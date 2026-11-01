@@ -31,3 +31,4 @@ storybook-static
 
 # Claude Code agent worktrees
 .claude/worktrees/
+e2e.db
