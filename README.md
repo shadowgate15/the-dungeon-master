@@ -1,56 +1,52 @@
-# sv
+# The Dungeon Master
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+An AI Dungeon Master for Dungeons & Dragons. It runs the game, so players can just play.
 
-## Creating a project
+This document is the project's North Star. It describes where we are headed and what is in scope right now, so every feature starts from the same place.
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Vision
 
-```sh
-# create a new project
-npx sv create my-app
-```
+A complete game-running system. A player opens a session in the UI and sees the game unfold: narrative descriptions, a map, their character, the state of the world. The AI runs everything behind it: narrating, voicing NPCs, adjudicating actions, and keeping the world consistent.
 
-To recreate this project with the same configuration:
+## Guiding principles
 
-```sh
-# recreate this project
-pnpm dlx sv@1.2.0 create --template minimal --types ts --add prettier eslint vitest="usages:unit,component" playwright="demo:no" tailwindcss="plugins:typography,forms" drizzle="database:sqlite+sqlite:better-sqlite3" storybook ai-tools="ide:claude-code+delivery:plugin" --install pnpm the-dungeon-master
-```
+- **Deterministic code owns the rules and state.** Dice, HP, initiative, spell slots, inventory and every other mechanic live in code and the database. The database is the single source of truth.
+- **The LLM owns narration and judgment.** It writes the story and makes calls with no fixed answer: NPC behavior, ruling on improvised actions, pacing. It never invents numbers or state. It calls tools, and the tools change state.
+- **Local-first.** The app runs on the player's machine with SQLite and a local model, with no network dependency. The LLM sits behind a thin provider interface, so hosted backends can be swapped in later. No specific model is assumed.
+- **Rules content is limited to the D&D 5e SRD 5.1** (CC-BY-4.0).
 
-## Adding features
+## Campaign lifecycle
 
-Add features to your project with `sv add`:
+1. The player asks the system to generate a campaign, optionally with parameters (tone, setting, length, etc.).
+2. The system generates a campaign setting and an initial arc for the characters.
+3. Play is improvised from there, in response to what the players do. The system keeps persistent memory of the story, NPCs and world.
 
-```sh
-npx sv add
-```
+## Current focus
 
-For example, to add Tailwind CSS:
+- Solo play: one human player, with the AI as DM. The data model should not rule out multiple players.
+- Text-first web app: a streaming narrative with side panels (character sheet, dice, combat tracker).
+- D&D 5e on the SRD 5.1.
 
-```sh
-npx sv add tailwindcss
-```
+## Later (not goals right now)
 
-## Developing
+- Map and richer visuals
+- Voice
+- Multiplayer
+- Hosting and accounts
+- Pre-written adventure modules
+- The 2024 rules
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Stack
 
-```sh
-npm run dev
+SvelteKit, TypeScript, Tailwind, Drizzle with SQLite (better-sqlite3), Vitest, Playwright, Storybook.
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
+## Development
 
 ```sh
-npm run build
+pnpm install
+pnpm dev          # start the dev server
+pnpm check        # type-check
+pnpm lint         # prettier + eslint
+pnpm test         # unit + e2e tests
+pnpm storybook    # component workbench
 ```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.

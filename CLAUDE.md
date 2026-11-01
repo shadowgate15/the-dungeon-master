@@ -1,3 +1,7 @@
+## Project overview
+
+@README.md
+
 ## Agent skills
 
 ### Issue tracker
