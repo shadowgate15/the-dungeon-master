@@ -6,6 +6,7 @@
   },
   "include": [
     "src",
+    ".storybook/**/*",
     "vite.config.ts",
     "prettier.config.js",
     "playwright.config.ts",

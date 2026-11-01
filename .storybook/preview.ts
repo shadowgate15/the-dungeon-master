@@ -1,6 +1,8 @@
 import type { Preview } from '@storybook/sveltekit'
+import QueryDecorator from './QueryDecorator.svelte'
 
 const preview: Preview = {
+  decorators: [(story) => ({ Component: QueryDecorator, props: { children: story } })],
   parameters: {
     controls: {
       matchers: {
