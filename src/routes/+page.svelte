@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
+  import AiPanel from '#lib/ai/AiPanel.svelte'
   import {
     GENRE_FLAVORS,
     MAGIC_LEVELS,
@@ -22,6 +23,8 @@
 
 <main class="mx-auto max-w-xl space-y-6 p-6">
   <h1 class="text-2xl font-semibold">Worlds</h1>
+
+  <AiPanel />
 
   <form
     method="POST"
