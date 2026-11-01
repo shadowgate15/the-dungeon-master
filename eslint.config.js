@@ -1,7 +1,5 @@
-// For more info, see https://github.com/storybookjs/eslint-plugin-storybook#configuration-flat-config-format
-import storybook from 'eslint-plugin-storybook'
-
 import prettier from 'eslint-config-prettier'
+import storybook from 'eslint-plugin-storybook'
 import path from 'node:path'
 import js from '@eslint/js'
 import svelte from 'eslint-plugin-svelte'
@@ -16,6 +14,7 @@ export default defineConfig(
   js.configs.recommended,
   ts.configs.recommended,
   svelte.configs.recommended,
+  storybook.configs['flat/recommended'],
   prettier,
   svelte.configs.prettier,
   {
