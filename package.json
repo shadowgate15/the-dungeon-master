@@ -24,6 +24,8 @@
   },
   "devDependencies": {
     "@chromatic-com/storybook": "latest",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
     "@storybook/addon-a11y": "^10.6.5",
