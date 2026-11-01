@@ -4,7 +4,7 @@ Conventions for this repo. Anything enforced by tooling (Prettier, ESLint, `svel
 
 ## TanStack Query
 
-Client-side server state uses `@tanstack/svelte-query`.
+Use `@tanstack/svelte-query` for client-side reads of server state.
 
 - **Create clients with `createQueryClient()`** from `src/lib/query/client.ts`. Never call `new QueryClient()` directly. The app layout, Storybook and tests all go through the factory.
 - **Queries run in the browser only.** The factory sets `enabled: browser`, so nothing fetches during SSR and no cache is shared between requests. Don't prefetch in `load` functions unless a page needs it.
