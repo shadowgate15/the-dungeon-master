@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { openDatabase, migrateDatabase, type Database } from '../db/connect'
-import { createWorldService, type WorldService } from './service'
-import { GENRE_FLAVORS } from '#lib/world/enums.ts'
+import { createWorldService, WorldValidationError, type WorldService } from './service'
+import { GENRE_FLAVORS, PREMISE_SOFT_CAP } from '#lib/world/enums.ts'
 
 let db: Database
 let worlds: WorldService
@@ -27,6 +27,69 @@ describe('World service', () => {
     })
     expect(world.id).toBeTruthy()
     expect(world.createdAt).toBe(world.updatedAt)
+  })
+
+  it('persists all six seed fields', () => {
+    const created = worlds.create({
+      name: 'Eldoria',
+      premise: 'A drowned kingdom.',
+      genreFlavor: 'dark fantasy',
+      scale: 'continent',
+      magicLevel: 'low',
+      techLevel: 'renaissance'
+    })
+
+    expect(worlds.get(created.id)).toMatchObject({
+      premise: 'A drowned kingdom.',
+      genreFlavor: 'dark fantasy',
+      scale: 'continent',
+      magicLevel: 'low',
+      techLevel: 'renaissance'
+    })
+  })
+
+  it('stores unspecified enums and a blank premise as NULL', () => {
+    const created = worlds.create({
+      name: 'Eldoria',
+      premise: '   ',
+      genreFlavor: null,
+      scale: undefined,
+      magicLevel: null
+    })
+
+    expect(created).toMatchObject({
+      premise: null,
+      genreFlavor: null,
+      scale: null,
+      magicLevel: null,
+      techLevel: null
+    })
+  })
+
+  it('rejects an enum value outside the closed list', () => {
+    for (const bad of [
+      { genreFlavor: 'cozy mystery' },
+      { scale: 'galaxy' },
+      { magicLevel: 'extreme' },
+      { techLevel: 'steampunk' }
+    ]) {
+      expect(() => worlds.create({ name: 'Bad', ...bad } as never)).toThrow(WorldValidationError)
+    }
+    expect(worlds.list()).toEqual([])
+  })
+
+  it('does not relate genre flavor to tech level', () => {
+    expect(() =>
+      worlds.create({ name: 'Odd', genreFlavor: 'high fantasy', techLevel: 'futuristic' })
+    ).not.toThrow()
+    expect(() =>
+      worlds.create({ name: 'Odd2', genreFlavor: 'science fiction', techLevel: 'stone age' })
+    ).not.toThrow()
+  })
+
+  it('stores a premise past the soft cap', () => {
+    const premise = 'x'.repeat(PREMISE_SOFT_CAP * 3)
+    expect(worlds.create({ name: 'Long', premise }).premise).toBe(premise)
   })
 
   it('requires a name', () => {
