@@ -46,6 +46,10 @@
           {seed}
           onaccept={(field, value) => (seed[field] = value)}
           disabled={status.state !== 'ready'}
+          contextLength={status.state === 'ready' ? status.contextLength : null}
+          fallbackContextLength={status.state === 'ready'
+            ? status.fallbackContextLength
+            : undefined}
           onreasoningmodel={ai.reasoningModel}
         />
       {/key}

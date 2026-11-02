@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { REASONING_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import {
   estimatePromptTokens,
+  KEEP_MESSAGES,
   estimateTokens,
   exceedsLimit,
   shouldCompact
@@ -48,8 +49,6 @@ export const turnSchema = z.object({
   })
 })
 
-/** How many of the newest messages (three exchanges) always stay verbatim. */
-export const KEEP_MESSAGES = 6
 export const SUMMARY_MAX = 1200
 export const SUMMARY_MAX_TOKENS = 500
 

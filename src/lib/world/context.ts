@@ -8,6 +8,9 @@ import type { Seed, SeedField } from './seed.ts'
 /** Warn, and compact before the next send, at this share of the context limit. */
 export const COMPACT_THRESHOLD = 0.8
 
+/** How many of the newest messages (three exchanges) always stay verbatim. */
+export const KEEP_MESSAGES = 6
+
 /** Used when the model's context length is unknown and nothing is configured. */
 export const DEFAULT_CONTEXT_LIMIT = 4096
 
