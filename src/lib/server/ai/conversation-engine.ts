@@ -51,6 +51,11 @@ export interface TurnInput<F extends string = string> {
   /** Proposals still awaiting a decision; feedback in `message` may be about these. */
   pending?: { field: F; value: string }[]
   message: string
+  /**
+   * Extra system prompts rebuilt by the server every turn (e.g. a Campaign's Worlds). They sit
+   * after the seed prompt, never in the transcript or summary, and count toward the estimate.
+   */
+  extraSystemPrompts?: string[]
   /** Model-facing summary of the first `summarizedCount` messages of `history`. */
   summary?: string
   summarizedCount?: number
@@ -103,6 +108,8 @@ export type TurnFailure = {
     /** Found by the probe that precedes a send: LM Studio is down or lacks the model. */
     | 'not-connected'
     | 'model-unavailable'
+    /** A Campaign's selected Worlds were archived or deleted; non-retryable, no model call is made. */
+    | 'worlds-changed'
   message: string
 }
 
@@ -284,7 +291,11 @@ export function createConversationEngine<F extends string>(
   }
 
   function buildRequest(input: Input, signal: AbortSignal): ChatRequest {
-    const systemPrompts = [config.systemPrompt, config.seedPrompt(input.seed)]
+    const systemPrompts = [
+      config.systemPrompt,
+      config.seedPrompt(input.seed),
+      ...(input.extraSystemPrompts ?? [])
+    ]
     const summary = summaryPrompt(input.summary)
     if (summary) systemPrompts.push(summary)
     const dismissed = dismissedPrompt(input.dismissed)
