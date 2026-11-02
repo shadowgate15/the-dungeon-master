@@ -102,6 +102,16 @@ export function createWorldService(db: Database, now: () => number = Date.now) {
         .get()!.n
     },
 
+    /** Campaign counts keyed by World id, for the list. Worlds with no Campaign are absent. */
+    campaignCounts(): Record<string, number> {
+      const rows = db
+        .select({ worldId: worldCampaign.worldId, n: count() })
+        .from(worldCampaign)
+        .groupBy(worldCampaign.worldId)
+        .all()
+      return Object.fromEntries(rows.map((r) => [r.worldId, r.n]))
+    },
+
     /** Hides the World from the list and picker and makes it read-only. */
     archive(id: string): World {
       return setArchived(id, now())

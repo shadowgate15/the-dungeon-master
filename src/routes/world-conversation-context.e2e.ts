@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test'
+import { openNewWorld } from './world-helpers'
 
 const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
 
@@ -41,7 +42,7 @@ test('the meter warns near the limit, then compacts automatically and keeps the 
   page,
   request
 }) => {
-  await page.goto('/')
+  await openNewWorld(page)
   const panel = page.getByRole('region', { name: 'AI' })
   const meter = panel.getByRole('meter', { name: 'Context' })
   await expect(meter).toBeVisible()
@@ -83,7 +84,7 @@ test('Compact now summarizes on request and the meter reflects the compacted siz
   page,
   request
 }) => {
-  await page.goto('/')
+  await openNewWorld(page)
   const panel = page.getByRole('region', { name: 'AI' })
   const compact = panel.getByRole('button', { name: 'Compact now' })
   await expect(compact).toBeDisabled()
@@ -112,8 +113,8 @@ test.describe('when compaction fails', () => {
     name = ''
   ) {
     await setUsage(request, 3000, 400)
-    await page.goto('/')
-    if (name) await page.getByLabel('Name').fill(name)
+    await openNewWorld(page)
+    if (name) await page.getByLabel('Name', { exact: true }).fill(name)
     const panel = page.getByRole('region', { name: 'AI' })
     for (const word of ['alpha', 'bravo', 'charlie', 'delta']) await say(panel, `${word} message`)
     await setScenario(request, 'summary-fails')
@@ -144,7 +145,7 @@ test.describe('when compaction fails', () => {
     await expect(panel.getByText('alpha message')).toBeVisible()
     await expect(panel.getByLabel('Message')).toBeDisabled()
     await expect(panel.getByText(/finish your world on the seed card/i)).toBeVisible()
-    await expect(page.getByLabel('Name')).toBeEnabled()
+    await expect(page.getByLabel('Name', { exact: true })).toBeEnabled()
   })
 
   test('blocks input; "Clear chat" empties the chat and keeps the seed card', async ({
@@ -158,6 +159,6 @@ test.describe('when compaction fails', () => {
     await expect(panel.getByRole('alert')).toHaveCount(0)
     await expect(panel.getByText('alpha message')).toHaveCount(0)
     await expect(panel.getByLabel('Message')).toBeEnabled()
-    await expect(page.getByLabel('Name')).toHaveValue('Kept Name')
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Kept Name')
   })
 })

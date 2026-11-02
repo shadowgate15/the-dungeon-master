@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
+import { openNewWorld } from './world-helpers'
 
 const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
 
@@ -31,11 +32,11 @@ test('drafts proposals, accepts one, dismisses one and sends both facts next tur
       genreFlavor: 'dark fantasy'
     }
   })
-  await page.goto('/')
+  await openNewWorld(page)
   const panel = page.getByRole('region', { name: 'AI' })
   await expect(panel.getByLabel('Message')).toBeEnabled()
 
-  await page.getByLabel('Name').fill('My Own Name')
+  await page.getByLabel('Name', { exact: true }).fill('My Own Name')
 
   // Hold the turn in flight so the pending state can be observed.
   let release!: () => void
@@ -52,8 +53,8 @@ test('drafts proposals, accepts one, dismisses one and sends both facts next tur
   await expect(panel.getByLabel('Message')).toBeDisabled()
   await expect(panel.getByRole('button', { name: 'Send' })).toBeDisabled()
   // The seed card stays editable during the turn.
-  await expect(page.getByLabel('Name')).toBeEnabled()
-  await page.getByLabel('Name').fill('Edited While Waiting')
+  await expect(page.getByLabel('Name', { exact: true })).toBeEnabled()
+  await page.getByLabel('Name', { exact: true }).fill('Edited While Waiting')
   release()
 
   await expect(panel.getByText('Here is a first draft.')).toBeVisible()
@@ -64,12 +65,12 @@ test('drafts proposals, accepts one, dismisses one and sends both facts next tur
   await expect(cards).toHaveCount(3)
 
   // Nothing reaches the seed card until accepted.
-  await expect(page.getByLabel('Name')).toHaveValue('Edited While Waiting')
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Edited While Waiting')
   await expect(page.getByLabel('Premise')).toHaveValue('')
   await expect(page.getByLabel('Genre flavor')).toHaveValue('')
 
   await cards.filter({ hasText: 'Eldoria' }).getByRole('button', { name: 'Accept' }).click()
-  await expect(page.getByLabel('Name')).toHaveValue('Eldoria')
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Eldoria')
   await expect(cards.filter({ hasText: 'Eldoria' }).getByRole('button')).toHaveCount(0)
 
   await cards.filter({ hasText: 'dark fantasy' }).getByRole('button', { name: 'Dismiss' }).click()
@@ -93,13 +94,13 @@ test('drafts proposals, accepts one, dismisses one and sends both facts next tur
 
 test('the transcript is not persisted across a reload', async ({ page, request }) => {
   await setChatContent(request, { reply: 'A reply that is not saved.', proposals: {} })
-  await page.goto('/')
+  await openNewWorld(page)
   const panel = page.getByRole('region', { name: 'AI' })
   await panel.getByLabel('Message').fill('Hello')
   await panel.getByRole('button', { name: 'Send' }).click()
   await expect(panel.getByText('A reply that is not saved.')).toBeVisible()
 
-  await page.reload()
+  await openNewWorld(page)
 
   await expect(panel.getByLabel('Message')).toBeEnabled()
   await expect(panel.getByText('A reply that is not saved.')).toBeHidden()
@@ -113,7 +114,7 @@ test('feedback revises a proposal: the old card collapses only when the revision
     reply: 'A first premise.',
     proposals: { premise: 'A drowned kingdom.', name: 'Eldoria' }
   })
-  await page.goto('/')
+  await openNewWorld(page)
   const panel = page.getByRole('region', { name: 'AI' })
   await panel.getByLabel('Message').fill('Draft me a world')
   await panel.getByRole('button', { name: 'Send' }).click()

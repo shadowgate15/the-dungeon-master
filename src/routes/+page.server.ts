@@ -1,11 +1,63 @@
 import { fail } from '@sveltejs/kit'
 import { db } from '#lib/server/db/index.ts'
-import { createWorldService, WorldValidationError } from '#lib/server/world/service.ts'
+import {
+  createWorldService,
+  WorldInUseError,
+  WorldNotFoundError,
+  WorldValidationError
+} from '#lib/server/world/service.ts'
+import type { ActionNotice } from '#lib/world/ActionToast.svelte'
 import type { Actions, PageServerLoad } from './$types'
 
 const worlds = createWorldService(db)
 
-export const load: PageServerLoad = () => ({ worlds: worlds.list() })
+export const load: PageServerLoad = ({ url }) => {
+  const view: 'active' | 'archived' =
+    url.searchParams.get('view') === 'archived' ? 'archived' : 'active'
+  const active = worlds.list()
+  const archived = worlds.listArchived()
+  const counts = worlds.campaignCounts()
+  return {
+    view,
+    worlds: (view === 'archived' ? archived : active).map((w) => ({
+      id: w.id,
+      name: w.name,
+      premise: w.premise,
+      genreFlavor: w.genreFlavor,
+      scale: w.scale,
+      magicLevel: w.magicLevel,
+      techLevel: w.techLevel,
+      updatedAt: w.updatedAt,
+      campaigns: counts[w.id] ?? 0
+    })),
+    activeCount: active.length,
+    archivedCount: archived.length
+  }
+}
+
+/** Archives or restores every World named by the form's `id` fields, and offers the reverse. */
+function setArchived(action: 'archive' | 'restore') {
+  const past = action === 'archive' ? 'Archived' : 'Restored'
+  const reverse = action === 'archive' ? 'restore' : 'archive'
+  return async ({ request }: { request: Request }) => {
+    const ids = (await request.formData()).getAll('id').map(String)
+    const done: { id: string; name: string }[] = []
+    for (const id of ids) {
+      try {
+        const { name } = worlds[action](id)
+        done.push({ id, name })
+      } catch (e) {
+        if (!(e instanceof WorldNotFoundError)) throw e
+      }
+    }
+    if (done.length === 0) return fail(404, { error: 'World not found' })
+    const notice: ActionNotice = {
+      message: done.length === 1 ? `${past} ${done[0].name}` : `${past} ${done.length} Worlds`,
+      undo: { action: reverse, ids: done.map((d) => d.id) }
+    }
+    return { notice }
+  }
+}
 
 export const actions: Actions = {
   createWorld: async ({ request }) => {
@@ -29,5 +81,24 @@ export const actions: Actions = {
         return fail(400, { ...values, error: error.message })
       throw error
     }
+    return { created: true }
+  },
+
+  archive: setArchived('archive'),
+
+  restore: setArchived('restore'),
+
+  delete: async ({ request }) => {
+    const id = String((await request.formData()).get('id') ?? '')
+    const name = worlds.get(id)?.name
+    try {
+      worlds.delete(id)
+    } catch (e) {
+      if (e instanceof WorldNotFoundError) return fail(404, { error: e.message })
+      if (e instanceof WorldInUseError) return fail(409, { error: e.message })
+      throw e
+    }
+    const notice: ActionNotice = { message: `Deleted ${name}` }
+    return { notice }
   }
 }

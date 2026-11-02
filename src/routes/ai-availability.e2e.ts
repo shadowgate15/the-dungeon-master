@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
+import { openNewWorld } from './world-helpers'
 
 const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
 
@@ -17,7 +18,7 @@ test.afterEach(async ({ request }) => {
 })
 
 test('shows the model and a connected status when LM Studio is ready', async ({ page }) => {
-  await page.goto('/')
+  await openNewWorld(page)
 
   const panel = page.getByRole('region', { name: 'AI' })
   await expect(panel.getByText('fake-model')).toBeVisible()
@@ -27,7 +28,7 @@ test('shows the model and a connected status when LM Studio is ready', async ({ 
 
 test('not connected recovers after Check connection', async ({ page, request }) => {
   await setScenario(request, 'unreachable')
-  await page.goto('/')
+  await openNewWorld(page)
 
   const panel = page.getByRole('region', { name: 'AI' })
   await expect(panel.getByText('Not connected')).toBeVisible()
@@ -36,7 +37,7 @@ test('not connected recovers after Check connection', async ({ page, request }) 
   await expect(panel.getByRole('button', { name: 'Send' })).toBeDisabled()
 
   // The form still works as in manual mode.
-  await expect(page.getByLabel('Name')).toBeEnabled()
+  await expect(page.getByLabel('Name', { exact: true })).toBeEnabled()
 
   await setScenario(request, 'ready')
   await panel.getByRole('button', { name: 'Check connection' }).click()
@@ -47,7 +48,7 @@ test('not connected recovers after Check connection', async ({ page, request }) 
 
 test('names the configured model when LM Studio does not have it', async ({ page, request }) => {
   await setScenario(request, 'model-missing')
-  await page.goto('/')
+  await openNewWorld(page)
 
   const panel = page.getByRole('region', { name: 'AI' })
   await expect(panel.getByText(/fake-model.*not available/i)).toBeVisible()
@@ -58,7 +59,7 @@ test('the first send probes: LM Studio stopping after page load shows not connec
   page,
   request
 }) => {
-  await page.goto('/')
+  await openNewWorld(page)
   const panel = page.getByRole('region', { name: 'AI' })
   await expect(panel.getByText('Connected')).toBeVisible()
   await page.waitForLoadState('networkidle')
@@ -69,11 +70,11 @@ test('the first send probes: LM Studio stopping after page load shows not connec
 
   await expect(panel.getByText('Not connected')).toBeVisible()
   await expect(panel.getByLabel('Message')).toBeDisabled()
-  await expect(page.getByLabel('Name')).toBeEnabled()
+  await expect(page.getByLabel('Name', { exact: true })).toBeEnabled()
 })
 
 test('the first send reports a model that is no longer available', async ({ page, request }) => {
-  await page.goto('/')
+  await openNewWorld(page)
   const panel = page.getByRole('region', { name: 'AI' })
   await expect(panel.getByText('Connected')).toBeVisible()
   await page.waitForLoadState('networkidle')
@@ -92,7 +93,7 @@ test('never exposes the LM Studio base URL to the browser', async ({ page }) => 
       seen.push(await response.text().catch(() => ''))
     }
   })
-  await page.goto('/')
+  await openNewWorld(page)
   await expect(page.getByText('Connected')).toBeVisible()
 
   expect((await page.content()).includes('127.0.0.1:1235')).toBe(false)

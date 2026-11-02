@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
+import { openNewWorld } from './world-helpers'
 
 const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
 
@@ -31,7 +32,7 @@ test('bad output shows an inline error; the failed turn stays out of history; Re
   request
 }) => {
   await setScenario(request, 'bad-output')
-  await page.goto('/')
+  await openNewWorld(page)
   const panel = page.getByRole('region', { name: 'AI' })
   const before = (await chatRequests(request)).length
   await panel.getByLabel('Message').fill('FAILED-MESSAGE-TEXT')
@@ -43,9 +44,9 @@ test('bad output shows an inline error; the failed turn stays out of history; Re
   await expect(panel.getByText('FAILED-MESSAGE-TEXT')).toBeVisible()
   await expect(panel.getByRole('list', { name: 'Proposals' })).toHaveCount(0)
   // The seed card and form stay fully usable.
-  await expect(page.getByLabel('Name')).toBeEnabled()
-  await page.getByLabel('Name').fill('Still Mine')
-  await expect(page.getByLabel('Name')).toHaveValue('Still Mine')
+  await expect(page.getByLabel('Name', { exact: true })).toBeEnabled()
+  await page.getByLabel('Name', { exact: true }).fill('Still Mine')
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Still Mine')
   // The silent retry means two attempts for the one turn.
   expect((await chatRequests(request)).length - before).toBe(2)
 
@@ -70,19 +71,19 @@ test('Stop cancels a turn that is in flight and leaves a retryable failed turn',
   request
 }) => {
   await setScenario(request, 'hang')
-  await page.goto('/')
+  await openNewWorld(page)
   const panel = page.getByRole('region', { name: 'AI' })
   await panel.getByLabel('Message').fill('Anyone there?')
   await panel.getByRole('button', { name: 'Send' }).click()
 
   await expect(panel.getByText('Thinking')).toBeVisible()
-  await page.getByLabel('Name').fill('Editable While Waiting')
+  await page.getByLabel('Name', { exact: true }).fill('Editable While Waiting')
   await panel.getByRole('button', { name: 'Stop' }).click()
 
   await expect(panel.getByRole('alert')).toContainText('Stopped')
   await expect(panel.getByText('Thinking')).toBeHidden()
   await expect(panel.getByRole('button', { name: 'Retry' })).toBeEnabled()
-  await expect(page.getByLabel('Name')).toHaveValue('Editable While Waiting')
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Editable While Waiting')
 
   await setScenario(request, 'ready')
   await setChatContent(request, { reply: 'Here now.', proposals: {} })
@@ -95,7 +96,7 @@ test('a reasoning model gets a clear message and disables AI until a successful 
   request
 }) => {
   await setScenario(request, 'reasoning-model')
-  await page.goto('/')
+  await openNewWorld(page)
   const panel = page.getByRole('region', { name: 'AI' })
   const before = (await chatRequests(request)).length
   await panel.getByLabel('Message').fill('Hello')
@@ -107,10 +108,10 @@ test('a reasoning model gets a clear message and disables AI until a successful 
   await expect(panel.getByLabel('Message')).toBeDisabled()
   await expect(panel.getByRole('button', { name: 'Send' })).toBeDisabled()
   await expect(panel.getByRole('button', { name: 'Retry' })).toBeDisabled()
-  await expect(page.getByLabel('Name')).toBeEnabled()
+  await expect(page.getByLabel('Name', { exact: true })).toBeEnabled()
 
   // The lock outlives a reload; only a successful re-probe releases it.
-  await page.reload()
+  await openNewWorld(page)
   await expect(panel.getByLabel('Message')).toBeDisabled()
   await expect(panel.getByText(/usually means a reasoning model/)).toBeVisible()
 

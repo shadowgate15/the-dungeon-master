@@ -243,6 +243,20 @@ describe('World service', () => {
       expect(worlds.affectedCampaignCount(b.id)).toBe(1)
     })
 
+    it('counts the Campaigns of every World in one call, omitting Worlds with none', () => {
+      const a = worlds.create({ name: 'A' })
+      const b = worlds.create({ name: 'B' })
+      const unused = worlds.create({ name: 'Unused' })
+      link(a.id, 'c1')
+      link(a.id, 'c2')
+      link(b.id, 'c2')
+
+      const counts = worlds.campaignCounts()
+
+      expect(counts).toEqual({ [a.id]: 2, [b.id]: 1 })
+      expect(counts[unused.id]).toBeUndefined()
+    })
+
     it('drops a deleted Campaign from the count and cascades its links', () => {
       const a = worlds.create({ name: 'A' })
       link(a.id, 'c1')
