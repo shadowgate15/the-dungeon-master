@@ -50,6 +50,8 @@ export interface TurnInput {
   history: ChatMessage[]
   /** Proposals the user dismissed, so the model does not repeat them. */
   dismissed: { field: SeedField; value: string }[]
+  /** Proposals still awaiting a decision; feedback in `message` may be about these. */
+  pending?: { field: SeedField; value: string }[]
   message: string
 }
 
@@ -85,7 +87,8 @@ export type TurnResult =
 const SYSTEM_PROMPT = `You are helping a player create a fantasy World for a tabletop role-playing campaign.
 Reply with a short message (a sentence or two) and a "proposals" object holding only the seed fields you want to change.
 Seed fields: name (short text), premise (a few sentences), genreFlavor, scale, magicLevel, techLevel (each one of the allowed values).
-Leave out fields you do not want to change. Never repeat a proposal the user dismissed. Respect values the user already set unless asked to change them.`
+Leave out fields you do not want to change. When the user gives feedback on a pending proposal, answer with a revised proposal for that same field.
+Never repeat a proposal the user dismissed. Respect values the user already set unless asked to change them.`
 
 function seedPrompt(seed: Seed) {
   const lines = (Object.keys(seed) as SeedField[]).map(
@@ -104,10 +107,18 @@ function dismissedPrompt(dismissed: TurnInput['dismissed']) {
   return `The user dismissed these proposals; do not propose them again:\n${lines.join('\n')}`
 }
 
+function pendingPrompt(pending: NonNullable<TurnInput['pending']>) {
+  if (pending.length === 0) return null
+  const lines = pending.map((p) => `- ${FIELD_LABELS[p.field]}: ${p.value}`)
+  return `These proposals are pending, not yet accepted. If the user's message is feedback on one, revise it by proposing a replacement for the same field:\n${lines.join('\n')}`
+}
+
 export function buildRequest(input: TurnInput, signal: AbortSignal): ChatRequest {
   const systemPrompts = [SYSTEM_PROMPT, seedPrompt(input.seed)]
   const dismissed = dismissedPrompt(input.dismissed)
   if (dismissed) systemPrompts.push(dismissed)
+  const pending = pendingPrompt(input.pending ?? [])
+  if (pending) systemPrompts.push(pending)
   return {
     systemPrompts,
     messages: [...input.history, { role: 'user', content: input.message }],

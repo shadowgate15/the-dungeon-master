@@ -6,6 +6,7 @@
     emptyConversation,
     failMessage,
     historyOf,
+    pendingProposals,
     receiveTurn,
     retryMessage,
     sendMessage
@@ -51,6 +52,7 @@
           seed: $state.snapshot(seed),
           history: historyOf(conversation),
           dismissed: dismissedNotes(conversation),
+          pending: pendingProposals(conversation),
           message
         })
       })
@@ -131,26 +133,33 @@
           {#if cards.length > 0}
             <ul aria-label="Proposals" class="mt-1 space-y-1">
               {#each cards as card (card.id)}
-                <li class="flex items-center gap-2 rounded border border-violet-200 p-2 text-sm">
-                  <span class="flex-1"
-                    ><strong>{FIELD_LABELS[card.field]}:</strong> {card.value}</span
-                  >
-                  {#if card.status === 'pending'}
-                    <button
-                      type="button"
-                      class="rounded bg-green-700 px-2 py-0.5 text-white"
-                      onclick={() => accept(card.id)}>Accept</button
+                {#if card.status === 'superseded'}
+                  <li class="px-2 text-sm text-slate-500">
+                    <span class="line-through">{FIELD_LABELS[card.field]}: {card.value}</span>
+                    (superseded)
+                  </li>
+                {:else}
+                  <li class="flex items-center gap-2 rounded border border-violet-200 p-2 text-sm">
+                    <span class="flex-1"
+                      ><strong>{FIELD_LABELS[card.field]}:</strong> {card.value}</span
                     >
-                    <button
-                      type="button"
-                      class="rounded border px-2 py-0.5"
-                      onclick={() => (conversation = dismissCard(conversation, card.id))}
-                      >Dismiss</button
-                    >
-                  {:else}
-                    <span class="text-slate-500 capitalize">{card.status}</span>
-                  {/if}
-                </li>
+                    {#if card.status === 'pending'}
+                      <button
+                        type="button"
+                        class="rounded bg-green-700 px-2 py-0.5 text-white"
+                        onclick={() => accept(card.id)}>Accept</button
+                      >
+                      <button
+                        type="button"
+                        class="rounded border px-2 py-0.5"
+                        onclick={() => (conversation = dismissCard(conversation, card.id))}
+                        >Dismiss</button
+                      >
+                    {:else}
+                      <span class="text-slate-500 capitalize">{card.status}</span>
+                    {/if}
+                  </li>
+                {/if}
               {/each}
             </ul>
           {/if}

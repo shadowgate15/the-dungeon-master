@@ -104,3 +104,58 @@ test('the transcript is not persisted across a reload', async ({ page, request }
   await expect(panel.getByLabel('Message')).toBeEnabled()
   await expect(panel.getByText('A reply that is not saved.')).toBeHidden()
 })
+
+test('feedback revises a proposal: the old card collapses only when the revision lands', async ({
+  page,
+  request
+}) => {
+  await setChatContent(request, {
+    reply: 'A first premise.',
+    proposals: { premise: 'A drowned kingdom.', name: 'Eldoria' }
+  })
+  await page.goto('/')
+  const panel = page.getByRole('region', { name: 'AI' })
+  await panel.getByLabel('Message').fill('Draft me a world')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  await expect(panel.getByText('A first premise.')).toBeVisible()
+
+  const cards = panel.getByRole('list', { name: 'Proposals' }).getByRole('listitem')
+  const oldPremise = cards.filter({ hasText: 'A drowned kingdom.' })
+  await expect(oldPremise.getByRole('button', { name: 'Accept' })).toBeVisible()
+
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  await page.route('**/api/world-creation/turn', async (route) => {
+    await gate
+    await route.continue()
+  })
+  await setChatContent(request, {
+    reply: 'Darker it is.',
+    proposals: { premise: 'A drowned kingdom haunted by its own dead.' }
+  })
+  await panel.getByLabel('Message').fill('Make the premise darker')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  await expect(panel.getByText('Thinking')).toBeVisible()
+
+  // While the revision is in flight the old card is still live.
+  await expect(oldPremise.getByRole('button', { name: 'Accept' })).toBeVisible()
+  release()
+
+  await expect(panel.getByText('Darker it is.')).toBeVisible()
+  await expect(oldPremise).toContainText('superseded')
+  await expect(oldPremise.getByRole('button')).toHaveCount(0)
+  const revised = cards.filter({ hasText: 'haunted by its own dead' })
+  await expect(revised.getByRole('button', { name: 'Accept' })).toBeVisible()
+  // The untouched name card stays live.
+  await expect(
+    cards.filter({ hasText: 'Eldoria' }).getByRole('button', { name: 'Accept' })
+  ).toBeVisible()
+
+  // The model was shown the pending premise so it could revise it.
+  const sent = await lastChatRequest(request)
+  expect(sent).toContain('A drowned kingdom.')
+  expect(sent).toContain('Make the premise darker')
+
+  await revised.getByRole('button', { name: 'Accept' }).click()
+  await expect(page.getByLabel('Premise')).toHaveValue('A drowned kingdom haunted by its own dead.')
+})

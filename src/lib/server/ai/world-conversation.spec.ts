@@ -105,6 +105,23 @@ describe('runTurn', () => {
     expect(request.threadId).not.toBe('')
   })
 
+  it('tells the model which proposals are still pending so feedback can revise them', async () => {
+    const { port, requests } = fakePort(complete({ reply: 'ok', proposals: {} }))
+
+    await runTurn(
+      port,
+      input({
+        pending: [{ field: 'premise', value: 'A drowned kingdom.' }],
+        message: 'make it darker'
+      })
+    )
+
+    const system = requests[0].systemPrompts.join('\n')
+    expect(system).toMatch(/pending/i)
+    expect(system).toContain('A drowned kingdom.')
+    expect(system).toMatch(/revise|replace/i)
+  })
+
   it('drops proposals that are empty or equal to the current seed value', async () => {
     const { port } = fakePort(
       complete({
