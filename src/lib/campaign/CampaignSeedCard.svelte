@@ -12,6 +12,15 @@
   }
 
   let { seed = $bindable(), worlds }: Props = $props()
+
+  // Worlds that became unavailable (archived or deleted elsewhere) drop out of the selection
+  // when the list reloads, so the player is never stuck with a chip they cannot see or remove.
+  $effect(() => {
+    const available = new Set(worlds.map((w) => w.id))
+    if (seed.worldIds.some((id) => !available.has(id))) {
+      seed.worldIds = seed.worldIds.filter((id) => available.has(id))
+    }
+  })
 </script>
 
 <div class="space-y-3">

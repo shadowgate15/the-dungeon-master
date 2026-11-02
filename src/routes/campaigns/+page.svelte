@@ -3,6 +3,8 @@
   import { replaceState } from '$app/navigation'
   import { resolve } from '$app/paths'
   import CampaignTable from '#lib/campaign/CampaignTable.svelte'
+  import CampaignChat from '#lib/campaign/CampaignChat.svelte'
+  import type { CampaignSeedCard, CampaignSeedField } from '#lib/campaign/seed.ts'
   import NewCampaignDialog from '#lib/campaign/NewCampaignDialog.svelte'
   import SectionNav from '#lib/SectionNav.svelte'
   import { enhance } from '$app/forms'
@@ -97,6 +99,7 @@
 <NewCampaignDialog
   bind:this={dialog}
   worlds={data.worlds}
+  {chat}
   initial={failedValues}
   error={createFailed && form ? form.error : undefined}
   open={serverOpen}
@@ -104,3 +107,7 @@
     if (page.url.searchParams.has('new')) replaceState(resolve('/campaigns'), {})
   }}
 />
+
+{#snippet chat(seed: CampaignSeedCard, onaccept: (field: CampaignSeedField, value: string) => void)}
+  <CampaignChat {seed} {onaccept} />
+{/snippet}
