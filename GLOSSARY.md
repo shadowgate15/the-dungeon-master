@@ -27,3 +27,23 @@ _Avoid_: Suggestion, draft
 **Creation conversation**:
 The chat beside the Seed card in which the player talks through a World with the AI and receives Proposals. Its transcript lives only in the browser and is discarded when the World is created or abandoned; nothing is stored.
 _Avoid_: Chat history, session
+
+**Campaign**:
+A story played out in one or more Worlds. A Campaign is always linked to at least one World, and Worlds can be added or removed over its life as long as one remains. A Campaign is either active or archived.
+_Avoid_: Adventure, game, session
+
+**Archived Campaign**:
+A Campaign set aside by its author. It is hidden from the main Campaign list and is read-only until restored. Archiving is reversible; deleting a Campaign is not. A Campaign is also read-only, without being archived, while any World it uses is archived.
+_Avoid_: Disabled Campaign, hidden Campaign, finished Campaign
+
+**Campaign Seed**:
+The set of choices a Campaign is created from: a name, a premise, a **tone** and a **length**, all required, plus the Worlds it is set in. Like a World's Seed, it is the starting point for a Campaign, not the Campaign itself. The Campaign's Worlds are chosen by the player and never proposed by the AI.
+_Avoid_: Campaign template, campaign config
+
+**Tone**:
+The mood of play a Campaign aims for, one of: heroic, lighthearted, tense, dark, mysterious, epic. Unordered. It describes how play feels, not the setting (that is a World's genre flavor). The AI uses it to set mood and register when narrating and proposing.
+_Avoid_: Genre, theme, style
+
+**Length**:
+How much story a Campaign is meant to hold, one of: one-shot, short, medium, long. Ordered shortest to longest. one-shot is a single sitting; short is a few sessions; medium is a season of play; long is an open-ended saga. It measures story scope, not hours or session counts. The AI uses it to pace how much story to plan.
+_Avoid_: Duration, session count, size
