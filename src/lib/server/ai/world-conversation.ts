@@ -80,8 +80,15 @@ export type TurnFailure = {
 
 export const TURN_TIMEOUT_MS = 60_000
 
+/** Token counts the provider reported for one call. */
+export interface TokenUsage {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
+
 export type TurnResult =
-  | { ok: true; reply: string; proposals: Partial<Record<SeedField, string>> }
+  | { ok: true; reply: string; proposals: Partial<Record<SeedField, string>>; usage?: TokenUsage }
   | { ok: false; failure: TurnFailure }
 
 const SYSTEM_PROMPT = `You are helping a player create a fantasy World for a tabletop role-playing campaign.
@@ -132,6 +139,7 @@ export function buildRequest(input: TurnInput, signal: AbortSignal): ChatRequest
 
 type Event = {
   type?: string
+  usage?: unknown
   name?: string
   message?: string
   code?: string
@@ -155,17 +163,33 @@ function runErrorFailure(event: Event): TurnFailure {
   return { kind: 'provider-error', message }
 }
 
-/** One model call, classified. Never rejects. */
-async function attemptTurn(
-  port: ChatPort,
-  input: TurnInput,
-  signal: AbortSignal
-): Promise<TurnResult> {
+const num = (value: unknown) => (typeof value === 'number' ? value : 0)
+
+/**
+ * `RUN_FINISHED.usage` is either AG-UI's `usage[]` (inputTokens/outputTokens) or
+ * TanStack's own shape (promptTokens/completionTokens); both are read here.
+ */
+function readUsage(raw: unknown): TokenUsage | undefined {
+  const u = (Array.isArray(raw) ? raw[0] : raw) as Record<string, unknown> | undefined
+  if (!u || typeof u !== 'object') return undefined
+  const promptTokens = num(u.promptTokens ?? u.inputTokens)
+  const completionTokens = num(u.completionTokens ?? u.outputTokens)
+  const totalTokens = num(u.totalTokens) || promptTokens + completionTokens
+  return totalTokens > 0 ? { promptTokens, completionTokens, totalTokens } : undefined
+}
+
+type ModelCall =
+  { ok: true; object: unknown; usage?: TokenUsage } | { ok: false; failure: TurnFailure }
+
+/** One streamed model call: the structured object and usage, or a typed failure. */
+async function callModel(port: ChatPort, request: ChatRequest): Promise<ModelCall> {
   let object: unknown
+  let usage: TokenUsage | undefined
   try {
-    for await (const raw of port(buildRequest(input, signal))) {
+    for await (const raw of port(request)) {
       const event = raw as Event
       if (event.type === 'RUN_ERROR') return { ok: false, failure: runErrorFailure(event) }
+      if (event.type === 'RUN_FINISHED') usage = readUsage(event.usage) ?? usage
       if (event.type === 'CUSTOM' && event.name === 'structured-output.complete') {
         object = event.value?.object
       }
@@ -179,6 +203,18 @@ async function attemptTurn(
       }
     }
   }
+  return { ok: true, object, usage }
+}
+
+/** One model call, classified. Never rejects. */
+async function attemptTurn(
+  port: ChatPort,
+  input: TurnInput,
+  signal: AbortSignal
+): Promise<TurnResult> {
+  const call = await callModel(port, buildRequest(input, signal))
+  if (!call.ok) return call
+  const { object, usage } = call
 
   const parsed = turnSchema.safeParse(object)
   if (!parsed.success) {
@@ -193,7 +229,7 @@ async function attemptTurn(
     const value = parsed.data.proposals[field]?.trim()
     if (value && value !== input.seed[field]) proposals[field] = value
   }
-  return { ok: true, reply: parsed.data.reply, proposals }
+  return { ok: true, reply: parsed.data.reply, proposals, ...(usage && { usage }) }
 }
 
 export interface RunTurnOptions {
