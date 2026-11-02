@@ -4,6 +4,8 @@ const DATABASE_URL = 'e2e.db'
 const FAKE_LM_STUDIO_PORT = 1235
 
 export default defineConfig({
+  // The fake LM Studio's scenario and canned chat content are process-wide state.
+  workers: 1,
   webServer: [
     {
       command: 'node src/lib/testing/fake-lm-studio/cli.ts',

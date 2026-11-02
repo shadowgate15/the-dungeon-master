@@ -1,6 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
   import AiPanel from '#lib/ai/AiPanel.svelte'
+  import CreationChat from '#lib/world/CreationChat.svelte'
+  import { emptySeed, type SeedField } from '#lib/world/seed.ts'
   import { resolve } from '$app/paths'
   import {
     GENRE_FLAVORS,
@@ -12,7 +14,19 @@
 
   let { data, form } = $props()
 
-  let premise = $state('')
+  // The seed card's live values. The chat reads them and writes only accepted proposals.
+  // Only the values of a failed no-JS submit seed it.
+  // svelte-ignore state_referenced_locally
+  let seed = $state({ ...emptySeed(), ...pickSeed(form) })
+  // Bumped when a World is created, which remounts the chat and discards its transcript.
+  let chatKey = $state(0)
+
+  function pickSeed(values: unknown): Partial<Record<SeedField, string>> {
+    const source = (values ?? {}) as Record<string, unknown>
+    return Object.fromEntries(
+      Object.entries(source).filter(([key, v]) => key in emptySeed() && typeof v === 'string')
+    )
+  }
 
   const pickers = [
     { name: 'genreFlavor', label: 'Genre flavor', options: GENRE_FLAVORS },
@@ -25,38 +39,43 @@
 <main class="mx-auto max-w-xl space-y-6 p-6">
   <h1 class="text-2xl font-semibold">Worlds</h1>
 
-  <AiPanel />
+  <AiPanel>
+    {#snippet chat()}
+      {#key chatKey}
+        <CreationChat {seed} onaccept={(field, value) => (seed[field] = value)} />
+      {/key}
+    {/snippet}
+  </AiPanel>
 
   <form
     method="POST"
     action="?/createWorld"
     use:enhance
-    onreset={() => (premise = '')}
+    onreset={() => {
+      seed = emptySeed()
+      chatKey++
+    }}
     class="space-y-2"
   >
     <label class="block">
       <span class="block text-sm font-medium">Name</span>
-      <input name="name" value={form?.name ?? ''} class="w-full rounded border p-2" />
+      <input name="name" bind:value={seed.name} class="w-full rounded border p-2" />
     </label>
     <label class="block">
       <span class="block text-sm font-medium">Premise</span>
-      <textarea name="premise" bind:value={premise} rows="4" class="w-full rounded border p-2"
+      <textarea name="premise" bind:value={seed.premise} rows="4" class="w-full rounded border p-2"
       ></textarea>
     </label>
-    {#if premise.length > PREMISE_SOFT_CAP}
+    {#if seed.premise.length > PREMISE_SOFT_CAP}
       <p class="text-sm text-amber-600">
-        Premise is long ({premise.length} of about {PREMISE_SOFT_CAP} characters). You can still save
-        it.
+        Premise is long ({seed.premise.length} of about {PREMISE_SOFT_CAP} characters). You can still
+        save it.
       </p>
     {/if}
     {#each pickers as picker (picker.name)}
       <label class="block">
         <span class="block text-sm font-medium">{picker.label}</span>
-        <select
-          name={picker.name}
-          value={(form as Record<string, unknown> | null)?.[picker.name] ?? ''}
-          class="w-full rounded border p-2"
-        >
+        <select name={picker.name} bind:value={seed[picker.name]} class="w-full rounded border p-2">
           <option value="">Unspecified</option>
           {#each picker.options as option (option)}
             <option value={option}>{option}</option>
