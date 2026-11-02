@@ -109,19 +109,19 @@ export function createCampaignService(db: Database, now: () => number = Date.now
 
     /** Replaces the Seed fields and the whole World set in one transaction; updated_at always moves. */
     update(id: string, seed: CampaignSeed, worldIds: readonly string[]): Campaign {
-      const current = db.select().from(campaign).where(eq(campaign.id, id)).get()
-      if (!current) throw new CampaignNotFoundError('Campaign not found')
-      if (current.archivedAt !== null) {
-        throw new CampaignValidationError('An archived Campaign cannot be edited')
-      }
-      const blocking = worlds.archivedWorldsOfCampaign(id)
-      if (blocking.length > 0) {
-        throw new CampaignValidationError(
-          `Campaign is read-only while these Worlds are archived: ${blocking.map((w) => w.name).join(', ')}`
-        )
-      }
       const values = validate(seed)
       return db.transaction((tx) => {
+        const current = tx.select().from(campaign).where(eq(campaign.id, id)).get()
+        if (!current) throw new CampaignNotFoundError('Campaign not found')
+        if (current.archivedAt !== null) {
+          throw new CampaignValidationError('An archived Campaign cannot be edited')
+        }
+        const blocking = worlds.archivedWorldsOfCampaign(id)
+        if (blocking.length > 0) {
+          throw new CampaignValidationError(
+            `Campaign is read-only while these Worlds are archived: ${blocking.map((w) => w.name).join(', ')}`
+          )
+        }
         const ids = checkWorldIds(worldIds)
         const updated = tx
           .update(campaign)
