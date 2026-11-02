@@ -1,7 +1,5 @@
-import type { Seed, SeedField } from './seed.ts'
-
 /**
- * Client-safe context accounting for the World creation conversation: the meter, the
+ * Client-safe context accounting for Creation conversations (World, Campaign): the meter, the
  * character-estimate fallback and the compaction thresholds. Pure; no model access.
  */
 
@@ -25,14 +23,14 @@ export function estimateTokens(text: string) {
 }
 
 export interface PromptParts {
-  seed: Seed
+  seed: Record<string, string>
   /** The full visible history (via `historyOf`), including summarized messages. */
   history: { role: 'user' | 'assistant'; content: string }[]
   /** The model-facing summary of the first `summarizedCount` history messages. */
   summary?: string | null
   summarizedCount?: number
-  dismissed: { field: SeedField; value: string }[]
-  pending?: { field: SeedField; value: string }[]
+  dismissed: { field: string; value: string }[]
+  pending?: { field: string; value: string }[]
   message?: string
 }
 
