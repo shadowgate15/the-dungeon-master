@@ -12,6 +12,7 @@ const bodySchema = z.object({
   seed: z.object(Object.fromEntries(SEED_FIELDS.map((f) => [f, z.string().max(2000)]))),
   history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })),
   dismissed: z.array(z.object({ field, value: z.string() })),
+  pending: z.array(z.object({ field, value: z.string() })).default([]),
   message: z.string().trim().min(1).max(4000)
 })
 

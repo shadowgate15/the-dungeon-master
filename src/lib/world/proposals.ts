@@ -4,12 +4,12 @@ import type { SeedField } from './seed.ts'
  * Client-safe, UI-free state for the World creation conversation. Every function is
  * pure: it takes a state and returns a new one. The transcript lives only in memory.
  *
- * Card lifecycle: `pending` -> `accepted` | `dismissed`. Superseding (#31) adds a
- * `superseded` status and is applied inside `receiveTurn`, where new cards arrive;
- * nothing else needs to change.
+ * Card lifecycle: `pending` -> `accepted` | `dismissed` | `superseded`. A pending card
+ * is superseded inside `receiveTurn` when a new proposal for the same field lands, so an
+ * older card stays acceptable while a revision is in flight. Settled cards never change.
  */
 
-export type CardStatus = 'pending' | 'accepted' | 'dismissed'
+export type CardStatus = 'pending' | 'accepted' | 'dismissed' | 'superseded'
 
 export interface ProposalCard {
   id: string
@@ -68,9 +68,13 @@ export function receiveTurn(
       status: 'pending'
     })
   )
+  const revised = new Set(cards.map((c) => c.field))
+  const older = state.cards.map((c) =>
+    c.status === 'pending' && revised.has(c.field) ? { ...c, status: 'superseded' as const } : c
+  )
   return {
     entries: [...state.entries, { id: `m${turn}`, role: 'assistant', content: reply, turn }],
-    cards: [...state.cards, ...cards],
+    cards: [...older, ...cards],
     nextId: turn + 1
   }
 }
@@ -100,6 +104,13 @@ export function dismissCard(state: ConversationState, id: string): ConversationS
 export function dismissedNotes(state: ConversationState): DismissedNote[] {
   return state.cards
     .filter((c) => c.status === 'dismissed')
+    .map(({ field, value }) => ({ field, value }))
+}
+
+/** Proposals still awaiting a decision, so the model can revise them on feedback. */
+export function pendingProposals(state: ConversationState): DismissedNote[] {
+  return state.cards
+    .filter((c) => c.status === 'pending')
     .map(({ field, value }) => ({ field, value }))
 }
 
