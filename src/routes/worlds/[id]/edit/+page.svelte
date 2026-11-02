@@ -95,11 +95,18 @@
   </form>
 
   <section class="space-y-2 border-t border-border pt-4">
-    {#if !archived}
-      <form method="POST" action="?/archive" use:enhance>
-        <Button type="submit" variant="secondary">Archive World</Button>
-      </form>
-    {/if}
+    <div class="flex items-center gap-3">
+      {#if !archived}
+        <form method="POST" action="?/archive" use:enhance>
+          <Button type="submit" variant="secondary">Archive World</Button>
+        </form>
+      {/if}
+      {#if !confirmingDelete}
+        <Button type="button" variant="secondary" onclick={() => (confirmingDelete = true)}
+          >Delete World</Button
+        >
+      {/if}
+    </div>
 
     {#if form?.inUse}
       <Alert variant="danger">
@@ -119,10 +126,6 @@
           >Cancel</Button
         >
       </form>
-    {:else}
-      <Button type="button" variant="secondary" onclick={() => (confirmingDelete = true)}
-        >Delete World</Button
-      >
     {/if}
   </section>
 </main>
