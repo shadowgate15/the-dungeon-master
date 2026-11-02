@@ -82,4 +82,6 @@
       {/each}
     </ul>
   {/if}
+
+  <a href={resolve('/worlds/archived')} class="text-sm underline">Archived Worlds</a>
 </main>
