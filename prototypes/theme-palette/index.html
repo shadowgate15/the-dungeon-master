@@ -1,0 +1,144 @@
+<!doctype html>
+<!-- PROTOTYPE (throwaway): palette + type sheet for ticket #52. Open directly in a browser.
+     Fonts load from Google Fonts here ONLY for convenience; the real build self-hosts via Fontsource.
+     Three variants: ?variant=A|B|C (or use arrow keys / bottom bar). -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PROTOTYPE – Theme palette</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Uncial+Antiqua&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Metamorphous&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* ---------- Variant tokens: semantic roles ---------- */
+  /* A: Parchment & Oxblood — oxblood is the action color, gold is decoration */
+  [data-v='A'][data-theme='light'] { --bg:#f3e9d2; --surface:#fbf5e6; --raised:#fffaf0; --border:#cdb98f; --text:#2b2118; --muted:#6b5a45; --primary:#7a1f26; --on-primary:#fbf5e6; --accent:#9a7420; --focus:#1f4e79; --danger:#9b1c1c; --danger-bg:#f6dcd6; --success:#2f5d34; --success-bg:#dfe8cf; --warning:#7a4b00; --warning-bg:#f3e0b0; --info:#1f4e79; --info-bg:#d9e4ea; }
+  [data-v='A'][data-theme='dark']  { --bg:#17130f; --surface:#211b15; --raised:#2c241c; --border:#4a3d2e; --text:#eadfc8; --muted:#a8977c; --primary:#d9892b; --on-primary:#1b1208; --accent:#e0b24a; --focus:#7fb4e6; --danger:#e0786d; --danger-bg:#3a1b19; --success:#8fbf7f; --success-bg:#1f2d1c; --warning:#e5b455; --warning-bg:#33260e; --info:#8bb8dc; --info-bg:#172530; }
+  [data-v='A'] { --font-display:'Cinzel',serif; --font-body:'EB Garamond',serif; --body-size:1.1rem; --display-tracking:.04em; }
+
+  /* B: Illuminated manuscript — gold-forward, warm ink-brown actions, ornate display */
+  [data-v='B'][data-theme='light'] { --bg:#efe2c0; --surface:#f8eed2; --raised:#fdf6e0; --border:#c2a45e; --text:#33240f; --muted:#715a33; --primary:#5b3a14; --on-primary:#fdf0cf; --accent:#8f5f10; --focus:#0f4c81; --danger:#a01f2d; --danger-bg:#f5d7cf; --success:#3d5c1f; --success-bg:#e0e6c3; --warning:#7a4a00; --warning-bg:#f2dca0; --info:#244e6b; --info-bg:#d6e2e0; }
+  [data-v='B'][data-theme='dark']  { --bg:#14100c; --surface:#1d1710; --raised:#281f15; --border:#5a4624; --text:#f0e2bf; --muted:#b09a70; --primary:#e3b94f; --on-primary:#1a1204; --accent:#f0cf75; --focus:#8ec3f0; --danger:#ee8579; --danger-bg:#3d1b18; --success:#a5cc86; --success-bg:#212c17; --warning:#f0c366; --warning-bg:#392a0d; --info:#93c1de; --info-bg:#162630; }
+  [data-v='B'] { --font-display:'Uncial Antiqua',serif; --font-body:'Crimson Pro',serif; --body-size:1.1rem; --display-tracking:.02em; }
+
+  /* C: Slate & Candle — restrained stone neutrals, amber/oxblood used sparingly, UI-dense sans body */
+  [data-v='C'][data-theme='light'] { --bg:#e9e5dc; --surface:#f4f1ea; --raised:#fbf9f4; --border:#c4bdae; --text:#23211d; --muted:#625d52; --primary:#8a2a2f; --on-primary:#fbf9f4; --accent:#8a6518; --focus:#1d4f8a; --danger:#a12626; --danger-bg:#f3d9d3; --success:#2f6040; --success-bg:#d9e8d9; --warning:#7a4b05; --warning-bg:#f1e0b8; --info:#264f78; --info-bg:#d7e2ec; }
+  [data-v='C'][data-theme='dark']  { --bg:#121215; --surface:#1b1b20; --raised:#25252b; --border:#3b3b44; --text:#e6e2d8; --muted:#9d9a90; --primary:#e6a23c; --on-primary:#17110a; --accent:#d4a24a; --focus:#79b0ec; --danger:#ef7d78; --danger-bg:#381a1b; --success:#7fc294; --success-bg:#17291e; --warning:#e8b44f; --warning-bg:#33270f; --info:#7fb0e0; --info-bg:#15222f; }
+  [data-v='C'] { --font-display:'Metamorphous',serif; --font-body:'Inter',system-ui,sans-serif; --body-size:.95rem; --display-tracking:.01em; }
+
+  /* ---------- Sheet chrome ---------- */
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,sans-serif; background:#444; padding-bottom:4rem; }
+  .panes { display:grid; grid-template-columns:1fr 1fr; }
+  @media (max-width:900px){ .panes{ grid-template-columns:1fr; } }
+  .pane { background:var(--bg); color:var(--text); padding:1.5rem; font-family:var(--font-body); font-size:var(--body-size); line-height:1.5; min-width:0; }
+  .pane h1,.pane h2,.pane h3 { font-family:var(--font-display); letter-spacing:var(--display-tracking); margin:0 0 .5rem; font-weight:700; }
+  .pane h1 { font-size:2rem; } .pane h2 { font-size:1.25rem; margin-top:1.5rem; color:var(--accent); } .pane h3 { font-size:1rem; }
+  .tag { font:600 .7rem system-ui; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); }
+  .muted { color:var(--muted); }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:.5rem; padding:1rem; }
+  .row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:.5rem 0; }
+  .btn { font:inherit; font-weight:600; border-radius:.35rem; padding:.45rem .9rem; border:1px solid transparent; cursor:pointer; }
+  .btn:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  .btn-primary { background:var(--primary); color:var(--on-primary); }
+  .btn-secondary { background:var(--raised); color:var(--text); border-color:var(--border); }
+  .btn-ghost { background:transparent; color:var(--primary); }
+  .btn-danger { background:var(--danger); color:var(--bg); }
+  .btn[disabled] { opacity:.45; cursor:not-allowed; }
+  label { display:block; font-weight:600; margin-bottom:.2rem; }
+  input,select { font:inherit; width:100%; background:var(--raised); color:var(--text); border:1px solid var(--border); border-radius:.35rem; padding:.4rem .6rem; }
+  input.bad { border-color:var(--danger); } .err { color:var(--danger); font-size:.85em; }
+  a.lnk { color:var(--primary); text-decoration:underline; text-underline-offset:3px; }
+  .alert { border-left:4px solid; border-radius:.35rem; padding:.6rem .8rem; margin:.4rem 0; }
+  .alert b { font-family:var(--font-display); letter-spacing:var(--display-tracking); }
+  .a-info{background:var(--info-bg);color:var(--info);border-color:var(--info)} .a-success{background:var(--success-bg);color:var(--success);border-color:var(--success)}
+  .a-warning{background:var(--warning-bg);color:var(--warning);border-color:var(--warning)} .a-danger{background:var(--danger-bg);color:var(--danger);border-color:var(--danger)}
+  table { width:100%; border-collapse:collapse; } th { text-align:left; font-family:var(--font-display); letter-spacing:var(--display-tracking); color:var(--accent); border-bottom:2px solid var(--border); padding:.4rem; }
+  td { padding:.45rem .4rem; border-bottom:1px solid var(--border); } tr.sel td { background:var(--raised); }
+  .badge { font:600 .75rem var(--font-body); border:1px solid; border-radius:99px; padding:.05rem .55rem; }
+  .toast { display:flex; justify-content:space-between; align-items:center; gap:1rem; background:var(--text); color:var(--bg); border-radius:.4rem; padding:.6rem .9rem; box-shadow:0 6px 18px #0006; }
+  .toast button { background:none; border:0; color:var(--bg); text-decoration:underline; font:inherit; cursor:pointer; }
+  .meter { height:.7rem; border-radius:99px; background:var(--raised); border:1px solid var(--border); overflow:hidden; } .meter i { display:block; height:100%; background:var(--primary); }
+  .sw { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:.4rem; }
+  .sw div { border:1px solid var(--border); border-radius:.3rem; padding:.35rem; font:.7rem/1.3 ui-monospace,monospace; }
+  .contrast td { font:.8rem ui-monospace,monospace; padding:.15rem .3rem; } .pass{color:var(--success)} .fail{color:var(--danger);font-weight:700}
+  .quote { font-style:italic; border-left:3px solid var(--accent); padding-left:.8rem; }
+  .dropcap::first-letter { font-family:var(--font-display); float:left; font-size:3rem; line-height:.9; padding-right:.4rem; color:var(--primary); }
+  /* switcher */
+  #bar { position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); background:#111; color:#fff; font:600 .9rem system-ui; padding:.5rem 1rem; border-radius:99px; display:flex; gap:1rem; align-items:center; box-shadow:0 4px 16px #000a; z-index:9; }
+  #bar button { background:#333; color:#fff; border:0; border-radius:50%; width:2rem; height:2rem; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="panes" id="panes"></div>
+<div id="bar"><button id="prev">←</button><span id="label"></span><button id="next">→</button></div>
+
+<template id="tpl">
+  <h1>The Dungeon Master</h1>
+  <div class="tag" data-mode></div>
+  <p class="dropcap">The torchlight gutters as you descend the worn stair. Somewhere below, water drips onto stone, and the air smells of old iron and older secrets. <span class="muted">(muted: 14 / 20 gold remaining)</span></p>
+  <p class="quote">"Roll for initiative," says the Dungeon Master.</p>
+
+  <h2>Type scale</h2>
+  <h1 style="font-size:1.6rem">Heading one — Worlds</h1><h3>Heading three — Combat Tracker</h3>
+  <p>Body: The ranger nocks an arrow, <b>1d20 + 5</b> to hit, <i>advantage</i> from hiding. Armor Class 15, 27 HP.</p>
+
+  <h2>Buttons &amp; links</h2>
+  <div class="row"><button class="btn btn-primary">New World</button><button class="btn btn-secondary">Cancel</button><button class="btn btn-ghost">Restore</button><button class="btn btn-danger">Delete</button><button class="btn btn-primary" disabled>Disabled</button><a class="lnk" href="#">Edit world</a></div>
+
+  <h2>Form</h2>
+  <div class="card">
+    <div class="row" style="align-items:stretch"><div style="flex:1"><label>World name</label><input value="Aldermoor" /></div><div style="flex:1"><label>Genre flavor</label><select><option>High fantasy</option><option>Grimdark</option></select></div></div>
+    <label>Premise</label><input class="bad" value="" placeholder="Describe the world…" /><div class="err">Premise is required.</div>
+  </div>
+
+  <h2>Alerts</h2>
+  <div class="alert a-info"><b>Note.</b> The model is running locally.</div>
+  <div class="alert a-success"><b>Saved.</b> World “Aldermoor” created.</div>
+  <div class="alert a-warning"><b>Careful.</b> Premise is near the length limit.</div>
+  <div class="alert a-danger"><b>Failed.</b> Could not reach the model.</div>
+
+  <h2>Table row, badge, meter</h2>
+  <div class="card"><table><tr><th>World</th><th>Genre</th><th>State</th></tr>
+    <tr class="sel"><td>Aldermoor</td><td>High fantasy</td><td><span class="badge" style="color:var(--success)">Active</span></td></tr>
+    <tr><td>Saltmarsh</td><td>Grimdark</td><td><span class="badge" style="color:var(--muted)">Archived</span></td></tr></table>
+    <div class="row"><span class="muted">Context</span><div class="meter" style="flex:1"><i style="width:62%"></i></div></div></div>
+
+  <h2>Toast</h2>
+  <div class="toast"><span>World archived.</span><button>Undo</button></div>
+
+  <h2>Palette (semantic roles)</h2>
+  <div class="sw" data-sw></div>
+  <h2>Contrast (WCAG)</h2>
+  <table class="contrast" data-contrast></table>
+</template>
+
+<script>
+  const variants = { A:'Parchment & Oxblood — Cinzel + EB Garamond', B:'Illuminated Manuscript — Uncial Antiqua + Crimson Pro', C:'Slate & Candle — Metamorphous + Inter' };
+  const keys = Object.keys(variants);
+  const roles = ['bg','surface','raised','border','text','muted','primary','on-primary','accent','focus','danger','danger-bg','success','success-bg','warning','warning-bg','info','info-bg'];
+  const pairs = [['text','bg','body text'],['text','surface','text on surface'],['muted','bg','muted text'],['muted','surface','muted on surface'],['on-primary','primary','primary button'],['bg','danger','danger button'],['primary','bg','link / ghost'],['accent','bg','display heading (large, 3:1)'],['danger','danger-bg','alert danger'],['success','success-bg','alert success'],['warning','warning-bg','alert warning'],['info','info-bg','alert info'],['focus','bg','focus ring (3:1)'],['border','bg','border (3:1)']];
+  const lum = h => { const [r,g,b]=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255).map(c=>c<=.03928?c/12.92:((c+.055)/1.055)**2.4); return .2126*r+.7152*g+.0722*b; };
+  const ratio = (a,b) => { const [x,y]=[lum(a),lum(b)].sort((m,n)=>n-m); return (x+.05)/(y+.05); };
+
+  function build(v){
+    const panes = document.getElementById('panes'); panes.innerHTML='';
+    for (const mode of ['light','dark']) {
+      const el = document.createElement('div'); el.className='pane'; el.dataset.v=v; el.dataset.theme=mode;
+      el.appendChild(document.getElementById('tpl').content.cloneNode(true));
+      panes.appendChild(el);
+      el.querySelector('[data-mode]').textContent = `${mode} · variant ${v}`;
+      const cs = getComputedStyle(el), val = r => cs.getPropertyValue('--'+r).trim();
+      el.querySelector('[data-sw]').innerHTML = roles.map(r=>`<div style="background:${val(r)};color:${lum(val(r))>.35?'#000':'#fff'}">${r}<br>${val(r)}</div>`).join('');
+      el.querySelector('[data-contrast]').innerHTML = pairs.map(([f,b,l])=>{ const c=ratio(val(f),val(b)); const need=/3:1/.test(l)?3:4.5; return `<tr><td>${l}</td><td>${c.toFixed(2)}</td><td class="${c>=need?'pass':'fail'}">${c>=need?'AA ✓':'FAIL'}</td></tr>`; }).join('');
+    }
+    document.getElementById('label').textContent = `${v} (${variants[v]})`;
+  }
+  function go(d){ const cur = new URLSearchParams(location.search).get('variant')||'A'; const n = keys[(keys.indexOf(cur)+d+keys.length)%keys.length]; history.replaceState(null,'','?variant='+n); build(n); }
+  document.getElementById('prev').onclick=()=>go(-1); document.getElementById('next').onclick=()=>go(1);
+  addEventListener('keydown',e=>{ if(e.key==='ArrowLeft')go(-1); if(e.key==='ArrowRight')go(1); });
+  build(new URLSearchParams(location.search).get('variant')||'A');
+  document.fonts.ready.then(()=>build(new URLSearchParams(location.search).get('variant')||'A'));
+</script>
+</body>
+</html>
