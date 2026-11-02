@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   acceptCard,
+  applyCompaction,
   dismissCard,
   dismissedNotes,
   emptyConversation,
@@ -175,5 +176,50 @@ describe('superseding on feedback', () => {
     state = propose(state, { premise: 'P2' })
 
     expect(pendingProposals(state)).toEqual([{ field: 'premise', value: 'P2' }])
+  })
+})
+
+describe('compaction state', () => {
+  /** n exchanges: 2n history entries, ids m1..m2n. */
+  function exchanges(n: number) {
+    let state = emptyConversation()
+    for (let i = 0; i < n; i++) state = receiveTurn(sendMessage(state, `u${i}`), `r${i}`, {})
+    return state
+  }
+
+  it('remembers the summary and marks a divider after the last summarized message', () => {
+    const state = applyCompaction(exchanges(4), { summary: 'Gist.', summarizedCount: 4 })
+
+    expect(state.summary).toBe('Gist.')
+    expect(state.summarizedCount).toBe(4)
+    expect(state.dividers).toEqual([state.entries[3].id])
+    // The visible transcript stays complete.
+    expect(state.entries).toHaveLength(8)
+    expect(historyOf(state)).toHaveLength(8)
+  })
+
+  it('counts the divider position through history, skipping failed entries', () => {
+    let state = sendMessage(emptyConversation(), 'a')
+    state = failMessage(state, 'broken', 'oops')
+    state = receiveTurn(state, 'b', {})
+    state = applyCompaction(state, { summary: 'Gist.', summarizedCount: 2 })
+
+    expect(state.dividers).toEqual([state.entries[2].id])
+  })
+
+  it('keeps earlier dividers when compacting again', () => {
+    let state = applyCompaction(exchanges(4), { summary: 'One.', summarizedCount: 2 })
+    state = applyCompaction(state, { summary: 'Two.', summarizedCount: 5 })
+
+    expect(state.dividers).toHaveLength(2)
+    expect(state.summary).toBe('Two.')
+  })
+
+  it('records the last response size and forgets it once compacted', () => {
+    let state = receiveTurn(sendMessage(emptyConversation(), 'hi'), 'ok', {}, 321)
+    expect(state.lastUsedTokens).toBe(321)
+
+    state = applyCompaction(state, { summary: 'Gist.', summarizedCount: 2 })
+    expect(state.lastUsedTokens).toBeNull()
   })
 })

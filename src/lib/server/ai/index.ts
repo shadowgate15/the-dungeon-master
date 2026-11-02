@@ -1,13 +1,17 @@
-import { LM_STUDIO_BASE_URL, LM_STUDIO_MODEL } from '$app/env/private'
+import { LM_STUDIO_BASE_URL, LM_STUDIO_CONTEXT_LIMIT, LM_STUDIO_MODEL } from '$app/env/private'
 import { createChatAdapter } from './adapter.ts'
-import { resolveAiConfig } from './config.ts'
+import { resolveAiConfig, withContextFallback } from './config.ts'
 import { createReasoningLock } from './lock.ts'
 import { probeAi } from './probe.ts'
 import { createChatPort } from './world-conversation.ts'
 import type { AiStatus } from '#lib/ai/status.ts'
 
 /** Server-only: never import this from browser code. */
-const config = resolveAiConfig({ baseUrl: LM_STUDIO_BASE_URL, model: LM_STUDIO_MODEL })
+const config = resolveAiConfig({
+  baseUrl: LM_STUDIO_BASE_URL,
+  model: LM_STUDIO_MODEL,
+  contextLimit: LM_STUDIO_CONTEXT_LIMIT
+})
 
 export type { AiStatus }
 
@@ -18,8 +22,8 @@ const reasoningLock = createReasoningLock(() => probeAi(config))
  * `recheck` is an explicit user re-probe, the only thing that can release the lock.
  * The result never contains the base URL.
  */
-export function getAiStatus(options?: { recheck?: boolean }): Promise<AiStatus> {
-  return reasoningLock.status(options)
+export async function getAiStatus(options?: { recheck?: boolean }): Promise<AiStatus> {
+  return withContextFallback(await reasoningLock.status(options), config.contextLimit)
 }
 
 /** Disables the AI until a successful re-probe or a server restart. */

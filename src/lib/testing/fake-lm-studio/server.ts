@@ -9,6 +9,8 @@ import type { AddressInfo } from 'node:net'
  * The active scenario can be switched while the server runs, either with `setScenario`
  * or by POSTing `{ "scenario": "..." }` to `/__control/scenario` (used by Playwright).
  * POSTing any JSON to `/__control/chat-content` replaces the canned chat completion object,
+ * `/__control/summary-content` does the same for compaction requests, POSTing
+ * `{ promptTokens, completionTokens }` to `/__control/usage` sets the reported usage,
  * and GET `/__control/requests` returns the chat requests received so far.
  */
 
@@ -35,6 +37,16 @@ export interface ScenarioContext {
   options: { model: string; contextLength: number }
   /** The canned structured-output object that chat completions stream back. */
   chatContent: unknown
+  /** The canned object streamed back for context-compaction (summary) requests. */
+  summaryContent: unknown
+  /** The token counts reported in the final usage chunk. */
+  usage: { promptTokens: number; completionTokens: number }
+}
+
+/** A compaction request is the one whose output schema has a `summary` property. */
+function isSummaryRequest(body: unknown) {
+  const format = (body as { response_format?: unknown } | undefined)?.response_format
+  return JSON.stringify(format ?? null).includes('"summary":{')
 }
 
 export type Scenario = (ctx: ScenarioContext) => void | Promise<void>
@@ -96,7 +108,14 @@ function streamChatCompletion(ctx: ScenarioContext, content: string, reasoning =
   const size = Math.max(1, Math.ceil(content.length / 3))
   for (let i = 0; i < content.length; i += size) delta({ content: content.slice(i, i + size) })
   delta({}, 'stop')
-  write([], { usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 } })
+  const { promptTokens, completionTokens } = ctx.usage
+  write([], {
+    usage: {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: promptTokens + completionTokens
+    }
+  })
   res.end('data: [DONE]\n\n')
 }
 
@@ -104,7 +123,17 @@ export const scenarios: Record<string, Scenario> = {
   ready: (ctx) => {
     if (modelList(ctx, [ctx.options.model])) return
     if (ctx.path === '/v1/chat/completions') {
-      return streamChatCompletion(ctx, JSON.stringify(ctx.chatContent))
+      const canned = isSummaryRequest(ctx.body) ? ctx.summaryContent : ctx.chatContent
+      return streamChatCompletion(ctx, JSON.stringify(canned))
+    }
+    json(ctx.res, 404, { error: 'not found' })
+  },
+  /** Turns work, but compaction (summary) requests come back broken. */
+  'summary-fails': (ctx) => {
+    if (modelList(ctx, [ctx.options.model])) return
+    if (ctx.path === '/v1/chat/completions') {
+      const canned = isSummaryRequest(ctx.body) ? { summary: 42 } : ctx.chatContent
+      return streamChatCompletion(ctx, JSON.stringify(canned))
     }
     json(ctx.res, 404, { error: 'not found' })
   },
@@ -152,6 +181,10 @@ export interface FakeLmStudio {
   setScenario(name: string): void
   /** Replace the object that chat completions stream back in the `ready` scenario. */
   setChatContent(content: unknown): void
+  /** Replace the object that compaction (summary) requests stream back. */
+  setSummaryContent(content: unknown): void
+  /** Replace the token counts reported with each chat completion. */
+  setUsage(usage: { promptTokens: number; completionTokens: number }): void
   /** Chat completion requests still open (not finished or dropped by the client). */
   openChatConnections(): number
   close(): Promise<void>
@@ -179,6 +212,8 @@ export async function startFakeLmStudio(
   let scenario = options.scenario ?? 'ready'
   let chatContent: unknown = { reply: 'A fake reply.', proposal: {} }
   const requests: FakeRequest[] = []
+  let summaryContent: unknown = { summary: 'A fake summary of the earlier conversation.' }
+  let usage = { promptTokens: 10, completionTokens: 20 }
   let openChat = 0
 
   const server: Server = createServer(async (req, res) => {
@@ -198,12 +233,30 @@ export async function startFakeLmStudio(
       return json(res, 200, { ok: true })
     }
 
+    if (path === '/__control/summary-content' && req.method === 'POST') {
+      summaryContent = body
+      return json(res, 200, { ok: true })
+    }
+    if (path === '/__control/usage' && req.method === 'POST') {
+      usage = body as typeof usage
+      return json(res, 200, { ok: true })
+    }
+
     requests.push({ method: req.method ?? 'GET', path, body })
     if (path === '/v1/chat/completions') {
       openChat++
       res.on('close', () => openChat--)
     }
-    await scenarios[scenario]({ req, res, path, body, options: resolved, chatContent })
+    await scenarios[scenario]({
+      req,
+      res,
+      path,
+      body,
+      options: resolved,
+      chatContent,
+      summaryContent,
+      usage
+    })
   })
 
   await new Promise<void>((resolve) => server.listen(options.port ?? 0, '127.0.0.1', resolve))
@@ -218,6 +271,12 @@ export async function startFakeLmStudio(
     },
     setChatContent(content) {
       chatContent = content
+    },
+    setSummaryContent(content) {
+      summaryContent = content
+    },
+    setUsage(next) {
+      usage = next
     },
     openChatConnections: () => openChat,
     close: () =>

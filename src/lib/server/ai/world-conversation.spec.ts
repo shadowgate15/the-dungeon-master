@@ -177,6 +177,52 @@ describe('runTurn', () => {
   })
 })
 
+describe('runTurn usage', () => {
+  const finished = (usage: unknown) => [
+    ...complete({ reply: 'ok', proposals: {} }).slice(0, -1),
+    { type: 'RUN_FINISHED', threadId: 't', runId: 'r', usage }
+  ]
+
+  it('reports the token usage from RUN_FINISHED in the spec usage[] shape', async () => {
+    const { port } = fakePort(finished([{ inputTokens: 120, outputTokens: 30, totalTokens: 150 }]))
+
+    const result = await runTurn(port, input())
+
+    expect(result).toMatchObject({ ok: true, usage: { totalTokens: 150, promptTokens: 120 } })
+  })
+
+  it('reports the token usage from RUN_FINISHED in the TanStack shape', async () => {
+    const { port } = fakePort(finished({ promptTokens: 7, completionTokens: 3, totalTokens: 10 }))
+
+    const result = await runTurn(port, input())
+
+    expect(result).toMatchObject({ ok: true, usage: { totalTokens: 10, promptTokens: 7 } })
+  })
+
+  it('omits usage when the provider does not report it', async () => {
+    const { port } = fakePort(complete({ reply: 'ok', proposals: {} }))
+
+    const result = await runTurn(port, input())
+
+    expect(result).not.toHaveProperty('usage')
+  })
+
+  it('surfaces usage end to end through the real adapter and the fake server', async () => {
+    const fake = await startFakeLmStudio({ model: 'm' })
+    try {
+      fake.setChatContent({ reply: 'Hello.', proposals: {} })
+      const { createChatAdapter } = await import('./adapter.ts')
+      const port = createChatPort(createChatAdapter({ baseUrl: fake.baseUrl, model: 'm' }))
+
+      const result = await runTurn(port, input())
+
+      expect(result).toMatchObject({ ok: true, usage: { promptTokens: 10, totalTokens: 30 } })
+    } finally {
+      await fake.close()
+    }
+  })
+})
+
 describe('runTurn failure handling', () => {
   afterEach(() => vi.useRealTimers())
 
@@ -325,7 +371,7 @@ describe('createChatPort', () => {
 
       const result = await runTurn(port, input())
 
-      expect(result).toEqual({ ok: true, reply: 'Hello.', proposals: { name: 'Eldoria' } })
+      expect(result).toMatchObject({ ok: true, reply: 'Hello.', proposals: { name: 'Eldoria' } })
       const sent = fake.requests.find((r) => r.path === '/v1/chat/completions')?.body as {
         max_tokens?: number
         max_completion_tokens?: number
