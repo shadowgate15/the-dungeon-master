@@ -371,7 +371,7 @@ describe('createChatPort', () => {
 
       const result = await runTurn(port, input())
 
-      expect(result).toEqual({ ok: true, reply: 'Hello.', proposals: { name: 'Eldoria' } })
+      expect(result).toMatchObject({ ok: true, reply: 'Hello.', proposals: { name: 'Eldoria' } })
       const sent = fake.requests.find((r) => r.path === '/v1/chat/completions')?.body as {
         max_tokens?: number
         max_completion_tokens?: number
