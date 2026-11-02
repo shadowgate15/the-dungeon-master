@@ -53,7 +53,7 @@
   ] as const
 </script>
 
-{#snippet create()}
+{#snippet conversation()}
   <AiPanel>
     {#snippet chat(status, ai)}
       {#key chatKey}
@@ -71,7 +71,9 @@
       {/key}
     {/snippet}
   </AiPanel>
+{/snippet}
 
+{#snippet seedForm()}
   <form
     method="POST"
     action="?/createWorld"
@@ -115,10 +117,15 @@
   </form>
 {/snippet}
 
+{#snippet create()}
+  {@render conversation()}
+  {@render seedForm()}
+{/snippet}
+
 {#if variant === 'A'}
   <VariantA {store} {create} />
 {:else if variant === 'B'}
-  <VariantB {store} {create} />
+  <VariantB {store} {conversation} {seedForm} />
 {:else if variant === 'C'}
   <VariantC {store} {create} />
 {:else}

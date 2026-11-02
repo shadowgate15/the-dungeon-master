@@ -6,7 +6,15 @@
   import { ago, type ProtoWorld, type createProtoStore } from './store.svelte.ts'
   import Toast from './Toast.svelte'
 
-  let { store, create }: { store: ReturnType<typeof createProtoStore>; create: Snippet } = $props()
+  let {
+    store,
+    conversation,
+    seedForm
+  }: {
+    store: ReturnType<typeof createProtoStore>
+    conversation: Snippet
+    seedForm: Snippet
+  } = $props()
 
   let view = $state<'active' | 'archived'>('active')
   let query = $state('')
@@ -198,12 +206,22 @@
   </div>
 </div>
 
-<dialog bind:this={dialog} class="m-auto w-full max-w-xl rounded p-6 backdrop:bg-black/40">
+<dialog
+  bind:this={dialog}
+  class="m-auto w-[min(72rem,calc(100vw-2rem))] rounded p-6 backdrop:bg-black/40"
+>
   <div class="mb-3 flex items-center justify-between">
     <h2 class="text-xl font-semibold">New World</h2>
     <button type="button" aria-label="Close" onclick={() => dialog?.close()}>✕</button>
   </div>
-  {@render create()}
+  <div class="grid gap-6 lg:grid-cols-2">
+    <section aria-label="Conversation" class="max-h-[70vh] min-w-0 space-y-2 overflow-y-auto">
+      {@render conversation()}
+    </section>
+    <section aria-label="Seed card" class="max-h-[70vh] min-w-0 overflow-y-auto">
+      {@render seedForm()}
+    </section>
+  </div>
 </dialog>
 
 <Toast toast={store.toast} ondismiss={store.dismissToast} />
