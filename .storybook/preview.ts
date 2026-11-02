@@ -18,7 +18,7 @@ const preview: Preview = {
       }
     }
   },
-  initialGlobals: { theme: 'system' },
+  initialGlobals: { theme: import.meta.env.VITE_STORYBOOK_THEME ?? 'system' },
   decorators: [
     (story, context) => {
       // The tokens key off data-theme on <html>; no attribute means follow the OS.
@@ -41,7 +41,7 @@ const preview: Preview = {
       // 'todo' - show a11y violations in the test UI only
       // 'error' - fail CI on a11y violations
       // 'off' - skip a11y checks entirely
-      test: 'todo'
+      test: 'error'
     }
   }
 }

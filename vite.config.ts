@@ -9,6 +9,32 @@ import { storybookTest } from '@storybook/addon-vitest/vitest-plugin'
 const dirname =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url))
 
+// Every story runs once per theme; the preview reads the theme from VITE_STORYBOOK_THEME.
+const storybookProject = (theme: 'light' | 'dark') => ({
+  extends: true as const,
+  plugins: [
+    // The plugin will run tests for the stories defined in your Storybook config
+    // See options at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon#storybooktest
+    storybookTest({
+      configDir: path.join(dirname, '.storybook')
+    })
+  ],
+  test: {
+    name: `storybook-${theme}`,
+    env: { VITE_STORYBOOK_THEME: theme },
+    browser: {
+      enabled: true,
+      headless: true,
+      provider: playwright({}),
+      instances: [
+        {
+          browser: 'chromium' as const
+        }
+      ]
+    }
+  }
+})
+
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 export default defineConfig({
   plugins: [
@@ -57,29 +83,7 @@ export default defineConfig({
           exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
         }
       },
-      {
-        extends: true,
-        plugins: [
-          // The plugin will run tests for the stories defined in your Storybook config
-          // See options at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon#storybooktest
-          storybookTest({
-            configDir: path.join(dirname, '.storybook')
-          })
-        ],
-        test: {
-          name: 'storybook',
-          browser: {
-            enabled: true,
-            headless: true,
-            provider: playwright({}),
-            instances: [
-              {
-                browser: 'chromium'
-              }
-            ]
-          }
-        }
-      }
+      ...(['light', 'dark'] as const).map(storybookProject)
     ]
   }
 })
