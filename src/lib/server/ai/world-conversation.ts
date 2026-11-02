@@ -8,7 +8,13 @@ import {
   exceedsLimit,
   shouldCompact
 } from '#lib/world/context.ts'
-import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '#lib/world/enums.ts'
+import {
+  GENRE_FLAVORS,
+  MAGIC_LEVELS,
+  PREMISE_SOFT_CAP,
+  SCALES,
+  TECH_LEVELS
+} from '#lib/world/enums.ts'
 import {
   FIELD_LABELS,
   NAME_MAX,
@@ -137,7 +143,7 @@ export type TurnResult =
 const SYSTEM_PROMPT = `You are helping a player create a World: the lasting setting that many tabletop role-playing campaigns can be set in. A World is a place, not a story.
 Reply with a short message (a sentence or two) and a "proposals" object holding only the seed fields you want to change.
 Seed fields: name (short text), premise, genreFlavor, scale, magicLevel, techLevel (each one of the allowed values).
-The premise describes the World itself in a few sentences: what it is like, what makes it distinctive, and the lasting conditions, powers or tensions that shape life in it. Write it as a description of a place and its present state, in the present tense. Do not write a plot, quest, chosen-one tale or character arc, and do not name protagonists or tell a sequence of events; adventures happen later, inside the World. Stay consistent with the genre flavor, scale, magic level and tech level when they are set.
+The premise describes the World itself in a few sentences, ideally 300 to 400 characters and never more than ${PREMISE_SOFT_CAP}: what it is like, what makes it distinctive, and the lasting conditions, powers or tensions that shape life in it. Write it as a description of a place and its present state, in the present tense. Do not write a plot, quest, chosen-one tale or character arc, and do not name protagonists or tell a sequence of events; adventures happen later, inside the World. Stay consistent with the genre flavor, scale, magic level and tech level when they are set.
 Leave out fields you do not want to change. When the user gives feedback on a pending proposal, answer with a revised proposal for that same field.
 Never repeat a proposal the user dismissed. Respect values the user already set unless asked to change them.`
 
