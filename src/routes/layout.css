@@ -1,3 +1,142 @@
 @import 'tailwindcss';
+@import '@fontsource/metamorphous/400.css';
+@import '@fontsource-variable/inter/index.css';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+/* Dark mode follows data-theme; with no attribute the media query below applies. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* Layer 1: raw palette (plain variables, no utilities generated). */
+:root {
+  --parchment-100: #fbf9f4;
+  --parchment-200: #f4f1ea;
+  --parchment-300: #e9e5dc;
+  --parchment-border: #c4bdae;
+  --parchment-control: #857d6c;
+  --ink-900: #23211d;
+  --ink-500: #625d52;
+  --oxblood-600: #8a2a2f;
+  --gold-700: #8a6518;
+  --azure-700: #1d4f8a;
+  --red-tint-light: #f6dcdc;
+  --red-ink-light: #8c1f1f;
+  --green-tint-light: #dcefdc;
+  --green-ink-light: #1f5a28;
+  --amber-tint-light: #f7e8c6;
+  --amber-ink-light: #6b4a06;
+  --blue-tint-light: #dce8f6;
+  --blue-ink-light: #1d4f8a;
+
+  --stone-950: #121215;
+  --stone-900: #1b1b20;
+  --stone-800: #25252b;
+  --stone-700: #3b3b44;
+  --stone-control: #7b7b88;
+  --bone-100: #e6e2d8;
+  --bone-400: #9d9a90;
+  --amber-400: #e6a23c;
+  --amber-ink: #17110a;
+  --gold-400: #d4a24a;
+  --sky-300: #79b0ec;
+  --red-tint-dark: #3a1b1d;
+  --red-ink-dark: #f2a3a3;
+  --green-tint-dark: #17301b;
+  --green-ink-dark: #9fd8a6;
+  --amber-tint-dark: #3a2c0e;
+  --amber-ink-dark: #f0c46a;
+  --blue-tint-dark: #172a40;
+  --blue-ink-dark: #9cc4f2;
+}
+
+/* Layer 2: semantic roles, declared in @theme so utilities are generated. */
+@theme {
+  --color-bg: var(--parchment-300);
+  --color-surface: var(--parchment-200);
+  --color-raised: var(--parchment-100);
+  --color-border: var(--parchment-border);
+  --color-control-border: var(--parchment-control);
+  --color-text: var(--ink-900);
+  --color-muted: var(--ink-500);
+  --color-primary: var(--oxblood-600);
+  --color-on-primary: var(--parchment-100);
+  --color-accent: var(--gold-700);
+  --color-focus: var(--azure-700);
+  --color-danger: var(--red-ink-light);
+  --color-danger-bg: var(--red-tint-light);
+  --color-success: var(--green-ink-light);
+  --color-success-bg: var(--green-tint-light);
+  --color-warning: var(--amber-ink-light);
+  --color-warning-bg: var(--amber-tint-light);
+  --color-info: var(--blue-ink-light);
+  --color-info-bg: var(--blue-tint-light);
+
+  --font-display: 'Metamorphous', ui-serif, Georgia, serif;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --radius-control: 0.375rem;
+  --radius-panel: 0.75rem;
+  --shadow-raised: 0 1px 3px rgb(0 0 0 / 0.18);
+  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.35);
+}
+
+@layer base {
+  :root:where([data-theme='dark']) {
+    color-scheme: dark;
+  }
+  :root:where([data-theme='light']) {
+    color-scheme: light;
+  }
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+  }
+}
+
+/* Dark values: explicit attribute, or OS preference when no attribute is set. */
+:root[data-theme='dark'] {
+  --color-bg: var(--stone-950);
+  --color-surface: var(--stone-900);
+  --color-raised: var(--stone-800);
+  --color-border: var(--stone-700);
+  --color-control-border: var(--stone-control);
+  --color-text: var(--bone-100);
+  --color-muted: var(--bone-400);
+  --color-primary: var(--amber-400);
+  --color-on-primary: var(--amber-ink);
+  --color-accent: var(--gold-400);
+  --color-focus: var(--sky-300);
+  --color-danger: var(--red-ink-dark);
+  --color-danger-bg: var(--red-tint-dark);
+  --color-success: var(--green-ink-dark);
+  --color-success-bg: var(--green-tint-dark);
+  --color-warning: var(--amber-ink-dark);
+  --color-warning-bg: var(--amber-tint-dark);
+  --color-info: var(--blue-ink-dark);
+  --color-info-bg: var(--blue-tint-dark);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --color-bg: var(--stone-950);
+    --color-surface: var(--stone-900);
+    --color-raised: var(--stone-800);
+    --color-border: var(--stone-700);
+    --color-control-border: var(--stone-control);
+    --color-text: var(--bone-100);
+    --color-muted: var(--bone-400);
+    --color-primary: var(--amber-400);
+    --color-on-primary: var(--amber-ink);
+    --color-accent: var(--gold-400);
+    --color-focus: var(--sky-300);
+    --color-danger: var(--red-ink-dark);
+    --color-danger-bg: var(--red-tint-dark);
+    --color-success: var(--green-ink-dark);
+    --color-success-bg: var(--green-tint-dark);
+    --color-warning: var(--amber-ink-dark);
+    --color-warning-bg: var(--amber-tint-dark);
+    --color-info: var(--blue-ink-dark);
+    --color-info-bg: var(--blue-tint-dark);
+  }
+}
