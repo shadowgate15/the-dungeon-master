@@ -1,5 +1,11 @@
 <script lang="ts">
   import ContextMeter from './ContextMeter.svelte'
+  import Alert from '#lib/ui/Alert.svelte'
+  import Button from '#lib/ui/Button.svelte'
+  import ChatBubble from '#lib/ui/ChatBubble.svelte'
+  import Field from '#lib/ui/Field.svelte'
+  import ProposalCard from '#lib/ui/ProposalCard.svelte'
+  import Textarea from '#lib/ui/Textarea.svelte'
   import { DEFAULT_CONTEXT_LIMIT, estimatePromptTokens, KEEP_MESSAGES } from './context.ts'
   import {
     acceptCard,
@@ -227,65 +233,58 @@
 <div class="space-y-2">
   <ol aria-label="Conversation" class="space-y-2">
     {#each conversation.entries as entry (entry.id)}
-      <li class={entry.role === 'user' ? 'text-right' : ''}>
-        <p
-          class={[
-            'inline-block rounded px-2 py-1',
-            entry.error === undefined ? 'bg-slate-100' : 'bg-red-50 text-slate-500'
-          ]}
+      <li class="flex flex-col gap-1">
+        <ChatBubble
+          role={entry.role === 'user' ? 'user' : 'assistant'}
+          error={entry.error !== undefined}
         >
           {entry.content}
-        </p>
+        </ChatBubble>
         {#if entry.error !== undefined}
-          <p role="alert" class="text-sm text-red-600">
-            Failed: {entry.error}
-            <button
-              type="button"
-              class="rounded border px-2 py-0.5 text-slate-800 disabled:opacity-50"
+          <Alert variant="danger" class="flex items-center gap-2">
+            <span>Failed: {entry.error}</span>
+            <Button
+              variant="secondary"
+              size="sm"
               disabled={busy || locked}
-              onclick={() => retry(entry.id)}>Retry</button
+              onclick={() => retry(entry.id)}>Retry</Button
             >
-          </p>
+          </Alert>
         {/if}
         {#if entry.turn !== undefined}
           {@const cards = conversation.cards.filter((c) => c.turn === entry.turn)}
           {#if cards.length > 0}
-            <ul aria-label="Proposals" class="mt-1 space-y-1">
+            <ul aria-label="Proposals" class="space-y-1">
               {#each cards as card (card.id)}
-                {#if card.status === 'superseded'}
-                  <li class="px-2 text-sm text-slate-500">
-                    <span class="line-through">{FIELD_LABELS[card.field]}: {card.value}</span>
-                    (superseded)
-                  </li>
-                {:else}
-                  <li class="flex items-center gap-2 rounded border border-violet-200 p-2 text-sm">
-                    <span class="flex-1"
-                      ><strong>{FIELD_LABELS[card.field]}:</strong> {card.value}</span
-                    >
-                    {#if card.status === 'pending'}
-                      <button
-                        type="button"
-                        class="rounded bg-green-700 px-2 py-0.5 text-white"
-                        onclick={() => accept(card.id)}>Accept</button
-                      >
-                      <button
-                        type="button"
-                        class="rounded border px-2 py-0.5"
-                        onclick={() => (conversation = dismissCard(conversation, card.id))}
-                        >Dismiss</button
-                      >
-                    {:else}
-                      <span class="text-slate-500 capitalize">{card.status}</span>
-                    {/if}
-                  </li>
-                {/if}
+                <li>
+                  <ProposalCard
+                    label={FIELD_LABELS[card.field]}
+                    value={card.value}
+                    status={card.status}
+                  >
+                    {#snippet actions()}
+                      {#if card.status === 'pending'}
+                        <Button size="sm" onclick={() => accept(card.id)}>Accept</Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onclick={() => (conversation = dismissCard(conversation, card.id))}
+                          >Dismiss</Button
+                        >
+                      {/if}
+                    {/snippet}
+                  </ProposalCard>
+                </li>
               {/each}
             </ul>
           {/if}
         {/if}
       </li>
       {#if conversation.dividers.includes(entry.id)}
-        <li role="separator" class="border-t border-dashed pt-1 text-center text-xs text-slate-500">
+        <li
+          role="separator"
+          class="border-t border-dashed border-border pt-1 text-center text-xs text-muted"
+        >
           Earlier messages above were summarized for the assistant
         </li>
       {/if}
@@ -297,11 +296,9 @@
   {/if}
 
   {#if busy}
-    <p role="status" class="text-slate-500">
+    <p role="status" class="flex items-center gap-2 text-muted">
       Thinking…
-      <button type="button" class="rounded border px-2 py-0.5 text-slate-800" onclick={stop}
-        >Stop</button
-      >
+      <Button variant="secondary" size="sm" onclick={stop}>Stop</Button>
     </p>
   {/if}
 
@@ -310,54 +307,49 @@
       event.preventDefault()
       void send(draft.trim())
     }}
-    class="space-y-1"
+    class="space-y-2"
   >
-    <label class="block">
-      <span class="block text-sm font-medium">Message</span>
-      <textarea
-        bind:value={draft}
-        disabled={busy || locked}
-        rows="2"
-        class="w-full rounded border p-2 disabled:opacity-50"></textarea>
-    </label>
-    <button
-      type="submit"
-      disabled={busy || locked || !draft.trim()}
-      class="rounded bg-slate-800 px-3 py-1 text-white disabled:opacity-50"
-    >
-      Send
-    </button>
-    <button
-      type="button"
-      disabled={busy || locked || !canCompact}
-      onclick={compactNow}
-      class="rounded border px-3 py-1 disabled:opacity-50"
-    >
-      Compact now
-    </button>
+    <Field label="Message">
+      {#snippet children(id, describedby)}
+        <Textarea
+          {id}
+          aria-describedby={describedby}
+          bind:value={draft}
+          disabled={busy || locked}
+          rows={2}
+        />
+      {/snippet}
+    </Field>
+    <div class="flex gap-2">
+      <Button type="submit" disabled={busy || locked || !draft.trim()}>Send</Button>
+      <Button
+        variant="secondary"
+        type="button"
+        disabled={busy || locked || !canCompact}
+        onclick={compactNow}
+      >
+        Compact now
+      </Button>
+    </div>
   </form>
 
   {#if notice}
-    <p role="status" class="text-sm text-slate-600">{notice}</p>
+    <Alert variant="info">{notice}</Alert>
   {/if}
 
   {#if blocked !== null}
-    <div role="alert" class="space-y-1 rounded border border-red-200 bg-red-50 p-2 text-sm">
+    <Alert variant="danger" class="space-y-2">
       <p>{blocked}. The chat is paused.</p>
-      <button
-        type="button"
-        class="rounded border bg-white px-2 py-0.5"
-        onclick={() => ((finished = true), (blocked = null))}>Finish on the seed card</button
-      >
-      <button type="button" class="rounded border bg-white px-2 py-0.5" onclick={clearChat}
-        >Clear chat</button
-      >
-    </div>
+      <div class="flex gap-2">
+        <Button variant="secondary" size="sm" onclick={() => ((finished = true), (blocked = null))}
+          >Finish on the seed card</Button
+        >
+        <Button variant="secondary" size="sm" onclick={clearChat}>Clear chat</Button>
+      </div>
+    </Alert>
   {/if}
 
   {#if finished}
-    <p role="status" class="text-sm text-slate-600">
-      The chat is closed. Finish your World on the seed card.
-    </p>
+    <Alert variant="info">The chat is closed. Finish your World on the seed card.</Alert>
   {/if}
 </div>

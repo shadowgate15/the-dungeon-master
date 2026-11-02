@@ -1,5 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
+  import Button from '#lib/ui/Button.svelte'
+  import Panel from '#lib/ui/Panel.svelte'
+  import Textarea from '#lib/ui/Textarea.svelte'
   import { REASONING_MODEL_MESSAGE, type AiStatus } from './status.ts'
 
   type Props = {
@@ -23,40 +26,33 @@
   )
 </script>
 
-<section aria-label="AI" class="space-y-2 rounded border p-3">
-  <h2 class="text-lg font-semibold">AI</h2>
-
+<Panel title="AI">
   {#if status && status.state !== 'not-configured'}
     <p>Model: <span class="font-mono">{status.model}</span></p>
   {/if}
 
   {#if !status}
-    <p class="text-slate-500">Checking connection…</p>
+    <p class="text-muted">Checking connection…</p>
   {:else if status.state === 'ready'}
     <p>Connected</p>
   {:else if status.state === 'reasoning-model'}
-    <p class="text-slate-500">{REASONING_MODEL_MESSAGE} The form works as usual.</p>
+    <p class="text-muted">{REASONING_MODEL_MESSAGE} The form works as usual.</p>
   {:else if status.state === 'not-configured'}
-    <p class="text-slate-500">AI is not configured. The form works as usual.</p>
+    <p class="text-muted">AI is not configured. The form works as usual.</p>
   {:else if status.state === 'unreachable'}
-    <p class="text-slate-500">
+    <p class="text-muted">
       Not connected. Start LM Studio, or check the server configuration. The form works as usual.
     </p>
   {:else}
-    <p class="text-slate-500">
+    <p class="text-muted">
       The model {status.model} is not available in LM Studio. Download or load it there. The form works
       as usual.
     </p>
   {/if}
 
-  <button
-    type="button"
-    onclick={oncheck}
-    disabled={checking}
-    class="rounded border px-3 py-1 disabled:opacity-50"
-  >
+  <Button variant="secondary" size="sm" type="button" onclick={oncheck} disabled={checking}>
     Check connection
-  </button>
+  </Button>
 
   {#if chatStatus && chat}
     {@render chat(chatStatus)}
@@ -64,11 +60,9 @@
     <fieldset disabled={!ready} class="space-y-1">
       <label class="block">
         <span class="block text-sm font-medium">Message</span>
-        <textarea rows="2" class="w-full rounded border p-2 disabled:opacity-50"></textarea>
+        <Textarea rows={2} />
       </label>
-      <button type="button" class="rounded bg-slate-800 px-3 py-1 text-white disabled:opacity-50">
-        Send
-      </button>
+      <Button type="button" size="sm">Send</Button>
     </fieldset>
   {/if}
-</section>
+</Panel>
