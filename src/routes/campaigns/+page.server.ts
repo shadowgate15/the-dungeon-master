@@ -5,6 +5,7 @@ import {
   CampaignNotFoundError,
   CampaignValidationError
 } from '#lib/server/campaign/service.ts'
+import { worldWithSeed } from '#lib/server/campaign/world-seed.ts'
 import { createWorldService } from '#lib/server/world/service.ts'
 import type { ActionNotice } from '#lib/world/ActionToast.svelte'
 import type { Actions, PageServerLoad } from './$types'
@@ -19,20 +20,22 @@ export const load: PageServerLoad = ({ url }) => {
   const filterWorld = worlds.get(url.searchParams.get('world') ?? '')
   const worldFilter = filterWorld && { id: filterWorld.id, name: filterWorld.name }
   const active = campaigns.list({ worldId: worldFilter?.id })
-  const archived = campaigns
-    .listArchived()
-    .filter((c) => !worldFilter || campaigns.get(c.id)!.worlds.some((w) => w.id === worldFilter.id))
+  const withWorlds = (list: ReturnType<typeof campaigns.list>) =>
+    list.map((c) => ({ ...c, worlds: campaigns.get(c.id)?.worlds ?? [] }))
+  const archived = withWorlds(campaigns.listArchived()).filter(
+    (c) => !worldFilter || c.worlds.some((w) => w.id === worldFilter.id)
+  )
   return {
     view,
     worldFilter,
-    campaigns: (view === 'archived' ? archived : active).map((c) => ({
+    campaigns: (view === 'archived' ? archived : withWorlds(active)).map((c) => ({
       id: c.id,
       name: c.name,
       premise: c.premise,
       tone: c.tone,
       length: c.length,
       updatedAt: c.updatedAt,
-      worlds: campaigns.get(c.id)!.worlds.map((w) => ({
+      worlds: c.worlds.map((w) => ({
         id: w.id,
         name: w.name,
         archived: w.archivedAt !== null
@@ -41,7 +44,7 @@ export const load: PageServerLoad = ({ url }) => {
     activeCount: active.length,
     archivedCount: archived.length,
     // Only active Worlds may be newly linked.
-    worlds: worlds.list().map((w) => ({ id: w.id, name: w.name }))
+    worlds: worlds.list().map(worldWithSeed)
   }
 }
 

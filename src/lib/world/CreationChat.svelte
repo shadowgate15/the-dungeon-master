@@ -31,6 +31,8 @@
     subject?: string
     /** Extra request body keys read when a turn is sent (a Campaign's selected `worldIds`). */
     extraBody?: Record<string, unknown>
+    /** Server-built system prompts the client only estimates (a Campaign's Worlds' Seed text). */
+    extraSystemPrompts?: string[]
     /** Called when a turn fails because the selected Worlds changed (Campaign only). */
     onworldschanged?: () => void
     /** True when AI controls must be off (a reasoning model was detected). */
@@ -52,6 +54,7 @@
     labels = FIELD_LABELS,
     subject = 'World',
     extraBody,
+    extraSystemPrompts,
     onworldschanged,
     disabled = false,
     onreasoningmodel,
@@ -81,7 +84,8 @@
       summary: conversation.summary,
       summarizedCount: conversation.summarizedCount,
       dismissed: dismissedNotes(conversation),
-      pending: pendingProposals(conversation)
+      pending: pendingProposals(conversation),
+      extraSystemPrompts
     })
   )
   const used = $derived(conversation.lastUsedTokens ?? estimatedUsed)
