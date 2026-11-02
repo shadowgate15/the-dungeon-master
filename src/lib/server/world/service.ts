@@ -1,7 +1,7 @@
-import { asc, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, count, eq, isNull, sql } from 'drizzle-orm'
 import type { Database } from '../db/connect'
 import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '#lib/world/enums.ts'
-import { world } from '../db/schema'
+import { world, worldCampaign } from '../db/schema'
 
 export type World = typeof world.$inferSelect
 export type WorldSeed = Omit<
@@ -23,25 +23,54 @@ function checkEnum<T extends string>(
   return value as T
 }
 
+function validate(seed: WorldSeed) {
+  const name = seed.name?.trim()
+  if (!name) throw new WorldValidationError('Name is required')
+  return {
+    name,
+    premise: seed.premise?.trim() || null,
+    genreFlavor: checkEnum('genre flavor', GENRE_FLAVORS, seed.genreFlavor),
+    scale: checkEnum('scale', SCALES, seed.scale),
+    magicLevel: checkEnum('magic level', MAGIC_LEVELS, seed.magicLevel),
+    techLevel: checkEnum('tech level', TECH_LEVELS, seed.techLevel)
+  }
+}
+
 export function createWorldService(db: Database, now: () => number = Date.now) {
   return {
     create(seed: WorldSeed): World {
-      const name = seed.name?.trim()
-      if (!name) throw new WorldValidationError('Name is required')
-      const values = {
-        name,
-        premise: seed.premise?.trim() || null,
-        genreFlavor: checkEnum('genre flavor', GENRE_FLAVORS, seed.genreFlavor),
-        scale: checkEnum('scale', SCALES, seed.scale),
-        magicLevel: checkEnum('magic level', MAGIC_LEVELS, seed.magicLevel),
-        techLevel: checkEnum('tech level', TECH_LEVELS, seed.techLevel)
-      }
       const at = now()
       return db
         .insert(world)
-        .values({ ...values, createdAt: at, updatedAt: at })
+        .values({ ...validate(seed), createdAt: at, updatedAt: at })
         .returning()
         .get()
+    },
+
+    /** Edits apply live to every Campaign using the World; updated_at always moves. */
+    update(id: string, seed: WorldSeed): World {
+      const values = validate(seed)
+      const updated = db
+        .update(world)
+        .set({ ...values, updatedAt: now() })
+        .where(and(eq(world.id, id), isNull(world.archivedAt)))
+        .returning()
+        .get()
+      if (updated) return updated
+      throw new WorldValidationError(
+        db.select().from(world).where(eq(world.id, id)).get()
+          ? 'An archived World cannot be edited'
+          : 'World not found'
+      )
+    },
+
+    /** How many Campaigns an edit to this World touches. */
+    affectedCampaignCount(id: string): number {
+      return db
+        .select({ n: count() })
+        .from(worldCampaign)
+        .where(eq(worldCampaign.worldId, id))
+        .get()!.n
     },
 
     get(id: string): World | undefined {

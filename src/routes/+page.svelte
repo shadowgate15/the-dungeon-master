@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
   import AiPanel from '#lib/ai/AiPanel.svelte'
+  import { resolve } from '$app/paths'
   import {
     GENRE_FLAVORS,
     MAGIC_LEVELS,
@@ -74,7 +75,10 @@
   {:else}
     <ul aria-label="Worlds" class="space-y-1">
       {#each data.worlds as world (world.id)}
-        <li>{world.name}</li>
+        <li>
+          <a href={resolve('/worlds/[id]/edit', { id: world.id })} class="underline">{world.name}</a
+          >
+        </li>
       {/each}
     </ul>
   {/if}

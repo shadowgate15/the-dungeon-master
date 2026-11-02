@@ -156,4 +156,96 @@ describe('World service', () => {
       /FOREIGN KEY/i
     )
   })
+
+  describe('edit', () => {
+    it('persists every seed field and bumps updated_at', () => {
+      let now = 1000
+      const svc = createWorldService(db, () => now)
+      const created = svc.create({ name: 'Eldoria' })
+      now = 2000
+
+      const edited = svc.update(created.id, {
+        name: ' Aldoria ',
+        premise: 'A drowned kingdom.',
+        genreFlavor: 'dark fantasy',
+        scale: 'continent',
+        magicLevel: 'low',
+        techLevel: 'renaissance'
+      })
+
+      expect(edited).toMatchObject({
+        name: 'Aldoria',
+        premise: 'A drowned kingdom.',
+        genreFlavor: 'dark fantasy',
+        scale: 'continent',
+        magicLevel: 'low',
+        techLevel: 'renaissance',
+        createdAt: 1000,
+        updatedAt: 2000
+      })
+      expect(svc.get(created.id)).toEqual(edited)
+    })
+
+    it('bumps updated_at on every edit, even an unchanged one', () => {
+      let now = 1000
+      const svc = createWorldService(db, () => now)
+      const created = svc.create({ name: 'Eldoria' })
+      now = 1001
+      expect(svc.update(created.id, { name: 'Eldoria' }).updatedAt).toBe(1001)
+      now = 1002
+      expect(svc.update(created.id, { name: 'Eldoria' }).updatedAt).toBe(1002)
+    })
+
+    it('clears a field back to unspecified', () => {
+      const created = worlds.create({ name: 'E', premise: 'p', scale: 'planar' })
+      const edited = worlds.update(created.id, { name: 'E', premise: ' ', scale: null })
+      expect(edited).toMatchObject({ premise: null, scale: null })
+    })
+
+    it('validates like create and leaves the World untouched on failure', () => {
+      const created = worlds.create({ name: 'Eldoria', scale: 'planar' })
+      expect(() => worlds.update(created.id, { name: ' ' })).toThrow(WorldValidationError)
+      expect(() => worlds.update(created.id, { name: 'X', scale: 'galaxy' } as never)).toThrow(
+        WorldValidationError
+      )
+      expect(worlds.get(created.id)).toEqual(created)
+    })
+
+    it('refuses to edit an unknown or archived World', () => {
+      expect(() => worlds.update('nope', { name: 'X' })).toThrow(WorldValidationError)
+      const created = worlds.create({ name: 'Eldoria' })
+      db.$client.prepare('update world set archived_at = 5 where id = ?').run(created.id)
+      expect(() => worlds.update(created.id, { name: 'X' })).toThrow(/archived/i)
+      expect(worlds.get(created.id)?.name).toBe('Eldoria')
+    })
+  })
+
+  describe('affected Campaigns', () => {
+    const link = (worldId: string, campaignId: string) => {
+      db.$client.prepare('insert or ignore into campaign (id) values (?)').run(campaignId)
+      db.$client.prepare('insert into world_campaign values (?, ?)').run(worldId, campaignId)
+    }
+
+    it('counts the Campaigns linked to a World', () => {
+      const a = worlds.create({ name: 'A' })
+      const b = worlds.create({ name: 'B' })
+      expect(worlds.affectedCampaignCount(a.id)).toBe(0)
+      link(a.id, 'c1')
+      link(a.id, 'c2')
+      link(b.id, 'c2')
+      expect(worlds.affectedCampaignCount(a.id)).toBe(2)
+      expect(worlds.affectedCampaignCount(b.id)).toBe(1)
+    })
+
+    it('drops a deleted Campaign from the count and cascades its links', () => {
+      const a = worlds.create({ name: 'A' })
+      link(a.id, 'c1')
+      link(a.id, 'c2')
+      db.$client.prepare("delete from campaign where id = 'c1'").run()
+
+      expect(worlds.affectedCampaignCount(a.id)).toBe(1)
+      const rows = db.$client.prepare('select * from world_campaign').all()
+      expect(rows).toEqual([{ world_id: a.id, campaign_id: 'c2' }])
+    })
+  })
 })
