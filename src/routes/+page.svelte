@@ -7,6 +7,7 @@
   import { page } from '$app/state'
   import { replaceState } from '$app/navigation'
   import { resolve } from '$app/paths'
+  import SectionNav from '#lib/SectionNav.svelte'
   import ActionToast from '#lib/world/ActionToast.svelte'
   import WorldTable from '#lib/world/WorldTable.svelte'
   import {
@@ -55,6 +56,7 @@
 </script>
 
 <main class="mx-auto max-w-6xl space-y-4 p-6">
+  <SectionNav current="worlds" />
   <div class="flex items-center justify-between">
     <h1 class="text-2xl font-semibold">Worlds</h1>
     <a
