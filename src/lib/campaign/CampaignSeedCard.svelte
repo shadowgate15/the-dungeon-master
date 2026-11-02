@@ -15,9 +15,16 @@
 
   // Worlds that became unavailable (archived or deleted elsewhere) drop out of the selection
   // when the list reloads, so the player is never stuck with a chip they cannot see or remove.
+  // The player is told which ones were removed, never left to wonder.
+  const names: Record<string, string> = {}
+  let removed = $state<string[]>([])
+
   $effect(() => {
+    for (const w of worlds) names[w.id] = w.name
     const available = new Set(worlds.map((w) => w.id))
-    if (seed.worldIds.some((id) => !available.has(id))) {
+    const gone = seed.worldIds.filter((id) => !available.has(id))
+    if (gone.length > 0) {
+      removed = [...new Set([...removed, ...gone.map((id) => names[id] ?? 'a World')])]
       seed.worldIds = seed.worldIds.filter((id) => available.has(id))
     }
   })
@@ -25,6 +32,15 @@
 
 <div class="space-y-3">
   <WorldPicker {worlds} bind:value={seed.worldIds} />
+  {#if removed.length > 0}
+    <p role="status" class="flex items-start justify-between gap-2 text-sm text-amber-600">
+      <span>
+        Removed from this Campaign because {removed.length === 1 ? 'it was' : 'they were'} archived or
+        deleted: {removed.join(', ')}. Choose another World to continue.
+      </span>
+      <button type="button" class="underline" onclick={() => (removed = [])}>Dismiss</button>
+    </p>
+  {/if}
   <label class="block">
     <span class="block text-sm font-medium">Name</span>
     <input name="name" bind:value={seed.name} class="w-full rounded border p-2" />
