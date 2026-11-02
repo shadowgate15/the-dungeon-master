@@ -6,6 +6,8 @@ const FAKE_LM_STUDIO_PORT = 1235
 export default defineConfig({
   // The fake LM Studio's scenario and canned chat content are process-wide state.
   workers: 1,
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   webServer: [
     {
       command: 'node src/lib/testing/fake-lm-studio/cli.ts',
@@ -22,6 +24,6 @@ export default defineConfig({
       }
     }
   ],
-  use: { baseURL: 'http://localhost:4173' },
+  use: { baseURL: 'http://localhost:4173', trace: 'on-first-retry' },
   testMatch: '**/*.e2e.{ts,js}'
 })
