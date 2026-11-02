@@ -186,7 +186,15 @@
           {#each [world.genreFlavor, world.scale, world.magicLevel, world.techLevel] as value, i (i)}
             <td class="p-2 {value ? '' : 'text-slate-400'}">{value ?? '—'}</td>
           {/each}
-          <td class="p-2">{world.campaigns || '—'}</td>
+          <td class="p-2">
+            {#if world.campaigns > 0}
+              <a href="{resolve('/campaigns')}?world={world.id}" class="underline"
+                >{world.campaigns}</a
+              >
+            {:else}
+              —
+            {/if}
+          </td>
           <td class="p-2 whitespace-nowrap text-slate-500">{day(world.updatedAt)}</td>
           <td class="p-2 text-right">
             {#if confirmingDelete === world.id}
