@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { check, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { LENGTHS, TONES } from '../../campaign/enums'
 import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '../../world/enums'
 
 export const task = sqliteTable('task', {
@@ -38,12 +39,25 @@ export const world = sqliteTable(
   ]
 )
 
-// Stub: the Campaign map owns this table afterwards.
-export const campaign = sqliteTable('campaign', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID())
-})
+export const campaign = sqliteTable(
+  'campaign',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    name: text('name').notNull(),
+    premise: text('premise').notNull(),
+    tone: text('tone', { enum: TONES }).notNull(),
+    length: text('length', { enum: LENGTHS }).notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    archivedAt: integer('archived_at')
+  },
+  () => [
+    check('campaign_tone_check', oneOf('tone', TONES)),
+    check('campaign_length_check', oneOf('length', LENGTHS))
+  ]
+)
 
 export const worldCampaign = sqliteTable(
   'world_campaign',
