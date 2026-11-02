@@ -8,6 +8,8 @@ import type { AddressInfo } from 'node:net'
  * reasoning-model, ...) register another entry in `scenarios`; nothing else changes.
  * The active scenario can be switched while the server runs, either with `setScenario`
  * or by POSTing `{ "scenario": "..." }` to `/__control/scenario` (used by Playwright).
+ * POSTing any JSON to `/__control/chat-content` replaces the canned chat completion object,
+ * and GET `/__control/requests` returns the chat requests received so far.
  */
 
 export interface FakeRequest {
@@ -156,6 +158,12 @@ export async function startFakeLmStudio(
       if (!name || !(name in scenarios)) return json(res, 400, { error: 'unknown scenario' })
       scenario = name
       return json(res, 200, { scenario })
+    }
+
+    if (path === '/__control/requests') return json(res, 200, requests)
+    if (path === '/__control/chat-content' && req.method === 'POST') {
+      chatContent = body
+      return json(res, 200, { ok: true })
     }
 
     requests.push({ method: req.method ?? 'GET', path, body })
