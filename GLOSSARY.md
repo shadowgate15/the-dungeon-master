@@ -17,7 +17,7 @@ The small set of choices a World is created from: a name, a premise, and four en
 _Avoid_: Template, config
 
 **Seed card**:
-The live, directly editable form that holds the Seed while a World is being created. It is the source of truth and works with no AI. Nothing reaches it from the AI until the player accepts a proposal.
+The live, directly editable form that holds the Seed while a World or a Campaign is being created or edited. It is the source of truth and works with no AI. Nothing reaches it from the AI until the player accepts a proposal.
 _Avoid_: World form, draft
 
 **Proposal** / **proposal card**:

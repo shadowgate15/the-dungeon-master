@@ -62,5 +62,5 @@
 </main>
 
 {#snippet chat(seed: CampaignSeedCard, onaccept: (field: CampaignSeedField, value: string) => void)}
-  <CampaignChat {seed} {onaccept} />
+  <CampaignChat {seed} {onaccept} worlds={data.worlds} />
 {/snippet}

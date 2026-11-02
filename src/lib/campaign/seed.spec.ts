@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emptyCampaignSeed, isCampaignSeedComplete } from './seed'
+import { emptyCampaignSeed, isCampaignSeedComplete, worldsPromptEstimate } from './seed'
 
 const complete = {
   name: 'Ember Road',
@@ -31,5 +31,27 @@ describe('isCampaignSeedComplete', () => {
 
   it('starts with the given Worlds pre-selected', () => {
     expect(emptyCampaignSeed(['w9']).worldIds).toEqual(['w9'])
+  })
+})
+
+describe('worldsPromptEstimate', () => {
+  const w = (id: string, premise: string) => ({
+    id,
+    name: id,
+    premise,
+    genreFlavor: 'gothic horror',
+    scale: '',
+    magicLevel: '',
+    techLevel: ''
+  })
+
+  it('includes the Seed text of the selected Worlds only', () => {
+    const text = worldsPromptEstimate(
+      [w('a', 'Fog-bound moors'), w('b', 'Sunken city')],
+      ['a']
+    ).join('\n')
+    expect(text).toContain('Fog-bound moors')
+    expect(text).toContain('gothic horror')
+    expect(text).not.toContain('Sunken city')
   })
 })

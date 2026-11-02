@@ -1,4 +1,5 @@
 import { error, fail } from '@sveltejs/kit'
+import { worldWithSeed } from '#lib/server/campaign/world-seed.ts'
 import { db } from '#lib/server/db/index.ts'
 import {
   createCampaignService,
@@ -27,7 +28,7 @@ export const load: PageServerLoad = ({ params }) => {
     // Archived Worlds that make the Campaign read-only; the page shows these instead of a form.
     blockingWorlds: campaigns.blockingWorlds(found.id).map((w) => ({ id: w.id, name: w.name })),
     // Only active Worlds may be newly linked.
-    worlds: worlds.list().map((w) => ({ id: w.id, name: w.name }))
+    worlds: worlds.list().map(worldWithSeed)
   }
 }
 
