@@ -6,7 +6,10 @@
 
   type Props = {
     chat?: Snippet<
-      [Extract<AiStatus, { state: 'ready' | 'reasoning-model' }>, { reasoningModel: () => void }]
+      [
+        Extract<AiStatus, { state: 'ready' | 'reasoning-model' }>,
+        { reasoningModel: () => void; unavailable: (status: AiStatus) => void }
+      ]
     >
   }
 
@@ -40,6 +43,11 @@
       queryClient.setQueryData(['ai-status'], locked)
     }
   }
+
+  // A send's pre-probe found LM Studio down or the model missing: show that state.
+  function unavailable(status: AiStatus) {
+    queryClient.setQueryData(['ai-status'], status)
+  }
 </script>
 
 <AiStatusView
@@ -53,5 +61,5 @@
 />
 
 {#snippet chatWithActions(status: Extract<AiStatus, { state: 'ready' | 'reasoning-model' }>)}
-  {@render chat?.(status, { reasoningModel })}
+  {@render chat?.(status, { reasoningModel, unavailable })}
 {/snippet}

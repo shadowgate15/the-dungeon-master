@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit'
-import { getChatPort, isReasoningModelLocked } from '#lib/server/ai/index.ts'
+import { getChatPort, isReasoningModelLocked, lockReasoningModel } from '#lib/server/ai/index.ts'
 import { compactRequestSchema } from '#lib/server/ai/request.ts'
 import { compactConversation } from '#lib/server/ai/world-conversation.ts'
 import type { RequestHandler } from './$types'
@@ -15,7 +15,11 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ error: 'AI is disabled until the connection is checked' }, { status: 503 })
   }
 
-  return json(
-    await compactConversation(port, { ...parsed.data, message: '' }, { signal: request.signal })
+  const result = await compactConversation(
+    port,
+    { ...parsed.data, message: '' },
+    { signal: request.signal }
   )
+  if (!result.ok && result.failure.kind === 'reasoning-model') lockReasoningModel()
+  return json(result)
 }

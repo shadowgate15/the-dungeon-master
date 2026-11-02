@@ -3,6 +3,7 @@ import { db } from '#lib/server/db/index.ts'
 import {
   createWorldService,
   WorldInUseError,
+  WorldNotFoundError,
   WorldValidationError
 } from '#lib/server/world/service.ts'
 import type { Actions, PageServerLoad } from './$types'
@@ -33,6 +34,7 @@ export const actions: Actions = {
       // The service validates enum membership; the cast only bridges raw form strings.
       worlds.update(params.id, values as Parameters<typeof worlds.update>[1])
     } catch (e) {
+      if (e instanceof WorldNotFoundError) error(404, 'World not found')
       if (e instanceof WorldValidationError) return fail(400, { ...values, error: e.message })
       throw e
     }
@@ -40,12 +42,22 @@ export const actions: Actions = {
   },
 
   archive: ({ params }) => {
-    worlds.archive(params.id)
+    try {
+      worlds.archive(params.id)
+    } catch (e) {
+      if (e instanceof WorldNotFoundError) error(404, 'World not found')
+      throw e
+    }
     redirect(303, '/')
   },
 
   restore: ({ params }) => {
-    worlds.restore(params.id)
+    try {
+      worlds.restore(params.id)
+    } catch (e) {
+      if (e instanceof WorldNotFoundError) error(404, 'World not found')
+      throw e
+    }
     return { restored: true }
   },
 
@@ -53,6 +65,7 @@ export const actions: Actions = {
     try {
       worlds.delete(params.id)
     } catch (e) {
+      if (e instanceof WorldNotFoundError) error(404, 'World not found')
       if (e instanceof WorldInUseError) return fail(409, { inUse: true, error: e.message })
       throw e
     }

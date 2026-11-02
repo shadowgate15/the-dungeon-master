@@ -15,6 +15,7 @@
     sendMessage
   } from './proposals.ts'
   import { FIELD_LABELS, type Seed, type SeedField } from './seed.ts'
+  import type { AiStatus } from '#lib/ai/status.ts'
   import type { Compaction, TurnFailure, TurnResult } from '#lib/server/ai/world-conversation.ts'
 
   type Props = {
@@ -26,6 +27,8 @@
     disabled?: boolean
     /** Called when a turn shows the model is a reasoning model. */
     onreasoningmodel?: () => void
+    /** Called when the probe before a send found LM Studio down or the model missing. */
+    onunavailable?: (status: AiStatus) => void
     /** The loaded model's context length; null when LM Studio did not report it. */
     contextLength?: number | null
     /** The configured limit, estimated against, when `contextLength` is null. */
@@ -37,6 +40,7 @@
     onaccept,
     disabled = false,
     onreasoningmodel,
+    onunavailable,
     contextLength = null,
     fallbackContextLength = DEFAULT_CONTEXT_LIMIT
   }: Props = $props()
@@ -102,8 +106,18 @@
           message
         })
       })
-      const result = (await response.json().catch(() => null)) as TurnResult | null
-      if (result && 'ok' in result && result.ok) {
+      const result = (await response.json().catch(() => null)) as
+        (TurnResult & { status?: AiStatus }) | null
+      if (
+        result &&
+        'ok' in result &&
+        !result.ok &&
+        (result.failure.kind === 'not-connected' || result.failure.kind === 'model-unavailable') &&
+        result.status
+      ) {
+        // Nothing was sent: the panel switches to its not-connected state; the form still works.
+        onunavailable?.(result.status)
+      } else if (result && 'ok' in result && result.ok) {
         // A compaction rewrites only what the model sees; the transcript keeps everything.
         const compacted = result.compaction
           ? applyCompaction(conversation, result.compaction)
@@ -165,6 +179,13 @@
         conversation = applyCompaction(conversation, result)
       } else if (result && !result.ok && result.failure.kind === 'context-full') {
         blocked = result.failure.message
+      } else if (result && !result.ok && result.failure.kind === 'reasoning-model') {
+        notice = result.failure.message
+        onreasoningmodel?.()
+      } else if (result && !result.ok && result.failure.kind === 'timeout') {
+        notice = 'Compaction took too long. Try again.'
+      } else if (result && !result.ok && result.failure.kind === 'cancelled') {
+        notice = 'Compaction stopped.'
       } else {
         notice = 'Compaction did not finish. Try again.'
       }
