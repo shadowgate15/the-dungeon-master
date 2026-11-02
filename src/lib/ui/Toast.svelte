@@ -5,7 +5,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import Button from './Button.svelte'
+  import Button from '#lib/ui/Button.svelte'
+  import { NEUTRAL_CLASSES, STATUS_CLASSES } from './status.ts'
 
   type Props = {
     tone?: ToastTone
@@ -16,13 +17,7 @@
 
   let { tone = 'neutral', onclose, class: className, children, ...rest }: Props = $props()
 
-  const tones: Record<ToastTone, string> = {
-    neutral: 'bg-raised text-text border-border',
-    info: 'bg-info-bg text-info border-info',
-    success: 'bg-success-bg text-success border-success',
-    warning: 'bg-warning-bg text-warning border-warning',
-    danger: 'bg-danger-bg text-danger border-danger'
-  }
+  const tones: Record<ToastTone, string> = { neutral: NEUTRAL_CLASSES, ...STATUS_CLASSES }
 </script>
 
 <div

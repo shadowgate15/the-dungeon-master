@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, type Snippet } from 'svelte'
   import type { HTMLDialogAttributes } from 'svelte/elements'
-  import Button from './Button.svelte'
+  import Button from '#lib/ui/Button.svelte'
 
   type Props = {
     open?: boolean

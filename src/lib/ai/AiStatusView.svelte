@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import Button from '../ui/Button.svelte'
-  import Panel from '../ui/Panel.svelte'
-  import Textarea from '../ui/Textarea.svelte'
+  import Button from '#lib/ui/Button.svelte'
+  import Panel from '#lib/ui/Panel.svelte'
+  import Textarea from '#lib/ui/Textarea.svelte'
   import { REASONING_MODEL_MESSAGE, type AiStatus } from './status.ts'
 
   type Props = {

@@ -5,6 +5,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
+  import { NEUTRAL_CLASSES, STATUS_CLASSES_BORDERLESS } from './status.ts'
 
   type Props = {
     variant?: BadgeVariant
@@ -15,11 +16,8 @@
   let { variant = 'neutral', size = 'md', class: className, children, ...rest }: Props = $props()
 
   const variants: Record<BadgeVariant, string> = {
-    neutral: 'bg-raised text-text border-border',
-    info: 'bg-info-bg text-info border-transparent',
-    success: 'bg-success-bg text-success border-transparent',
-    warning: 'bg-warning-bg text-warning border-transparent',
-    danger: 'bg-danger-bg text-danger border-transparent'
+    neutral: NEUTRAL_CLASSES,
+    ...STATUS_CLASSES_BORDERLESS
   }
 </script>
 

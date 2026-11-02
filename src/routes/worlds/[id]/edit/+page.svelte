@@ -65,10 +65,10 @@
         {/snippet}
       </Field>
       {#if premise.length > PREMISE_SOFT_CAP}
-        <p class="text-sm text-warning">
+        <Alert variant="warning" role="status">
           Premise is long ({premise.length} of about {PREMISE_SOFT_CAP} characters). You can still save
           it.
-        </p>
+        </Alert>
       {/if}
       {#each pickers as picker (picker.name)}
         <Field label={picker.label}>

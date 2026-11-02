@@ -1,9 +1,6 @@
-<script lang="ts" module>
-  export type ThemeChoice = 'system' | 'light' | 'dark'
-</script>
-
 <script lang="ts">
   import { enhance } from '$app/forms'
+  import { THEME_OPTIONS, type ThemeChoice } from './theme.ts'
 
   let {
     theme,
@@ -14,12 +11,6 @@
     /** Where the no-JS POST sends the browser back to. */
     redirectTo?: string
   } = $props()
-
-  const options: { value: ThemeChoice; icon: string; label: string }[] = [
-    { value: 'system', icon: '◐', label: 'System' },
-    { value: 'light', icon: '☀', label: 'Light' },
-    { value: 'dark', icon: '☾', label: 'Dark' }
-  ]
 
   // Set on click so the toggle and page react before the server answers.
   let chosen = $state<ThemeChoice | null>(null)
@@ -47,7 +38,7 @@
 >
   <input type="hidden" name="redirectTo" value={redirectTo} />
   <div class="flex overflow-hidden rounded-control border border-control-border text-sm">
-    {#each options as option (option.value)}
+    {#each THEME_OPTIONS as option (option.value)}
       <button
         type="submit"
         name="theme"
