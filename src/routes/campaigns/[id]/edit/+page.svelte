@@ -1,7 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
   import CampaignEditForm from '#lib/campaign/CampaignEditForm.svelte'
-  import { emptyCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
+  import CampaignChat from '#lib/campaign/CampaignChat.svelte'
+  import {
+    emptyCampaignSeed,
+    type CampaignSeedCard,
+    type CampaignSeedField
+  } from '#lib/campaign/seed.ts'
 
   let { data, form } = $props()
 
@@ -44,10 +49,10 @@
       </ul>
     </div>
   {:else}
-    <!-- #83: pass a `chat` snippet here to show the Creation conversation beside the Seed card. -->
     {#key data.campaign.id}
       <CampaignEditForm
         {initial}
+        {chat}
         worlds={data.worlds}
         error={form && 'error' in form ? String(form.error) : undefined}
         saved={form !== null && form !== undefined && 'saved' in form}
@@ -55,3 +60,7 @@
     {/key}
   {/if}
 </main>
+
+{#snippet chat(seed: CampaignSeedCard, onaccept: (field: CampaignSeedField, value: string) => void)}
+  <CampaignChat {seed} {onaccept} />
+{/snippet}

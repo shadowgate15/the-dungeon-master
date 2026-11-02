@@ -6,7 +6,8 @@
   import {
     emptyCampaignSeed,
     isCampaignSeedComplete,
-    type CampaignSeedCard as Seed
+    type CampaignSeedCard as Seed,
+    type CampaignSeedField
   } from './seed.ts'
 
   type Props = {
@@ -20,8 +21,8 @@
     open?: boolean
     /** Called after the dialog closes. */
     onclose?: () => void
-    /** Slot for the chat pane (arrives in a later ticket); the Seed card is the right-hand column. */
-    chat?: Snippet<[Seed]>
+    /** Slot for the chat pane, on the left; the Seed card is the right-hand column. */
+    chat?: Snippet<[Seed, (field: CampaignSeedField, value: string) => void]>
   }
 
   let { worlds, initial = {}, error, open = false, onclose, chat }: Props = $props()
@@ -29,10 +30,17 @@
   // svelte-ignore state_referenced_locally
   let seed = $state<Seed>({ ...emptyCampaignSeed(), ...initial })
   let dialog = $state<HTMLDialogElement>()
+  // Bumped whenever the dialog opens or closes, which discards the chat's transcript.
+  let chatKey = $state(0)
+
+  function accept(field: CampaignSeedField, value: string) {
+    seed[field] = value
+  }
 
   /** Opens the modal with a fresh card, pre-selecting the given Worlds. */
   export function show(worldIds: string[] = []) {
     seed = emptyCampaignSeed(worldIds.filter((id) => worlds.some((w) => w.id === id)))
+    chatKey++
     dialog?.showModal()
   }
 
@@ -49,7 +57,10 @@
   bind:this={dialog}
   {open}
   aria-label="New Campaign"
-  onclose={() => onclose?.()}
+  onclose={() => {
+    chatKey++
+    onclose?.()
+  }}
   class="m-auto w-[min(72rem,calc(100vw-2rem))] rounded-lg p-6 backdrop:bg-black/50"
 >
   <div class="mb-4 flex items-center justify-between">
@@ -74,7 +85,9 @@
   {:else}
     <div class="grid gap-6 {chat ? 'lg:grid-cols-2' : ''}">
       {#if chat}
-        <div class="space-y-2 lg:max-h-[70vh] lg:overflow-y-auto">{@render chat(seed)}</div>
+        <div class="space-y-2 lg:max-h-[70vh] lg:overflow-y-auto">
+          {#key chatKey}{@render chat(seed, accept)}{/key}
+        </div>
       {/if}
       <form
         method="POST"

@@ -106,7 +106,7 @@
           {#key chatKey}
             <CreationChat
               {seed}
-              onaccept={(field, value) => (seed[field] = value)}
+              onaccept={(field, value) => (seed[field as SeedField] = value)}
               disabled={status.state !== 'ready'}
               contextLength={status.state === 'ready' ? status.contextLength : null}
               fallbackContextLength={status.state === 'ready'

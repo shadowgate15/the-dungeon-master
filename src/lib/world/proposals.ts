@@ -1,4 +1,5 @@
-import type { SeedField } from './seed.ts'
+/** A Seed field name: World and Campaign each have their own set. */
+type SeedField = string
 
 /**
  * Client-safe, UI-free state for the World creation conversation. Every function is
