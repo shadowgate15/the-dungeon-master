@@ -5,7 +5,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import Badge, { type BadgeVariant } from './Badge.svelte'
+  import Badge, { type BadgeVariant } from '#lib/ui/Badge.svelte'
 
   type Props = {
     label: string

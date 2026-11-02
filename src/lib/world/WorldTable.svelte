@@ -15,7 +15,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
   import { resolve } from '$app/paths'
-  import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Checkbox from '#lib/ui/Checkbox.svelte'
   import SegmentedNav from '#lib/ui/SegmentedNav.svelte'
@@ -122,7 +121,10 @@
   <!-- Row checkboxes join this form through their form attribute; the bar needs JS to appear. -->
   <form id="bulk-actions" method="POST" use:enhance>
     {#if picked.length > 0}
-      <Alert variant="info" role="group" class="flex items-center gap-3">
+      <div
+        role="group"
+        class="flex items-center gap-3 rounded-control border border-border bg-raised px-3 py-2 text-sm text-text"
+      >
         <span class="mr-auto">{picked.length} selected</span>
         {#if view === 'active'}
           <Button type="submit" size="sm" formaction={actionUrl('archive')} form="bulk-actions"
@@ -136,7 +138,7 @@
         <Button type="button" variant="ghost" size="sm" onclick={() => (selected = [])}
           >Clear selection</Button
         >
-      </Alert>
+      </div>
     {/if}
   </form>
 
