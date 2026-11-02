@@ -1,6 +1,13 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
   import { resolve } from '$app/paths'
+  import Alert from '#lib/ui/Alert.svelte'
+  import Button from '#lib/ui/Button.svelte'
+  import Field from '#lib/ui/Field.svelte'
+  import Link from '#lib/ui/Link.svelte'
+  import Select from '#lib/ui/Select.svelte'
+  import TextInput from '#lib/ui/TextInput.svelte'
+  import Textarea from '#lib/ui/Textarea.svelte'
   import {
     GENRE_FLAVORS,
     MAGIC_LEVELS,
@@ -28,101 +35,93 @@
 </script>
 
 <main class="mx-auto max-w-xl space-y-6 p-6">
-  <a href={resolve('/')} class="text-sm underline">Back to Worlds</a>
-  <h1 class="text-2xl font-semibold">Edit {data.world.name}</h1>
+  <Link href={resolve('/')} class="text-sm">Back to Worlds</Link>
+  <h1 class="font-display text-2xl font-semibold text-text">Edit {data.world.name}</h1>
 
-  <p class="text-sm text-slate-600">
+  <p class="text-sm text-muted">
     Edits apply live. {data.affectedCampaigns}
     {data.affectedCampaigns === 1 ? 'Campaign' : 'Campaigns'} affected.
   </p>
 
   {#if archived}
-    <div role="status" class="space-y-2 rounded border border-amber-400 p-3">
-      <p class="text-sm">This World is archived and read-only. Restore it to edit.</p>
+    <Alert variant="warning" role="status" class="space-y-2">
+      <p>This World is archived and read-only. Restore it to edit.</p>
       <form method="POST" action="?/restore" use:enhance>
-        <button type="submit" class="rounded border px-3 py-1">Restore</button>
+        <Button type="submit" variant="secondary" size="sm">Restore</Button>
       </form>
-    </div>
+    </Alert>
   {/if}
 
   <form method="POST" action="?/save" use:enhance class="space-y-2">
     <fieldset disabled={archived} class="space-y-2">
-      <label class="block">
-        <span class="block text-sm font-medium">Name</span>
-        <input name="name" value={current.name ?? ''} class="w-full rounded border p-2" />
-      </label>
-      <label class="block">
-        <span class="block text-sm font-medium">Premise</span>
-        <textarea name="premise" bind:value={premise} rows="4" class="w-full rounded border p-2"
-        ></textarea>
-      </label>
+      <Field label="Name">
+        {#snippet children(id)}
+          <TextInput {id} name="name" value={current.name ?? ''} />
+        {/snippet}
+      </Field>
+      <Field label="Premise">
+        {#snippet children(id)}
+          <Textarea {id} name="premise" bind:value={premise} rows={4} />
+        {/snippet}
+      </Field>
       {#if premise.length > PREMISE_SOFT_CAP}
-        <p class="text-sm text-amber-600">
+        <p class="text-sm text-warning">
           Premise is long ({premise.length} of about {PREMISE_SOFT_CAP} characters). You can still save
           it.
         </p>
       {/if}
       {#each pickers as picker (picker.name)}
-        <label class="block">
-          <span class="block text-sm font-medium">{picker.label}</span>
-          <select
-            name={picker.name}
-            value={current[picker.name] ?? ''}
-            class="w-full rounded border p-2"
-          >
-            <option value="">Unspecified</option>
-            {#each picker.options as option (option)}
-              <option value={option}>{option}</option>
-            {/each}
-          </select>
-        </label>
+        <Field label={picker.label}>
+          {#snippet children(id)}
+            <Select {id} name={picker.name} value={current[picker.name] ?? ''}>
+              <option value="">Unspecified</option>
+              {#each picker.options as option (option)}
+                <option value={option}>{option}</option>
+              {/each}
+            </Select>
+          {/snippet}
+        </Field>
       {/each}
       {#if form?.error && !form?.inUse}
-        <p role="alert" class="text-sm text-red-600">{form.error}</p>
+        <Alert variant="danger">{form.error}</Alert>
       {/if}
       {#if form?.saved}
-        <p role="status" class="text-sm text-green-700">Saved</p>
+        <Alert variant="success">Saved</Alert>
       {/if}
       {#if !archived}
-        <button type="submit" class="rounded bg-slate-800 px-3 py-2 text-white">Save changes</button
-        >
+        <Button type="submit">Save changes</Button>
       {/if}
     </fieldset>
   </form>
 
-  <section class="space-y-2 border-t pt-4">
+  <section class="space-y-2 border-t border-border pt-4">
     {#if !archived}
       <form method="POST" action="?/archive" use:enhance>
-        <button type="submit" class="rounded border px-3 py-1">Archive World</button>
+        <Button type="submit" variant="secondary">Archive World</Button>
       </form>
     {/if}
 
     {#if form?.inUse}
-      <div role="alert" class="space-y-2 text-sm text-red-600">
-        <p>
-          This World is used by a Campaign and cannot be deleted. {archived
-            ? 'Keep it archived instead.'
-            : 'Archive it instead.'}
-        </p>
-      </div>
+      <Alert variant="danger">
+        This World is used by a Campaign and cannot be deleted. {archived
+          ? 'Keep it archived instead.'
+          : 'Archive it instead.'}
+      </Alert>
     {/if}
 
     {#if confirmingDelete}
       <form method="POST" action="?/delete" use:enhance class="space-y-2">
-        <p class="text-sm">Permanently delete {data.world.name}? This cannot be undone.</p>
-        <button type="submit" class="rounded bg-red-700 px-3 py-1 text-white">Confirm delete</button
-        >
-        <button
-          type="button"
-          class="rounded border px-3 py-1"
-          onclick={() => (confirmingDelete = false)}>Cancel</button
+        <p class="text-sm text-text">
+          Permanently delete {data.world.name}? This cannot be undone.
+        </p>
+        <Button type="submit" variant="danger">Confirm delete</Button>
+        <Button type="button" variant="secondary" onclick={() => (confirmingDelete = false)}
+          >Cancel</Button
         >
       </form>
     {:else}
-      <button
-        type="button"
-        class="rounded border px-3 py-1"
-        onclick={() => (confirmingDelete = true)}>Delete World</button
+      <Button type="button" variant="secondary" onclick={() => (confirmingDelete = true)}
+        >Delete World</Button
       >
     {/if}
   </section>
