@@ -67,6 +67,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+        env:
+          DATABASE_URL: build.db
 
   e2e:
     runs-on: ubuntu-latest
