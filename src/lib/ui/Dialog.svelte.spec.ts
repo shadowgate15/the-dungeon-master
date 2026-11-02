@@ -28,6 +28,20 @@ describe('Dialog', () => {
     expect(dialog.matches(':modal')).toBe(true)
   })
 
+  it('opens as a modal when opened after mount', async () => {
+    const { rerender } = render(Dialog, {
+      open: false,
+      title: 'New World',
+      closeHref: '/',
+      children: body
+    })
+
+    await rerender({ open: true })
+
+    const dialog = page.getByRole('dialog', { name: 'New World' }).element()
+    expect(dialog.matches(':modal')).toBe(true)
+  })
+
   it('closes and reports it when the close link is clicked', async () => {
     let closed = 0
     render(Dialog, {

@@ -24,6 +24,9 @@
   }: Props = $props()
 
   let dialog: HTMLDialogElement | undefined = $state()
+  // Only the server render uses the `open` attribute. After that, opening goes through
+  // showModal(); a reactive attribute would open the dialog non-modally first.
+  const serverOpen = open
 
   // A server-rendered open dialog is non-modal; upgrade it once JS runs.
   onMount(() => {
@@ -42,7 +45,7 @@
 
 <dialog
   bind:this={dialog}
-  {open}
+  open={serverOpen}
   aria-label={title}
   onclose={() => {
     // The upgrade closes and reopens; only a dialog that stayed closed counts.

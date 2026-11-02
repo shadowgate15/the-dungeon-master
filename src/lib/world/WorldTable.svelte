@@ -90,21 +90,24 @@
 </script>
 
 <div class="space-y-4">
-  <div class="flex flex-wrap items-center gap-3">
-    <TextInput
-      type="search"
-      size="sm"
-      aria-label="Search Worlds"
-      placeholder="Search name or premise"
-      bind:value={query}
-      class="w-64"
-    />
-    <Select size="sm" aria-label="Genre" bind:value={genre} class="w-auto">
-      <option value="">All genres</option>
-      {#each genres as g (g)}
-        <option value={g}>{g}</option>
-      {/each}
-    </Select>
+  <div class="flex items-center gap-3">
+    <div class="min-w-0 flex-1">
+      <TextInput
+        type="search"
+        size="sm"
+        aria-label="Search Worlds"
+        placeholder="Search name or premise"
+        bind:value={query}
+      />
+    </div>
+    <div class="shrink-0">
+      <Select size="sm" aria-label="Genre" bind:value={genre}>
+        <option value="">All genres</option>
+        {#each genres as g (g)}
+          <option value={g}>{g}</option>
+        {/each}
+      </Select>
+    </div>
     <SegmentedNav
       label="World view"
       items={[
