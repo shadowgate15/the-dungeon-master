@@ -19,25 +19,44 @@
     view: 'active' | 'archived'
     activeCount: number
     archivedCount: number
-    /** Per-row controls for the Actions column (archive, restore, delete arrive with the edit ticket). */
+    /** The World the list is filtered to (`?world=ID`), if any. */
+    worldFilter?: { id: string; name: string }
+    /** Per-row controls for the Actions column. */
     actions?: Snippet<[CampaignListItem]>
   }
 
-  let { campaigns, view, activeCount, archivedCount, actions }: Props = $props()
+  let { campaigns, view, activeCount, archivedCount, worldFilter, actions }: Props = $props()
+
+  // The query string for a view and World filter, each present only when set.
+  const query = (opts: { view?: 'active' | 'archived'; world?: string }) => {
+    const parts = [
+      opts.view === 'archived' ? 'view=archived' : '',
+      opts.world ? `world=${encodeURIComponent(opts.world)}` : ''
+    ].filter(Boolean)
+    return parts.length ? `?${parts.join('&')}` : ''
+  }
+  const blockingWorlds = (c: CampaignListItem) => c.worlds.filter((w) => w.archived)
 
   // ISO date: the same string on the server and in the browser, whatever the locale.
   const day = (ms: number) => new Date(ms).toISOString().slice(0, 10)
 </script>
 
 <div class="space-y-4">
+  {#if worldFilter}
+    <p class="flex items-center gap-3 rounded bg-slate-100 px-3 py-2 text-sm">
+      <span>Showing Campaigns set in <strong>{worldFilter.name}</strong></span>
+      <a href="{resolve('/campaigns')}{query({ view })}" class="underline">Clear filter</a>
+    </p>
+  {/if}
+
   <nav aria-label="Campaign view" class="flex w-fit overflow-hidden rounded border text-sm">
     <a
-      href={resolve('/campaigns')}
+      href="{resolve('/campaigns')}{query({ world: worldFilter?.id })}"
       aria-current={view === 'active' ? 'page' : undefined}
       class="px-3 py-2 {view === 'active' ? 'bg-slate-800 text-white' : ''}">Active {activeCount}</a
     >
     <a
-      href="{resolve('/campaigns')}?view=archived"
+      href="{resolve('/campaigns')}{query({ view: 'archived', world: worldFilter?.id })}"
       aria-current={view === 'archived' ? 'page' : undefined}
       class="px-3 py-2 {view === 'archived' ? 'bg-slate-800 text-white' : ''}"
       >Archived {archivedCount}</a
@@ -66,15 +85,24 @@
             <p class="truncate text-xs text-slate-500" title={campaign.premise}>
               {campaign.premise}
             </p>
+            {#if blockingWorlds(campaign).length > 0}
+              <p class="mt-1 text-xs">
+                <span class="rounded bg-amber-100 px-1.5 text-amber-800">Read-only</span>
+                Restore {blockingWorlds(campaign)
+                  .map((w) => w.name)
+                  .join(', ')} to edit this Campaign.
+              </p>
+            {/if}
           </td>
           <td class="p-2">{campaign.tone}</td>
           <td class="p-2">{campaign.length}</td>
           <td class="p-2">
             {#each campaign.worlds as world (world.id)}
-              <span
+              <a
+                href="{resolve('/campaigns')}{query({ view, world: world.id })}"
                 class="mr-1 inline-block rounded border px-1.5 text-xs {world.archived
                   ? 'border-dashed line-through'
-                  : ''}">{world.name}</span
+                  : ''}">{world.name}</a
               >
             {/each}
           </td>
@@ -84,7 +112,11 @@
       {:else}
         <tr>
           <td colspan="6" class="p-8 text-center text-slate-500">
-            {view === 'archived' ? 'No archived Campaigns.' : 'No Campaigns yet.'}
+            {#if worldFilter}
+              No Campaigns match.
+            {:else}
+              {view === 'archived' ? 'No archived Campaigns.' : 'No Campaigns yet.'}
+            {/if}
           </td>
         </tr>
       {/each}
