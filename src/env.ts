@@ -12,5 +12,10 @@ export const variables = defineEnvVars({
   LM_STUDIO_MODEL: {
     description: 'The model id to use. When unset, the AI is treated as not configured.',
     schema: optional
+  },
+  LM_STUDIO_CONTEXT_LIMIT: {
+    description:
+      'Context length in tokens to assume when LM Studio does not report the loaded one. Defaults to 4096.',
+    schema: optional
   }
 })

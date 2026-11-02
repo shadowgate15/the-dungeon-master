@@ -3,7 +3,14 @@ export type AiStatus =
   | { state: 'not-configured' }
   | { state: 'unreachable'; model: string }
   | { state: 'model-unavailable'; model: string }
-  | { state: 'ready'; model: string; contextLength: number | null }
+  | {
+      state: 'ready'
+      model: string
+      /** The loaded context length from the probe; null when the model is not loaded. */
+      contextLength: number | null
+      /** The configured limit to use (with a character estimate) when `contextLength` is null. */
+      fallbackContextLength?: number
+    }
   /** A turn showed the model returns no answer content; controls stay off until re-probe. */
   | { state: 'reasoning-model'; model: string }
 

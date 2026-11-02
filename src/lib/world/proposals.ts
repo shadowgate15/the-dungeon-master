@@ -35,6 +35,13 @@ export interface ConversationState {
   cards: ProposalCard[]
   /** Counter for ids and turns. Monotonic. */
   nextId: number
+  /** Model-facing summary of the first `summarizedCount` messages of `historyOf`. */
+  summary: string | null
+  summarizedCount: number
+  /** Entry ids after which the transcript shows "earlier messages were summarized". */
+  dividers: string[]
+  /** Total tokens the provider reported for the last turn; null when unknown or stale. */
+  lastUsedTokens: number | null
 }
 
 export interface DismissedNote {
@@ -43,7 +50,15 @@ export interface DismissedNote {
 }
 
 export function emptyConversation(): ConversationState {
-  return { entries: [], cards: [], nextId: 1 }
+  return {
+    entries: [],
+    cards: [],
+    nextId: 1,
+    summary: null,
+    summarizedCount: 0,
+    dividers: [],
+    lastUsedTokens: null
+  }
 }
 
 export function sendMessage(state: ConversationState, content: string): ConversationState {
@@ -81,7 +96,8 @@ export function retryMessage(state: ConversationState, id: string) {
 export function receiveTurn(
   state: ConversationState,
   reply: string,
-  proposals: Partial<Record<SeedField, string>>
+  proposals: Partial<Record<SeedField, string>>,
+  usedTokens?: number
 ): ConversationState {
   const turn = state.nextId
   const cards: ProposalCard[] = (Object.entries(proposals) as [SeedField, string][]).map(
@@ -98,9 +114,31 @@ export function receiveTurn(
     c.status === 'pending' && revised.has(c.field) ? { ...c, status: 'superseded' as const } : c
   )
   return {
+    ...state,
     entries: [...state.entries, { id: `m${turn}`, role: 'assistant', content: reply, turn }],
     cards: [...older, ...cards],
-    nextId: turn + 1
+    nextId: turn + 1,
+    lastUsedTokens: usedTokens ?? null
+  }
+}
+
+/**
+ * Stores a compaction. Only the model-facing side changes: the transcript stays complete
+ * and gains a divider after the last summarized message. The old usage is stale now, so
+ * the meter falls back to an estimate of the compacted prompt.
+ */
+export function applyCompaction(
+  state: ConversationState,
+  compaction: { summary: string; summarizedCount: number }
+): ConversationState {
+  const last = state.entries.filter((e) => e.error === undefined)[compaction.summarizedCount - 1]
+  return {
+    ...state,
+    summary: compaction.summary,
+    summarizedCount: compaction.summarizedCount,
+    dividers:
+      last && !state.dividers.includes(last.id) ? [...state.dividers, last.id] : state.dividers,
+    lastUsedTokens: null
   }
 }
 
