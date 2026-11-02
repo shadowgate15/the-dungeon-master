@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "prototype:worlds": "vite dev --open \"/?variant=A\"",
     "build": "vite build",
     "preview": "vite preview",
     "prepare": "husky && svelte-kit sync || echo ''",

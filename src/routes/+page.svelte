@@ -4,6 +4,12 @@
   import CreationChat from '#lib/world/CreationChat.svelte'
   import { emptySeed, type SeedField } from '#lib/world/seed.ts'
   import { resolve } from '$app/paths'
+  import { page } from '$app/state'
+  import PrototypeSwitcher from '#lib/world/prototype/PrototypeSwitcher.svelte'
+  import VariantA from '#lib/world/prototype/VariantA.svelte'
+  import VariantB from '#lib/world/prototype/VariantB.svelte'
+  import VariantC from '#lib/world/prototype/VariantC.svelte'
+  import { createProtoStore } from '#lib/world/prototype/store.svelte.ts'
   import {
     GENRE_FLAVORS,
     MAGIC_LEVELS,
@@ -13,6 +19,17 @@
   } from '#lib/world/enums.ts'
 
   let { data, form } = $props()
+
+  // PROTOTYPE: ?variant= swaps the rendering of this page. Mutations in A/B/C are in-memory stubs.
+  const variants = [
+    { key: 'current', name: 'Current page' },
+    { key: 'A', name: 'Master-detail' },
+    { key: 'B', name: 'Dense table' },
+    { key: 'C', name: 'Card library + shelf' }
+  ]
+  const variant = $derived(page.url.searchParams.get('variant') ?? 'current')
+  // svelte-ignore state_referenced_locally
+  const store = createProtoStore(data.worlds, data.archivedWorlds)
 
   // The seed card's live values. The chat reads them and writes only accepted proposals.
   // Only the values of a failed no-JS submit seed it.
@@ -36,9 +53,7 @@
   ] as const
 </script>
 
-<main class="mx-auto max-w-xl space-y-6 p-6">
-  <h1 class="text-2xl font-semibold">Worlds</h1>
-
+{#snippet create()}
   <AiPanel>
     {#snippet chat(status, ai)}
       {#key chatKey}
@@ -98,19 +113,36 @@
     {/if}
     <button type="submit" class="rounded bg-slate-800 px-3 py-2 text-white">Create World</button>
   </form>
+{/snippet}
 
-  {#if data.worlds.length === 0}
-    <p class="text-slate-500">No Worlds yet.</p>
-  {:else}
-    <ul aria-label="Worlds" class="space-y-1">
-      {#each data.worlds as world (world.id)}
-        <li>
-          <a href={resolve('/worlds/[id]/edit', { id: world.id })} class="underline">{world.name}</a
-          >
-        </li>
-      {/each}
-    </ul>
-  {/if}
+{#if variant === 'A'}
+  <VariantA {store} {create} />
+{:else if variant === 'B'}
+  <VariantB {store} {create} />
+{:else if variant === 'C'}
+  <VariantC {store} {create} />
+{:else}
+  <main class="mx-auto max-w-xl space-y-6 p-6">
+    <h1 class="text-2xl font-semibold">Worlds</h1>
 
-  <a href={resolve('/worlds/archived')} class="text-sm underline">Archived Worlds</a>
-</main>
+    {@render create()}
+
+    {#if data.worlds.length === 0}
+      <p class="text-slate-500">No Worlds yet.</p>
+    {:else}
+      <ul aria-label="Worlds" class="space-y-1">
+        {#each data.worlds as world (world.id)}
+          <li>
+            <a href={resolve('/worlds/[id]/edit', { id: world.id })} class="underline"
+              >{world.name}</a
+            >
+          </li>
+        {/each}
+      </ul>
+    {/if}
+
+    <a href={resolve('/worlds/archived')} class="text-sm underline">Archived Worlds</a>
+  </main>
+{/if}
+
+<PrototypeSwitcher {variants} />

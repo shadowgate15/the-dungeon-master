@@ -5,7 +5,10 @@ import type { Actions, PageServerLoad } from './$types'
 
 const worlds = createWorldService(db)
 
-export const load: PageServerLoad = () => ({ worlds: worlds.list() })
+export const load: PageServerLoad = () => ({
+  worlds: worlds.list(),
+  archivedWorlds: worlds.listArchived()
+})
 
 export const actions: Actions = {
   createWorld: async ({ request }) => {
