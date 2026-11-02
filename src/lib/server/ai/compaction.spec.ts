@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { emptySeed } from '#lib/world/seed.ts'
+import { startFakeLmStudio } from '#lib/testing/fake-lm-studio/server.ts'
 import {
   compactConversation,
+  createChatPort,
   runTurn,
   type ChatMessage,
   type ChatPort,
@@ -250,5 +252,30 @@ describe('compaction failure', () => {
 
     expect(result).toMatchObject({ ok: false, failure: { kind: 'timeout' } })
     expect(requests).toHaveLength(1)
+  })
+})
+
+describe('compaction against the fake LM Studio server', () => {
+  it('summarizes through the real adapter and answers the turn on the compacted prompt', async () => {
+    const fake = await startFakeLmStudio({ model: 'm' })
+    try {
+      fake.setChatContent({ reply: 'Noted.', proposals: {} })
+      fake.setSummaryContent({ summary: 'A short fake gist.' })
+      fake.setUsage({ promptTokens: 200, completionTokens: 20 })
+      const { createChatAdapter } = await import('./adapter.ts')
+      const port = createChatPort(createChatAdapter({ baseUrl: fake.baseUrl, model: 'm' }))
+
+      const result = await runTurn(port, input({ context: nearlyFull }))
+
+      expect(result).toMatchObject({
+        ok: true,
+        reply: 'Noted.',
+        usage: { totalTokens: 220 },
+        compaction: { summary: 'A short fake gist.', summarizedCount: 6 }
+      })
+      expect(fake.requests.filter((r) => r.path === '/v1/chat/completions')).toHaveLength(2)
+    } finally {
+      await fake.close()
+    }
   })
 })
