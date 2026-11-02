@@ -32,6 +32,8 @@ export interface PromptParts {
   dismissed: { field: string; value: string }[]
   pending?: { field: string; value: string }[]
   message?: string
+  /** Server-built system prompts beyond the seed (e.g. a Campaign's Worlds). */
+  extraSystemPrompts?: string[]
 }
 
 /** Character-based estimate of what the next request will weigh, in tokens. */
@@ -43,7 +45,8 @@ export function estimatePromptTokens(parts: PromptParts) {
     live.reduce((n, m) => n + m.content.length, 0) +
     parts.dismissed.reduce((n, d) => n + d.value.slice(0, DISMISSED_VALUE_CHARS).length, 0) +
     (parts.pending ?? []).reduce((n, p) => n + p.value.length, 0) +
-    (parts.message?.length ?? 0)
+    (parts.message?.length ?? 0) +
+    (parts.extraSystemPrompts ?? []).reduce((n, p) => n + p.length, 0)
   return FIXED_OVERHEAD_TOKENS + Math.ceil(chars / CHARS_PER_TOKEN)
 }
 
