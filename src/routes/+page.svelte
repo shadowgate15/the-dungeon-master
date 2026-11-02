@@ -3,6 +3,7 @@
   import AiPanel from '#lib/ai/AiPanel.svelte'
   import CreationChat from '#lib/world/CreationChat.svelte'
   import { emptySeed, type SeedField } from '#lib/world/seed.ts'
+  import { resolve } from '$app/paths'
   import {
     GENRE_FLAVORS,
     MAGIC_LEVELS,
@@ -93,8 +94,13 @@
   {:else}
     <ul aria-label="Worlds" class="space-y-1">
       {#each data.worlds as world (world.id)}
-        <li>{world.name}</li>
+        <li>
+          <a href={resolve('/worlds/[id]/edit', { id: world.id })} class="underline">{world.name}</a
+          >
+        </li>
       {/each}
     </ul>
   {/if}
+
+  <a href={resolve('/worlds/archived')} class="text-sm underline">Archived Worlds</a>
 </main>
