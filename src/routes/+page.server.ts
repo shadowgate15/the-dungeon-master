@@ -50,7 +50,8 @@ function setArchived(action: 'archive' | 'restore') {
         if (!(e instanceof WorldNotFoundError)) throw e
       }
     }
-    if (done.length === 0) return fail(404, { error: 'World not found' })
+    if (done.length === 0)
+      return fail(404, { notice: { message: 'World not found' } satisfies ActionNotice })
     const notice: ActionNotice = {
       message: done.length === 1 ? `${past} ${done[0].name}` : `${past} ${done.length} Worlds`,
       undo: { action: reverse, ids: done.map((d) => d.id) }
@@ -90,12 +91,14 @@ export const actions: Actions = {
 
   delete: async ({ request }) => {
     const id = String((await request.formData()).get('id') ?? '')
-    const name = worlds.get(id)?.name
+    const name = worlds.get(id)?.name ?? 'World'
     try {
       worlds.delete(id)
     } catch (e) {
-      if (e instanceof WorldNotFoundError) return fail(404, { error: e.message })
-      if (e instanceof WorldInUseError) return fail(409, { error: e.message })
+      if (e instanceof WorldNotFoundError)
+        return fail(404, { notice: { message: e.message } satisfies ActionNotice })
+      if (e instanceof WorldInUseError)
+        return fail(409, { notice: { message: e.message } satisfies ActionNotice })
       throw e
     }
     const notice: ActionNotice = { message: `Deleted ${name}` }

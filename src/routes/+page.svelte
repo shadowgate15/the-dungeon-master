@@ -5,6 +5,7 @@
   import { emptySeed, type SeedField } from '#lib/world/seed.ts'
   import { onMount } from 'svelte'
   import { page } from '$app/state'
+  import { replaceState } from '$app/navigation'
   import { resolve } from '$app/paths'
   import ActionToast from '#lib/world/ActionToast.svelte'
   import WorldTable from '#lib/world/WorldTable.svelte'
@@ -34,7 +35,7 @@
 
   let dialog = $state<HTMLDialogElement>()
   // A failed create reopens the dialog on the server render; other failures belong to the table.
-  const createFailed = $derived(form !== null && form !== undefined && 'premise' in form)
+  const createFailed = $derived(form !== null && form !== undefined && 'error' in form)
   const serverOpen = $derived(page.url.searchParams.has('new') || createFailed)
 
   // The server renders the dialog open without JS; with JS it becomes a real modal.
@@ -80,6 +81,9 @@
   bind:this={dialog}
   open={serverOpen}
   aria-label="New World"
+  onclose={() => {
+    if (page.url.searchParams.has('new')) replaceState(resolve('/'), {})
+  }}
   class="m-auto w-[min(72rem,calc(100vw-2rem))] rounded-lg p-6 backdrop:bg-black/50"
 >
   <div class="mb-4 flex items-center justify-between">

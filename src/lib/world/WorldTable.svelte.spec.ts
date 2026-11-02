@@ -122,6 +122,16 @@ describe('WorldTable', () => {
     await expect.poll(rowNames).toEqual(['Bramble'])
   })
 
+  it('drops a genre filter the next view no longer offers', async () => {
+    const { rerender } = render(WorldTable, props())
+    await userEvent.selectOptions(page.getByRole('combobox', { name: 'Genre' }), 'high fantasy')
+    await expect.poll(rowNames).toEqual(['Bramble'])
+
+    await rerender(props({ view: 'archived', worlds: [ashfall] }))
+
+    await expect.poll(rowNames).toEqual(['Ashfall'])
+  })
+
   it('sorts by most recently updated first, and re-sorts by name, Campaigns or updated', async () => {
     render(WorldTable, props())
     await expect.poll(rowNames).toEqual(['Ashfall', 'Cinder', 'Bramble'])

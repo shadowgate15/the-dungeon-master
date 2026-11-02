@@ -49,6 +49,11 @@
       })
   )
 
+  // A genre the current view no longer has would leave the table empty behind a blank select.
+  $effect(() => {
+    if (genre && !genres.includes(genre)) genre = ''
+  })
+
   let selected = $state<string[]>([])
   let confirmingDelete = $state<string | null>(null)
   // A World a filter hides is no longer selected, so a bulk action never touches unseen rows.
