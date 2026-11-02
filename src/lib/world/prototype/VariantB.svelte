@@ -215,10 +215,10 @@
     <button type="button" aria-label="Close" onclick={() => dialog?.close()}>✕</button>
   </div>
   <div class="grid gap-6 lg:grid-cols-2">
-    <section aria-label="Conversation" class="max-h-[70vh] min-w-0 space-y-2 overflow-y-auto">
+    <section aria-label="Conversation" class="min-w-0 space-y-2 overflow-y-auto lg:max-h-[70vh]">
       {@render conversation()}
     </section>
-    <section aria-label="Seed card" class="max-h-[70vh] min-w-0 overflow-y-auto">
+    <section aria-label="Seed card" class="min-w-0 overflow-y-auto lg:max-h-[70vh]">
       {@render seedForm()}
     </section>
   </div>
