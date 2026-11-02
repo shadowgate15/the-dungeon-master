@@ -63,4 +63,17 @@ describe('AiStatusView', () => {
 
     expect(oncheck).toHaveBeenCalledOnce()
   })
+
+  it('explains a reasoning model, names a suitable model and disables the controls', async () => {
+    render(AiStatusView, {
+      status: { state: 'reasoning-model', model: 'big-thinker' },
+      checking: false,
+      oncheck: () => {}
+    })
+
+    await expect.element(page.getByText(/reasoning model/i)).toBeVisible()
+    await expect.element(page.getByText(/qwen3-4b-2507/)).toBeVisible()
+    await expect.element(page.getByLabelText('Message')).toBeDisabled()
+    await expect.element(page.getByRole('button', { name: 'Check connection' })).toBeEnabled()
+  })
 })

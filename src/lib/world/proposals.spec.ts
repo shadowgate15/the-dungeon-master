@@ -4,7 +4,9 @@ import {
   dismissCard,
   dismissedNotes,
   emptyConversation,
+  failMessage,
   historyOf,
+  retryMessage,
   receiveTurn,
   sendMessage
 } from './proposals.ts'
@@ -64,5 +66,47 @@ describe('conversation state', () => {
       { role: 'assistant', content: 'two' },
       { role: 'user', content: 'three' }
     ])
+  })
+
+  it('keeps a failed message visible but out of the history sent to the model', () => {
+    let state = receiveTurn(sendMessage(emptyConversation(), 'one'), 'two', { name: 'X' })
+    state = failMessage(state, 'three', 'The assistant could not reply.')
+    state = sendMessage(state, 'four')
+
+    expect(state.entries.map((e) => [e.content, e.error])).toEqual([
+      ['one', undefined],
+      ['two', undefined],
+      ['three', 'The assistant could not reply.'],
+      ['four', undefined]
+    ])
+    expect(historyOf(state)).toEqual([
+      { role: 'user', content: 'one' },
+      { role: 'assistant', content: 'two' },
+      { role: 'user', content: 'four' }
+    ])
+  })
+
+  it('a failed turn adds no cards', () => {
+    const state = failMessage(emptyConversation(), 'hi', 'boom')
+
+    expect(state.cards).toEqual([])
+  })
+
+  it('retrying removes the failed entry and returns its message to resend', () => {
+    const failed = failMessage(emptyConversation(), 'hi', 'boom')
+
+    const { state, message } = retryMessage(failed, failed.entries[0].id)
+
+    expect(message).toBe('hi')
+    expect(state.entries).toEqual([])
+  })
+
+  it('retrying an entry that did not fail does nothing', () => {
+    const sent = sendMessage(emptyConversation(), 'hi')
+
+    const { state, message } = retryMessage(sent, sent.entries[0].id)
+
+    expect(message).toBeNull()
+    expect(state).toBe(sent)
   })
 })

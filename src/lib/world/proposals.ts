@@ -26,6 +26,8 @@ export interface ChatEntry {
   content: string
   /** For assistant entries: the turn number, matching `ProposalCard.turn`. */
   turn?: number
+  /** For user entries whose turn failed: what went wrong. Such entries are not history. */
+  error?: string
 }
 
 export interface ConversationState {
@@ -49,6 +51,29 @@ export function sendMessage(state: ConversationState, content: string): Conversa
     ...state,
     nextId: state.nextId + 1,
     entries: [...state.entries, { id: `m${state.nextId}`, role: 'user', content }]
+  }
+}
+
+/** Records a message whose turn failed: visible, retryable, never sent to the model. */
+export function failMessage(
+  state: ConversationState,
+  content: string,
+  error: string
+): ConversationState {
+  return {
+    ...state,
+    nextId: state.nextId + 1,
+    entries: [...state.entries, { id: `m${state.nextId}`, role: 'user', content, error }]
+  }
+}
+
+/** Removes a failed entry and returns its message so the caller can send it again. */
+export function retryMessage(state: ConversationState, id: string) {
+  const entry = state.entries.find((e) => e.id === id)
+  if (!entry || entry.error === undefined) return { state, message: null }
+  return {
+    state: { ...state, entries: state.entries.filter((e) => e.id !== id) },
+    message: entry.content
   }
 }
 
@@ -104,5 +129,7 @@ export function dismissedNotes(state: ConversationState): DismissedNote[] {
 }
 
 export function historyOf(state: ConversationState) {
-  return state.entries.map(({ role, content }) => ({ role, content }))
+  return state.entries
+    .filter((e) => e.error === undefined)
+    .map(({ role, content }) => ({ role, content }))
 }

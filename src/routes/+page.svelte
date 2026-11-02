@@ -40,9 +40,14 @@
   <h1 class="text-2xl font-semibold">Worlds</h1>
 
   <AiPanel>
-    {#snippet chat()}
+    {#snippet chat(status, ai)}
       {#key chatKey}
-        <CreationChat {seed} onaccept={(field, value) => (seed[field] = value)} />
+        <CreationChat
+          {seed}
+          onaccept={(field, value) => (seed[field] = value)}
+          disabled={status.state !== 'ready'}
+          onreasoningmodel={ai.reasoningModel}
+        />
       {/key}
     {/snippet}
   </AiPanel>
