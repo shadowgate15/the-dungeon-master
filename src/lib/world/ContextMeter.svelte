@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Badge from '../ui/Badge.svelte'
+  import Meter from '../ui/Meter.svelte'
   import { contextMeter } from './context.ts'
 
   type Props = {
@@ -15,23 +17,13 @@
 </script>
 
 <div class="space-y-1 text-sm">
-  <div
-    role="meter"
-    aria-label="Context"
-    aria-valuemin="0"
-    aria-valuemax={limit}
-    aria-valuenow={used}
-    class="h-2 overflow-hidden rounded bg-slate-200"
-  >
-    <div
-      class={['h-full', meter.warn ? 'bg-amber-500' : 'bg-violet-500']}
-      style:width="{meter.percent}%"
-    ></div>
-  </div>
-  <p class="text-slate-600">
+  <Meter label="Context" {used} {limit} warn={meter.warn} />
+  <p class="text-muted">
     {estimated ? '~' : ''}{format(used)} / {format(limit)} tokens
     {#if meter.warn}
-      <span class="text-amber-700">· Context almost full: older messages will be summarized.</span>
+      <Badge variant="warning" size="sm"
+        >Context almost full: older messages will be summarized.</Badge
+      >
     {/if}
   </p>
 </div>
