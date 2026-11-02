@@ -1,6 +1,7 @@
 import { LM_STUDIO_BASE_URL, LM_STUDIO_MODEL } from '$app/env/private'
 import { createChatAdapter } from './adapter.ts'
 import { resolveAiConfig } from './config.ts'
+import { createReasoningLock } from './lock.ts'
 import { probeAi } from './probe.ts'
 import { createChatPort } from './world-conversation.ts'
 import type { AiStatus } from '#lib/ai/status.ts'
@@ -10,9 +11,24 @@ const config = resolveAiConfig({ baseUrl: LM_STUDIO_BASE_URL, model: LM_STUDIO_M
 
 export type { AiStatus }
 
-/** Probes LM Studio now. The result never contains the base URL. */
-export function getAiStatus(): Promise<AiStatus> {
-  return probeAi(config)
+const reasoningLock = createReasoningLock(() => probeAi(config))
+
+/**
+ * Probes LM Studio now (unless a reasoning model locked the AI, see `lockReasoningModel`).
+ * `recheck` is an explicit user re-probe, the only thing that can release the lock.
+ * The result never contains the base URL.
+ */
+export function getAiStatus(options?: { recheck?: boolean }): Promise<AiStatus> {
+  return reasoningLock.status(options)
+}
+
+/** Disables the AI until a successful re-probe or a server restart. */
+export function lockReasoningModel() {
+  if (config.model) reasoningLock.engage(config.model)
+}
+
+export function isReasoningModelLocked() {
+  return reasoningLock.locked
 }
 
 /** The configured chat port for conversation modules, or null when no model is set. */

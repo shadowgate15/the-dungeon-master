@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit'
 import { z } from 'zod'
-import { getChatPort } from '#lib/server/ai/index.ts'
+import { getChatPort, isReasoningModelLocked, lockReasoningModel } from '#lib/server/ai/index.ts'
 import { runTurn } from '#lib/server/ai/world-conversation.ts'
 import { SEED_FIELDS } from '#lib/world/seed.ts'
 import type { RequestHandler } from './$types'
@@ -24,5 +24,14 @@ export const POST: RequestHandler = async ({ request }) => {
   const port = getChatPort()
   if (!port) return json({ error: 'AI is not configured' }, { status: 503 })
 
-  return json(await runTurn(port, parsed.data as Parameters<typeof runTurn>[1]))
+  if (isReasoningModelLocked()) {
+    return json({ error: 'AI is disabled until the connection is checked' }, { status: 503 })
+  }
+
+  // request.signal fires when the browser drops the request (Stop), cancelling the turn.
+  const result = await runTurn(port, parsed.data as Parameters<typeof runTurn>[1], {
+    signal: request.signal
+  })
+  if (!result.ok && result.failure.kind === 'reasoning-model') lockReasoningModel()
+  return json(result)
 }

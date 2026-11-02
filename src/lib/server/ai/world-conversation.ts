@@ -1,5 +1,6 @@
 import { chat } from '@tanstack/ai'
 import { z } from 'zod'
+import { REASONING_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '#lib/world/enums.ts'
 import {
   FIELD_LABELS,
@@ -17,10 +18,10 @@ import type { createChatAdapter } from './adapter.ts'
  * a short reply and a partial-seed proposal (or a typed failure) out. UI-free; the model
  * is reached only through the injected `ChatPort`, so tests drive it with canned events.
  *
- * Extension points: #31 changes how the client applies `proposals` (this module stays
- * as is); #32 adds `signal`/retry around the port call in `runTurn` and new failure
- * kinds to `TurnFailure`; #33 adds `usage` to the success result and a compaction
- * step that rewrites `history` before `buildRequest`.
+ * Layering: `attemptTurn` is one model call classified into a `TurnResult`; `runTurn`
+ * wraps it with the failure policy (one deadline, cancellation, one silent retry for bad
+ * output). #33 adds `usage` to the success result and a compaction step that rewrites
+ * `history` before `buildRequest`; both belong in or around `attemptTurn`, not the policy.
  */
 
 export const MAX_TOKENS = 600
@@ -61,13 +62,23 @@ export interface ChatRequest {
   maxTokens: number
   threadId: string
   outputSchema: typeof turnSchema
+  /** Aborted on timeout or cancel; the port must stop the provider call when it fires. */
+  signal: AbortSignal
 }
 
 /** Streams provider-neutral AG-UI style events for one request. */
 export type ChatPort = (request: ChatRequest) => AsyncIterable<unknown>
 
-export type TurnFailure =
-  { kind: 'provider-error'; message: string } | { kind: 'invalid-output'; message: string }
+/**
+ * `invalid-output` (validation error or truncation) is the only retryable kind.
+ * `reasoning-model` means the model produced no answer content at all.
+ */
+export type TurnFailure = {
+  kind: 'provider-error' | 'invalid-output' | 'reasoning-model' | 'timeout' | 'cancelled'
+  message: string
+}
+
+export const TURN_TIMEOUT_MS = 60_000
 
 export type TurnResult =
   | { ok: true; reply: string; proposals: Partial<Record<SeedField, string>> }
@@ -102,7 +113,7 @@ function pendingPrompt(pending: NonNullable<TurnInput['pending']>) {
   return `These proposals are pending, not yet accepted. If the user's message is feedback on one, revise it by proposing a replacement for the same field:\n${lines.join('\n')}`
 }
 
-export function buildRequest(input: TurnInput): ChatRequest {
+export function buildRequest(input: TurnInput, signal: AbortSignal): ChatRequest {
   const systemPrompts = [SYSTEM_PROMPT, seedPrompt(input.seed)]
   const dismissed = dismissedPrompt(input.dismissed)
   if (dismissed) systemPrompts.push(dismissed)
@@ -114,23 +125,47 @@ export function buildRequest(input: TurnInput): ChatRequest {
     maxTokens: MAX_TOKENS,
     // chat() requires a non-empty threadId; nothing is persisted, so each turn is its own.
     threadId: crypto.randomUUID(),
-    outputSchema: turnSchema
+    outputSchema: turnSchema,
+    signal
   }
 }
 
-type Event = { type?: string; name?: string; message?: string; value?: { object?: unknown } }
+type Event = {
+  type?: string
+  name?: string
+  message?: string
+  code?: string
+  value?: { object?: unknown }
+}
 
-export async function runTurn(port: ChatPort, input: TurnInput): Promise<TurnResult> {
+/** TanStack AI error codes for output the model produced but we cannot use. */
+const BAD_OUTPUT_CODES = new Set([
+  'structured-output-validation-failed',
+  'structured-output-parse-failed',
+  'max_tokens'
+])
+const REASONING_MODEL_CODE = 'structured-output-missing-result'
+
+function runErrorFailure(event: Event): TurnFailure {
+  const message = event.message ?? 'The model request failed'
+  if (event.code === REASONING_MODEL_CODE) {
+    return { kind: 'reasoning-model', message: REASONING_MODEL_MESSAGE }
+  }
+  if (event.code && BAD_OUTPUT_CODES.has(event.code)) return { kind: 'invalid-output', message }
+  return { kind: 'provider-error', message }
+}
+
+/** One model call, classified. Never rejects. */
+async function attemptTurn(
+  port: ChatPort,
+  input: TurnInput,
+  signal: AbortSignal
+): Promise<TurnResult> {
   let object: unknown
   try {
-    for await (const raw of port(buildRequest(input))) {
+    for await (const raw of port(buildRequest(input, signal))) {
       const event = raw as Event
-      if (event.type === 'RUN_ERROR') {
-        return {
-          ok: false,
-          failure: { kind: 'provider-error', message: event.message ?? 'The model request failed' }
-        }
-      }
+      if (event.type === 'RUN_ERROR') return { ok: false, failure: runErrorFailure(event) }
       if (event.type === 'CUSTOM' && event.name === 'structured-output.complete') {
         object = event.value?.object
       }
@@ -161,10 +196,69 @@ export async function runTurn(port: ChatPort, input: TurnInput): Promise<TurnRes
   return { ok: true, reply: parsed.data.reply, proposals }
 }
 
+export interface RunTurnOptions {
+  /** Cancels the turn (the user pressed Stop). */
+  signal?: AbortSignal
+  /** The whole-turn deadline, silent retry included. Injectable for tests. */
+  timeoutMs?: number
+}
+
+const TIMEOUT_FAILURE: TurnResult = {
+  ok: false,
+  failure: { kind: 'timeout', message: 'The model took too long to reply' }
+}
+const CANCELLED_FAILURE: TurnResult = {
+  ok: false,
+  failure: { kind: 'cancelled', message: 'The turn was stopped' }
+}
+
+/**
+ * Failure policy around `attemptTurn`: one deadline for the whole turn (abort, no
+ * retry), cancellation, and a single silent retry when the model's output was bad.
+ * Reasoning-model, provider, timeout and cancel failures are never retried.
+ */
+export async function runTurn(
+  port: ChatPort,
+  input: TurnInput,
+  options: RunTurnOptions = {}
+): Promise<TurnResult> {
+  const controller = new AbortController()
+  let outcome: TurnResult | undefined
+  const stop = (result: TurnResult) => {
+    outcome ??= result
+    controller.abort()
+  }
+  // Resolves when the turn is stopped, so a port that ignores its signal cannot hold us.
+  const stopped = new Promise<TurnResult>((resolve) =>
+    controller.signal.addEventListener('abort', () => resolve(outcome!))
+  )
+  const onCancel = () => stop(CANCELLED_FAILURE)
+  const timer = setTimeout(() => stop(TIMEOUT_FAILURE), options.timeoutMs ?? TURN_TIMEOUT_MS)
+  options.signal?.addEventListener('abort', onCancel)
+  if (options.signal?.aborted) onCancel()
+
+  try {
+    const run = async () => {
+      if (controller.signal.aborted) return outcome!
+      return Promise.race([attemptTurn(port, input, controller.signal), stopped])
+    }
+    const first = await run()
+    if (first.ok || first.failure.kind !== 'invalid-output') return first
+    return await run()
+  } finally {
+    clearTimeout(timer)
+    options.signal?.removeEventListener('abort', onCancel)
+  }
+}
+
 /** The production port: TanStack AI `chat()` over the configured adapter. */
 export function createChatPort(adapter: ReturnType<typeof createChatAdapter>): ChatPort {
-  return (request) =>
-    chat({
+  return (request) => {
+    // chat() takes a controller, not a signal: relay ours so aborting cancels the fetch.
+    const abortController = new AbortController()
+    if (request.signal.aborted) abortController.abort()
+    else request.signal.addEventListener('abort', () => abortController.abort(), { once: true })
+    return chat({
       adapter,
       systemPrompts: request.systemPrompts,
       messages: request.messages,
@@ -172,6 +266,8 @@ export function createChatPort(adapter: ReturnType<typeof createChatAdapter>): C
       outputSchema: request.outputSchema,
       // The cap goes through the adapter's model options, not the top-level option.
       modelOptions: { max_tokens: request.maxTokens },
-      stream: true
+      stream: true,
+      abortController
     }) as AsyncIterable<unknown>
+  }
 }

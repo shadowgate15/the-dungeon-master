@@ -4,8 +4,8 @@ import type { AddressInfo } from 'node:net'
 /**
  * A fake LM Studio over real HTTP, so tests exercise the real adapter and probe.
  *
- * A scenario decides how the server answers. To add one (bad-output, hang,
- * reasoning-model, ...) register another entry in `scenarios`; nothing else changes.
+ * A scenario decides how the server answers. To add one (more failure modes,
+ * ...) register another entry in `scenarios`; nothing else changes.
  * The active scenario can be switched while the server runs, either with `setScenario`
  * or by POSTing `{ "scenario": "..." }` to `/__control/scenario` (used by Playwright).
  * POSTing any JSON to `/__control/chat-content` replaces the canned chat completion object,
@@ -70,8 +70,11 @@ function modelList(ctx: ScenarioContext, ids: string[]): boolean {
   return false
 }
 
-/** Streams `content` as Chat Completions SSE chunks, in a few pieces like a real model. */
-function streamChatCompletion(ctx: ScenarioContext, content: string) {
+/**
+ * Streams `content` as Chat Completions SSE chunks, in a few pieces like a real model.
+ * A `reasoning` text is streamed first as `reasoning_content`, as a reasoning model does.
+ */
+function streamChatCompletion(ctx: ScenarioContext, content: string, reasoning = '') {
   const { res } = ctx
   res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
   const write = (choices: object[], extra: object = {}) =>
@@ -89,6 +92,7 @@ function streamChatCompletion(ctx: ScenarioContext, content: string) {
     write([{ index: 0, delta: d, finish_reason: finish }])
 
   delta({ role: 'assistant', content: '' })
+  if (reasoning) delta({ reasoning_content: reasoning })
   const size = Math.max(1, Math.ceil(content.length / 3))
   for (let i = 0; i < content.length; i += size) delta({ content: content.slice(i, i + size) })
   delta({}, 'stop')
@@ -101,6 +105,31 @@ export const scenarios: Record<string, Scenario> = {
     if (modelList(ctx, [ctx.options.model])) return
     if (ctx.path === '/v1/chat/completions') {
       return streamChatCompletion(ctx, JSON.stringify(ctx.chatContent))
+    }
+    json(ctx.res, 404, { error: 'not found' })
+  },
+  /** The model answers, but with JSON that breaks the turn schema. */
+  'bad-output': (ctx) => {
+    if (modelList(ctx, [ctx.options.model])) return
+    if (ctx.path === '/v1/chat/completions') {
+      return streamChatCompletion(
+        ctx,
+        JSON.stringify({ reply: 'Broken.', proposals: { scale: 'galaxy' } })
+      )
+    }
+    json(ctx.res, 404, { error: 'not found' })
+  },
+  /** Chat requests are accepted and then never answered, until the client gives up. */
+  hang: (ctx) => {
+    if (modelList(ctx, [ctx.options.model])) return
+    if (ctx.path === '/v1/chat/completions') return
+    json(ctx.res, 404, { error: 'not found' })
+  },
+  /** A reasoning model: it streams only reasoning and never any answer content. */
+  'reasoning-model': (ctx) => {
+    if (modelList(ctx, [ctx.options.model])) return
+    if (ctx.path === '/v1/chat/completions') {
+      return streamChatCompletion(ctx, '', 'Let me think about this world...')
     }
     json(ctx.res, 404, { error: 'not found' })
   },
@@ -123,6 +152,8 @@ export interface FakeLmStudio {
   setScenario(name: string): void
   /** Replace the object that chat completions stream back in the `ready` scenario. */
   setChatContent(content: unknown): void
+  /** Chat completion requests still open (not finished or dropped by the client). */
+  openChatConnections(): number
   close(): Promise<void>
 }
 
@@ -148,6 +179,7 @@ export async function startFakeLmStudio(
   let scenario = options.scenario ?? 'ready'
   let chatContent: unknown = { reply: 'A fake reply.', proposal: {} }
   const requests: FakeRequest[] = []
+  let openChat = 0
 
   const server: Server = createServer(async (req, res) => {
     const path = new URL(req.url ?? '/', 'http://fake').pathname
@@ -167,6 +199,10 @@ export async function startFakeLmStudio(
     }
 
     requests.push({ method: req.method ?? 'GET', path, body })
+    if (path === '/v1/chat/completions') {
+      openChat++
+      res.on('close', () => openChat--)
+    }
     await scenarios[scenario]({ req, res, path, body, options: resolved, chatContent })
   })
 
@@ -183,6 +219,7 @@ export async function startFakeLmStudio(
     setChatContent(content) {
       chatContent = content
     },
+    openChatConnections: () => openChat,
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections()

@@ -1,19 +1,26 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import type { AiStatus } from './status.ts'
+  import { REASONING_MODEL_MESSAGE, type AiStatus } from './status.ts'
 
   type Props = {
     /** undefined until the first probe answers. */
     status: AiStatus | undefined
     checking: boolean
     oncheck: () => void
-    /** The chat UI. Rendered only when the AI is ready; otherwise disabled controls show. */
-    chat?: Snippet<[Extract<AiStatus, { state: 'ready' }>]>
+    /**
+     * The chat UI. Rendered when the AI is ready, and also after a reasoning model was
+     * detected so the transcript (with its failed turns) stays visible, disabled.
+     * Otherwise disabled placeholder controls show.
+     */
+    chat?: Snippet<[Extract<AiStatus, { state: 'ready' | 'reasoning-model' }>]>
   }
 
   let { status, checking, oncheck, chat }: Props = $props()
 
   const ready = $derived(status?.state === 'ready' ? status : undefined)
+  const chatStatus = $derived(
+    status?.state === 'ready' || status?.state === 'reasoning-model' ? status : undefined
+  )
 </script>
 
 <section aria-label="AI" class="space-y-2 rounded border p-3">
@@ -27,6 +34,8 @@
     <p class="text-slate-500">Checking connection…</p>
   {:else if status.state === 'ready'}
     <p>Connected</p>
+  {:else if status.state === 'reasoning-model'}
+    <p class="text-slate-500">{REASONING_MODEL_MESSAGE} The form works as usual.</p>
   {:else if status.state === 'not-configured'}
     <p class="text-slate-500">AI is not configured. The form works as usual.</p>
   {:else if status.state === 'unreachable'}
@@ -49,8 +58,8 @@
     Check connection
   </button>
 
-  {#if ready && chat}
-    {@render chat(ready)}
+  {#if chatStatus && chat}
+    {@render chat(chatStatus)}
   {:else}
     <fieldset disabled={!ready} class="space-y-1">
       <label class="block">
