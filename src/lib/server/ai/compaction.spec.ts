@@ -215,6 +215,43 @@ describe('compaction failure', () => {
     expect(p.summaryCalls()).toHaveLength(2)
   })
 
+  it('reports a reasoning model during the summary as reasoning-model, not context-full', async () => {
+    const reasoning = [
+      { type: 'RUN_ERROR', message: 'x', code: 'structured-output-missing-result' }
+    ]
+    const p = scriptedPorts({ summary: [reasoning] })
+
+    const result = await runTurn(p.port, input({ context: nearlyFull }))
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'reasoning-model' } })
+    expect(p.summaryCalls()).toHaveLength(1)
+    expect(p.turnCalls()).toHaveLength(0)
+  })
+
+  it('reports an unreachable provider during manual compaction as provider-error', async () => {
+    const port: ChatPort = async function* () {
+      throw new Error('connect ECONNREFUSED')
+      yield {}
+    }
+
+    const result = await compactConversation(port, input())
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'provider-error' } })
+  })
+
+  it('reports a timeout during manual compaction as timeout', async () => {
+    const port: ChatPort = async function* (request) {
+      await new Promise<void>((_, reject) =>
+        request.signal.addEventListener('abort', () => reject(new Error('aborted')))
+      )
+      yield {}
+    }
+
+    const result = await compactConversation(port, input(), { timeoutMs: 20 })
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'timeout' } })
+  })
+
   it('blocks when the prompt still exceeds the limit after compaction', async () => {
     // The verbatim tail alone is far over the limit, so no summary can save the turn.
     const history = [...transcript(6), ...transcript(6, 2000)]

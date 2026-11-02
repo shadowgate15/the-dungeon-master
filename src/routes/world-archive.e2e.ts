@@ -46,3 +46,18 @@ test('deletes an unreferenced World only after confirmation', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Worlds' })).toBeVisible()
   await expect(page.getByText(name)).toHaveCount(0)
 })
+
+test('deletes an archived unreferenced World from its edit page', async ({ page }) => {
+  const name = `ArchDelete ${Date.now()}`
+  await createWorld(page, name)
+  await page.getByRole('button', { name: 'Archive World' }).click()
+  await page.getByRole('link', { name: 'Archived Worlds' }).click()
+  await page.getByRole('list', { name: 'Archived Worlds' }).getByRole('link', { name }).click()
+  await page.waitForLoadState('networkidle')
+
+  await page.getByRole('button', { name: 'Delete World' }).click()
+  await page.getByRole('button', { name: 'Confirm delete' }).click()
+  await expect(page.getByRole('heading', { name: 'Worlds' })).toBeVisible()
+  await page.getByRole('link', { name: 'Archived Worlds' }).click()
+  await expect(page.getByText(name)).toHaveCount(0)
+})

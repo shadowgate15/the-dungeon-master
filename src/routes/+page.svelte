@@ -51,6 +51,7 @@
             ? status.fallbackContextLength
             : undefined}
           onreasoningmodel={ai.reasoningModel}
+          onunavailable={ai.unavailable}
         />
       {/key}
     {/snippet}

@@ -90,37 +90,40 @@
     </fieldset>
   </form>
 
-  {#if !archived}
-    <section class="space-y-2 border-t pt-4">
+  <section class="space-y-2 border-t pt-4">
+    {#if !archived}
       <form method="POST" action="?/archive" use:enhance>
         <button type="submit" class="rounded border px-3 py-1">Archive World</button>
       </form>
+    {/if}
 
-      {#if form?.inUse}
-        <div role="alert" class="space-y-2 text-sm text-red-600">
-          <p>This World is used by a Campaign and cannot be deleted. Archive it instead.</p>
-        </div>
-      {/if}
+    {#if form?.inUse}
+      <div role="alert" class="space-y-2 text-sm text-red-600">
+        <p>
+          This World is used by a Campaign and cannot be deleted. {archived
+            ? 'Keep it archived instead.'
+            : 'Archive it instead.'}
+        </p>
+      </div>
+    {/if}
 
-      {#if confirmingDelete}
-        <form method="POST" action="?/delete" use:enhance class="space-y-2">
-          <p class="text-sm">Permanently delete {data.world.name}? This cannot be undone.</p>
-          <button type="submit" class="rounded bg-red-700 px-3 py-1 text-white"
-            >Confirm delete</button
-          >
-          <button
-            type="button"
-            class="rounded border px-3 py-1"
-            onclick={() => (confirmingDelete = false)}>Cancel</button
-          >
-        </form>
-      {:else}
+    {#if confirmingDelete}
+      <form method="POST" action="?/delete" use:enhance class="space-y-2">
+        <p class="text-sm">Permanently delete {data.world.name}? This cannot be undone.</p>
+        <button type="submit" class="rounded bg-red-700 px-3 py-1 text-white">Confirm delete</button
+        >
         <button
           type="button"
           class="rounded border px-3 py-1"
-          onclick={() => (confirmingDelete = true)}>Delete World</button
+          onclick={() => (confirmingDelete = false)}>Cancel</button
         >
-      {/if}
-    </section>
-  {/if}
+      </form>
+    {:else}
+      <button
+        type="button"
+        class="rounded border px-3 py-1"
+        onclick={() => (confirmingDelete = true)}>Delete World</button
+      >
+    {/if}
+  </section>
 </main>

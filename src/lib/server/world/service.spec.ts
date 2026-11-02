@@ -3,6 +3,7 @@ import { openDatabase, migrateDatabase, type Database } from '../db/connect'
 import {
   createWorldService,
   WorldInUseError,
+  WorldNotFoundError,
   WorldValidationError,
   type WorldService
 } from './service'
@@ -217,7 +218,7 @@ describe('World service', () => {
     })
 
     it('refuses to edit an unknown or archived World', () => {
-      expect(() => worlds.update('nope', { name: 'X' })).toThrow(WorldValidationError)
+      expect(() => worlds.update('nope', { name: 'X' })).toThrow(WorldNotFoundError)
       const created = worlds.create({ name: 'Eldoria' })
       db.$client.prepare('update world set archived_at = 5 where id = ?').run(created.id)
       expect(() => worlds.update(created.id, { name: 'X' })).toThrow(/archived/i)
@@ -294,8 +295,21 @@ describe('World service', () => {
     })
 
     it('throws when archiving or restoring an unknown World', () => {
-      expect(() => worlds.archive('nope')).toThrow(WorldValidationError)
-      expect(() => worlds.restore('nope')).toThrow(WorldValidationError)
+      expect(() => worlds.archive('nope')).toThrow(WorldNotFoundError)
+      expect(() => worlds.restore('nope')).toThrow(WorldNotFoundError)
+    })
+
+    it('archiving an archived World is a no-op that keeps archived_at and updated_at', () => {
+      const w = worlds.create({ name: 'A' })
+      const first = worlds.archive(w.id)
+      expect(worlds.archive(w.id)).toEqual(first)
+      expect(worlds.get(w.id)).toEqual(first)
+    })
+
+    it('restoring an active World is a no-op that keeps updated_at', () => {
+      const w = worlds.create({ name: 'A' })
+      expect(worlds.restore(w.id)).toEqual(w)
+      expect(worlds.get(w.id)).toEqual(w)
     })
 
     it('deletes an unreferenced World', () => {
@@ -319,7 +333,7 @@ describe('World service', () => {
     })
 
     it('throws when deleting an unknown World', () => {
-      expect(() => worlds.delete('nope')).toThrow(WorldValidationError)
+      expect(() => worlds.delete('nope')).toThrow(WorldNotFoundError)
     })
 
     it('makes a Campaign read-only while any linked World is archived', () => {

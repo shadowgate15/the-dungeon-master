@@ -103,6 +103,9 @@ export type TurnFailure = {
     | 'cancelled'
     /** The conversation cannot fit the model's context; input is blocked until the user chooses. */
     | 'context-full'
+    /** Found by the probe that precedes a send: LM Studio is down or lacks the model. */
+    | 'not-connected'
+    | 'model-unavailable'
   message: string
 }
 
@@ -309,7 +312,7 @@ const SYSTEM_PROMPT_COMPACT = SUMMARY_PROMPT
 
 type CompactResult = ({ ok: true } & Compaction) | { ok: false; failure: TurnFailure }
 
-const COMPACTION_FAILED: CompactResult = {
+const COMPACTION_FAILED: Extract<CompactResult, { ok: false }> = {
   ok: false,
   failure: {
     kind: 'context-full',
@@ -317,18 +320,27 @@ const COMPACTION_FAILED: CompactResult = {
   }
 }
 
-/** One summary call, parsed. Null on any failure; the caller decides whether to retry. */
-async function summarizeOnce(port: ChatPort, request: ChatRequest) {
+type SummaryAttempt =
+  | { ok: true; summary: string }
+  /** `retry`: the output was unusable, so one more attempt may help. */
+  | { ok: false; failure: TurnFailure; retry: boolean }
+
+/** One summary call, parsed. The caller decides whether to retry. */
+async function summarizeOnce(port: ChatPort, request: ChatRequest): Promise<SummaryAttempt> {
   const call = await callModel(port, request)
-  if (!call.ok) return null
+  if (!call.ok) return { ...call, retry: call.failure.kind === 'invalid-output' }
   const parsed = summarySchema.safeParse(call.object)
-  return parsed.success ? parsed.data.summary.trim() : null
+  if (parsed.success && parsed.data.summary.trim()) {
+    return { ok: true, summary: parsed.data.summary.trim() }
+  }
+  return { ok: false, failure: COMPACTION_FAILED.failure, retry: true }
 }
 
 /**
- * Summarizes everything but the last `KEEP_MESSAGES` messages (plus any earlier summary)
- * with one silent retry. Nothing older than the tail is a no-op that returns the existing
- * state unchanged. Failure is `context-full`: the caller blocks input.
+ * Summarizes everything but the last `KEEP_MESSAGES` messages (plus any earlier summary).
+ * Unusable output gets one silent retry, then `context-full`: the caller blocks input.
+ * Real failures (reasoning model, provider error) are reported as they are, unretried.
+ * Nothing older than the tail is a no-op that returns the existing state unchanged.
  */
 async function compact(
   port: ChatPort,
@@ -341,8 +353,9 @@ async function compact(
 
   const request = summaryRequest(input, input.history.slice(from, upTo), signal)
   for (let attempt = 0; attempt < 2 && !signal.aborted; attempt++) {
-    const summary = await summarizeOnce(port, request)
-    if (summary) return { ok: true, summary, summarizedCount: upTo }
+    const result = await summarizeOnce(port, request)
+    if (result.ok) return { ok: true, summary: result.summary, summarizedCount: upTo }
+    if (!result.retry) return { ok: false, failure: result.failure }
   }
   return COMPACTION_FAILED
 }

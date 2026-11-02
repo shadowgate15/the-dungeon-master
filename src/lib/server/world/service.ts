@@ -11,6 +11,9 @@ export type WorldSeed = Omit<
 
 export class WorldValidationError extends Error {}
 
+/** The World does not exist. */
+export class WorldNotFoundError extends Error {}
+
 /** Delete refused because a Campaign still references the World. */
 export class WorldInUseError extends Error {}
 
@@ -41,14 +44,16 @@ function validate(seed: WorldSeed) {
 
 export function createWorldService(db: Database, now: () => number = Date.now) {
   function setArchived(id: string, archivedAt: number | null): World {
-    const updated = db
+    const current = db.select().from(world).where(eq(world.id, id)).get()
+    if (!current) throw new WorldNotFoundError('World not found')
+    // Already in the requested state: no-op, so archived_at/updated_at are not overwritten.
+    if ((current.archivedAt === null) === (archivedAt === null)) return current
+    return db
       .update(world)
       .set({ archivedAt, updatedAt: now() })
       .where(eq(world.id, id))
       .returning()
       .get()
-    if (!updated) throw new WorldValidationError('World not found')
-    return updated
   }
 
   function archivedWorldsOfCampaign(campaignId: string): World[] {
@@ -82,11 +87,10 @@ export function createWorldService(db: Database, now: () => number = Date.now) {
         .returning()
         .get()
       if (updated) return updated
-      throw new WorldValidationError(
-        db.select().from(world).where(eq(world.id, id)).get()
-          ? 'An archived World cannot be edited'
-          : 'World not found'
-      )
+      if (db.select().from(world).where(eq(world.id, id)).get()) {
+        throw new WorldValidationError('An archived World cannot be edited')
+      }
+      throw new WorldNotFoundError('World not found')
     },
 
     /** How many Campaigns an edit to this World touches. */
@@ -111,7 +115,7 @@ export function createWorldService(db: Database, now: () => number = Date.now) {
     delete(id: string): void {
       try {
         const deleted = db.delete(world).where(eq(world.id, id)).returning().get()
-        if (!deleted) throw new WorldValidationError('World not found')
+        if (!deleted) throw new WorldNotFoundError('World not found')
       } catch (e) {
         // RESTRICT reports as SQLITE_CONSTRAINT_TRIGGER, other FK failures as _FOREIGNKEY.
         if (/^SQLITE_CONSTRAINT/.test((e as { code?: string }).code ?? '')) {
