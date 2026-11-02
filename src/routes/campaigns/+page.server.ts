@@ -1,7 +1,12 @@
 import { fail } from '@sveltejs/kit'
 import { db } from '#lib/server/db/index.ts'
-import { createCampaignService, CampaignValidationError } from '#lib/server/campaign/service.ts'
+import {
+  createCampaignService,
+  CampaignNotFoundError,
+  CampaignValidationError
+} from '#lib/server/campaign/service.ts'
 import { createWorldService } from '#lib/server/world/service.ts'
+import type { ActionNotice } from '#lib/world/ActionToast.svelte'
 import type { Actions, PageServerLoad } from './$types'
 
 const campaigns = createCampaignService(db)
@@ -10,10 +15,16 @@ const worlds = createWorldService(db)
 export const load: PageServerLoad = ({ url }) => {
   const view: 'active' | 'archived' =
     url.searchParams.get('view') === 'archived' ? 'archived' : 'active'
-  const active = campaigns.list()
-  const archived = campaigns.listArchived()
+  // An unknown World id (a stale link) is ignored rather than emptying the list.
+  const filterWorld = worlds.get(url.searchParams.get('world') ?? '')
+  const worldFilter = filterWorld && { id: filterWorld.id, name: filterWorld.name }
+  const active = campaigns.list({ worldId: worldFilter?.id })
+  const archived = campaigns
+    .listArchived()
+    .filter((c) => !worldFilter || campaigns.get(c.id)!.worlds.some((w) => w.id === worldFilter.id))
   return {
     view,
+    worldFilter,
     campaigns: (view === 'archived' ? archived : active).map((c) => ({
       id: c.id,
       name: c.name,
@@ -34,7 +45,49 @@ export const load: PageServerLoad = ({ url }) => {
   }
 }
 
+/** Archives or restores the Campaign named by the form's `id`, and offers the reverse. */
+function setArchived(action: 'archive' | 'restore') {
+  const past = action === 'archive' ? 'Archived' : 'Restored'
+  const reverse = action === 'archive' ? 'restore' : 'archive'
+  return async ({ request }: { request: Request }) => {
+    const ids = (await request.formData()).getAll('id').map(String)
+    const done: { id: string; name: string }[] = []
+    for (const id of ids) {
+      try {
+        done.push({ id, name: campaigns[action](id).name })
+      } catch (e) {
+        if (!(e instanceof CampaignNotFoundError)) throw e
+      }
+    }
+    if (done.length === 0)
+      return fail(404, { notice: { message: 'Campaign not found' } satisfies ActionNotice })
+    const notice: ActionNotice = {
+      message: done.length === 1 ? `${past} ${done[0].name}` : `${past} ${done.length} Campaigns`,
+      undo: { action: reverse, ids: done.map((d) => d.id) }
+    }
+    return { notice }
+  }
+}
+
 export const actions: Actions = {
+  archive: setArchived('archive'),
+
+  restore: setArchived('restore'),
+
+  delete: async ({ request }) => {
+    const id = String((await request.formData()).get('id') ?? '')
+    const name = campaigns.get(id)?.name ?? 'Campaign'
+    try {
+      campaigns.delete(id)
+    } catch (e) {
+      if (e instanceof CampaignNotFoundError)
+        return fail(404, { notice: { message: e.message } satisfies ActionNotice })
+      throw e
+    }
+    const notice: ActionNotice = { message: `Deleted ${name}` }
+    return { notice }
+  },
+
   createCampaign: async ({ request }) => {
     const data = await request.formData()
     const text = (key: string) => String(data.get(key) ?? '')
