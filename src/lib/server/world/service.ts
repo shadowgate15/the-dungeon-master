@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, count, eq, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { Database } from '../db/connect'
 import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '#lib/world/enums.ts'
 import { world, worldCampaign } from '../db/schema'
@@ -10,6 +10,9 @@ export type WorldSeed = Omit<
 >
 
 export class WorldValidationError extends Error {}
+
+/** Delete refused because a Campaign still references the World. */
+export class WorldInUseError extends Error {}
 
 function checkEnum<T extends string>(
   label: string,
@@ -37,6 +40,28 @@ function validate(seed: WorldSeed) {
 }
 
 export function createWorldService(db: Database, now: () => number = Date.now) {
+  function setArchived(id: string, archivedAt: number | null): World {
+    const updated = db
+      .update(world)
+      .set({ archivedAt, updatedAt: now() })
+      .where(eq(world.id, id))
+      .returning()
+      .get()
+    if (!updated) throw new WorldValidationError('World not found')
+    return updated
+  }
+
+  function archivedWorldsOfCampaign(campaignId: string): World[] {
+    return db
+      .select({ world })
+      .from(worldCampaign)
+      .innerJoin(world, eq(world.id, worldCampaign.worldId))
+      .where(and(eq(worldCampaign.campaignId, campaignId), isNotNull(world.archivedAt)))
+      .orderBy(asc(world.name))
+      .all()
+      .map((r) => r.world)
+  }
+
   return {
     create(seed: WorldSeed): World {
       const at = now()
@@ -71,6 +96,47 @@ export function createWorldService(db: Database, now: () => number = Date.now) {
         .from(worldCampaign)
         .where(eq(worldCampaign.worldId, id))
         .get()!.n
+    },
+
+    /** Hides the World from the list and picker and makes it read-only. */
+    archive(id: string): World {
+      return setArchived(id, now())
+    },
+
+    restore(id: string): World {
+      return setArchived(id, null)
+    },
+
+    /** Hard delete; the database's RESTRICT refuses it while any Campaign references the World. */
+    delete(id: string): void {
+      try {
+        const deleted = db.delete(world).where(eq(world.id, id)).returning().get()
+        if (!deleted) throw new WorldValidationError('World not found')
+      } catch (e) {
+        // RESTRICT reports as SQLITE_CONSTRAINT_TRIGGER, other FK failures as _FOREIGNKEY.
+        if (/^SQLITE_CONSTRAINT/.test((e as { code?: string }).code ?? '')) {
+          throw new WorldInUseError('World is used by a Campaign; archive it instead')
+        }
+        throw e
+      }
+    },
+
+    /** Derived, never stored: a Campaign is read-only while any linked World is archived. */
+    isCampaignReadOnly(campaignId: string): boolean {
+      return archivedWorldsOfCampaign(campaignId).length > 0
+    },
+
+    /** The archived Worlds blocking a Campaign, so the UI can name them. */
+    archivedWorldsOfCampaign,
+
+    /** Archived Worlds, most recently archived first. */
+    listArchived(): World[] {
+      return db
+        .select()
+        .from(world)
+        .where(isNotNull(world.archivedAt))
+        .orderBy(sql`${world.archivedAt} desc`, sql`rowid desc`)
+        .all()
     },
 
     get(id: string): World | undefined {

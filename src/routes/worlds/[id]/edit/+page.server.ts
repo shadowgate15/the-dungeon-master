@@ -1,6 +1,10 @@
-import { error, fail } from '@sveltejs/kit'
+import { error, fail, redirect } from '@sveltejs/kit'
 import { db } from '#lib/server/db/index.ts'
-import { createWorldService, WorldValidationError } from '#lib/server/world/service.ts'
+import {
+  createWorldService,
+  WorldInUseError,
+  WorldValidationError
+} from '#lib/server/world/service.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 const worlds = createWorldService(db)
@@ -33,5 +37,25 @@ export const actions: Actions = {
       throw e
     }
     return { saved: true }
+  },
+
+  archive: ({ params }) => {
+    worlds.archive(params.id)
+    redirect(303, '/')
+  },
+
+  restore: ({ params }) => {
+    worlds.restore(params.id)
+    return { restored: true }
+  },
+
+  delete: ({ params }) => {
+    try {
+      worlds.delete(params.id)
+    } catch (e) {
+      if (e instanceof WorldInUseError) return fail(409, { inUse: true, error: e.message })
+      throw e
+    }
+    redirect(303, '/')
   }
 }
