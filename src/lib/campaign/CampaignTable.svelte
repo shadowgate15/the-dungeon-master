@@ -78,7 +78,10 @@
       {#each campaigns as campaign (campaign.id)}
         <tr class="border-b align-top">
           <td class="max-w-xs p-2">
-            <span class="font-medium">{campaign.name}</span>
+            <a
+              href={resolve('/campaigns/[id]/edit', { id: campaign.id })}
+              class="font-medium underline">{campaign.name}</a
+            >
             <p class="truncate text-xs text-slate-500" title={campaign.premise}>
               {campaign.premise}
             </p>
