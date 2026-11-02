@@ -44,6 +44,18 @@ const props = (over: Record<string, unknown> = {}) => ({
   ...over
 })
 
+describe('WorldTable Campaign count link', () => {
+  it("links the Campaign count to that World's filtered Campaigns list", async () => {
+    render(WorldTable, props())
+
+    await expect
+      .element(page.getByRole('link', { name: '2', exact: true }))
+      .toHaveAttribute('href', '/campaigns?world=w1')
+    // A World with no Campaigns has nothing to link to.
+    await expect.element(page.getByRole('link', { name: '—' })).not.toBeInTheDocument()
+  })
+})
+
 const rowNames = () =>
   page
     .getByRole('row')
