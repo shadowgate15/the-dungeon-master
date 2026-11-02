@@ -4,7 +4,7 @@ import { LENGTHS, TONES } from '#lib/campaign/enums.ts'
 import {
   CAMPAIGN_FIELD_LABELS,
   CAMPAIGN_SEED_FIELDS,
-  type CampaignSeedCard,
+  type CampaignSeedFields,
   type CampaignSeedField
 } from '#lib/campaign/seed.ts'
 import { PREMISE_SOFT_CAP } from '#lib/world/enums.ts'
@@ -52,7 +52,7 @@ const SUMMARY_PROMPT = `You compress the earlier part of a Campaign creation con
 Write a short summary (a few sentences, under ${SUMMARY_MAX} characters) of the player's intent and direction: tone, themes, what they like and what they reject, and where the conversation is heading.
 Include which proposals were dismissed and why they were unwanted. Keep a previous summary's still-relevant points. Do not invent details.`
 
-function seedPrompt(seed: CampaignSeedCard) {
+function seedPrompt(seed: CampaignSeedFields) {
   const lines = CAMPAIGN_SEED_FIELDS.map(
     (f) => `- ${CAMPAIGN_FIELD_LABELS[f]}: ${seed[f] || '(unset)'}`
   )

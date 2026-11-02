@@ -1,0 +1,54 @@
+<script lang="ts">
+  import { LENGTHS, TONES } from '#lib/campaign/enums.ts'
+  import { PREMISE_SOFT_CAP } from '#lib/world/enums.ts'
+  import WorldPicker from './WorldPicker.svelte'
+  import type { CampaignSeedCard } from './seed.ts'
+
+  type Props = {
+    /** The live card. Fields are named name, premise, tone, length and worldId for form posts. */
+    seed: CampaignSeedCard
+    /** Active Worlds the player may choose. */
+    worlds: { id: string; name: string }[]
+  }
+
+  let { seed = $bindable(), worlds }: Props = $props()
+</script>
+
+<div class="space-y-3">
+  <WorldPicker {worlds} bind:value={seed.worldIds} />
+  <label class="block">
+    <span class="block text-sm font-medium">Name</span>
+    <input name="name" bind:value={seed.name} class="w-full rounded border p-2" />
+  </label>
+  <label class="block">
+    <span class="block text-sm font-medium">Premise</span>
+    <textarea name="premise" bind:value={seed.premise} rows="4" class="w-full rounded border p-2"
+    ></textarea>
+  </label>
+  {#if seed.premise.length > PREMISE_SOFT_CAP}
+    <p class="text-sm text-amber-600">
+      Premise is long ({seed.premise.length} of about {PREMISE_SOFT_CAP} characters). You can still save
+      it.
+    </p>
+  {/if}
+  <div class="grid grid-cols-2 gap-3">
+    <label class="block">
+      <span class="block text-sm font-medium">Tone</span>
+      <select name="tone" bind:value={seed.tone} class="w-full rounded border p-2">
+        <option value="">Choose…</option>
+        {#each TONES as tone (tone)}
+          <option value={tone}>{tone}</option>
+        {/each}
+      </select>
+    </label>
+    <label class="block">
+      <span class="block text-sm font-medium">Length</span>
+      <select name="length" bind:value={seed.length} class="w-full rounded border p-2">
+        <option value="">Choose…</option>
+        {#each LENGTHS as length (length)}
+          <option value={length}>{length}</option>
+        {/each}
+      </select>
+    </label>
+  </div>
+</div>
