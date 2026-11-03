@@ -1,5 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
+  import Alert from '#lib/ui/Alert.svelte'
+  import Link from '#lib/ui/Link.svelte'
   import CampaignEditForm from '#lib/campaign/CampaignEditForm.svelte'
   import CampaignChat from '#lib/campaign/CampaignChat.svelte'
   import {
@@ -32,22 +34,22 @@
 </script>
 
 <main class="mx-auto max-w-5xl space-y-6 p-6">
-  <a href={resolve('/campaigns')} class="text-sm underline">Back to Campaigns</a>
-  <h1 class="text-2xl font-semibold">Edit {data.campaign.name}</h1>
+  <Link href={resolve('/campaigns')} class="text-sm">Back to Campaigns</Link>
+  <h1 class="font-display text-2xl font-semibold text-text">Edit {data.campaign.name}</h1>
 
   {#if data.campaign.archived}
-    <div role="status" class="rounded border border-amber-400 p-3 text-sm">
+    <Alert variant="warning" role="status">
       This Campaign is archived and cannot be edited. Restore it to edit.
-    </div>
+    </Alert>
   {:else if readOnly}
-    <div role="status" class="space-y-2 rounded border border-amber-400 p-3 text-sm">
+    <Alert variant="warning" role="status" class="space-y-2">
       <p>This Campaign is read-only while these Worlds are archived. Restore them to edit it.</p>
       <ul class="list-disc pl-5">
         {#each data.blockingWorlds as world (world.id)}
           <li>{world.name}</li>
         {/each}
       </ul>
-    </div>
+    </Alert>
   {:else}
     {#key data.campaign.id}
       <CampaignEditForm

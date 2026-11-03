@@ -13,6 +13,11 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import { resolve } from '$app/paths'
+  import Alert from '#lib/ui/Alert.svelte'
+  import Badge from '#lib/ui/Badge.svelte'
+  import Link from '#lib/ui/Link.svelte'
+  import SegmentedNav from '#lib/ui/SegmentedNav.svelte'
+  import Table from '#lib/ui/Table.svelte'
 
   type Props = {
     campaigns: CampaignListItem[]
@@ -43,28 +48,30 @@
 
 <div class="space-y-4">
   {#if worldFilter}
-    <p class="flex items-center gap-3 rounded bg-slate-100 px-3 py-2 text-sm">
+    <Alert variant="info" class="flex items-center gap-3">
       <span>Showing Campaigns set in <strong>{worldFilter.name}</strong></span>
-      <a href="{resolve('/campaigns')}{query({ view })}" class="underline">Clear filter</a>
-    </p>
+      <Link href="{resolve('/campaigns')}{query({ view })}">Clear filter</Link>
+    </Alert>
   {/if}
 
-  <nav aria-label="Campaign view" class="flex w-fit overflow-hidden rounded border text-sm">
-    <a
-      href="{resolve('/campaigns')}{query({ world: worldFilter?.id })}"
-      aria-current={view === 'active' ? 'page' : undefined}
-      class="px-3 py-2 {view === 'active' ? 'bg-slate-800 text-white' : ''}">Active {activeCount}</a
-    >
-    <a
-      href="{resolve('/campaigns')}{query({ view: 'archived', world: worldFilter?.id })}"
-      aria-current={view === 'archived' ? 'page' : undefined}
-      class="px-3 py-2 {view === 'archived' ? 'bg-slate-800 text-white' : ''}"
-      >Archived {archivedCount}</a
-    >
-  </nav>
+  <SegmentedNav
+    label="Campaign view"
+    items={[
+      {
+        href: `${resolve('/campaigns')}${query({ world: worldFilter?.id })}`,
+        label: `Active ${activeCount}`,
+        current: view === 'active'
+      },
+      {
+        href: `${resolve('/campaigns')}${query({ view: 'archived', world: worldFilter?.id })}`,
+        label: `Archived ${archivedCount}`,
+        current: view === 'archived'
+      }
+    ]}
+  />
 
-  <table class="w-full text-left text-sm">
-    <thead class="border-b text-xs text-slate-500 uppercase">
+  <Table>
+    <thead class="border-b border-border text-xs text-muted uppercase">
       <tr>
         <th class="p-2">Name</th>
         <th class="p-2">Tone</th>
@@ -76,18 +83,18 @@
     </thead>
     <tbody>
       {#each campaigns as campaign (campaign.id)}
-        <tr class="border-b align-top">
+        <tr class="border-b border-border align-top">
           <td class="max-w-xs p-2">
-            <a
+            <Link
               href={resolve('/campaigns/[id]/edit', { id: campaign.id })}
-              class="font-medium underline">{campaign.name}</a
+              class="font-medium text-text">{campaign.name}</Link
             >
-            <p class="truncate text-xs text-slate-500" title={campaign.premise}>
+            <p class="truncate text-xs text-muted" title={campaign.premise}>
               {campaign.premise}
             </p>
             {#if blockingWorlds(campaign).length > 0}
               <p class="mt-1 text-xs">
-                <span class="rounded bg-amber-100 px-1.5 text-amber-800">Read-only</span>
+                <Badge variant="warning" size="sm">Read-only</Badge>
                 Restore {blockingWorlds(campaign)
                   .map((w) => w.name)
                   .join(', ')} to edit this Campaign.
@@ -98,20 +105,20 @@
           <td class="p-2">{campaign.length}</td>
           <td class="p-2">
             {#each campaign.worlds as world (world.id)}
-              <a
+              <Link
                 href="{resolve('/campaigns')}{query({ view, world: world.id })}"
-                class="mr-1 inline-block rounded border px-1.5 text-xs {world.archived
-                  ? 'border-dashed line-through'
-                  : ''}">{world.name}</a
+                class="mr-1 inline-block rounded-full border px-2 py-0.5 text-xs text-text no-underline hover:bg-raised {world.archived
+                  ? 'border-dashed border-muted line-through'
+                  : 'border-border'}">{world.name}</Link
               >
             {/each}
           </td>
-          <td class="p-2 whitespace-nowrap text-slate-500">{day(campaign.updatedAt)}</td>
+          <td class="p-2 whitespace-nowrap text-muted">{day(campaign.updatedAt)}</td>
           <td class="p-2 text-right">{@render actions?.(campaign)}</td>
         </tr>
       {:else}
         <tr>
-          <td colspan="6" class="p-8 text-center text-slate-500">
+          <td colspan="6" class="p-8 text-center text-muted">
             {#if worldFilter}
               No Campaigns match.
             {:else}
@@ -121,5 +128,5 @@
         </tr>
       {/each}
     </tbody>
-  </table>
+  </Table>
 </div>

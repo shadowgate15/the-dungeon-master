@@ -1,6 +1,12 @@
 <script lang="ts">
   import { LENGTHS, TONES } from '#lib/campaign/enums.ts'
   import { PREMISE_SOFT_CAP } from '#lib/world/enums.ts'
+  import Alert from '#lib/ui/Alert.svelte'
+  import Button from '#lib/ui/Button.svelte'
+  import Field from '#lib/ui/Field.svelte'
+  import Select from '#lib/ui/Select.svelte'
+  import TextInput from '#lib/ui/TextInput.svelte'
+  import Textarea from '#lib/ui/Textarea.svelte'
   import WorldPicker from './WorldPicker.svelte'
   import type { CampaignSeedCard } from './seed.ts'
 
@@ -28,52 +34,53 @@
       seed.worldIds = seed.worldIds.filter((id) => available.has(id))
     }
   })
+
+  const pickers = [
+    { name: 'tone', label: 'Tone', options: TONES },
+    { name: 'length', label: 'Length', options: LENGTHS }
+  ] as const
 </script>
 
 <div class="space-y-3">
   <WorldPicker {worlds} bind:value={seed.worldIds} />
   {#if removed.length > 0}
-    <p role="status" class="flex items-start justify-between gap-2 text-sm text-amber-600">
+    <Alert variant="warning" role="status" class="flex items-start justify-between gap-2">
       <span>
         Removed from this Campaign because {removed.length === 1 ? 'it was' : 'they were'} archived or
         deleted: {removed.join(', ')}. Choose another World to continue.
       </span>
-      <button type="button" class="underline" onclick={() => (removed = [])}>Dismiss</button>
-    </p>
+      <Button type="button" variant="ghost" size="sm" onclick={() => (removed = [])}>Dismiss</Button
+      >
+    </Alert>
   {/if}
-  <label class="block">
-    <span class="block text-sm font-medium">Name</span>
-    <input name="name" bind:value={seed.name} class="w-full rounded border p-2" />
-  </label>
-  <label class="block">
-    <span class="block text-sm font-medium">Premise</span>
-    <textarea name="premise" bind:value={seed.premise} rows="4" class="w-full rounded border p-2"
-    ></textarea>
-  </label>
+  <Field label="Name">
+    {#snippet children(id)}
+      <TextInput {id} name="name" bind:value={seed.name} />
+    {/snippet}
+  </Field>
+  <Field label="Premise">
+    {#snippet children(id)}
+      <Textarea {id} name="premise" bind:value={seed.premise} rows={4} />
+    {/snippet}
+  </Field>
   {#if seed.premise.length > PREMISE_SOFT_CAP}
-    <p class="text-sm text-amber-600">
+    <Alert variant="warning" role="status">
       Premise is long ({seed.premise.length} of about {PREMISE_SOFT_CAP} characters). You can still save
       it.
-    </p>
+    </Alert>
   {/if}
   <div class="grid grid-cols-2 gap-3">
-    <label class="block">
-      <span class="block text-sm font-medium">Tone</span>
-      <select name="tone" bind:value={seed.tone} class="w-full rounded border p-2">
-        <option value="">Choose…</option>
-        {#each TONES as tone (tone)}
-          <option value={tone}>{tone}</option>
-        {/each}
-      </select>
-    </label>
-    <label class="block">
-      <span class="block text-sm font-medium">Length</span>
-      <select name="length" bind:value={seed.length} class="w-full rounded border p-2">
-        <option value="">Choose…</option>
-        {#each LENGTHS as length (length)}
-          <option value={length}>{length}</option>
-        {/each}
-      </select>
-    </label>
+    {#each pickers as picker (picker.name)}
+      <Field label={picker.label}>
+        {#snippet children(id)}
+          <Select {id} name={picker.name} bind:value={seed[picker.name]}>
+            <option value="">Choose…</option>
+            {#each picker.options as option (option)}
+              <option value={option}>{option}</option>
+            {/each}
+          </Select>
+        {/snippet}
+      </Field>
+    {/each}
   </div>
 </div>

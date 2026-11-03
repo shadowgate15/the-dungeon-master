@@ -1,6 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
   import type { Snippet } from 'svelte'
+  import Alert from '#lib/ui/Alert.svelte'
+  import Button from '#lib/ui/Button.svelte'
   import CampaignSeedCard from './CampaignSeedCard.svelte'
   import type { CampaignSeedCard as Seed, CampaignSeedField } from './seed.ts'
 
@@ -46,11 +48,11 @@
   >
     <CampaignSeedCard bind:seed {worlds} />
     {#if error}
-      <p role="alert" class="text-sm text-red-600">{error}</p>
+      <Alert variant="danger">{error}</Alert>
     {/if}
     {#if saved}
-      <p role="status" class="text-sm text-green-700">Saved</p>
+      <Alert variant="success">Saved</Alert>
     {/if}
-    <button type="submit" class="rounded bg-slate-800 px-3 py-2 text-white">Save changes</button>
+    <Button type="submit">Save changes</Button>
   </form>
 </div>

@@ -71,7 +71,7 @@ test('proposals fill the Seed card only when accepted, and newer ones supersede'
   await panel.getByLabel('Message').fill('Again')
   await panel.getByRole('button', { name: 'Send' }).click()
   await expect(panel.getByText('Better one.')).toBeVisible()
-  await expect(panel.getByText('(superseded)')).toHaveCount(1)
+  await expect(panel.getByText('superseded', { exact: true })).toHaveCount(1)
   await panel.getByRole('button', { name: 'Accept' }).click()
   await expect(dialog.getByLabel('Premise')).toHaveValue('Second hook.')
 

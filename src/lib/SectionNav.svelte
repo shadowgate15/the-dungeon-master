@@ -9,14 +9,18 @@
   ] as const
 </script>
 
-<nav aria-label="Sections" class="flex gap-4 border-b text-sm">
+<nav aria-label="Sections" class="flex gap-4 border-b border-border text-sm">
   {#each links as link (link.key)}
     <a
       href={link.href()}
       aria-current={current === link.key ? 'page' : undefined}
-      class="pb-2 {current === link.key
-        ? 'border-b-2 border-slate-800 font-medium'
-        : 'text-slate-500'}">{link.label}</a
+      class={[
+        '-mb-px rounded-t-sm border-b-2 px-1 pb-2 no-underline',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+        current === link.key
+          ? 'border-primary font-medium text-text'
+          : 'border-transparent text-muted hover:text-text'
+      ]}>{link.label}</a
     >
   {/each}
 </nav>

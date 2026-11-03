@@ -9,6 +9,7 @@
   import SectionNav from '#lib/SectionNav.svelte'
   import { enhance } from '$app/forms'
   import ActionToast from '#lib/world/ActionToast.svelte'
+  import Button from '#lib/ui/Button.svelte'
 
   let { data, form } = $props()
 
@@ -51,8 +52,10 @@
     <form method="POST" action={actionUrl('delete')} use:enhance class="inline">
       <input type="hidden" name="id" value={campaign.id} />
       <span class="text-xs">Delete forever?</span>
-      <button type="submit" class="px-1 font-medium text-red-700">Confirm delete</button>
-      <button type="button" class="px-1" onclick={() => (confirmingDelete = null)}>Cancel</button>
+      <Button type="submit" variant="danger" size="sm">Confirm delete</Button>
+      <Button type="button" variant="ghost" size="sm" onclick={() => (confirmingDelete = null)}
+        >Cancel</Button
+      >
     </form>
   {:else}
     <form
@@ -62,10 +65,16 @@
       class="inline"
     >
       <input type="hidden" name="id" value={campaign.id} />
-      <button type="submit" class="px-1">{data.view === 'active' ? 'Archive' : 'Restore'}</button>
+      <Button type="submit" variant="ghost" size="sm"
+        >{data.view === 'active' ? 'Archive' : 'Restore'}</Button
+      >
     </form>
-    <button type="button" class="px-1 text-red-700" onclick={() => (confirmingDelete = campaign.id)}
-      >Delete</button
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      class="text-danger"
+      onclick={() => (confirmingDelete = campaign.id)}>Delete</Button
     >
   {/if}
 {/snippet}
@@ -73,14 +82,13 @@
 <main class="mx-auto max-w-6xl space-y-4 p-6">
   <SectionNav current="campaigns" />
   <div class="flex items-center justify-between">
-    <h1 class="text-2xl font-semibold">Campaigns</h1>
-    <a
+    <h1 class="font-display text-2xl">Campaigns</h1>
+    <Button
       href="{resolve('/campaigns')}?new"
-      class="rounded bg-slate-800 px-3 py-2 text-white"
-      onclick={(e) => {
+      onclick={(e: MouseEvent) => {
         e.preventDefault()
         dialog?.show(filterWorldIds)
-      }}>New Campaign</a
+      }}>New Campaign</Button
     >
   </div>
 
