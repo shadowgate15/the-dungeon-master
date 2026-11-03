@@ -20,15 +20,27 @@
     retryMessage,
     sendMessage
   } from './proposals.ts'
-  import { FIELD_LABELS, type Seed, type SeedField } from './seed.ts'
+  import { FIELD_LABELS } from './seed.ts'
   import type { AiStatus } from '#lib/ai/status.ts'
-  import type { Compaction, TurnFailure, TurnResult } from '#lib/server/ai/world-conversation.ts'
+  import type { Compaction, TurnFailure, TurnResult } from '#lib/server/ai/conversation-engine.ts'
 
   type Props = {
     /** The live seed card values, read when a turn is sent. */
-    seed: Seed
+    seed: Record<string, string>
     /** Called when the user accepts a card: the only way the chat changes the seed card. */
-    onaccept: (field: SeedField, value: string) => void
+    onaccept: (field: string, value: string) => void
+    /** The conversation endpoints' base path: `<endpoint>/turn` and `<endpoint>/compact`. */
+    endpoint?: string
+    /** Card labels by seed field. */
+    labels?: Record<string, string>
+    /** What is being created, as the player says it: "World" or "Campaign". */
+    subject?: string
+    /** Extra request body keys read when a turn is sent (a Campaign's selected `worldIds`). */
+    extraBody?: Record<string, unknown>
+    /** Server-built system prompts the client only estimates (a Campaign's Worlds' Seed text). */
+    extraSystemPrompts?: string[]
+    /** Called when a turn fails because the selected Worlds changed (Campaign only). */
+    onworldschanged?: () => void
     /** True when AI controls must be off (a reasoning model was detected). */
     disabled?: boolean
     /** Called when a turn shows the model is a reasoning model. */
@@ -44,6 +56,12 @@
   let {
     seed,
     onaccept,
+    endpoint = '/api/world-creation',
+    labels = FIELD_LABELS,
+    subject = 'World',
+    extraBody,
+    extraSystemPrompts,
+    onworldschanged,
     disabled = false,
     onreasoningmodel,
     onunavailable,
@@ -72,7 +90,8 @@
       summary: conversation.summary,
       summarizedCount: conversation.summarizedCount,
       dismissed: dismissedNotes(conversation),
-      pending: pendingProposals(conversation)
+      pending: pendingProposals(conversation),
+      extraSystemPrompts
     })
   )
   const used = $derived(conversation.lastUsedTokens ?? estimatedUsed)
@@ -89,7 +108,8 @@
 
   const FAILURE_TEXT: Record<string, string> = {
     timeout: 'The assistant took too long to reply.',
-    cancelled: 'Stopped before the assistant replied.'
+    cancelled: 'Stopped before the assistant replied.',
+    'worlds-changed': 'A selected World was archived or deleted. Reload the Worlds and try again.'
   }
 
   async function send(message: string) {
@@ -99,12 +119,13 @@
     const controller = (inflight = new AbortController())
     let failure: TurnFailure | null = null
     try {
-      const response = await fetch('/api/world-creation/turn', {
+      const response = await fetch(`${endpoint}/turn`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
           seed: $state.snapshot(seed),
+          ...$state.snapshot(extraBody),
           history: historyOf(conversation),
           dismissed: dismissedNotes(conversation),
           pending: pendingProposals(conversation),
@@ -154,6 +175,7 @@
       inflight = null
     }
     if (failure?.kind === 'reasoning-model') onreasoningmodel?.()
+    if (failure?.kind === 'worlds-changed') onworldschanged?.()
   }
 
   function failureText(failure: TurnFailure | null) {
@@ -167,12 +189,13 @@
     notice = null
     const controller = (inflight = new AbortController())
     try {
-      const response = await fetch('/api/world-creation/compact', {
+      const response = await fetch(`${endpoint}/compact`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
           seed: $state.snapshot(seed),
+          ...$state.snapshot(extraBody),
           history,
           dismissed: dismissedNotes(conversation),
           pending: pendingProposals(conversation),
@@ -257,11 +280,7 @@
             <ul aria-label="Proposals" class="space-y-1">
               {#each cards as card (card.id)}
                 <li>
-                  <ProposalCard
-                    label={FIELD_LABELS[card.field]}
-                    value={card.value}
-                    status={card.status}
-                  >
+                  <ProposalCard label={labels[card.field]} value={card.value} status={card.status}>
                     {#snippet actions()}
                       {#if card.status === 'pending'}
                         <Button size="sm" onclick={() => accept(card.id)}>Accept</Button>
@@ -350,6 +369,6 @@
   {/if}
 
   {#if finished}
-    <Alert variant="info">The chat is closed. Finish your World on the seed card.</Alert>
+    <Alert variant="info">The chat is closed. Finish your {subject} on the seed card.</Alert>
   {/if}
 </div>

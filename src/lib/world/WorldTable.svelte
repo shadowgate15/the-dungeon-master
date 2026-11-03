@@ -17,6 +17,7 @@
   import { resolve } from '$app/paths'
   import Button from '#lib/ui/Button.svelte'
   import Checkbox from '#lib/ui/Checkbox.svelte'
+  import Link from '#lib/ui/Link.svelte'
   import SegmentedNav from '#lib/ui/SegmentedNav.svelte'
   import Select from '#lib/ui/Select.svelte'
   import SortHeader from '#lib/ui/SortHeader.svelte'
@@ -193,7 +194,13 @@
           {#each [world.genreFlavor, world.scale, world.magicLevel, world.techLevel] as value, i (i)}
             <td class="p-2 {value ? '' : 'text-muted'}">{value ?? '—'}</td>
           {/each}
-          <td class="p-2">{world.campaigns || '—'}</td>
+          <td class="p-2">
+            {#if world.campaigns > 0}
+              <Link href="{resolve('/campaigns')}?world={world.id}">{world.campaigns}</Link>
+            {:else}
+              —
+            {/if}
+          </td>
           <td class="p-2 whitespace-nowrap text-muted">{day(world.updatedAt)}</td>
           <td class="p-2 text-right">
             {#if confirmingDelete === world.id}

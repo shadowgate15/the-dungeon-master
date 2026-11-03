@@ -6,6 +6,7 @@
   import { page } from '$app/state'
   import { replaceState } from '$app/navigation'
   import { resolve } from '$app/paths'
+  import SectionNav from '#lib/SectionNav.svelte'
   import ActionToast from '#lib/world/ActionToast.svelte'
   import WorldTable from '#lib/world/WorldTable.svelte'
   import Alert from '#lib/ui/Alert.svelte'
@@ -55,6 +56,7 @@
 </script>
 
 <main class="mx-auto max-w-6xl space-y-4 p-6">
+  <SectionNav current="worlds" />
   <div class="flex items-center justify-between">
     <h1 class="font-display text-2xl">Worlds</h1>
     <Button
@@ -91,7 +93,7 @@
           {#key chatKey}
             <CreationChat
               {seed}
-              onaccept={(field, value) => (seed[field] = value)}
+              onaccept={(field, value) => (seed[field as SeedField] = value)}
               disabled={status.state !== 'ready'}
               contextLength={status.state === 'ready' ? status.contextLength : null}
               fallbackContextLength={status.state === 'ready'

@@ -155,7 +155,9 @@ describe('World service', () => {
 
   it('refuses to delete a World that a Campaign references', () => {
     const world = worlds.create({ name: 'Eldoria' })
-    db.$client.prepare("insert into campaign (id) values ('c1')").run()
+    db.$client
+      .prepare("insert into campaign values ('c1', 'C', 'p', 'epic', 'short', 0, 0, null)")
+      .run()
     db.$client.prepare("insert into world_campaign values (?, 'c1')").run(world.id)
 
     expect(() => db.$client.prepare('delete from world where id = ?').run(world.id)).toThrow(
@@ -228,7 +230,9 @@ describe('World service', () => {
 
   describe('affected Campaigns', () => {
     const link = (worldId: string, campaignId: string) => {
-      db.$client.prepare('insert or ignore into campaign (id) values (?)').run(campaignId)
+      db.$client
+        .prepare("insert or ignore into campaign values (?, 'C', 'p', 'epic', 'short', 0, 0, null)")
+        .run(campaignId)
       db.$client.prepare('insert into world_campaign values (?, ?)').run(worldId, campaignId)
     }
 
@@ -276,7 +280,9 @@ describe('World service', () => {
       worlds = createWorldService(db, () => ++tick)
     })
     const link = (worldId: string, campaignId: string) => {
-      db.$client.prepare('insert or ignore into campaign (id) values (?)').run(campaignId)
+      db.$client
+        .prepare("insert or ignore into campaign values (?, 'C', 'p', 'epic', 'short', 0, 0, null)")
+        .run(campaignId)
       db.$client.prepare('insert into world_campaign values (?, ?)').run(worldId, campaignId)
     }
 
