@@ -8,6 +8,8 @@
 
 <script lang="ts">
   import { enhance } from '$app/forms'
+  import Button from '#lib/ui/Button.svelte'
+  import Toast from '#lib/ui/Toast.svelte'
 
   let {
     notice,
@@ -19,10 +21,7 @@
 </script>
 
 {#if notice && notice !== dismissed}
-  <div
-    role="status"
-    class="fixed right-4 bottom-4 z-40 flex items-center gap-3 rounded bg-slate-900 px-4 py-2 text-sm text-white shadow-lg"
-  >
+  <Toast onclose={() => (dismissed = notice)}>
     <span>{notice.message}</span>
     {#if notice.undo}
       <form
@@ -33,14 +32,8 @@
         {#each notice.undo.ids as id (id)}
           <input type="hidden" name="id" value={id} />
         {/each}
-        <button type="submit" class="font-semibold text-amber-300 underline">Undo</button>
+        <Button type="submit" variant="secondary" size="sm">Undo</Button>
       </form>
     {/if}
-    <button
-      type="button"
-      aria-label="Dismiss"
-      class="text-slate-400"
-      onclick={() => (dismissed = notice)}>✕</button
-    >
-  </div>
+  </Toast>
 {/if}

@@ -3,13 +3,19 @@
   import AiPanel from '#lib/ai/AiPanel.svelte'
   import CreationChat from '#lib/world/CreationChat.svelte'
   import { emptySeed, type SeedField } from '#lib/world/seed.ts'
-  import { onMount } from 'svelte'
   import { page } from '$app/state'
   import { replaceState } from '$app/navigation'
   import { resolve } from '$app/paths'
   import SectionNav from '#lib/SectionNav.svelte'
   import ActionToast from '#lib/world/ActionToast.svelte'
   import WorldTable from '#lib/world/WorldTable.svelte'
+  import Alert from '#lib/ui/Alert.svelte'
+  import Button from '#lib/ui/Button.svelte'
+  import Dialog from '#lib/ui/Dialog.svelte'
+  import Field from '#lib/ui/Field.svelte'
+  import Select from '#lib/ui/Select.svelte'
+  import Textarea from '#lib/ui/Textarea.svelte'
+  import TextInput from '#lib/ui/TextInput.svelte'
   import {
     GENRE_FLAVORS,
     MAGIC_LEVELS,
@@ -34,18 +40,12 @@
     )
   }
 
-  let dialog = $state<HTMLDialogElement>()
   // A failed create reopens the dialog on the server render; other failures belong to the table.
   const createFailed = $derived(form !== null && form !== undefined && 'error' in form)
   const serverOpen = $derived(page.url.searchParams.has('new') || createFailed)
-
-  // The server renders the dialog open without JS; with JS it becomes a real modal.
-  onMount(() => {
-    if (dialog?.open) {
-      dialog.close()
-      dialog.showModal()
-    }
-  })
+  // The server renders the dialog open without JS; Dialog upgrades it to a real modal.
+  // svelte-ignore state_referenced_locally
+  let open = $state(serverOpen)
 
   const pickers = [
     { name: 'genreFlavor', label: 'Genre flavor', options: GENRE_FLAVORS },
@@ -58,14 +58,13 @@
 <main class="mx-auto max-w-6xl space-y-4 p-6">
   <SectionNav current="worlds" />
   <div class="flex items-center justify-between">
-    <h1 class="text-2xl font-semibold">Worlds</h1>
-    <a
+    <h1 class="font-display text-2xl">Worlds</h1>
+    <Button
       href="{resolve('/')}?new"
-      class="rounded bg-slate-800 px-3 py-2 text-white"
-      onclick={(e) => {
+      onclick={(e: MouseEvent) => {
         e.preventDefault()
-        dialog?.showModal()
-      }}>New World</a
+        open = true
+      }}>New World</Button
     >
   </div>
 
@@ -79,26 +78,14 @@
 
 <ActionToast notice={form?.notice} view={data.view} />
 
-<dialog
-  bind:this={dialog}
-  open={serverOpen}
-  aria-label="New World"
+<Dialog
+  bind:open
+  title="New World"
+  closeHref={resolve('/')}
   onclose={() => {
     if (page.url.searchParams.has('new')) replaceState(resolve('/'), {})
   }}
-  class="m-auto w-[min(72rem,calc(100vw-2rem))] rounded-lg p-6 backdrop:bg-black/50"
 >
-  <div class="mb-4 flex items-center justify-between">
-    <h2 class="text-xl font-semibold">New World</h2>
-    <a
-      href={resolve('/')}
-      onclick={(e) => {
-        e.preventDefault()
-        dialog?.close()
-      }}
-      class="text-sm underline">Close</a
-    >
-  </div>
   <div class="grid gap-6 lg:grid-cols-2">
     <div class="space-y-2 lg:max-h-[70vh] lg:overflow-y-auto">
       <AiPanel>
@@ -126,7 +113,7 @@
         use:enhance={() =>
           async ({ result, update }) => {
             await update()
-            if (result.type === 'success') dialog?.close()
+            if (result.type === 'success') open = false
           }}
         onreset={() => {
           seed = emptySeed()
@@ -134,45 +121,39 @@
         }}
         class="space-y-2"
       >
-        <label class="block">
-          <span class="block text-sm font-medium">Name</span>
-          <input name="name" bind:value={seed.name} class="w-full rounded border p-2" />
-        </label>
-        <label class="block">
-          <span class="block text-sm font-medium">Premise</span>
-          <textarea
-            name="premise"
-            bind:value={seed.premise}
-            rows="4"
-            class="w-full rounded border p-2"></textarea>
-        </label>
+        <Field label="Name">
+          {#snippet children(id)}
+            <TextInput {id} name="name" bind:value={seed.name} />
+          {/snippet}
+        </Field>
+        <Field label="Premise">
+          {#snippet children(id)}
+            <Textarea {id} name="premise" bind:value={seed.premise} rows={4} />
+          {/snippet}
+        </Field>
         {#if seed.premise.length > PREMISE_SOFT_CAP}
-          <p class="text-sm text-amber-600">
+          <Alert variant="warning" role="status">
             Premise is long ({seed.premise.length} of about {PREMISE_SOFT_CAP} characters). You can still
             save it.
-          </p>
+          </Alert>
         {/if}
         {#each pickers as picker (picker.name)}
-          <label class="block">
-            <span class="block text-sm font-medium">{picker.label}</span>
-            <select
-              name={picker.name}
-              bind:value={seed[picker.name]}
-              class="w-full rounded border p-2"
-            >
-              <option value="">Unspecified</option>
-              {#each picker.options as option (option)}
-                <option value={option}>{option}</option>
-              {/each}
-            </select>
-          </label>
+          <Field label={picker.label}>
+            {#snippet children(id)}
+              <Select {id} name={picker.name} bind:value={seed[picker.name]}>
+                <option value="">Unspecified</option>
+                {#each picker.options as option (option)}
+                  <option value={option}>{option}</option>
+                {/each}
+              </Select>
+            {/snippet}
+          </Field>
         {/each}
         {#if createFailed && form?.error}
-          <p role="alert" class="text-sm text-red-600">{form.error}</p>
+          <Alert variant="danger">{form.error}</Alert>
         {/if}
-        <button type="submit" class="rounded bg-slate-800 px-3 py-2 text-white">Create World</button
-        >
+        <Button type="submit">Create World</Button>
       </form>
     </div>
   </div>
-</dialog>
+</Dialog>
