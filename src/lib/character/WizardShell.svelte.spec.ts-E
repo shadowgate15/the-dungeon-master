@@ -1,0 +1,149 @@
+import { page } from 'vitest/browser'
+import { describe, expect, it, vi } from 'vitest'
+import { render } from 'vitest-browser-svelte'
+import alignments from '#lib/rules/data/alignments.json'
+import backgrounds from '#lib/rules/data/backgrounds.json'
+import classLevels from '#lib/rules/data/classLevels.json'
+import classes from '#lib/rules/data/classes.json'
+import equipment from '#lib/rules/data/equipment.json'
+import features from '#lib/rules/data/features.json'
+import languages from '#lib/rules/data/languages.json'
+import proficiencies from '#lib/rules/data/proficiencies.json'
+import races from '#lib/rules/data/races.json'
+import skills from '#lib/rules/data/skills.json'
+import spells from '#lib/rules/data/spells.json'
+import subclassLevels from '#lib/rules/data/subclassLevels.json'
+import subclasses from '#lib/rules/data/subclasses.json'
+import subraces from '#lib/rules/data/subraces.json'
+import traits from '#lib/rules/data/traits.json'
+import type { WizardRules } from './draft.ts'
+import WizardShell from './WizardShell.svelte'
+import { CharacterWizard } from './wizard.svelte.ts'
+
+const rules = {
+  alignments,
+  backgrounds,
+  classLevels,
+  classes,
+  equipment,
+  features,
+  languages,
+  proficiencies,
+  races,
+  skills,
+  spells,
+  subclassLevels,
+  subclasses,
+  subraces,
+  traits
+} as unknown as WizardRules
+
+function setup() {
+  const onabandon = vi.fn()
+  const wizard = new CharacterWizard(rules)
+  render(WizardShell, { wizard, backHref: '/', onabandon })
+  return { wizard, onabandon }
+}
+
+describe('WizardShell with the Concept step', () => {
+  it('starts on Concept with the later steps locked', async () => {
+    setup()
+
+    await expect.element(page.getByRole('heading', { name: 'Concept' })).toBeVisible()
+    await expect.element(page.getByRole('button', { name: /Ability scores/ })).toBeDisabled()
+    await expect.element(page.getByRole('button', { name: /Review/ })).toBeDisabled()
+  })
+
+  it('offers a subrace only for races that have one', async () => {
+    setup()
+
+    await expect.element(page.getByLabelText('Subrace')).not.toBeInTheDocument()
+    await page.getByLabelText('Race').selectOptions('elf')
+    await expect.element(page.getByLabelText('Subrace')).toBeVisible()
+    await page.getByLabelText('Race').selectOptions('human')
+    await expect.element(page.getByLabelText('Subrace')).not.toBeInTheDocument()
+  })
+
+  it('preselects a class with a single subclass option', async () => {
+    setup()
+
+    await page.getByLabelText('Class').selectOptions('cleric')
+
+    await expect.element(page.getByLabelText('Subclass')).toHaveValue('life')
+  })
+
+  it('unlocks the later steps once Concept is valid', async () => {
+    setup()
+
+    await page.getByLabelText('Name').fill('Brenna')
+    await page.getByLabelText('Race').selectOptions('human')
+    await page.getByLabelText('Class').selectOptions('fighter')
+    await expect.element(page.getByRole('button', { name: /Ability scores/ })).toBeDisabled()
+    await page.getByLabelText('Background').selectOptions('acolyte')
+
+    await expect.element(page.getByRole('button', { name: /Ability scores/ })).toBeEnabled()
+    await expect.element(page.getByRole('button', { name: /Concept\s*, valid/ })).toBeVisible()
+  })
+
+  it('fills the stats strip in as the draft grows', async () => {
+    setup()
+
+    await expect.element(page.getByRole('group', { name: 'Speed' })).toHaveTextContent('—')
+    await page.getByLabelText('Race').selectOptions('human')
+
+    await expect.element(page.getByRole('group', { name: 'Speed' })).toHaveTextContent('30')
+    await expect.element(page.getByRole('group', { name: 'HP' })).toHaveTextContent('—')
+  })
+
+  it('tells the player when changing the race clears the subrace', async () => {
+    setup()
+
+    await page.getByLabelText('Race').selectOptions('elf')
+    await page.getByLabelText('Subrace').selectOptions('high-elf')
+    await page.getByLabelText('Race').selectOptions('human')
+
+    await expect.element(page.getByText(/Cleared the subrace High Elf/)).toBeVisible()
+    await page.getByRole('button', { name: 'Dismiss' }).click()
+    await expect.element(page.getByText(/Cleared the subrace/)).not.toBeInTheDocument()
+  })
+
+  it('asks before abandoning and keeps the draft when the player backs out', async () => {
+    const { onabandon } = setup()
+
+    await page.getByRole('button', { name: 'Abandon' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Abandon this Character?' })
+    await expect.element(dialog).toBeVisible()
+    await expect.element(dialog).toHaveTextContent(/only in this browser/)
+    await dialog.getByRole('button', { name: 'Keep editing' }).click()
+
+    await expect.element(dialog).not.toBeVisible()
+    expect(onabandon).not.toHaveBeenCalled()
+  })
+
+  it('abandons only after the player confirms', async () => {
+    const { onabandon } = setup()
+
+    await page.getByRole('button', { name: 'Abandon' }).click()
+    await page
+      .getByRole('dialog', { name: 'Abandon this Character?' })
+      .getByRole('button', { name: 'Abandon' })
+      .click()
+
+    expect(onabandon).toHaveBeenCalledOnce()
+  })
+
+  it('renders the conversation slot beside every step when one is given', async () => {
+    const { createRawSnippet } = await import('svelte')
+    const aside = createRawSnippet(() => ({ render: () => '<p>Chat goes here</p>' }))
+    render(WizardShell, {
+      wizard: new CharacterWizard(rules),
+      backHref: '/',
+      onabandon: () => {},
+      aside
+    })
+
+    await expect
+      .element(page.getByRole('complementary', { name: 'Creation conversation' }))
+      .toHaveTextContent('Chat goes here')
+  })
+})
