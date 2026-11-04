@@ -78,4 +78,20 @@ describe('ReviewStep save', () => {
       scores: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 }
     })
   })
+
+  it('puts to the saved Character when the wizard is editing one', async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({ error: 'An archived Character cannot be edited' }, { status: 400 })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const wizard = new CharacterWizard(rules, undefined, readyWizard().draft, 'abc-123')
+    render(ReviewStep, { wizard })
+
+    await page.getByRole('button', { name: 'Save changes' }).click()
+
+    await expect.element(page.getByRole('alert')).toHaveTextContent('cannot be edited')
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { method: string }]
+    expect(url).toBe('/api/characters/abc-123')
+    expect(init.method).toBe('PUT')
+  })
 })

@@ -22,17 +22,21 @@
   let saving = $state(false)
   let error = $state<string | null>(null)
 
-  /** Posts the draft. Success lands on the summary; failure keeps the draft and shows the error. */
+  /** Posts (or, when editing, puts) the draft. Success lands on the summary; failure keeps the draft and shows the error. */
   async function save() {
     if (payload === null) return
     saving = true
     error = null
     try {
-      const response = await fetch(resolve('/api/characters'), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: payload
-      })
+      const editing = wizard.characterId
+      const response = await fetch(
+        editing ? resolve('/api/characters/[id]', { id: editing }) : resolve('/api/characters'),
+        {
+          method: editing ? 'PUT' : 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: payload
+        }
+      )
       const result = (await response.json()) as { id?: string; error?: string }
       if (response.ok && result.id) {
         // Saved: the draft is no longer unsaved, so leaving must not ask to discard it.
@@ -59,6 +63,6 @@
   {/if}
 
   <Button type="button" disabled={payload === null || saving} onclick={save}>
-    {saving ? 'Saving…' : 'Save Character'}
+    {saving ? 'Saving…' : wizard.characterId ? 'Save changes' : 'Save Character'}
   </Button>
 </div>
