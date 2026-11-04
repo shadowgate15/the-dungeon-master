@@ -29,6 +29,8 @@ export interface CharacterDraft {
   // Ability scores (#110): base scores before racial bonuses; null until assigned.
   abilityMethod: 'standard-array' | 'point-buy' | 'rolling' | null
   baseScores: Record<AbilityKey, number | null>
+  /** The current rolled set: six rows of four d6, dropped die included. Kept across methods. */
+  abilityRolls: number[][] | null
   // Feature choices (#112): full choice key to picked option slugs.
   picks: Record<string, string[]>
   // Equipment (#113): full equipment choice key to the chosen option and wildcard items.
@@ -89,6 +91,7 @@ export function emptyDraft(): CharacterDraft {
     level: 1,
     abilityMethod: null,
     baseScores: { str: null, dex: null, con: null, int: null, wis: null, cha: null },
+    abilityRolls: null,
     picks: {},
     equipment: {}
   }
