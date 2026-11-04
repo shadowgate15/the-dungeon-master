@@ -92,3 +92,26 @@ export function expertiseSkillBonus(input: {
   if (!input.proficient) return 0
   return input.expertise ? input.proficiencyBonus * 2 : input.proficiencyBonus
 }
+
+/** What a weapon looks like to the fighting style bonuses. */
+export interface WeaponShape {
+  ranged: boolean
+  twoHanded: boolean
+}
+
+/** Fighting Style: Archery, +2 to attack rolls with ranged weapons. */
+export function weaponAttackBonus(activeSlugs: readonly string[], weapon: WeaponShape): number {
+  return weapon.ranged && activeSlugs.includes('fighter-fighting-style-archery') ? 2 : 0
+}
+
+/**
+ * Fighting Style: Dueling, +2 damage with a melee weapon held in one hand. Whether the other hand
+ * is free is not tracked (no off-hand logic), so any melee weapon that is not two-handed counts.
+ */
+export function weaponDamageBonus(activeSlugs: readonly string[], weapon: WeaponShape): number {
+  return !weapon.ranged &&
+    !weapon.twoHanded &&
+    activeSlugs.includes('fighter-fighting-style-dueling')
+    ? 2
+    : 0
+}
