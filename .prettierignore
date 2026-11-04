@@ -8,3 +8,7 @@ bun.lockb
 # Miscellaneous
 /static/
 /drizzle/
+
+# Vendored upstream data and its generated, committed normalization
+/vendor/
+/src/lib/rules/data/
