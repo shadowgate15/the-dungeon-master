@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import ContextMeter from './ContextMeter.svelte'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
@@ -12,6 +13,7 @@
     applyCompaction,
     dismissCard,
     dismissedNotes,
+    dropStaleCards,
     emptyConversation,
     failMessage,
     historyOf,
@@ -43,6 +45,11 @@
     onworldschanged?: () => void
     /** Called with the fields of the still-pending cards whenever they change (Character rail dot). */
     onpending?: (fields: string[]) => void
+    /**
+     * Flags pending cards that the live seed or draft made impossible to accept (one flag per card,
+     * in order). Re-evaluated whenever what it reads changes; flagged cards are dropped.
+     */
+    isStale?: (pending: { field: string; value: string }[]) => boolean[]
     /** Renders a card's value for display (Character Roll cards); the raw value is still sent. */
     formatValue?: (field: string, value: string) => string
     /** True when AI controls must be off (a reasoning model was detected). */
@@ -67,6 +74,7 @@
     extraSystemPrompts,
     onworldschanged,
     onpending,
+    isStale,
     formatValue,
     disabled = false,
     onreasoningmodel,
@@ -103,6 +111,15 @@
   const used = $derived(conversation.lastUsedTokens ?? estimatedUsed)
   const canCompact = $derived(history.length - KEEP_MESSAGES > conversation.summarizedCount)
   const locked = $derived(disabled || blocked !== null || finished)
+
+  $effect(() => {
+    if (!isStale) return
+    const next = dropStaleCards(
+      untrack(() => conversation),
+      isStale
+    )
+    if (next !== untrack(() => conversation)) conversation = next
+  })
 
   $effect(() => {
     onpending?.(pendingProposals(conversation).map((p) => p.field))

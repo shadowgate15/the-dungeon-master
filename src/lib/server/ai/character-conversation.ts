@@ -16,7 +16,20 @@ import {
   validateAbilityScores
 } from '#lib/character/ability-scores.ts'
 import { ABILITY_METHODS, encodeRolls, parseAssignment } from '#lib/character/conversation.ts'
-import { LIMITS, type CharacterDraft } from '#lib/character/draft.ts'
+import {
+  emptyDraft,
+  LIMITS,
+  resolverDraft,
+  type CharacterDraft,
+  type WizardRules
+} from '#lib/character/draft.ts'
+import { parseEquipmentPicks, parseFeaturePicks } from '#lib/character/conversation.ts'
+import { categoryItems, equipmentGroups, ownedEquipment } from '#lib/character/equipment.ts'
+import { classSpellOptions, spellAllowance, spellPickFlags } from '#lib/character/spells.ts'
+import { groupIssues, groupLabel, skillsStepGroups } from '#lib/character/steps.ts'
+import { deriveStats } from '#lib/rules/derive-stats.ts'
+import { resolveFeatures } from '#lib/rules/resolver.ts'
+import { loadWizardRules } from '../character/wizard-rules.ts'
 import type { RulesRepository } from '../rules/repository'
 import {
   createConversationEngine,
@@ -59,6 +72,8 @@ export const MAX_RETRIES = 2
 export interface StepContext {
   draft: DraftView
   rules: RulesRepository
+  /** Plain Rules Data for the resolver and the step helpers (the committed dataset). */
+  wizard: WizardRules
   /** The set `roll_ability_scores` rolled this turn (one per turn), for validation and the card. */
   rolled?: number[][]
   /** Dice source for server-run rolls; injectable for tests. */
@@ -71,7 +86,8 @@ export type DraftView = Pick<
   'name' | 'race' | 'subrace' | 'class' | 'subclass' | 'background' | 'alignment'
 > &
   Partial<Pick<CharacterDraft, 'appearance' | 'personality' | 'backstory'>> &
-  Partial<Pick<CharacterDraft, 'abilityMethod' | 'baseScores' | 'abilityRolls'>>
+  Partial<Pick<CharacterDraft, 'abilityMethod' | 'baseScores' | 'abilityRolls'>> &
+  Partial<Pick<CharacterDraft, 'picks' | 'equipment' | 'classSpells'>>
 
 export interface StepModule {
   /** Zod shape of the `proposals` object: only this step's fields, all optional. */
@@ -179,7 +195,7 @@ const abilitiesModule: StepModule = {
   },
   guidance: `Current step: Ability scores. You may propose abilityMethod (one of standard-array, point-buy, rolling) and abilityAssignment (every ability exactly once as "str=15, dex=14, con=13, int=12, wis=10, cha=8"). An assignment only arranges the value set below for the method in force; you never invent numbers. Never choose the method silently: propose it as abilityMethod for the player to accept, and arrange values only for a method the player chose or that you propose in the same reply. To roll, call the roll_ability_scores tool (only when the player asks to roll or has chosen rolling); never state dice results yourself. The player sees the roll as a card they accept or dismiss.`,
   options({ draft, rolled, random }: StepContext) {
-    const ctx = { draft, rolled, random } as StepContext
+    const ctx = { draft, rolled, random } as StepContext // only the ability data is read
     const { rolls, totals } = abilitySets(ctx)
     const lines = [
       'Legal options for this step:',
@@ -250,10 +266,213 @@ const abilitiesModule: StepModule = {
   }
 }
 
+// --- Skills & features, equipment, spells (#117) -------------------------------------------------
+
+/** The sent draft as a full `CharacterDraft` (fields the server does not read keep their empty value). */
+function fullDraft(view: DraftView, patch: Partial<CharacterDraft> = {}): CharacterDraft {
+  const base = emptyDraft()
+  return {
+    ...base,
+    ...view,
+    subclass: view.subclass ?? null,
+    baseScores: view.baseScores ?? base.baseScores,
+    abilityRolls: view.abilityRolls ?? null,
+    abilityMethod: view.abilityMethod ?? null,
+    picks: view.picks ?? {},
+    equipment: view.equipment ?? {},
+    classSpells: view.classSpells ?? [],
+    ...patch
+  }
+}
+
+const resolveDraft = (wizard: WizardRules, draft: CharacterDraft) =>
+  resolveFeatures(wizard, resolverDraft(draft))
+
+const FEATURE_FORMAT =
+  'Format: "choice_key=slug,slug; choice_key=slug" using the choice keys and option slugs listed, exactly the stated number of picks per key.'
+
+const skillsModule: StepModule = {
+  proposals: { featurePicks: z.string().max(1500).optional() },
+  guidance: `Current step: Skills & features. Propose featurePicks: picks for one or more of the open choices listed, each keyed by its choice key. ${FEATURE_FORMAT} Pick exactly the stated number for every key you include, never repeat a pick, and use only listed options. Never propose numbers, equipment or spells here.`,
+  options({ draft, wizard }) {
+    const groups = skillsStepGroups(resolveDraft(wizard, fullDraft(draft)))
+    if (groups.length === 0) return 'There are no feature choices to make for this draft yet.'
+    return [
+      'Legal options for this step (choice key, how many to pick, then the option slugs):',
+      ...groups.map((g) => {
+        const options = g.options.filter((o) => !o.disabled).map((o) => `${o.slug} (${o.name})`)
+        const current = g.picks.length ? ` Currently picked: ${g.picks.join(', ')}.` : ''
+        return `- ${g.key}: ${groupLabel(g)}; pick ${g.choose}.${current} Options: ${options.join('; ')}`
+      })
+    ].join('\n')
+  },
+  validate(p, { draft, wizard }) {
+    if (p.featurePicks === undefined) return []
+    const picks = parseFeaturePicks(p.featurePicks)
+    if (!picks) return [`Skills and features must be written as: ${FEATURE_FORMAT}`]
+    const next = fullDraft(draft, { picks: { ...(draft.picks ?? {}), ...picks } })
+    const groups = skillsStepGroups(resolveDraft(wizard, next))
+    const problems: string[] = []
+    for (const key of Object.keys(picks)) {
+      const g = groups.find((x) => x.key === key)
+      if (!g) {
+        problems.push(`"${key}" is not a choice this Character has.`)
+        continue
+      }
+      if (g.status !== 'valid') problems.push(...groupIssues(g))
+    }
+    return problems
+  }
+}
+
+const EQUIPMENT_FORMAT =
+  'Format: "choice_key=option_index:item_slug,item_slug; choice_key=option_index" with one item slug for each wildcard slot of the chosen option, in order, and nothing after the index when the option has no wildcard.'
+
+const equipmentGroupsOf = (draft: DraftView, wizard: WizardRules) => {
+  const full = fullDraft(draft)
+  return equipmentGroups(wizard, full, resolveDraft(wizard, full))
+}
+
+const equipmentModule: StepModule = {
+  proposals: { equipmentPicks: z.string().max(1500).optional() },
+  guidance: `Current step: Equipment. Propose equipmentPicks: an option for one or more of the choice groups listed, plus a specific item for every wildcard slot of the option. ${EQUIPMENT_FORMAT} Never choose a disabled option. Never propose numbers, skills or spells here.`,
+  options({ draft, wizard }) {
+    const groups = equipmentGroupsOf(draft, wizard)
+    if (groups.length === 0) return 'There are no equipment choices to make for this draft yet.'
+    const categories = new Set<string>()
+    const lines = groups.map((g) => {
+      const options = g.options.map((o) => {
+        o.slots.forEach((c) => categories.add(c))
+        const slots = o.slots.length ? ` [wildcard slots: ${o.slots.join(', ')}]` : ''
+        return `  ${o.index}: ${o.label}${slots}${o.disabled ? ` (disabled: ${o.disabled})` : ''}`
+      })
+      return `- ${g.key} (${g.ownerName}): ${g.label}\n${options.join('\n')}`
+    })
+    const wildcard = [...categories].map(
+      (c) =>
+        `- ${c}: ${categoryItems(wizard, c)
+          .map((i) => i.slug)
+          .join(', ')}`
+    )
+    return [
+      'Legal options for this step (choice key, then option index: summary):',
+      ...lines,
+      ...(wildcard.length ? ['Items for wildcard slots, by category:', ...wildcard] : [])
+    ].join('\n')
+  },
+  validate(p, { draft, wizard }) {
+    if (p.equipmentPicks === undefined) return []
+    const picks = parseEquipmentPicks(p.equipmentPicks)
+    if (!picks) return [`Equipment must be written as: ${EQUIPMENT_FORMAT}`]
+    const groups = equipmentGroupsOf(draft, wizard)
+    const problems: string[] = []
+    for (const [key, pick] of Object.entries(picks)) {
+      const g = groups.find((x) => x.key === key)
+      if (!g) {
+        problems.push(`"${key}" is not an equipment choice this Character has.`)
+        continue
+      }
+      const option = g.options[pick.option]
+      if (!option) {
+        problems.push(`${key}: option ${pick.option} does not exist.`)
+        continue
+      }
+      if (option.disabled) {
+        problems.push(
+          `${key}: option ${pick.option} (${option.label}) is disabled. ${option.disabled}`
+        )
+        continue
+      }
+      if (pick.wild.length !== option.slots.length) {
+        problems.push(
+          `${key}: option ${pick.option} needs ${option.slots.length} wildcard item(s), you gave ${pick.wild.length}.`
+        )
+        continue
+      }
+      option.slots.forEach((category, i) => {
+        const item = pick.wild[i]
+        if (!item || !categoryItems(wizard, category).some((c) => c.slug === item)) {
+          problems.push(`${key}: "${item ?? ''}" is not a legal ${category} item.`)
+        }
+      })
+    }
+    return problems
+  }
+}
+
+const spellList = (slugs: string[], wizard: WizardRules) =>
+  slugs
+    .map((slug) => `${slug} (${wizard.spells.find((s) => s.slug === slug)?.name ?? slug})`)
+    .join('; ')
+
+const spellsModule: StepModule = {
+  proposals: { classSpells: z.string().max(1500).optional() },
+  guidance: `Current step: Spells. Propose classSpells: the complete list of the Character's class cantrips and level 1 spells as comma-separated spell slugs (for example "light,mage-hand,magic-missile"), with exactly the stated number of each. The list replaces the player's current class picks. Use only listed spells. Never propose numbers, skills or equipment here.`,
+  options({ draft, wizard }) {
+    const full = fullDraft(draft)
+    const allowance = spellAllowance(wizard, full.class)
+    if (allowance.cantrips + allowance.spells === 0) {
+      return 'This class picks no spells at level 1. Do not propose any.'
+    }
+    const resolved = resolveDraft(wizard, full)
+    const taken = new Set([
+      ...resolved.grantedSpells.map((s) => s.spell),
+      ...resolved.groups.filter((g) => g.kind === 'spell').flatMap((g) => g.picks)
+    ])
+    const options = (level: 0 | 1) =>
+      spellList(
+        classSpellOptions(wizard, full.class, level)
+          .map((o) => o.slug)
+          .filter((slug) => !taken.has(slug)),
+        wizard
+      )
+    return [
+      `Legal options for this step: pick exactly ${allowance.cantrips} cantrips and ${allowance.spells} level 1 spells.`,
+      `Cantrips: ${options(0)}`,
+      `Level 1 spells: ${options(1)}`,
+      `Current picks: ${full.classSpells.join(', ') || '(none)'}`
+    ].join('\n')
+  },
+  validate(p, { draft, wizard }) {
+    if (p.classSpells === undefined) return []
+    const slugs = p.classSpells
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (slugs.length === 0) return ['Propose at least one spell slug, comma-separated.']
+    const full = fullDraft(draft, { classSpells: slugs })
+    const resolved = resolveDraft(wizard, full)
+    const stats = deriveStats(wizard, resolved, {
+      class: full.class,
+      level: full.level,
+      baseScores: full.baseScores,
+      equipment: ownedEquipment(wizard, full, resolved)
+    })
+    const flags = spellPickFlags({ rules: wizard, draft: full, resolved, stats })
+    const problems = flags.map((f) => f.reason)
+    const flagged = new Set(flags.map((f) => f.slug))
+    const allowance = spellAllowance(wizard, full.class)
+    const count = (level: 0 | 1) =>
+      slugs.filter(
+        (s) => !flagged.has(s) && wizard.spells.find((x) => x.slug === s)?.level === level
+      ).length
+    if (count(0) !== allowance.cantrips) {
+      problems.push(`Pick exactly ${allowance.cantrips} cantrips, you proposed ${count(0)}.`)
+    }
+    if (count(1) !== allowance.spells) {
+      problems.push(`Pick exactly ${allowance.spells} level 1 spells, you proposed ${count(1)}.`)
+    }
+    return problems
+  }
+}
+
 /** The registry: a step with no module has no AI help (the client keeps the chat idle there). */
 export const STEP_MODULES: Record<ConversationStep, StepModule> = {
   concept: conceptModule,
-  abilities: abilitiesModule
+  abilities: abilitiesModule,
+  skills: skillsModule,
+  equipment: equipmentModule,
+  spells: spellsModule
 }
 
 // --- Prompts ------------------------------------------------------------------------------------
@@ -348,6 +567,8 @@ const INVALID_OUTPUT = {
 export interface CharacterTurnOptions extends RunTurnOptions {
   /** Dice source for server-run tools (tests). */
   random?: () => number
+  /** Plain Rules Data for the resolver (tests); defaults to the committed dataset. */
+  wizardRules?: WizardRules
 }
 
 const NO_TOOLS_NOTE =
@@ -361,7 +582,12 @@ export async function runCharacterTurn(
 ): Promise<TurnResult<CharacterField>> {
   if (!draftResolves(draft, rules)) return OPTIONS_CHANGED
   const module = STEP_MODULES[step]
-  const ctx: StepContext = { draft, rules, random: options.random }
+  const ctx: StepContext = {
+    draft,
+    rules,
+    wizard: options.wizardRules ?? loadWizardRules(),
+    random: options.random
+  }
   const engine = engineFor(step)
   const base = [
     module.guidance,

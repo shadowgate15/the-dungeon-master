@@ -4,6 +4,7 @@ import {
   applyCompaction,
   dismissCard,
   dismissedNotes,
+  dropStaleCards,
   emptyConversation,
   failMessage,
   historyOf,
@@ -221,5 +222,27 @@ describe('compaction state', () => {
 
     state = applyCompaction(state, { summary: 'Gist.', summarizedCount: 2 })
     expect(state.lastUsedTokens).toBeNull()
+  })
+})
+
+describe('dropping pending cards an earlier change invalidated', () => {
+  it('removes stale pending cards without recording a dismissal', () => {
+    let state = receiveTurn(sendMessage(emptyConversation(), 'hi'), 'ok', {
+      name: 'Eldoria',
+      scale: 'continent'
+    })
+    state = acceptCard(state, state.cards[0].id).state
+    const next = dropStaleCards(state, (pending) => pending.map((p) => p.field === 'scale'))
+    expect(next.cards.map((c) => [c.field, c.status])).toEqual([
+      ['name', 'accepted'],
+      ['scale', 'superseded']
+    ])
+    expect(pendingProposals(next)).toEqual([])
+    expect(dismissedNotes(next)).toEqual([])
+  })
+
+  it('returns the same state when nothing is stale', () => {
+    const state = receiveTurn(sendMessage(emptyConversation(), 'hi'), 'ok', { name: 'Eldoria' })
+    expect(dropStaleCards(state, (pending) => pending.map(() => false))).toBe(state)
   })
 })

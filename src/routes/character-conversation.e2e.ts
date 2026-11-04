@@ -54,3 +54,58 @@ test('an illegal proposal never reaches the player: the turn fails with a retry'
   await expect(panel.getByRole('list', { name: 'Proposals' })).toHaveCount(0)
   await expect(panel.getByRole('button', { name: 'Retry' })).toBeVisible()
 })
+
+test('a pending card is dropped when an earlier change invalidates it', async ({
+  page,
+  request
+}) => {
+  await setChat(request, {
+    reply: 'An elf of the high kind.',
+    proposals: { race: 'elf', subrace: 'high-elf' }
+  })
+  await page.goto('/characters/new')
+  await page.waitForLoadState('networkidle')
+
+  const panel = page.getByRole('complementary', { name: 'Creation conversation' })
+  await panel.getByLabel('Message').fill('A high elf')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  const cards = panel.getByRole('list', { name: 'Proposals' }).getByRole('listitem')
+  await expect(cards).toHaveCount(2)
+
+  await cards.first().getByRole('button', { name: 'Accept' }).click()
+  const subrace = cards.nth(1)
+  await expect(subrace.getByRole('button', { name: 'Accept' })).toBeVisible()
+
+  // The player picks another race by hand: the subrace card no longer fits and goes away.
+  await page.getByRole('combobox', { name: 'Race', exact: true }).selectOption('dwarf')
+  await expect(subrace.getByRole('button', { name: 'Accept' })).toHaveCount(0)
+  await expect(subrace.getByText('superseded')).toBeVisible()
+})
+
+test('Skills & features proposals are keyed by choice and apply when accepted', async ({
+  page,
+  request
+}) => {
+  await setChat(request, {
+    reply: 'Two skills for the soldier.',
+    proposals: { featurePicks: 'class/fighter/proficiency-0=skill-athletics,skill-history' }
+  })
+  await page.goto('/characters/new')
+  await page.waitForLoadState('networkidle')
+  await page.getByRole('combobox', { name: 'Race', exact: true }).selectOption('human')
+  await page.getByRole('combobox', { name: 'Class', exact: true }).selectOption('fighter')
+  await page.getByRole('combobox', { name: 'Background', exact: true }).selectOption('acolyte')
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Brenna')
+  await page
+    .getByRole('button', { name: /Skills/ })
+    .first()
+    .click()
+
+  const panel = page.getByRole('complementary', { name: 'Creation conversation' })
+  await panel.getByLabel('Message').fill('Pick my skills')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  const card = panel.getByRole('list', { name: 'Proposals' }).getByRole('listitem')
+  await expect(card).toHaveCount(1)
+  await card.getByRole('button', { name: 'Accept' }).click()
+  await expect(card.getByText('accepted')).toBeVisible()
+})

@@ -8,6 +8,7 @@
     isConversationStep,
     acceptPatch,
     seedOf,
+    staleCards,
     STEP_FIELDS,
     type ConversationStep
   } from './conversation.ts'
@@ -53,6 +54,7 @@
       subject="Character"
       extraBody={{ step, draft: wizard.draft }}
       {onpending}
+      isStale={(pending) => staleCards(wizard.rules, wizard.draft, pending)}
       disabled={status.state !== 'ready' || !supported}
       contextLength={status.state === 'ready' ? status.contextLength : null}
       fallbackContextLength={status.state === 'ready' ? status.fallbackContextLength : undefined}
