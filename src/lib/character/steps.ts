@@ -2,6 +2,7 @@ import type { DerivedStats } from '#lib/rules/derive-stats.ts'
 import type { GroupKind, ResolvedFeatures, ResolvedGroup } from '#lib/rules/resolver.ts'
 import { validateEquipment } from './equipment.ts'
 import { validateAbilitiesStep } from './ability-scores.ts'
+import { validateSpells } from './spells.ts'
 import { LIMITS, type CharacterDraft, type WizardRules } from './draft.ts'
 
 /**
@@ -192,28 +193,16 @@ export function castsAtLevel1({ rules, draft, resolved }: StepContext): boolean 
 
 // --- Registry -----------------------------------------------------------------------------------
 
-/** Placeholder for a step a later ticket builds: never valid, so Review stays locked. */
-const comingSoon = (
-  id: StepId,
-  label: string,
-  extra: Partial<StepDefinition> = {}
-): StepDefinition => ({
-  id,
-  label,
-  validate: () => ({ state: 'incomplete', issues: ['This step is not available yet.'] }),
-  ...extra
-})
-
 /**
- * The steps in rail order. Replace a `comingSoon` entry to build its step (#110 abilities,
- * #112 skills, #113 equipment, #114 spells, #111 review).
+ * The steps in rail order. Every step is built; a new step replaces or adds an entry here and
+ * a component in `step-views.ts`.
  */
 export const STEPS: readonly StepDefinition[] = [
   { id: 'concept', label: 'Concept', unlock: 'always', validate: validateConcept },
   { id: 'abilities', label: 'Ability scores', validate: validateAbilitiesStep },
   { id: 'skills', label: 'Skills & features', validate: validateSkills },
   { id: 'equipment', label: 'Equipment', validate: validateEquipment },
-  comingSoon('spells', 'Spells', { applies: castsAtLevel1 }),
+  { id: 'spells', label: 'Spells', applies: castsAtLevel1, validate: validateSpells },
   {
     id: 'review',
     label: 'Review',
