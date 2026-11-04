@@ -83,3 +83,62 @@ describe('buildSummary for a draft', () => {
     expect(stats.hitPoints.status).toBe('pending')
   })
 })
+
+describe('custom background in the summary', () => {
+  const customPicks = {
+    'class/fighter/proficiency-0': ['skill-athletics', 'skill-intimidation'],
+    'class/fighter/fightingStyle-0': ['fighter-fighting-style-defense'],
+    'race/human/language-0': ['dwarvish'],
+    'background/custom/skills-0': ['skill-arcana', 'skill-history'],
+    'background/custom/toolsOrLanguages-0': ['thieves-tools', 'elvish']
+  }
+
+  it('shows the name and feature of a saved custom-background Character', () => {
+    const db = openDatabase(':memory:')
+    migrateDatabase(db)
+    seedRulesData(db)
+    const service = createCharacterService(db)
+    const created = service.create({
+      name: 'Vesper',
+      race: 'human',
+      class: 'fighter',
+      background: 'custom',
+      customBackgroundName: 'Wanderer',
+      customBackgroundFeature: 'You know the roads.',
+      abilityMethod: 'standard-array',
+      scores: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 },
+      picks: customPicks,
+      equipment: [
+        { choiceKey: 'class/fighter/equipment-0', item: 'chain-mail' },
+        { choiceKey: 'class/fighter/equipment-1', item: 'longsword' },
+        { choiceKey: 'class/fighter/equipment-1', item: 'shield' },
+        { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-light' },
+        { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-bolt', quantity: 20 },
+        { choiceKey: 'class/fighter/equipment-3', item: 'dungeoneers-pack' }
+      ]
+    })
+    const data = detailToSummaryData(service.get(created.id)!)
+    expect(data.customBackgroundName).toBe('Wanderer')
+    expect(data.customBackgroundFeature).toBe('You know the roads.')
+    expect(buildSummary(rules, data).names.background).toBe('Wanderer')
+  })
+
+  it('shows the custom background of a draft, and ignores stale text otherwise', () => {
+    const custom = draftToSummaryData(rules, {
+      ...emptyDraft(),
+      background: 'custom',
+      customBackgroundName: 'Wanderer',
+      customBackgroundFeature: 'You know the roads.'
+    })
+    expect(custom).toMatchObject({
+      customBackgroundName: 'Wanderer',
+      customBackgroundFeature: 'You know the roads.'
+    })
+    const other = draftToSummaryData(rules, {
+      ...emptyDraft(),
+      background: 'acolyte',
+      customBackgroundName: 'Stale'
+    })
+    expect(other.customBackgroundName).toBeNull()
+  })
+})

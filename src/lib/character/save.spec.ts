@@ -37,6 +37,40 @@ describe('draftToCharacterInput', () => {
     expect(input.equipment?.every((r) => r.choiceKey.startsWith('class/fighter/'))).toBe(true)
   })
 
+  it('forwards the rolled dice for the rolling method', () => {
+    const abilityRolls = [
+      [6, 5, 3, 1],
+      [6, 6, 6, 1],
+      [4, 4, 4, 4],
+      [3, 3, 2, 1],
+      [5, 4, 4, 2],
+      [2, 2, 2, 2]
+    ]
+    const input = draftToCharacterInput(rules, complete({ abilityRolls }))
+    expect(input.abilityMethod).toBe('roll')
+    expect(input.abilityRolls).toEqual(abilityRolls)
+    expect(input.customBackgroundName).toBeUndefined()
+  })
+
+  it('maps the custom background name and feature only for the custom background', () => {
+    const custom = draftToCharacterInput(
+      rules,
+      complete({
+        background: 'custom',
+        customBackgroundName: 'Wanderer',
+        customBackgroundFeature: 'You know the roads.'
+      })
+    )
+    expect(custom).toMatchObject({
+      background: 'custom',
+      customBackgroundName: 'Wanderer',
+      customBackgroundFeature: 'You know the roads.'
+    })
+    const other = draftToCharacterInput(rules, complete({ customBackgroundName: 'Stale' }))
+    expect(other.customBackgroundName).toBeUndefined()
+    expect(other.customBackgroundFeature).toBeUndefined()
+  })
+
   it('keeps the other method slugs unchanged', () => {
     expect(
       draftToCharacterInput(rules, complete({ abilityMethod: 'point-buy' })).abilityMethod

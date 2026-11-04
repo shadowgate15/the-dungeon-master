@@ -52,16 +52,17 @@ export interface SummaryModel {
 }
 
 export function draftToSummaryData(rules: WizardRules, draft: CharacterDraft): SummaryData {
-  // Class spells (#114) and the custom background arrive with their steps; the draft has no field
-  // for them yet, so they are read structurally and stay absent until then.
+  // Class spells (#114) arrive with their step; the draft has no field for them yet, so they are
+  // read structurally and stay absent until then.
   const extra = draft as unknown as Partial<SummaryData>
   const resolved = resolveFeatures(rules, resolverDraft(draft))
+  const custom = draft.background === 'custom'
   return {
     ...draft,
     equipment: equipmentRows(rules, draft, resolved),
     classSpells: extra.classSpells,
-    customBackgroundName: extra.customBackgroundName,
-    customBackgroundFeature: extra.customBackgroundFeature
+    customBackgroundName: custom ? draft.customBackgroundName : null,
+    customBackgroundFeature: custom ? draft.customBackgroundFeature : null
   }
 }
 

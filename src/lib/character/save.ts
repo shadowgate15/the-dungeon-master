@@ -19,8 +19,8 @@ export function draftToCharacterInput(rules: WizardRules, draft: CharacterDraft)
   const scores = {} as CharacterInput['scores']
   for (const key of ABILITY_KEYS) scores[key] = need(`${key} score`, draft.baseScores[key])
   const method = need('ability method', draft.abilityMethod)
-  // #110 adds the rolled dice to the draft; the service requires them for the roll method.
-  const rolls = (draft as { abilityRolls?: number[][] | null }).abilityRolls
+  const rolls = draft.abilityRolls
+  const custom = draft.background === 'custom'
   return {
     name: draft.name,
     alignment: draft.alignment as Alignment | null,
@@ -38,6 +38,13 @@ export function draftToCharacterInput(rules: WizardRules, draft: CharacterDraft)
     abilityMethod: method === 'rolling' ? 'roll' : method,
     scores,
     ...(rolls ? { abilityRolls: rolls } : {}),
+    // Required by the service for the custom background and forbidden otherwise.
+    ...(custom
+      ? {
+          customBackgroundName: draft.customBackgroundName,
+          customBackgroundFeature: draft.customBackgroundFeature
+        }
+      : {}),
     picks: draft.picks,
     equipment: equipmentRows(rules, draft, resolveFeatures(rules, resolverDraft(draft)))
   }

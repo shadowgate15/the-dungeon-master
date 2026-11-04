@@ -3,6 +3,9 @@ import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import { seedRulesData } from '../rules/seed'
 import { createCharacterService, type CharacterInput } from './service'
 import { saveCharacter } from './save'
+import { emptyDraft } from '#lib/character/draft.ts'
+import { draftToCharacterInput } from '#lib/character/save.ts'
+import { loadWizardRules } from './wizard-rules'
 
 let db: Database
 beforeEach(() => {
@@ -53,6 +56,68 @@ describe('saveCharacter', () => {
     const service = createCharacterService(db)
     expect(saveCharacter(service, 'not json')).toEqual({
       error: 'The Character could not be read. Try saving again.'
+    })
+  })
+
+  describe('from a wizard draft', () => {
+    const rules = loadWizardRules()
+    const draft = {
+      ...emptyDraft(),
+      name: 'Brannoch',
+      race: 'human',
+      class: 'fighter',
+      baseScores: { str: 18, dex: 14, con: 13, int: 12, wis: 8, cha: 6 },
+      equipment: Object.fromEntries(
+        [0, 1, 2, 3].map((i) => [`class/fighter/equipment-${i}`, { option: 0, wild: [] }])
+      )
+    }
+
+    it('saves a rolling Character with its dice', () => {
+      const abilityRolls = [
+        [6, 5, 3, 1],
+        [6, 6, 6, 1],
+        [4, 4, 4, 4],
+        [3, 3, 2, 1],
+        [5, 4, 4, 2],
+        [2, 2, 2, 2]
+      ]
+      const service = createCharacterService(db)
+      const mapped = draftToCharacterInput(rules, {
+        ...draft,
+        background: 'acolyte',
+        abilityMethod: 'rolling',
+        abilityRolls,
+        picks: input.picks!
+      })
+      const result = saveCharacter(service, JSON.stringify(mapped))
+      expect(result).toEqual({ id: expect.any(String) })
+      const saved = service.get((result as { id: string }).id)!
+      expect(saved.abilityMethod).toBe('roll')
+      expect(saved.abilityRolls).toEqual(abilityRolls)
+    })
+
+    it('saves a Character with a custom background', () => {
+      const service = createCharacterService(db)
+      const mapped = draftToCharacterInput(rules, {
+        ...draft,
+        background: 'custom',
+        customBackgroundName: 'Wanderer',
+        customBackgroundFeature: 'You know the roads.',
+        abilityMethod: 'standard-array',
+        baseScores: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 },
+        picks: {
+          ...input.picks,
+          'background/custom/skills-0': ['skill-arcana', 'skill-history'],
+          'background/custom/toolsOrLanguages-0': ['thieves-tools', 'elvish']
+        }
+      })
+      delete mapped.picks!['background/acolyte/language-0']
+      const result = saveCharacter(service, JSON.stringify(mapped))
+      expect(result).toEqual({ id: expect.any(String) })
+      expect(service.get((result as { id: string }).id)).toMatchObject({
+        customBackgroundName: 'Wanderer',
+        customBackgroundFeature: 'You know the roads.'
+      })
     })
   })
 })
