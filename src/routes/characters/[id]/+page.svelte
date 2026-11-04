@@ -6,6 +6,7 @@
   import CharacterSummary from '#lib/character/CharacterSummary.svelte'
   import SectionNav from '#lib/SectionNav.svelte'
   import Alert from '#lib/ui/Alert.svelte'
+  import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
   import Toast from '#lib/ui/Toast.svelte'
   import type { PageProps } from './$types'
@@ -30,7 +31,9 @@
       it.
     </Alert>
   {/if}
-  <!-- Editing arrives with the edit page (#115); the link appears here then, never for archived. -->
+  {#if !data.archived}
+    <Button href={resolve('/characters/[id]/edit', { id: data.id })}>Edit</Button>
+  {/if}
   <CharacterSummary model={data.summary} />
 </main>
 

@@ -18,6 +18,8 @@ import { computeSteps, STEPS, type StepDefinition, type StepId, type StepState }
 export class CharacterWizard {
   readonly rules: WizardRules
   readonly #defs: readonly StepDefinition[]
+  /** The saved Character being edited (review saves with PUT), or null for a new one. */
+  readonly characterId: string | null
 
   draft = $state<CharacterDraft>(emptyDraft())
   /** Messages about choices cleared by the last changes; shown above the stats strip. */
@@ -35,8 +37,20 @@ export class CharacterWizard {
   /** Rail state for each applicable step, in order. */
   steps: StepState[]
 
-  constructor(rules: WizardRules, defs: readonly StepDefinition[] = STEPS) {
+  /**
+   * @param initial a saved Character's draft (edit page): the wizard opens on it with nothing
+   *   unsaved. Omit for a new Character.
+   * @param characterId the id of the Character `initial` came from.
+   */
+  constructor(
+    rules: WizardRules,
+    defs: readonly StepDefinition[] = STEPS,
+    initial?: CharacterDraft,
+    characterId: string | null = null
+  ) {
     this.rules = rules
+    this.characterId = characterId
+    if (initial) this.draft = initial
     this.#defs = defs
     this.resolved = $derived(resolveFeatures(rules, resolverDraft(this.draft)))
     this.stats = $derived(

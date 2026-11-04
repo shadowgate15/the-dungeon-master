@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
+  import { beforeNavigate, goto } from '$app/navigation'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Dialog from '#lib/ui/Dialog.svelte'
@@ -24,6 +25,18 @@
   let { wizard, backHref, onabandon, aside }: Props = $props()
 
   let confirming = $state(false)
+  /** Where an in-app navigation was headed when it was held back to ask about the draft. */
+  let leavingTo = $state<URL | null>(null)
+  let discarding = $state(false)
+
+  // In-app navigation (links, back button) with unsaved changes asks first. Tab close and reload
+  // are covered by `onbeforeunload` below; saving and abandoning clear `dirty` before they leave.
+  beforeNavigate(({ to, type, cancel }) => {
+    if (!wizard.dirty || !to || type === 'leave') return
+    cancel()
+    leavingTo = to.url
+    discarding = true
+  })
   const active = $derived(wizard.step(wizard.current))
   const View = $derived(STEP_VIEWS[wizard.current])
   const next = $derived(wizard.next ? wizard.step(wizard.next) : undefined)
@@ -95,6 +108,30 @@
     </aside>
   {/if}
 </main>
+
+<Dialog
+  bind:open={discarding}
+  title="Discard this Character?"
+  closeHref={backHref}
+  class="!w-[min(28rem,calc(100vw-2rem))]"
+>
+  <p class="mb-4 text-sm">
+    You have unsaved changes. They live only in this browser and will be lost if you leave.
+  </p>
+  <div class="flex justify-end gap-2">
+    <Button variant="secondary" onclick={() => (discarding = false)}>Keep editing</Button>
+    <Button
+      variant="danger"
+      onclick={() => {
+        discarding = false
+        wizard.dirty = false
+        // The target came from a navigation the app already resolved.
+        // eslint-disable-next-line svelte/no-navigation-without-resolve
+        if (leavingTo) void goto(leavingTo)
+      }}>Discard</Button
+    >
+  </div>
+</Dialog>
 
 <Dialog
   bind:open={confirming}

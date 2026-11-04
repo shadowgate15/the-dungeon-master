@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import { seedRulesData } from '../rules/seed'
 import { createCharacterService, type CharacterInput } from './service'
-import { saveCharacter } from './save'
+import { saveCharacter, updateCharacter } from './save'
 import { emptyDraft } from '#lib/character/draft.ts'
 import { draftToCharacterInput } from '#lib/character/save.ts'
 import { loadWizardRules } from './wizard-rules'
@@ -56,6 +56,41 @@ describe('saveCharacter', () => {
     const service = createCharacterService(db)
     expect(saveCharacter(service, 'not json')).toEqual({
       error: 'The Character could not be read. Try saving again.'
+    })
+  })
+
+  describe('updateCharacter', () => {
+    it('replaces the Character and keeps its id', () => {
+      const service = createCharacterService(db)
+      const { id } = service.create(input)
+      const result = updateCharacter(service, id, JSON.stringify({ ...input, name: 'Renamed' }))
+      expect(result).toEqual({ id })
+      expect(service.get(id)?.name).toBe('Renamed')
+    })
+
+    it('reports a rule violation and leaves the Character unchanged', () => {
+      const service = createCharacterService(db)
+      const { id } = service.create(input)
+      expect(updateCharacter(service, id, JSON.stringify({ ...input, name: ' ' }))).toEqual({
+        error: 'Name is required'
+      })
+      expect(service.get(id)?.name).toBe('Brannoch')
+    })
+
+    it('reports an archived Character as not editable', () => {
+      const service = createCharacterService(db)
+      const { id } = service.create(input)
+      service.archive(id)
+      expect(updateCharacter(service, id, JSON.stringify(input))).toEqual({
+        error: 'An archived Character cannot be edited'
+      })
+    })
+
+    it('reports a missing Character', () => {
+      const service = createCharacterService(db)
+      expect(updateCharacter(service, 'nope', JSON.stringify(input))).toEqual({
+        error: 'Character not found'
+      })
     })
   })
 
