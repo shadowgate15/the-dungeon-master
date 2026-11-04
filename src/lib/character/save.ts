@@ -46,6 +46,7 @@ export function draftToCharacterInput(rules: WizardRules, draft: CharacterDraft)
         }
       : {}),
     picks: draft.picks,
-    equipment: equipmentRows(rules, draft, resolveFeatures(rules, resolverDraft(draft)))
+    equipment: equipmentRows(rules, draft, resolveFeatures(rules, resolverDraft(draft))),
+    classSpells: draft.classSpells
   }
 }

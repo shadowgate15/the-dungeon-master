@@ -2,6 +2,7 @@ import type { AbilityKey, DeriveRules } from '#lib/rules/derive-stats.ts'
 import { resolveFeatures, type ResolverDraft, type ResolverRules } from '#lib/rules/resolver.ts'
 import type { RulesDataset } from '#lib/rules/schema.ts'
 import { reconcileEquipment, type EquipmentPick } from './equipment.ts'
+import { reconcileSpells } from './spells.ts'
 
 /**
  * The Character draft: the unsaved state of a Character while the wizard is open. Browser-only
@@ -35,6 +36,9 @@ export interface CharacterDraft {
   picks: Record<string, string[]>
   // Equipment (#113): full equipment choice key to the chosen option and wildcard items.
   equipment: Record<string, EquipmentPick>
+  // Spells (#114): cantrip and level 1 spell slugs picked from the class list; the High Elf cantrip
+  // lives in `picks`, granted spells are derived.
+  classSpells: string[]
   /** Custom background (#94): required only while `background` is `custom`, empty otherwise. */
   customBackgroundName: string
   customBackgroundFeature: string
@@ -99,6 +103,7 @@ export function emptyDraft(): CharacterDraft {
     abilityRolls: null,
     picks: {},
     equipment: {},
+    classSpells: [],
     customBackgroundName: '',
     customBackgroundFeature: ''
   }
@@ -126,7 +131,11 @@ export interface Reconciled {
  * attach to are kept (flagging them is the resolver's job). Pure; returns a new draft.
  */
 export function reconcile(rules: WizardRules, input: CharacterDraft): Reconciled {
-  const draft: CharacterDraft = { ...input, picks: { ...input.picks } }
+  const draft: CharacterDraft = {
+    ...input,
+    picks: { ...input.picks },
+    classSpells: [...input.classSpells]
+  }
   const notices: string[] = []
   const nameOf = (list: readonly { slug: string; name: string }[], slug: string) =>
     list.find((e) => e.slug === slug)?.name ?? slug
@@ -181,5 +190,9 @@ export function reconcile(rules: WizardRules, input: CharacterDraft): Reconciled
   const gear = reconcileEquipment(rules, draft)
   draft.equipment = gear.equipment
   notices.push(...gear.notices)
+
+  const spells = reconcileSpells(rules, draft)
+  draft.classSpells = spells.classSpells
+  notices.push(...spells.notices)
   return { draft, notices }
 }
