@@ -33,7 +33,8 @@ const input: CharacterInput = {
     { choiceKey: 'class/fighter/equipment-1', item: 'shield' },
     { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-light' },
     { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-bolt', quantity: 20 },
-    { choiceKey: 'class/fighter/equipment-3', item: 'dungeoneers-pack' }
+    { choiceKey: 'class/fighter/equipment-3', item: 'dungeoneers-pack' },
+    { choiceKey: 'background/acolyte/equipment-0', item: 'amulet' }
   ]
 }
 
@@ -122,6 +123,10 @@ describe('saveCharacter', () => {
         background: 'acolyte',
         abilityMethod: 'rolling',
         abilityRolls,
+        equipment: {
+          ...draft.equipment,
+          'background/acolyte/equipment-0': { option: 0, wild: ['amulet'] }
+        },
         picks: input.picks!
       })
       const result = saveCharacter(service, JSON.stringify(mapped))

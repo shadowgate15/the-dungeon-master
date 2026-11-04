@@ -5,7 +5,9 @@
  * feature slugs. Pure: no database or server imports.
  */
 
-export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'
+/** The six abilities in canonical order; the single source for every ability list. */
+export const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const
+export type AbilityKey = (typeof ABILITY_KEYS)[number]
 export type AbilityMods = Record<AbilityKey, number>
 
 /** What the Character wears. AC is unarmored-only for now, but the formulas already honour this. */

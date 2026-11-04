@@ -4,6 +4,7 @@ import {
   hpBonus,
   weaponAttackBonus,
   weaponDamageBonus,
+  ABILITY_KEYS,
   type AbilityKey
 } from './registry.ts'
 import type { ResolvedFeatures } from './resolver.ts'
@@ -20,7 +21,7 @@ import type { RulesDataset } from './schema.ts'
  * AC is unarmored only (`unarmoredAc`): armor and shield AC wait for the later sheet effort.
  */
 
-export type { AbilityKey } from './registry.ts'
+export { ABILITY_KEYS, type AbilityKey } from './registry.ts'
 
 /** The Rules Data collections deriving stats reads. */
 export type DeriveRules = Pick<
@@ -109,8 +110,6 @@ export interface DerivedStats {
 }
 
 // --- Helpers ------------------------------------------------------------------------------------
-
-export const ABILITY_KEYS: readonly AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 
 /** floor((score - 10) / 2): 8 and 9 are -1, 1 is -5. */
 export const abilityModifier = (score: number) => Math.floor((score - 10) / 2)

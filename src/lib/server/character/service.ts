@@ -17,10 +17,11 @@ import {
   subclass,
   subrace
 } from '../db/schema'
+import { equipmentGroupKeys } from '../../character/equipment'
 import { loadRulesDataset } from '../rules/dataset'
+import { ABILITY_KEYS, type AbilityKey } from '../../rules/registry'
 import { resolveFeatures, type ResolverRules } from '../../rules/resolver'
 import {
-  ABILITIES,
   ABILITY_METHODS,
   BACKSTORY_MAX,
   CUSTOM_BACKGROUND_FEATURE_MAX,
@@ -28,7 +29,6 @@ import {
   CUSTOM_BACKGROUND_SLUG,
   NAME_MAX,
   TEXT_MAX,
-  type AbilityKey,
   type AbilityMethod,
   type Alignment,
   type PickSource
@@ -149,7 +149,7 @@ const sortedNumbers = (values: number[]) => [...values].sort((a, b) => a - b)
 
 /** Checks the six assigned scores (and rolls) against the method's rules. */
 function checkScores(input: CharacterInput, config: MethodConfig) {
-  const scores = ABILITIES.map((a) => {
+  const scores = ABILITY_KEYS.map((a) => {
     const v = input.scores?.[a]
     if (!isInt(v)) return fail(`Score ${a} must be a whole number`)
     return v
@@ -169,7 +169,7 @@ function checkScores(input: CharacterInput, config: MethodConfig) {
       for (const [i, v] of scores.entries()) {
         const cost = config.costs[String(v)]
         if (v < config.min || v > config.max || cost === undefined) {
-          fail(`Score ${ABILITIES[i]} must be between ${config.min} and ${config.max}`)
+          fail(`Score ${ABILITY_KEYS[i]} must be between ${config.min} and ${config.max}`)
         }
         spent += cost
       }
@@ -374,22 +374,17 @@ export function createCharacterService(
       source
     }))
 
-    // Equipment: keys are the class's (or background's) equipment choice groups; every class group
-    // needs a pick; items exist.
-    const groupKeys = (
-      ownerType: 'class' | 'background',
-      slug: string,
-      groups: { key: string; kind: string }[] = []
-    ) => groups.filter((g) => g.kind === 'equipment').map((g) => `${ownerType}/${slug}/${g.key}`)
-    const classKeys = groupKeys('class', input.class, classRules.get(input.class)?.choiceGroups)
-    const legalKeys = new Set([
-      ...classKeys,
-      ...groupKeys(
+    // Equipment: keys are the class's and background's equipment choice groups; every group needs
+    // a pick (#113); items exist.
+    const requiredKeys = [
+      ...equipmentGroupKeys('class', input.class, classRules.get(input.class)?.choiceGroups),
+      ...equipmentGroupKeys(
         'background',
         input.background,
         backgroundRules.get(input.background)?.choiceGroups
       )
-    ])
+    ]
+    const legalKeys = new Set(requiredKeys)
     const gear = input.equipment ?? []
     const seen = new Set<string>()
     for (const row of gear) {
@@ -401,7 +396,7 @@ export function createCharacterService(
       if (seen.has(dupe)) fail(`Equipment ${row.item} is listed twice for ${row.choiceKey}`)
       seen.add(dupe)
     }
-    for (const key of classKeys) {
+    for (const key of requiredKeys) {
       if (!gear.some((r) => r.choiceKey === key)) fail(`Equipment choice ${key} needs a pick`)
     }
     const itemSlugs = [...new Set(gear.map((r) => r.item))]

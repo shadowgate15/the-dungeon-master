@@ -51,7 +51,8 @@ test('creating through the save endpoint lands on a summary with a success toast
         { choiceKey: 'class/fighter/equipment-0', item: 'chain-mail' },
         { choiceKey: 'class/fighter/equipment-1', item: 'longsword' },
         { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-light' },
-        { choiceKey: 'class/fighter/equipment-3', item: 'dungeoneers-pack' }
+        { choiceKey: 'class/fighter/equipment-3', item: 'dungeoneers-pack' },
+        { choiceKey: 'background/acolyte/equipment-0', item: 'amulet' }
       ]
     }
   })

@@ -9,7 +9,8 @@ import {
   text
 } from 'drizzle-orm/sqlite-core'
 import { LENGTHS, TONES } from '../../campaign/enums'
-import { ABILITIES, ABILITY_METHODS, ALIGNMENTS, PICK_SOURCES } from '../../character/enums'
+import { ABILITY_KEYS } from '../../rules/registry'
+import { ABILITY_METHODS, ALIGNMENTS, PICK_SOURCES } from '../../character/enums'
 import {
   background,
   classTable,
@@ -142,7 +143,7 @@ export const character = sqliteTable(
     check('character_level_check', between('level', 1, 20)),
     check('character_alignment_check', oneOf('alignment', ALIGNMENTS)),
     check('character_ability_method_check', oneOf('ability_method', ABILITY_METHODS)),
-    ...ABILITIES.map((a) => check(`character_${a}_check`, between(`"${a}"`, 1, 30)))
+    ...ABILITY_KEYS.map((a) => check(`character_${a}_check`, between(`"${a}"`, 1, 30)))
   ]
 )
 

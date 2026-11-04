@@ -44,7 +44,8 @@ const fighter = (over: Partial<CharacterInput> = {}): CharacterInput => ({
     { choiceKey: 'class/fighter/equipment-1', item: 'shield' },
     { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-light' },
     { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-bolt', quantity: 20 },
-    { choiceKey: 'class/fighter/equipment-3', item: 'dungeoneers-pack' }
+    { choiceKey: 'class/fighter/equipment-3', item: 'dungeoneers-pack' },
+    { choiceKey: 'background/acolyte/equipment-0', item: 'amulet' }
   ],
   ...over
 })
@@ -78,7 +79,8 @@ const wizard = (over: Partial<CharacterInput> = {}): CharacterInput => ({
   equipment: [
     { choiceKey: 'class/wizard/equipment-0', item: 'quarterstaff' },
     { choiceKey: 'class/wizard/equipment-1', item: 'component-pouch' },
-    { choiceKey: 'class/wizard/equipment-2', item: 'scholars-pack' }
+    { choiceKey: 'class/wizard/equipment-2', item: 'scholars-pack' },
+    { choiceKey: 'background/acolyte/equipment-0', item: 'amulet' }
   ],
   ...over
 })
@@ -144,7 +146,7 @@ describe('Character service', () => {
         item: 'crossbow-bolt',
         quantity: 20
       })
-      expect(got.equipment).toHaveLength(6)
+      expect(got.equipment).toHaveLength(7)
       expect(got.choices).toContainEqual({
         choiceKey: 'class/fighter/fightingStyle-0',
         optionSlug: 'fighter-fighting-style-defense'
@@ -222,6 +224,7 @@ describe('Character service', () => {
     })
 
     it('requires the custom background fields only for the custom background', () => {
+      const noBg = fighter().equipment!.filter((g) => !g.choiceKey.startsWith('background/'))
       const picks = {
         'class/fighter/proficiency-0': ['skill-athletics', 'skill-intimidation'],
         'class/fighter/fightingStyle-0': ['fighter-fighting-style-defense'],
@@ -230,13 +233,17 @@ describe('Character service', () => {
         'background/custom/toolsOrLanguages-0': ['thieves-tools', 'elvish']
       }
       rejects(fighter({ customBackgroundName: 'Wanderer' }), /only allowed with the custom/)
-      rejects(fighter({ background: 'custom', picks }), /Custom background name is required/)
       rejects(
-        fighter({ background: 'custom', customBackgroundName: 'Wanderer', picks }),
+        fighter({ equipment: noBg, background: 'custom', picks }),
+        /Custom background name is required/
+      )
+      rejects(
+        fighter({ equipment: noBg, background: 'custom', customBackgroundName: 'Wanderer', picks }),
         /feature is required/
       )
       rejects(
         fighter({
+          equipment: noBg,
           background: 'custom',
           customBackgroundName: 'x'.repeat(81),
           customBackgroundFeature: 'f',
@@ -246,6 +253,7 @@ describe('Character service', () => {
       )
       const custom = characters.create(
         fighter({
+          equipment: noBg,
           background: 'custom',
           customBackgroundName: 'Wanderer',
           customBackgroundFeature: 'You know the roads.',
@@ -302,6 +310,14 @@ describe('Character service', () => {
       )
       rejects(fighter({ equipment: [...gear, gear[0]] }), /listed twice/)
       rejects(fighter({ equipment: gear.slice(0, 3) }), /equipment-2/)
+    })
+
+    it('requires a pick for every background equipment group too (#113)', () => {
+      const gear = fighter().equipment!
+      rejects(
+        fighter({ equipment: gear.filter((g) => !g.choiceKey.startsWith('background/')) }),
+        /background\/acolyte\/equipment-0/
+      )
     })
   })
 
@@ -382,6 +398,7 @@ describe('Character service', () => {
       expect(got.classSlug).toBe('wizard')
       expect(got.skills.map((s) => s.skill).sort()).toEqual(['arcana', 'history'])
       expect(got.equipment.map((e) => e.item).sort()).toEqual([
+        'amulet',
         'component-pouch',
         'quarterstaff',
         'scholars-pack'

@@ -1,4 +1,4 @@
-import type { AbilityKey } from '#lib/rules/derive-stats.ts'
+import { ABILITY_KEYS, type AbilityKey } from '#lib/rules/registry.ts'
 import type { CharacterDraft } from './draft.ts'
 import type { StepContext, StepValidation } from './steps.ts'
 
@@ -12,7 +12,7 @@ import type { StepContext, StepValidation } from './steps.ts'
  */
 export type DraftAbilityMethod = NonNullable<CharacterDraft['abilityMethod']>
 
-export const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const
+export { ABILITY_KEYS }
 export const ABILITY_LABELS: Record<AbilityKey, string> = {
   str: 'Strength',
   dex: 'Dexterity',
