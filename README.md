@@ -13,7 +13,7 @@ A complete game-running system. A player opens a session in the UI and sees the 
 - **Deterministic code owns the rules and state.** Dice, HP, initiative, spell slots, inventory and every other mechanic live in code and the database. The database is the single source of truth.
 - **The LLM owns narration and judgment.** It writes the story and makes calls with no fixed answer: NPC behavior, ruling on improvised actions, pacing. It never invents numbers or state. It calls tools, and the tools change state.
 - **Local-first.** The app runs on the player's machine with SQLite and a local model, with no network dependency. The LLM sits behind a thin provider interface, so hosted backends can be swapped in later. No specific model is assumed.
-- **Rules content is limited to the D&D 5e SRD 5.1** (CC-BY-4.0).
+- **Rules content is limited to the D&D 5e SRD 5.1** (CC-BY-4.0), plus minimal app-defined mechanics where the SRD is silent (e.g. ability score methods).
 
 ## Campaign lifecycle
 

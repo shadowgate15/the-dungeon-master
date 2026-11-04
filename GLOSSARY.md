@@ -47,3 +47,7 @@ _Avoid_: Genre, theme, style
 **Length**:
 How much story a Campaign is meant to hold, one of: one-shot, short, medium, long. Ordered shortest to longest. one-shot is a single sitting; short is a few sessions; medium is a season of play; long is an open-ended saga. It measures story scope, not hours or session counts. The AI uses it to pace how much story to plan.
 _Avoid_: Duration, session count, size
+
+**Ability Score Method**:
+One of the three ways a Character's six base ability scores are set: **standard array** (the fixed values 15, 14, 13, 12, 10, 8, each assigned to one ability), **point buy** (a 27-point budget spent on scores from 8 to 15, up to the budget) or **rolling** (six rolls of four six-sided dice with the lowest dropped, assigned freely). None of the three is in the SRD; they are rules the app defines itself. The player chooses the method and the assignment; the AI may only propose which method and how to arrange the values, never the values themselves or a roll. Racial bonuses are applied on top of the base scores, never part of them.
+_Avoid_: Stat generation, stat roll
