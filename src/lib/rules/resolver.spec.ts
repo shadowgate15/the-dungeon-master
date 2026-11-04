@@ -460,7 +460,8 @@ describe('overlay integrity', () => {
       class: rules.classes,
       race: rules.races,
       trait: rules.traits,
-      subclass: rules.subclasses
+      subclass: rules.subclasses,
+      background: rules.backgrounds
     }
     for (const g of [...OVERLAY_GROUPS, ...OVERLAY_GRANTS]) {
       expect(has(owners[g.ownerType], g.ownerSlug), `${g.ownerType}/${g.ownerSlug}`).toBe(true)

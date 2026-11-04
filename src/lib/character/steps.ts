@@ -1,5 +1,5 @@
 import type { DerivedStats } from '#lib/rules/derive-stats.ts'
-import type { ResolvedFeatures } from '#lib/rules/resolver.ts'
+import type { GroupKind, ResolvedFeatures, ResolvedGroup } from '#lib/rules/resolver.ts'
 import { LIMITS, type CharacterDraft, type WizardRules } from './draft.ts'
 
 /**
@@ -87,6 +87,95 @@ export function validateConcept({ draft, resolved }: StepContext): StepValidatio
   return { state: attention ? 'attention' : issues.length ? 'incomplete' : 'valid', issues }
 }
 
+// --- Skills & features (#112) -------------------------------------------------------------------
+
+/**
+ * The choice-group kinds step 3 owns. The rest belong elsewhere: the subclass chooser to Concept,
+ * Half-Elf ability bonuses to Ability scores (#110), the High Elf cantrip to Spells (#114).
+ */
+export const SKILLS_STEP_KINDS: readonly GroupKind[] = [
+  'skill',
+  'tool',
+  'toolOrLanguage',
+  'language',
+  'expertise',
+  'feature',
+  'creatureType',
+  'terrain',
+  'dragonType',
+  'race'
+]
+
+export const skillsStepGroups = (resolved: ResolvedFeatures): ResolvedGroup[] =>
+  resolved.groups.filter((g) => SKILLS_STEP_KINDS.includes(g.kind))
+
+const KIND_LABELS: Partial<Record<GroupKind, string>> = {
+  skill: 'Skills',
+  tool: 'Tools',
+  toolOrLanguage: 'Tools or languages',
+  language: 'Languages',
+  expertise: 'Expertise',
+  feature: 'Fighting Style',
+  creatureType: 'Favored enemy',
+  terrain: 'Favored terrain',
+  dragonType: 'Draconic ancestry',
+  race: 'Favored enemy races'
+}
+
+/** A plain-language name for a choice group. */
+export const groupLabel = (g: ResolvedGroup): string =>
+  g.description ?? KIND_LABELS[g.kind] ?? g.groupKey
+
+/** Plain-language reasons a choice group is not valid yet. */
+export function groupIssues(g: ResolvedGroup): string[] {
+  const name = (slug: string) => g.options.find((o) => o.slug === slug)?.name ?? slug
+  const out: string[] = []
+  for (const i of g.issues) {
+    if (i.type === 'conflict') {
+      out.push(
+        `${groupLabel(g)}: ${name(i.slug)} is already ${i.with === 'granted' ? 'granted to you' : 'chosen elsewhere'}. Pick another.`
+      )
+    } else if (i.type === 'unknown-option') {
+      out.push(`${groupLabel(g)}: ${i.slug} is no longer an option. Pick another.`)
+    } else if (i.type === 'duplicate') {
+      out.push(`${groupLabel(g)}: ${name(i.slug)} is picked twice.`)
+    } else if (i.type === 'excess') {
+      out.push(`${groupLabel(g)}: too many picks; choose ${g.choose}.`)
+    } else {
+      out.push(`${groupLabel(g)}: choose at most one tool.`)
+    }
+  }
+  if (g.status === 'incomplete') {
+    const left = g.choose - new Set(g.picks).size
+    out.push(`${groupLabel(g)}: choose ${left} more.`)
+  }
+  return out
+}
+
+export function validateSkills({ draft, resolved }: StepContext): StepValidation {
+  const issues: string[] = []
+  let attention = false
+  if (draft.background === 'custom') {
+    if (!draft.customBackgroundName.trim()) issues.push('Name your custom background.')
+    if (!draft.customBackgroundFeature.trim()) {
+      issues.push('Describe your custom background feature.')
+    }
+    for (const f of ['customBackgroundName', 'customBackgroundFeature'] as const) {
+      if (draft[f].length > LIMITS[f]) {
+        attention = true
+        issues.push(
+          `The custom background ${f === 'customBackgroundName' ? 'name' : 'feature'} is over ${LIMITS[f]} characters.`
+        )
+      }
+    }
+  }
+  for (const g of skillsStepGroups(resolved)) {
+    if (g.status === 'attention') attention = true
+    if (g.status !== 'valid') issues.push(...groupIssues(g))
+  }
+  return { state: attention ? 'attention' : issues.length ? 'incomplete' : 'valid', issues }
+}
+
 // --- Spells applicability -----------------------------------------------------------------------
 
 /** A class that casts at level 1, or any draft with a spell pick (High Elf cantrip). */
@@ -120,7 +209,7 @@ const comingSoon = (
 export const STEPS: readonly StepDefinition[] = [
   { id: 'concept', label: 'Concept', unlock: 'always', validate: validateConcept },
   comingSoon('abilities', 'Ability scores'),
-  comingSoon('skills', 'Skills & features'),
+  { id: 'skills', label: 'Skills & features', validate: validateSkills },
   comingSoon('equipment', 'Equipment'),
   comingSoon('spells', 'Spells', { applies: castsAtLevel1 }),
   comingSoon('review', 'Review', { unlock: 'all-valid' })

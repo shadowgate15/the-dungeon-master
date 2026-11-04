@@ -225,7 +225,9 @@ describe('Character service', () => {
       const picks = {
         'class/fighter/proficiency-0': ['skill-athletics', 'skill-intimidation'],
         'class/fighter/fightingStyle-0': ['fighter-fighting-style-defense'],
-        'race/human/language-0': ['dwarvish']
+        'race/human/language-0': ['dwarvish'],
+        'background/custom/skills-0': ['skill-arcana', 'skill-history'],
+        'background/custom/toolsOrLanguages-0': ['thieves-tools', 'elvish']
       }
       rejects(fighter({ customBackgroundName: 'Wanderer' }), /only allowed with the custom/)
       rejects(fighter({ background: 'custom', picks }), /Custom background name is required/)
