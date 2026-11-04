@@ -47,3 +47,15 @@ _Avoid_: Genre, theme, style
 **Length**:
 How much story a Campaign is meant to hold, one of: one-shot, short, medium, long. Ordered shortest to longest. one-shot is a single sitting; short is a few sessions; medium is a season of play; long is an open-ended saga. It measures story scope, not hours or session counts. The AI uses it to pace how much story to plan.
 _Avoid_: Duration, session count, size
+
+**Character**:
+A player's hero, created at level 1 from the D&D 5e SRD 5.1 and stored as the player's choices only: race, class, background, ability scores, picked skills, spells and equipment, and narrative details. Everything computed from those choices (modifiers, hit points, armor class, saves, spell slots) is derived and never stored. A Character stands alone, owned by the player, and is linked to Campaigns separately. A Character is either active or archived.
+_Avoid_: Player character sheet, PC, hero, avatar
+
+**Archived Character**:
+A Character set aside by its author. It is hidden from the main Character list and is read-only until restored. Archiving is reversible; deleting a Character is not. A Character does not become read-only because of anything about its Campaigns.
+_Avoid_: Disabled Character, retired Character
+
+**Ability Score Method**:
+How a Character's six base ability scores were produced: standard array, point buy, or rolling (4d6, drop the lowest, six times). Code makes any rolls and the Character keeps the rolled dice, so the assigned scores can be checked against them.
+_Avoid_: Stat generation, stat roll
