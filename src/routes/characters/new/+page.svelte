@@ -14,4 +14,8 @@
 
 <svelte:head><title>New Character</title></svelte:head>
 
-<WizardShell {wizard} backHref={resolve('/')} onabandon={() => goto(resolve('/'))} />
+<WizardShell
+  {wizard}
+  backHref={resolve('/characters')}
+  onabandon={() => goto(resolve('/characters'))}
+/>

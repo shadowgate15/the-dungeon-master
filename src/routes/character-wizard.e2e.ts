@@ -41,5 +41,5 @@ test('abandon asks to confirm and leaves only when confirmed', async ({ page }) 
 
   await page.getByRole('button', { name: 'Abandon', exact: true }).click()
   await dialog.getByRole('button', { name: 'Abandon', exact: true }).click()
-  await expect(page).not.toHaveURL(/\/characters\/new/)
+  await expect(page).toHaveURL(/\/characters$/)
 })
