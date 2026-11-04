@@ -5,6 +5,17 @@ import {
   type CharacterField,
   type ConversationStep
 } from '#lib/character/conversation.ts'
+import {
+  ABILITY_KEYS,
+  ABILITY_LABELS,
+  POINT_BUY,
+  ROLL,
+  STANDARD_ARRAY,
+  rollAbilityScores,
+  rollTotals,
+  validateAbilityScores
+} from '#lib/character/ability-scores.ts'
+import { ABILITY_METHODS, encodeRolls, parseAssignment } from '#lib/character/conversation.ts'
 import { LIMITS, type CharacterDraft } from '#lib/character/draft.ts'
 import type { RulesRepository } from '../rules/repository'
 import {
@@ -12,6 +23,7 @@ import {
   SUMMARY_MAX,
   TURN_TIMEOUT_MS,
   type ChatPort,
+  type ChatTool,
   type CompactResult,
   type Compaction,
   type ConversationEngine,
@@ -47,6 +59,10 @@ export const MAX_RETRIES = 2
 export interface StepContext {
   draft: DraftView
   rules: RulesRepository
+  /** The set `roll_ability_scores` rolled this turn (one per turn), for validation and the card. */
+  rolled?: number[][]
+  /** Dice source for server-run rolls; injectable for tests. */
+  random?: () => number
 }
 
 /** The draft fields the server reads. Later steps widen this (and `draftSchema` in request.ts). */
@@ -54,7 +70,8 @@ export type DraftView = Pick<
   CharacterDraft,
   'name' | 'race' | 'subrace' | 'class' | 'subclass' | 'background' | 'alignment'
 > &
-  Partial<Pick<CharacterDraft, 'appearance' | 'personality' | 'backstory'>>
+  Partial<Pick<CharacterDraft, 'appearance' | 'personality' | 'backstory'>> &
+  Partial<Pick<CharacterDraft, 'abilityMethod' | 'baseScores' | 'abilityRolls'>>
 
 export interface StepModule {
   /** Zod shape of the `proposals` object: only this step's fields, all optional. */
@@ -63,6 +80,8 @@ export interface StepModule {
   options: (ctx: StepContext) => string
   /** One plain-language message per illegal proposal; empty when all are legal. */
   validate: (proposals: Partial<Record<CharacterField, string>>, ctx: StepContext) => string[]
+  /** Server-run tools offered on this step only (best-effort; see `runCharacterTurn`). */
+  tools?: (ctx: StepContext) => ChatTool[]
   /** Step guidance appended to the system prompt. */
   guidance: string
 }
@@ -143,9 +162,98 @@ const conceptModule: StepModule = {
   }
 }
 
+// --- Ability scores (#118) ----------------------------------------------------------------------
+
+const METHOD_SLUGS = ABILITY_METHODS as readonly string[]
+
+/** The value set an assignment must use: totals to place, or the point-buy rules. */
+function abilitySets(ctx: StepContext) {
+  const rolls = ctx.rolled ?? ctx.draft.abilityRolls ?? null
+  return { rolls, totals: rolls ? rollTotals(rolls) : null }
+}
+
+const abilitiesModule: StepModule = {
+  proposals: {
+    abilityMethod: z.string().max(40).optional(),
+    abilityAssignment: z.string().max(200).optional()
+  },
+  guidance: `Current step: Ability scores. You may propose abilityMethod (one of standard-array, point-buy, rolling) and abilityAssignment (every ability exactly once as "str=15, dex=14, con=13, int=12, wis=10, cha=8"). An assignment only arranges the value set below for the method in force; you never invent numbers. Never choose the method silently: propose it as abilityMethod for the player to accept, and arrange values only for a method the player chose or that you propose in the same reply. To roll, call the roll_ability_scores tool (only when the player asks to roll or has chosen rolling); never state dice results yourself. The player sees the roll as a card they accept or dismiss.`,
+  options({ draft, rolled, random }: StepContext) {
+    const ctx = { draft, rolled, random } as StepContext
+    const { rolls, totals } = abilitySets(ctx)
+    const lines = [
+      'Legal options for this step:',
+      `Methods (slug): standard-array, point-buy, rolling.`,
+      `- standard-array: assign ${STANDARD_ARRAY.join(', ')}, each once.`,
+      `- point-buy: ${POINT_BUY.budget} points, each score ${POINT_BUY.min} to ${POINT_BUY.max} (costs ${Object.entries(
+        POINT_BUY.costs
+      )
+        .map(([score, cost]) => `${score}:${cost}`)
+        .join(', ')}).`,
+      `- rolling: ${ROLL.dice}d6 drop lowest, six times; assign the totals.`,
+      `Player's current method: ${draft.abilityMethod ?? '(not chosen)'}.`
+    ]
+    if (rolls) lines.push(`Current rolled totals: ${totals!.join(', ')}.`)
+    const scores = draft.baseScores
+    if (scores) {
+      lines.push(
+        `Current base scores: ${ABILITY_KEYS.map((k) => `${ABILITY_LABELS[k]} ${scores[k] ?? 'unset'}`).join(', ')}.`
+      )
+    }
+    return lines.join('\n')
+  },
+  tools(ctx) {
+    return [
+      {
+        name: 'roll_ability_scores',
+        description: `Rolls a full set of ability scores (six rolls of ${ROLL.dice}d6, lowest die dropped) with server code. Takes no arguments; returns each roll's dice and total. Call at most once.`,
+        execute() {
+          ctx.rolled ??= rollAbilityScores(ctx.random)
+          return {
+            rolls: ctx.rolled.map((dice, i) => ({
+              roll: i + 1,
+              dice,
+              total: rollTotals([dice])[0]
+            })),
+            totals: rollTotals(ctx.rolled)
+          }
+        }
+      }
+    ]
+  },
+  validate(p, ctx) {
+    const problems: string[] = []
+    if (p.abilityMethod !== undefined && !METHOD_SLUGS.includes(p.abilityMethod)) {
+      problems.push(
+        `Ability score method "${p.abilityMethod}" is not a legal option (standard-array, point-buy or rolling).`
+      )
+    }
+    if (p.abilityAssignment !== undefined) {
+      const scores = parseAssignment(p.abilityAssignment)
+      const method = (p.abilityMethod ?? ctx.draft.abilityMethod) as
+        CharacterDraft['abilityMethod'] | undefined
+      if (!scores) {
+        problems.push(
+          'Ability score assignment must list every ability once as "str=15, dex=14, con=13, int=12, wis=10, cha=8".'
+        )
+      } else if (!method || !METHOD_SLUGS.includes(method)) {
+        problems.push(
+          'No ability score method is chosen. Propose abilityMethod for the player to accept, or arrange values only after they choose one.'
+        )
+      } else {
+        const { rolls } = abilitySets(ctx)
+        const check = validateAbilityScores(method, scores, rolls)
+        problems.push(...check.issues.map((i) => `Ability score assignment: ${i}`))
+      }
+    }
+    return problems
+  }
+}
+
 /** The registry: a step with no module has no AI help (the client keeps the chat idle there). */
 export const STEP_MODULES: Record<ConversationStep, StepModule> = {
-  concept: conceptModule
+  concept: conceptModule,
+  abilities: abilitiesModule
 }
 
 // --- Prompts ------------------------------------------------------------------------------------
@@ -237,15 +345,23 @@ const INVALID_OUTPUT = {
   failure: { kind: 'invalid-output', message: 'The model did not return a usable reply' }
 } as const
 
+export interface CharacterTurnOptions extends RunTurnOptions {
+  /** Dice source for server-run tools (tests). */
+  random?: () => number
+}
+
+const NO_TOOLS_NOTE =
+  'Tools are unavailable right now. Do not claim to roll; if the player wants to roll, tell them to use the Roll button on the step.'
+
 export async function runCharacterTurn(
   port: ChatPort,
   rules: RulesRepository,
   { step, draft, ...input }: CharacterTurnInput,
-  options: RunTurnOptions = {}
+  options: CharacterTurnOptions = {}
 ): Promise<TurnResult<CharacterField>> {
   if (!draftResolves(draft, rules)) return OPTIONS_CHANGED
   const module = STEP_MODULES[step]
-  const ctx: StepContext = { draft, rules }
+  const ctx: StepContext = { draft, rules, random: options.random }
   const engine = engineFor(step)
   const base = [
     module.guidance,
@@ -257,25 +373,50 @@ export async function runCharacterTurn(
   // One deadline covers every attempt; each engine call gets what is left of it.
   const deadline = Date.now() + (options.timeoutMs ?? TURN_TIMEOUT_MS)
   let compaction: Compaction | undefined
-  let current: TurnInput<CharacterField> = { ...input, extraSystemPrompts: base }
+  // Tools are best-effort: if the provider rejects the call, one retry goes without them.
+  let tools = module.tools?.(ctx)
+  let current: TurnInput<CharacterField> = {
+    ...input,
+    extraSystemPrompts: base,
+    ...(tools && { tools })
+  }
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const result = await engine.runTurn(port, current, {
       signal: options.signal,
       timeoutMs: Math.max(1, deadline - Date.now())
     })
-    if (!result.ok) return result
+    if (!result.ok) {
+      if (tools && result.failure.kind === 'provider-error') {
+        tools = undefined
+        const { tools: _t, ...rest } = current
+        void _t
+        current = {
+          ...rest,
+          extraSystemPrompts: [...(rest.extraSystemPrompts ?? []), NO_TOOLS_NOTE]
+        }
+        base.push(NO_TOOLS_NOTE)
+        attempt--
+        continue
+      }
+      return result
+    }
     compaction ??= result.compaction
     const problems = module.validate(result.proposals, ctx)
     if (problems.length === 0) {
       const { compaction: _drop, ...rest } = result
       void _drop
-      return { ...rest, ...(compaction && { compaction }) }
+      // The Roll card comes first; it is the server's roll, not a model proposal.
+      const proposals = ctx.rolled
+        ? { abilityRolls: encodeRolls(ctx.rolled), ...rest.proposals }
+        : rest.proposals
+      return { ...rest, proposals, ...(compaction && { compaction }) }
     }
     // The retry carries the compaction the first call made, so it is not summarized twice.
     current = {
       ...input,
       ...(compaction ?? {}),
+      ...(tools && { tools }),
       extraSystemPrompts: [
         ...base,
         `Your previous reply was rejected, so it was discarded. Fix every problem and reply again:\n${problems.map((p) => `- ${p}`).join('\n')}\nUse only the legal options listed above.`
