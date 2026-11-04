@@ -110,6 +110,8 @@ export type TurnFailure = {
     | 'model-unavailable'
     /** A Campaign's selected Worlds were archived or deleted; non-retryable, no model call is made. */
     | 'worlds-changed'
+    /** A Character draft slug no longer resolves in Rules Data; non-retryable, no model call is made. */
+    | 'options-changed'
   message: string
 }
 
