@@ -7,6 +7,7 @@ import {
   type CharacterDraft,
   type WizardRules
 } from './draft.ts'
+import { ownedEquipment } from './equipment.ts'
 import { computeSteps, STEPS, type StepDefinition, type StepId, type StepState } from './steps.ts'
 
 /**
@@ -42,7 +43,8 @@ export class CharacterWizard {
       deriveStats(rules, this.resolved, {
         class: this.draft.class,
         level: this.draft.level,
-        baseScores: this.draft.baseScores
+        baseScores: this.draft.baseScores,
+        equipment: ownedEquipment(rules, this.draft, this.resolved)
       })
     )
     this.steps = $derived(

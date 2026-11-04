@@ -10,10 +10,10 @@
 
   let { wizard }: { wizard: CharacterWizard } = $props()
 
-  const model = $derived(buildSummary(wizard.rules, draftToSummaryData(wizard.draft)))
+  const model = $derived(buildSummary(wizard.rules, draftToSummaryData(wizard.rules, wizard.draft)))
   const payload = $derived.by(() => {
     try {
-      return JSON.stringify(draftToCharacterInput(wizard.draft))
+      return JSON.stringify(draftToCharacterInput(wizard.rules, wizard.draft))
     } catch {
       return null
     }

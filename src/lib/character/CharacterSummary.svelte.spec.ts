@@ -7,6 +7,7 @@ import backgrounds from '#lib/rules/data/backgrounds.json'
 import classLevels from '#lib/rules/data/classLevels.json'
 import classes from '#lib/rules/data/classes.json'
 import equipment from '#lib/rules/data/equipment.json'
+import equipmentCategories from '#lib/rules/data/equipmentCategories.json'
 import features from '#lib/rules/data/features.json'
 import languages from '#lib/rules/data/languages.json'
 import proficiencies from '#lib/rules/data/proficiencies.json'
@@ -27,6 +28,7 @@ const rules = {
   classLevels,
   classes,
   equipment,
+  equipmentCategories,
   features,
   languages,
   proficiencies,

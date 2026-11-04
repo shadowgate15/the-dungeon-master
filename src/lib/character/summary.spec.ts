@@ -79,7 +79,7 @@ describe('buildSummary for a saved Character', () => {
 
 describe('buildSummary for a draft', () => {
   it('leaves what is unknown pending instead of failing', () => {
-    const { stats } = buildSummary(rules, draftToSummaryData(emptyDraft()))
+    const { stats } = buildSummary(rules, draftToSummaryData(rules, emptyDraft()))
     expect(stats.hitPoints.status).toBe('pending')
   })
 })

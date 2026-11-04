@@ -1,15 +1,17 @@
 import type { CharacterInput } from '#lib/server/character/service.ts'
 import { ABILITY_KEYS } from '#lib/rules/derive-stats.ts'
 import type { Alignment } from './enums.ts'
-import type { CharacterDraft } from './draft.ts'
+import { resolverDraft, type CharacterDraft, type WizardRules } from './draft.ts'
+import { equipmentRows } from './equipment.ts'
+import { resolveFeatures } from '#lib/rules/resolver.ts'
 
 /**
  * Maps the wizard draft to the service's `CharacterInput`. Vocabulary differences live here:
  * draft `rolling` is service `roll`, draft `baseScores` is service `scores`. Throws when the draft
  * is incomplete (Review is only reachable when it is not). Steps that add draft fields (roll dice
- * #110, equipment #113, class spells #114, custom background) extend this mapper.
+ * #110, class spells #114, custom background) extend this mapper.
  */
-export function draftToCharacterInput(draft: CharacterDraft): CharacterInput {
+export function draftToCharacterInput(rules: WizardRules, draft: CharacterDraft): CharacterInput {
   const need = <T>(label: string, value: T | null): T => {
     if (value === null) throw new Error(`The draft has no ${label}`)
     return value
@@ -36,6 +38,7 @@ export function draftToCharacterInput(draft: CharacterDraft): CharacterInput {
     abilityMethod: method === 'rolling' ? 'roll' : method,
     scores,
     ...(rolls ? { abilityRolls: rolls } : {}),
-    picks: draft.picks
+    picks: draft.picks,
+    equipment: equipmentRows(rules, draft, resolveFeatures(rules, resolverDraft(draft)))
   }
 }

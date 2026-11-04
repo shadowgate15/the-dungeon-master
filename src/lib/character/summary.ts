@@ -1,7 +1,8 @@
 import type { CharacterDetail } from '#lib/server/character/service.ts'
 import { deriveStats, type DerivedStats } from '#lib/rules/derive-stats.ts'
 import { resolveFeatures, type ResolvedFeatures } from '#lib/rules/resolver.ts'
-import type { CharacterDraft, WizardRules } from './draft.ts'
+import { resolverDraft, type CharacterDraft, type WizardRules } from './draft.ts'
+import { equipmentRows, fixedEquipment } from './equipment.ts'
 
 /**
  * What the Character summary shows, in slugs: the same shape for an unsaved draft (Review step)
@@ -50,15 +51,14 @@ export interface SummaryModel {
   spells: { name: string; level: number }[]
 }
 
-export function draftToSummaryData(draft: CharacterDraft): SummaryData {
-  // Fields later steps add to the draft (equipment #113, class spells #114, custom background)
-  // are read structurally so this stays correct as they land.
-  const extra = draft as unknown as Partial<SummaryData> & {
-    equipment?: { item: string; quantity?: number }[]
-  }
+export function draftToSummaryData(rules: WizardRules, draft: CharacterDraft): SummaryData {
+  // Class spells (#114) and the custom background arrive with their steps; the draft has no field
+  // for them yet, so they are read structurally and stay absent until then.
+  const extra = draft as unknown as Partial<SummaryData>
+  const resolved = resolveFeatures(rules, resolverDraft(draft))
   return {
     ...draft,
-    equipment: extra.equipment?.map((e) => ({ item: e.item, quantity: e.quantity ?? 1 })),
+    equipment: equipmentRows(rules, draft, resolved),
     classSpells: extra.classSpells,
     customBackgroundName: extra.customBackgroundName,
     customBackgroundFeature: extra.customBackgroundFeature
@@ -99,11 +99,21 @@ export function buildSummary(rules: WizardRules, data: SummaryData): SummaryMode
     background: data.background,
     picks: data.picks
   })
+  // Picked rows plus the fixed class items and background package, which are not stored.
+  const owned = [
+    ...fixedEquipment(rules, data).flatMap((f) => f.items),
+    ...(data.equipment ?? [])
+  ].reduce<{ item: string; quantity: number }[]>((all, e) => {
+    const row = all.find((r) => r.item === e.item)
+    if (row) row.quantity += e.quantity
+    else all.push({ item: e.item, quantity: e.quantity })
+    return all
+  }, [])
   const stats = deriveStats(rules, resolved, {
     class: data.class,
     level: data.level,
     baseScores: data.baseScores,
-    equipment: data.equipment?.map((e) => e.item)
+    equipment: owned.map((e) => e.item)
   })
   const name = (list: readonly { slug: string; name: string }[], slug: string | null) =>
     slug === null ? null : (list.find((e) => e.slug === slug)?.name ?? slug)
@@ -125,7 +135,7 @@ export function buildSummary(rules: WizardRules, data: SummaryData): SummaryMode
       background: data.customBackgroundName || name(rules.backgrounds, data.background),
       alignment: name(rules.alignments, data.alignment)
     },
-    equipment: (data.equipment ?? []).map((e) => ({
+    equipment: owned.map((e) => ({
       name: name(rules.equipment, e.item) ?? e.item,
       quantity: e.quantity
     })),
