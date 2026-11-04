@@ -47,3 +47,11 @@ _Avoid_: Genre, theme, style
 **Length**:
 How much story a Campaign is meant to hold, one of: one-shot, short, medium, long. Ordered shortest to longest. one-shot is a single sitting; short is a few sessions; medium is a season of play; long is an open-ended saga. It measures story scope, not hours or session counts. The AI uses it to pace how much story to plan.
 _Avoid_: Duration, session count, size
+
+**Background**:
+A Character's history before adventuring. It grants two skill proficiencies, two tool or language proficiencies, a feature and a starting equipment package, and carries the Character's personality trait, ideal, bond and flaw. A Character has exactly one. The choices are Acolyte, the only background the SRD ships, or a Custom background.
+_Avoid_: Origin, past, profession
+
+**Custom background**:
+A Background the player builds from the SRD's customization rule rather than choosing Acolyte: a name, two skill proficiencies and two tool or language proficiencies (picked by the player, with code enforcing the counts and the rule that a duplicate proficiency must be replaced by another of the same kind), a feature written as narrative text with no mechanics, and a fixed equipment package. The AI may propose any of these as Proposals; nothing counts until the player accepts.
+_Avoid_: Homebrew background, new background
