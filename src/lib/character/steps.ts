@@ -214,7 +214,12 @@ export const STEPS: readonly StepDefinition[] = [
   { id: 'skills', label: 'Skills & features', validate: validateSkills },
   { id: 'equipment', label: 'Equipment', validate: validateEquipment },
   comingSoon('spells', 'Spells', { applies: castsAtLevel1 }),
-  comingSoon('review', 'Review', { unlock: 'all-valid' })
+  {
+    id: 'review',
+    label: 'Review',
+    unlock: 'all-valid',
+    validate: () => ({ state: 'valid', issues: [] })
+  }
 ]
 
 /**
