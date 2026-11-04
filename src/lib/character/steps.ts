@@ -1,5 +1,6 @@
 import type { DerivedStats } from '#lib/rules/derive-stats.ts'
 import type { ResolvedFeatures } from '#lib/rules/resolver.ts'
+import { validateEquipment } from './equipment.ts'
 import { LIMITS, type CharacterDraft, type WizardRules } from './draft.ts'
 
 /**
@@ -121,7 +122,7 @@ export const STEPS: readonly StepDefinition[] = [
   { id: 'concept', label: 'Concept', unlock: 'always', validate: validateConcept },
   comingSoon('abilities', 'Ability scores'),
   comingSoon('skills', 'Skills & features'),
-  comingSoon('equipment', 'Equipment'),
+  { id: 'equipment', label: 'Equipment', validate: validateEquipment },
   comingSoon('spells', 'Spells', { applies: castsAtLevel1 }),
   comingSoon('review', 'Review', { unlock: 'all-valid' })
 ]

@@ -1,6 +1,7 @@
 import type { Component } from 'svelte'
 import ComingSoonStep from './ComingSoonStep.svelte'
 import ConceptStep from './ConceptStep.svelte'
+import EquipmentStep from './EquipmentStep.svelte'
 import type { StepId } from './steps.ts'
 import type { CharacterWizard } from './wizard.svelte.ts'
 
@@ -14,7 +15,7 @@ export const STEP_VIEWS: Record<StepId, Component<{ wizard: CharacterWizard }>> 
   concept: ConceptStep,
   abilities: ComingSoonStep,
   skills: ComingSoonStep,
-  equipment: ComingSoonStep,
+  equipment: EquipmentStep,
   spells: ComingSoonStep,
   review: ComingSoonStep
 }

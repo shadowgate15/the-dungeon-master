@@ -1,6 +1,7 @@
 import type { AbilityKey, DeriveRules } from '#lib/rules/derive-stats.ts'
 import { resolveFeatures, type ResolverDraft, type ResolverRules } from '#lib/rules/resolver.ts'
 import type { RulesDataset } from '#lib/rules/schema.ts'
+import { reconcileEquipment, type EquipmentPick } from './equipment.ts'
 
 /**
  * The Character draft: the unsaved state of a Character while the wizard is open. Browser-only
@@ -30,10 +31,14 @@ export interface CharacterDraft {
   baseScores: Record<AbilityKey, number | null>
   // Feature choices (#112): full choice key to picked option slugs.
   picks: Record<string, string[]>
+  // Equipment (#113): full equipment choice key to the chosen option and wildcard items.
+  equipment: Record<string, EquipmentPick>
 }
 
 /** The Rules Data collections the wizard reads in the browser. */
-export type WizardRules = ResolverRules & DeriveRules & Pick<RulesDataset, 'alignments'>
+export type WizardRules = ResolverRules &
+  DeriveRules &
+  Pick<RulesDataset, 'alignments' | 'equipmentCategories'>
 
 /** The collection names a server load must hand the browser. */
 export const WIZARD_RULES_KEYS = [
@@ -51,6 +56,7 @@ export const WIZARD_RULES_KEYS = [
   'spells',
   'skills',
   'equipment',
+  'equipmentCategories',
   'alignments'
 ] as const satisfies readonly (keyof WizardRules)[]
 
@@ -83,7 +89,8 @@ export function emptyDraft(): CharacterDraft {
     level: 1,
     abilityMethod: null,
     baseScores: { str: null, dex: null, con: null, int: null, wis: null, cha: null },
-    picks: {}
+    picks: {},
+    equipment: {}
   }
 }
 
@@ -154,5 +161,9 @@ export function reconcile(rules: WizardRules, input: CharacterDraft): Reconciled
   for (const owner of owners) {
     notices.push(`Cleared your ${owner} choices: they no longer apply.`)
   }
+
+  const gear = reconcileEquipment(rules, draft)
+  draft.equipment = gear.equipment
+  notices.push(...gear.notices)
   return { draft, notices }
 }

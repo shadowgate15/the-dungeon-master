@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { deriveStats } from '#lib/rules/derive-stats.ts'
 import { resolveFeatures } from '#lib/rules/resolver.ts'
 import { loadDataset } from '#lib/rules/test-dataset.ts'
+import { ownedEquipment } from './equipment.ts'
 import { emptyDraft, reconcile, resolverDraft, type CharacterDraft } from './draft.ts'
 import { computeSteps, STEPS, type StepContext, type StepDefinition } from './steps.ts'
 
@@ -13,7 +14,8 @@ function ctxFor(patch: Partial<CharacterDraft>): StepContext {
   const stats = deriveStats(rules, resolved, {
     class: draft.class,
     level: draft.level,
-    baseScores: draft.baseScores
+    baseScores: draft.baseScores,
+    equipment: ownedEquipment(rules, draft, resolved)
   })
   return { rules, draft, resolved, stats }
 }
