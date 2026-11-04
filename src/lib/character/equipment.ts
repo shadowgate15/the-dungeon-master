@@ -23,6 +23,23 @@ export interface EquipmentPick {
 
 export type EquipmentOwner = 'class' | 'background'
 
+/** Full choice key of an equipment group: `${ownerType}/${ownerSlug}/${groupKey}`. */
+export const equipmentGroupKey = (ownerType: EquipmentOwner, ownerSlug: string, groupKey: string) =>
+  `${ownerType}/${ownerSlug}/${groupKey}`
+
+/**
+ * The full keys of an owner's equipment groups. Every one of them needs an option picked (#113);
+ * the wizard and the Character service both derive the required set from this.
+ */
+export const equipmentGroupKeys = (
+  ownerType: EquipmentOwner,
+  ownerSlug: string,
+  groups: { key: string; kind: string }[] = []
+) =>
+  groups
+    .filter((g) => g.kind === 'equipment')
+    .map((g) => equipmentGroupKey(ownerType, ownerSlug, g.key))
+
 /** One piece of an option: a fixed item, or `count` wildcard slots over an item category. */
 export type OptionLine =
   | { kind: 'item'; item: string; name: string; count: number }
@@ -156,7 +173,7 @@ export function equipmentGroups(
     )
     for (const g of owner?.choiceGroups ?? []) {
       if (g.kind !== 'equipment') continue
-      const key = `${ownerType}/${ownerSlug}/${g.key}`
+      const key = equipmentGroupKey(ownerType, ownerSlug, g.key)
       const options = g.options.map((o, index): EquipmentOption => {
         const lines = o.items.flatMap((i) => describeLine(rules, i) ?? [])
         const slots = lines.flatMap((l) =>
@@ -319,13 +336,14 @@ export function reconcileEquipment(
     ['background', draft.background]
   ]
   for (const [ownerType, ownerSlug] of owners) {
+    if (!ownerSlug) continue
     const owner = (ownerType === 'class' ? rules.classes : rules.backgrounds).find(
       (o) => o.slug === ownerSlug
     )
     for (const g of owner?.choiceGroups ?? []) {
       if (g.kind !== 'equipment') continue
       live.set(
-        `${ownerType}/${ownerSlug}/${g.key}`,
+        equipmentGroupKey(ownerType, ownerSlug, g.key),
         g.options.length === 1 ? slotCount(g.options[0].items) : null
       )
     }

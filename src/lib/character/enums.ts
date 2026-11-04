@@ -16,9 +16,6 @@ export const ALIGNMENTS = [
 /** Ability Score Methods; slugs match the app-authored Rules Data rows. */
 export const ABILITY_METHODS = ['standard-array', 'point-buy', 'roll'] as const
 
-/** The six abilities in canonical order; also the `character` score column names. */
-export const ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const
-
 /** Where a stored skill or spell pick comes from. */
 export const PICK_SOURCES = ['class', 'race', 'background'] as const
 
@@ -34,5 +31,4 @@ export const CUSTOM_BACKGROUND_FEATURE_MAX = 1000
 
 export type Alignment = (typeof ALIGNMENTS)[number]
 export type AbilityMethod = (typeof ABILITY_METHODS)[number]
-export type AbilityKey = (typeof ABILITIES)[number]
 export type PickSource = (typeof PICK_SOURCES)[number]

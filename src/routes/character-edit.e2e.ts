@@ -114,22 +114,10 @@ test('creates, edits and deletes a Character end to end', async ({ page }) => {
   await expect(page.getByRole('row').filter({ hasText: renamed })).toHaveCount(0)
 })
 
-const withHolySymbol = [
-  { choiceKey: 'class/fighter/equipment-0', item: 'chain-mail' },
-  { choiceKey: 'class/fighter/equipment-1', item: 'longsword' },
-  { choiceKey: 'class/fighter/equipment-1', item: 'shield' },
-  { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-light' },
-  { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-bolt', quantity: 20 },
-  { choiceKey: 'class/fighter/equipment-3', item: 'dungeoneers-pack' },
-  { choiceKey: 'background/acolyte/equipment-0', item: 'amulet' }
-]
-
 test('a changed race keeps a conflicting pick and flags it; a changed class clears and says so', async ({
   page
 }) => {
-  const created = await seedCharacter(page, `Reconcile ${Date.now()}`, {
-    equipment: withHolySymbol
-  })
+  const created = await seedCharacter(page, `Reconcile ${Date.now()}`)
   await openWizard(page, `/characters/${created.id}/edit`)
 
   // Elves already know Elvish, so the Acolyte's Elvish pick is kept and flagged, not dropped.
@@ -151,7 +139,7 @@ test('a changed race keeps a conflicting pick and flags it; a changed class clea
 })
 
 test('leaving with unsaved changes asks to discard, in-app and on tab close', async ({ page }) => {
-  const created = await seedCharacter(page, `Discard ${Date.now()}`, { equipment: withHolySymbol })
+  const created = await seedCharacter(page, `Discard ${Date.now()}`)
   await page.goto(`/characters/${created.id}`)
   await page.getByRole('link', { name: 'Edit', exact: true }).click()
   await page.waitForLoadState('networkidle')

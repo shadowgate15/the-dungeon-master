@@ -42,7 +42,8 @@ export async function seedCharacter(page: Page, name: string, over: Partial<Char
         { choiceKey: 'class/fighter/equipment-1', item: 'shield' },
         { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-light' },
         { choiceKey: 'class/fighter/equipment-2', item: 'crossbow-bolt', quantity: 20 },
-        { choiceKey: 'class/fighter/equipment-3', item: 'dungeoneers-pack' }
+        { choiceKey: 'class/fighter/equipment-3', item: 'dungeoneers-pack' },
+        { choiceKey: 'background/acolyte/equipment-0', item: 'amulet' }
       ],
       ...over
     })
