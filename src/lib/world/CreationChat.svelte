@@ -43,6 +43,8 @@
     onworldschanged?: () => void
     /** Called with the fields of the still-pending cards whenever they change (Character rail dot). */
     onpending?: (fields: string[]) => void
+    /** Renders a card's value for display (Character Roll cards); the raw value is still sent. */
+    formatValue?: (field: string, value: string) => string
     /** True when AI controls must be off (a reasoning model was detected). */
     disabled?: boolean
     /** Called when a turn shows the model is a reasoning model. */
@@ -65,6 +67,7 @@
     extraSystemPrompts,
     onworldschanged,
     onpending,
+    formatValue,
     disabled = false,
     onreasoningmodel,
     onunavailable,
@@ -289,7 +292,11 @@
             <ul aria-label="Proposals" class="space-y-1">
               {#each cards as card (card.id)}
                 <li>
-                  <ProposalCard label={labels[card.field]} value={card.value} status={card.status}>
+                  <ProposalCard
+                    label={labels[card.field]}
+                    value={formatValue?.(card.field, card.value) ?? card.value}
+                    status={card.status}
+                  >
                     {#snippet actions()}
                       {#if card.status === 'pending'}
                         <Button size="sm" onclick={() => accept(card.id)}>Accept</Button>

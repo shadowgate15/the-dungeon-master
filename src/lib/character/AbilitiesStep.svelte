@@ -9,6 +9,7 @@
     POINT_BUY,
     STANDARD_ARRAY,
     availableValues,
+    methodPatch,
     pointCost,
     pointsSpent,
     rollAbilityScores,
@@ -55,14 +56,7 @@
 
   function chooseMethod(next: DraftAbilityMethod) {
     if (next === method) return
-    // Base scores are specific to a method; the rolled set is kept (#95).
-    wizard.update({
-      abilityMethod: next,
-      baseScores:
-        next === 'point-buy'
-          ? { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }
-          : { ...unassigned }
-    })
+    wizard.update(methodPatch(next))
   }
 
   function setScore(key: AbilityKey, value: number | null) {
