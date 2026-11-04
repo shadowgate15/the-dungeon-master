@@ -71,3 +71,4 @@ export const worldCampaign = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.worldId, t.campaignId] })]
 )
+export * from './rules-schema'

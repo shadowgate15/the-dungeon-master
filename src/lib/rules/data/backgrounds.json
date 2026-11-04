@@ -1,0 +1,370 @@
+[
+  {
+    "slug": "acolyte",
+    "name": "Acolyte",
+    "appAuthored": false,
+    "description": null,
+    "feature": {
+      "name": "Shelter of the Faithful",
+      "description": [
+        "As an acolyte, you command the respect of those who share your faith, and you can perform the religious ceremonies of your deity. You and your adventuring companions can expect to receive free healing and care at a temple, shrine, or other established presence of your faith, though you must provide any material components needed for spells. Those who share your religion will support you (but only you) at a modest lifestyle.",
+        "You might also have ties to a specific temple dedicated to your chosen deity or pantheon, and you have a residence there. This could be the temple where you used to serve, if you remain on good terms with it, or a temple where you have found a new home. While near your temple, you can call upon the priests for assistance, provided the assistance you ask for is not hazardous and you remain in good standing with your temple."
+      ]
+    },
+    "proficiencies": [
+      "skill-insight",
+      "skill-religion"
+    ],
+    "startingEquipment": [
+      {
+        "item": "clothes-common",
+        "quantity": 1
+      },
+      {
+        "item": "pouch",
+        "quantity": 1
+      }
+    ],
+    "startingGoldQuantity": 15,
+    "startingGoldUnit": "gp",
+    "options": [
+      {
+        "kind": "personalityTrait",
+        "text": "I idolize a particular hero of my faith, and constantly refer to that person's deeds and example.",
+        "alignments": []
+      },
+      {
+        "kind": "personalityTrait",
+        "text": "I can find common ground between the fiercest enemies, empathizing with them and always working toward peace.",
+        "alignments": []
+      },
+      {
+        "kind": "personalityTrait",
+        "text": "I see omens in every event and action. The gods try to speak to us, we just need to listen.",
+        "alignments": []
+      },
+      {
+        "kind": "personalityTrait",
+        "text": "Nothing can shake my optimistic attitude.",
+        "alignments": []
+      },
+      {
+        "kind": "personalityTrait",
+        "text": "I quote (or misquote) sacred texts and proverbs in almost every situation.",
+        "alignments": []
+      },
+      {
+        "kind": "personalityTrait",
+        "text": "I am tolerant (or intolerant) of other faiths and respect (or condemn) the worship of other gods.",
+        "alignments": []
+      },
+      {
+        "kind": "personalityTrait",
+        "text": "I've enjoyed fine food, drink, and high society among my temple's elite. Rough living grates on me.",
+        "alignments": []
+      },
+      {
+        "kind": "personalityTrait",
+        "text": "I've spent so long in the temple that I have little practical experience dealing with people in the outside world.",
+        "alignments": []
+      },
+      {
+        "kind": "ideal",
+        "text": "Tradition. The ancient traditions of worship and sacrifice must be preserved and upheld.",
+        "alignments": [
+          "lawful-good",
+          "lawful-neutral",
+          "lawful-evil"
+        ]
+      },
+      {
+        "kind": "ideal",
+        "text": "Charity. I always try to help those in need, no matter what the personal cost.",
+        "alignments": [
+          "lawful-good",
+          "neutral-good",
+          "chaotic-good"
+        ]
+      },
+      {
+        "kind": "ideal",
+        "text": "Change. We must help bring about the changes the gods are constantly working in the world.",
+        "alignments": [
+          "chaotic-good",
+          "chaotic-neutral",
+          "chaotic-evil"
+        ]
+      },
+      {
+        "kind": "ideal",
+        "text": "Power. I hope to one day rise to the top of my faith's religious hierarchy.",
+        "alignments": [
+          "lawful-good",
+          "lawful-neutral",
+          "lawful-evil"
+        ]
+      },
+      {
+        "kind": "ideal",
+        "text": "Faith. I trust that my deity will guide my actions. I have faith that if I work hard, things will go well.",
+        "alignments": [
+          "lawful-good",
+          "lawful-neutral",
+          "lawful-evil"
+        ]
+      },
+      {
+        "kind": "ideal",
+        "text": "Aspiration. I seek to prove myself worthy of my god's favor by matching my actions against his or her teachings.",
+        "alignments": [
+          "lawful-good",
+          "neutral-good",
+          "chaotic-good",
+          "lawful-neutral",
+          "neutral",
+          "chaotic-neutral",
+          "lawful-evil",
+          "neutral-evil",
+          "chaotic-evil"
+        ]
+      },
+      {
+        "kind": "bond",
+        "text": "I would die to recover an ancient relic of my faith that was lost long ago.",
+        "alignments": []
+      },
+      {
+        "kind": "bond",
+        "text": "I will someday get revenge on the corrupt temple hierarchy who branded me a heretic.",
+        "alignments": []
+      },
+      {
+        "kind": "bond",
+        "text": "I owe my life to the priest who took me in when my parents died.",
+        "alignments": []
+      },
+      {
+        "kind": "bond",
+        "text": "Everything I do is for the common people.",
+        "alignments": []
+      },
+      {
+        "kind": "bond",
+        "text": "I will do anything to protect the temple where I served.",
+        "alignments": []
+      },
+      {
+        "kind": "bond",
+        "text": "I seek to preserve a sacred text that my enemies consider heretical and seek to destroy.",
+        "alignments": []
+      },
+      {
+        "kind": "flaw",
+        "text": "I judge others harshly, and myself even more severely.",
+        "alignments": []
+      },
+      {
+        "kind": "flaw",
+        "text": "I put too much trust in those who wield power within my temple's hierarchy.",
+        "alignments": []
+      },
+      {
+        "kind": "flaw",
+        "text": "My piety sometimes leads me to blindly trust those that profess faith in my god.",
+        "alignments": []
+      },
+      {
+        "kind": "flaw",
+        "text": "I am inflexible in my thinking.",
+        "alignments": []
+      },
+      {
+        "kind": "flaw",
+        "text": "I am suspicious of strangers and expect the worst of them.",
+        "alignments": []
+      },
+      {
+        "kind": "flaw",
+        "text": "Once I pick a goal, I become obsessed with it to the detriment of everything else in my life.",
+        "alignments": []
+      }
+    ],
+    "choiceGroups": [
+      {
+        "key": "language-0",
+        "kind": "language",
+        "choose": 2,
+        "description": null,
+        "options": [
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "common"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "dwarvish"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "elvish"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "giant"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "gnomish"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "goblin"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "halfling"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "orc"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "abyssal"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "celestial"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "draconic"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "deep-speech"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "infernal"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "primordial"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "sylvan"
+              }
+            ]
+          },
+          {
+            "items": [
+              {
+                "type": "language",
+                "language": "undercommon"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "equipment-0",
+        "kind": "equipment",
+        "choose": 1,
+        "description": null,
+        "options": [
+          {
+            "items": [
+              {
+                "type": "equipmentCategory",
+                "category": "holy-symbols",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "custom",
+    "name": "Custom background",
+    "appAuthored": true,
+    "description": "Build your own background from the SRD customization rule: a name, two skill proficiencies, two tool or language proficiencies, and a feature you write yourself.",
+    "feature": null,
+    "proficiencies": [],
+    "startingEquipment": [
+      {
+        "item": "clothes-common",
+        "quantity": 1
+      },
+      {
+        "item": "pouch",
+        "quantity": 1
+      }
+    ],
+    "startingGoldQuantity": 15,
+    "startingGoldUnit": "gp",
+    "options": [],
+    "choiceGroups": []
+  }
+]
