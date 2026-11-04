@@ -70,9 +70,9 @@
       {#each characters as character (character.id)}
         <tr class="border-b border-border align-top">
           <td class="max-w-xs p-2">
-            <!-- The summary page is a later ticket, so the route is not yet in the typed list. -->
-            <Link href="{resolve('/characters')}/{character.id}" class="font-medium text-text"
-              >{character.name}</Link
+            <Link
+              href={resolve('/characters/[id]', { id: character.id })}
+              class="font-medium text-text">{character.name}</Link
             >
             <p class="truncate text-xs text-muted">{summary(character)}</p>
           </td>

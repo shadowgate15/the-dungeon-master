@@ -49,8 +49,7 @@
   <SectionNav current="characters" />
   <div class="flex items-center justify-between">
     <h1 class="font-display text-2xl">Characters</h1>
-    <!-- The wizard route is built in a parallel ticket. -->
-    <Button href="{resolve('/characters')}/new">New Character</Button>
+    <Button href={resolve('/characters/new')}>New Character</Button>
   </div>
 
   <CharacterTable
