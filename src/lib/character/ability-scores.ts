@@ -56,6 +56,20 @@ export function rollAbilityScores(random: () => number = Math.random): number[][
   )
 }
 
+/**
+ * The draft patch for choosing a method: base scores are specific to a method (point buy starts
+ * at 8s), the rolled set is kept (#95).
+ */
+export function methodPatch(next: DraftAbilityMethod): Partial<CharacterDraft> {
+  return {
+    abilityMethod: next,
+    baseScores:
+      next === 'point-buy'
+        ? { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }
+        : { str: null, dex: null, con: null, int: null, wis: null, cha: null }
+  }
+}
+
 /** One roll's score: the dice sum without the lowest die. */
 export function rollTotal(dice: readonly number[]): number {
   return [...dice]

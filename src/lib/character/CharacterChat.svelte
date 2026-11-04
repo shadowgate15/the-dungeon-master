@@ -4,8 +4,9 @@
   import CreationChat from '#lib/world/CreationChat.svelte'
   import {
     FIELD_LABELS,
+    formatCardValue,
     isConversationStep,
-    patchFor,
+    acceptPatch,
     seedOf,
     STEP_FIELDS,
     type ConversationStep
@@ -45,7 +46,8 @@
     {/if}
     <CreationChat
       {seed}
-      onaccept={(field, value) => wizard.update(patchFor(field, value))}
+      onaccept={(field, value) => wizard.update(acceptPatch(wizard.draft, field, value))}
+      formatValue={formatCardValue}
       endpoint="/api/character-creation"
       labels={FIELD_LABELS}
       subject="Character"

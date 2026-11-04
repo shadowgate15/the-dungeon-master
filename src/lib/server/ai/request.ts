@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { CAMPAIGN_SEED_FIELDS } from '#lib/campaign/seed.ts'
+import { ABILITY_KEYS } from '#lib/character/ability-scores.ts'
 import { ALL_FIELDS, CONVERSATION_STEPS } from '#lib/character/conversation.ts'
 import { LIMITS } from '#lib/character/draft.ts'
 import { SEED_FIELDS } from '#lib/world/seed.ts'
@@ -83,7 +84,21 @@ const draftSchema = z.object({
   alignment: slugOrNull,
   appearance: z.string().max(LIMITS.appearance * 2),
   personality: z.string().max(LIMITS.personality * 2),
-  backstory: z.string().max(LIMITS.backstory * 2)
+  backstory: z.string().max(LIMITS.backstory * 2),
+  // Ability scores (#118)
+  abilityMethod: z.enum(['standard-array', 'point-buy', 'rolling']).nullable().optional(),
+  baseScores: z
+    .object(
+      Object.fromEntries(
+        ABILITY_KEYS.map((k) => [k, z.number().int().min(0).max(30).nullable()])
+      ) as Record<(typeof ABILITY_KEYS)[number], z.ZodNullable<z.ZodNumber>>
+    )
+    .optional(),
+  abilityRolls: z
+    .array(z.array(z.number().int().min(1).max(6)).length(4))
+    .max(6)
+    .nullable()
+    .optional()
 })
 const character = requestSchemas(ALL_FIELDS as unknown as readonly [string, ...string[]], {
   step: z.enum(CONVERSATION_STEPS),
