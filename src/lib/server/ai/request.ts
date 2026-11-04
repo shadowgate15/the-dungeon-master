@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { CAMPAIGN_SEED_FIELDS } from '#lib/campaign/seed.ts'
+import { ALL_FIELDS, CONVERSATION_STEPS } from '#lib/character/conversation.ts'
+import { LIMITS } from '#lib/character/draft.ts'
 import { SEED_FIELDS } from '#lib/world/seed.ts'
 import { SUMMARY_MAX } from './world-conversation.ts'
 
@@ -65,3 +67,27 @@ const campaign = requestSchemas(CAMPAIGN_SEED_FIELDS, {
 })
 export const campaignTurnRequestSchema = campaign.turn
 export const campaignCompactRequestSchema = campaign.compact
+
+/**
+ * The Character draft is browser-only, so it is sent every turn (with the active step) and
+ * bounded here. Unknown keys are stripped: a step that adds draft fields adds them below.
+ */
+const slugOrNull = z.string().max(100).nullable()
+const draftSchema = z.object({
+  name: z.string().max(LIMITS.name),
+  race: slugOrNull,
+  subrace: slugOrNull,
+  class: slugOrNull,
+  subclass: slugOrNull,
+  background: slugOrNull,
+  alignment: slugOrNull,
+  appearance: z.string().max(LIMITS.appearance * 2),
+  personality: z.string().max(LIMITS.personality * 2),
+  backstory: z.string().max(LIMITS.backstory * 2)
+})
+const character = requestSchemas(ALL_FIELDS as unknown as readonly [string, ...string[]], {
+  step: z.enum(CONVERSATION_STEPS),
+  draft: draftSchema
+})
+export const characterTurnRequestSchema = character.turn
+export const characterCompactRequestSchema = character.compact

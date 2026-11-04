@@ -41,6 +41,8 @@
     extraSystemPrompts?: string[]
     /** Called when a turn fails because the selected Worlds changed (Campaign only). */
     onworldschanged?: () => void
+    /** Called with the fields of the still-pending cards whenever they change (Character rail dot). */
+    onpending?: (fields: string[]) => void
     /** True when AI controls must be off (a reasoning model was detected). */
     disabled?: boolean
     /** Called when a turn shows the model is a reasoning model. */
@@ -62,6 +64,7 @@
     extraBody,
     extraSystemPrompts,
     onworldschanged,
+    onpending,
     disabled = false,
     onreasoningmodel,
     onunavailable,
@@ -98,6 +101,10 @@
   const canCompact = $derived(history.length - KEEP_MESSAGES > conversation.summarizedCount)
   const locked = $derived(disabled || blocked !== null || finished)
 
+  $effect(() => {
+    onpending?.(pendingProposals(conversation).map((p) => p.field))
+  })
+
   function contextPayload() {
     return {
       summary: conversation.summary ?? undefined,
@@ -109,7 +116,9 @@
   const FAILURE_TEXT: Record<string, string> = {
     timeout: 'The assistant took too long to reply.',
     cancelled: 'Stopped before the assistant replied.',
-    'worlds-changed': 'A selected World was archived or deleted. Reload the Worlds and try again.'
+    'worlds-changed': 'A selected World was archived or deleted. Reload the Worlds and try again.',
+    'options-changed':
+      'A choice in your draft is no longer in the Rules Data. Review it and try again.'
   }
 
   async function send(message: string) {
