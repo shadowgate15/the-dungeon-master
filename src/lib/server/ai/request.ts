@@ -98,7 +98,23 @@ const draftSchema = z.object({
     .array(z.array(z.number().int().min(1).max(6)).length(4))
     .max(6)
     .nullable()
-    .optional()
+    .optional(),
+  // Feature choices, equipment and class spells (#117)
+  picks: z
+    .record(z.string().max(120), z.array(z.string().max(100)).max(20))
+    .refine((r) => Object.keys(r).length <= 60)
+    .optional(),
+  equipment: z
+    .record(
+      z.string().max(120),
+      z.object({
+        option: z.number().int().min(0).max(20),
+        wild: z.array(z.string().max(100).nullable()).max(10)
+      })
+    )
+    .refine((r) => Object.keys(r).length <= 30)
+    .optional(),
+  classSpells: z.array(z.string().max(100)).max(40).optional()
 })
 const character = requestSchemas(ALL_FIELDS as unknown as readonly [string, ...string[]], {
   step: z.enum(CONVERSATION_STEPS),

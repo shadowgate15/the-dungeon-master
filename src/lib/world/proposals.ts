@@ -165,6 +165,26 @@ export function dismissCard(state: ConversationState, id: string): ConversationS
   return settle(state, id, 'dismissed').state
 }
 
+/**
+ * Drops pending cards that an earlier change made impossible to accept (Character creation).
+ * `isStale` gets the pending cards in order and returns one flag each. A dropped card becomes
+ * `superseded`: it is no longer offered or sent, and it is not a dismissal, so the model is not
+ * told to avoid it. Returns the same state object when nothing is stale.
+ */
+export function dropStaleCards(
+  state: ConversationState,
+  isStale: (pending: DismissedNote[]) => boolean[]
+): ConversationState {
+  const pending = state.cards.filter((c) => c.status === 'pending')
+  const flags = isStale(pending.map(({ field, value }) => ({ field, value })))
+  const stale = new Set(pending.filter((_, i) => flags[i]).map((c) => c.id))
+  if (stale.size === 0) return state
+  return {
+    ...state,
+    cards: state.cards.map((c) => (stale.has(c.id) ? { ...c, status: 'superseded' as const } : c))
+  }
+}
+
 export function dismissedNotes(state: ConversationState): DismissedNote[] {
   return state.cards
     .filter((c) => c.status === 'dismissed')
