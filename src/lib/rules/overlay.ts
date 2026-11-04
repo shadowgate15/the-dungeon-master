@@ -11,7 +11,7 @@ import { slug } from './schema.ts'
  * `character_choice.choice_key`.
  */
 
-export const OVERLAY_OWNER_TYPES = ['class', 'race', 'trait', 'subclass'] as const
+export const OVERLAY_OWNER_TYPES = ['class', 'race', 'trait', 'subclass', 'background'] as const
 
 const overlayOption = z.strictObject({
   slug,
@@ -33,10 +33,16 @@ const overlayOptions = z.discriminatedUnion('from', [
   /** Wizard cantrips (High Elf). */
   z.strictObject({ from: z.literal('wizardCantrips') }),
   /** The Character's proficient skills, plus thieves' tools (Rogue expertise). */
-  z.strictObject({ from: z.literal('expertise') })
+  z.strictObject({ from: z.literal('expertise') }),
+  /** Every skill proficiency (Custom background). */
+  z.strictObject({ from: z.literal('skills') }),
+  /** Tool proficiencies plus Standard languages, one pool (Custom background). */
+  z.strictObject({ from: z.literal('toolsAndLanguages') })
 ])
 
 export const OVERLAY_KINDS = [
+  'skill',
+  'toolOrLanguage',
   'feature',
   'creatureType',
   'terrain',
@@ -138,6 +144,28 @@ const rawGroups: OverlayGroup[] = [
     description: 'Otherworldly Patron',
     source: 'SRD p.46',
     options: { from: 'subclasses' }
+  },
+  // Custom background (SRD p.60): two skills and two tools or languages. The Rules Data row has no
+  // choice groups of its own, so they live here.
+  {
+    ownerType: 'background',
+    ownerSlug: 'custom',
+    key: 'skills-0',
+    kind: 'skill',
+    choose: 2,
+    description: 'Custom background: two skill proficiencies',
+    source: 'SRD p.60',
+    options: { from: 'skills' }
+  },
+  {
+    ownerType: 'background',
+    ownerSlug: 'custom',
+    key: 'toolsOrLanguages-0',
+    kind: 'toolOrLanguage',
+    choose: 2,
+    description: 'Custom background: two tool proficiencies or languages',
+    source: 'SRD p.60',
+    options: { from: 'toolsAndLanguages' }
   },
   // Fighter (SRD p.24).
   {

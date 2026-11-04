@@ -60,6 +60,77 @@ describe('Concept validity', () => {
   })
 })
 
+describe('Skills & features validity', () => {
+  const picks = {
+    'class/fighter/proficiency-0': ['skill-athletics', 'skill-intimidation'],
+    'class/fighter/fightingStyle-0': ['fighter-fighting-style-defense'],
+    'race/human/language-0': ['dwarvish'],
+    'background/acolyte/language-0': ['elvish', 'gnomish']
+  }
+  const skills = (patch: Partial<CharacterDraft>) =>
+    computeSteps(ctxFor({ ...complete, ...patch })).find((s) => s.id === 'skills')!
+
+  it('is incomplete with exact counts missing, and names what is missing', () => {
+    const s = skills({})
+    expect(s.status).toBe('incomplete')
+    expect(s.issues.join(' ')).toMatch(/Fighting Style/i)
+  })
+
+  it('is incomplete when a group has fewer picks than its count', () => {
+    expect(
+      skills({ picks: { ...picks, 'class/fighter/proficiency-0': ['skill-athletics'] } }).status
+    ).toBe('incomplete')
+  })
+
+  it('is valid with every pick made', () => {
+    expect(skills({ picks }).status).toBe('valid')
+  })
+
+  it('needs attention (blocking Review) when a pick repeats another source', () => {
+    const s = skills({
+      picks: { ...picks, 'background/acolyte/language-0': ['common', 'gnomish'] }
+    })
+    expect(s.status).toBe('attention')
+    expect(s.issues.join(' ')).toMatch(/Common/)
+  })
+
+  it('does not count the subclass chooser or spell picks', () => {
+    expect(skills({ class: 'cleric', picks: {} }).issues.join(' ')).not.toMatch(/Divine Domain/)
+  })
+
+  describe('custom background', () => {
+    const custom = {
+      background: 'custom',
+      customBackgroundName: 'Wanderer',
+      customBackgroundFeature: 'You know the roads.',
+      picks: {
+        ...picks,
+        'background/custom/skills-0': ['skill-arcana', 'skill-history'],
+        'background/custom/toolsOrLanguages-0': ['thieves-tools', 'halfling']
+      }
+    }
+
+    it('is valid with a name, a feature and the exact picks', () => {
+      expect(skills(custom).status).toBe('valid')
+    })
+
+    it('requires a name and a feature', () => {
+      const noName = skills({ ...custom, customBackgroundName: ' ' })
+      expect(noName.status).toBe('incomplete')
+      expect(noName.issues.join(' ')).toMatch(/name/i)
+      const noFeature = skills({ ...custom, customBackgroundFeature: '' })
+      expect(noFeature.issues.join(' ')).toMatch(/feature/i)
+    })
+
+    it('needs attention when the text is over its limit', () => {
+      expect(skills({ ...custom, customBackgroundName: 'x'.repeat(81) }).status).toBe('attention')
+      expect(skills({ ...custom, customBackgroundFeature: 'x'.repeat(1001) }).status).toBe(
+        'attention'
+      )
+    })
+  })
+})
+
 describe('step statuses and gating', () => {
   it('locks every step after Concept until Concept is valid', () => {
     expect(states({})).toMatchObject({

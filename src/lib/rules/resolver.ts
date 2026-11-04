@@ -47,6 +47,7 @@ export type GrantSource = 'race' | 'class' | 'background'
 export type GroupKind =
   | 'skill'
   | 'tool'
+  | 'toolOrLanguage'
   | 'language'
   | 'abilityBonus'
   | 'feature'
@@ -185,6 +186,9 @@ export interface ResolvedFeatures {
 }
 
 const STRUCTURAL = ['race', 'subrace', 'class', 'subclass', 'background'] as const
+
+/** Proficiency types that are not tools (everything else, vehicles and kits included, is). */
+const NON_TOOL_TYPES = new Set(['Skills', 'Armor', 'Weapons', 'Saving Throws'])
 
 const byKey = <T extends { slug: string }>(rows: readonly T[]) =>
   new Map(rows.map((r) => [r.slug, r]))
@@ -399,6 +403,17 @@ export function resolveFeatures(rules: ResolverRules, draft: ResolverDraft): Res
         case 'expertise':
           options = [] // Computed once every other group is resolved.
           break
+        case 'skills':
+          options = rules.proficiencies
+            .filter((p) => p.type === 'Skills')
+            .map((p) => ({ slug: p.slug, name: p.name }))
+          break
+        case 'toolsAndLanguages':
+          options = [
+            ...rules.proficiencies.filter((p) => !NON_TOOL_TYPES.has(p.type)),
+            ...rules.languages.filter((l) => l.type === 'Standard')
+          ].map((o) => ({ slug: o.slug, name: o.name }))
+          break
       }
       rawGroups.push({
         key: choiceKey(g.ownerType, g.ownerSlug, g.key),
@@ -478,6 +493,7 @@ export function resolveFeatures(rules: ResolverRules, draft: ResolverDraft): Res
   if (background) {
     background.proficiencies.forEach((p) => addProficiency(p, 'background', 'fixed', null))
     dataGroups('background', background.slug, background.choiceGroups, 'background')
+    overlayGroups('background', background.slug, 'background')
     if (background.feature) {
       featureList.push({
         slug: background.slug,
@@ -501,23 +517,28 @@ export function resolveFeatures(rules: ResolverRules, draft: ResolverDraft): Res
     g.key === subclassKey ? (draft.subclass ? [draft.subclass] : []) : picksOf(g.key)
 
   // Which group (other than itself) picked a namespaced thing, for conflicts and disabling.
-  const ns = (g: RawGroup) =>
+  const isLanguage = (slug: string) => languages.has(slug) && !proficiencies.has(slug)
+  /** The namespace a pick lives in; one pool group (tool or language) decides per option. */
+  const spaceOf = (g: { kind: GroupKind }, slug: string) =>
     g.kind === 'language'
       ? 'language'
-      : g.kind === 'skill' || g.kind === 'tool'
-        ? 'proficiency'
-        : null
+      : g.kind === 'toolOrLanguage'
+        ? isLanguage(slug)
+          ? 'language'
+          : 'proficiency'
+        : g.kind === 'skill' || g.kind === 'tool'
+          ? 'proficiency'
+          : null
   const fixedTaken = new Set<string>([
     ...proficiencyList.map((p) => `proficiency:${p.slug}`),
     ...languageList.map((l) => `language:${l.slug}`)
   ])
   const chosenBy = new Map<string, string[]>()
   for (const g of live) {
-    const space = ns(g)
-    if (!space) continue
     const valid = new Set(g.options.map((o) => o.slug))
     for (const slug of new Set(picksFor(g))) {
-      if (!valid.has(slug)) continue
+      const space = spaceOf(g, slug)
+      if (!space || !valid.has(slug)) continue
       const id = `${space}:${slug}`
       chosenBy.set(id, [...(chosenBy.get(id) ?? []), g.key])
     }
@@ -527,7 +548,6 @@ export function resolveFeatures(rules: ResolverRules, draft: ResolverDraft): Res
     g: RawGroup,
     options: Omit<ResolvedOption, 'disabled'>[]
   ): ResolvedGroup => {
-    const space = ns(g)
     const picks = picksFor(g)
     const optionSlugs = new Set(options.map((o) => o.slug))
     const issues: GroupIssue[] = []
@@ -542,6 +562,7 @@ export function resolveFeatures(rules: ResolverRules, draft: ResolverDraft): Res
         issues.push({ type: 'unknown-option', slug })
         continue
       }
+      const space = spaceOf(g, slug)
       if (space) {
         const id = `${space}:${slug}`
         if (fixedTaken.has(id)) issues.push({ type: 'conflict', slug, with: 'granted' })
@@ -554,6 +575,7 @@ export function resolveFeatures(rules: ResolverRules, draft: ResolverDraft): Res
     if (new Set(picks).size > g.choose) issues.push({ type: 'excess' })
     const resolved: ResolvedOption[] = options.map((o) => {
       let disabled: OptionDisabled | null = null
+      const space = spaceOf(g, o.slug)
       if (space) {
         const id = `${space}:${o.slug}`
         if (fixedTaken.has(id)) disabled = 'granted'
@@ -604,10 +626,10 @@ export function resolveFeatures(rules: ResolverRules, draft: ResolverDraft): Res
     )
     .forEach((p) => toolProficiencies.add(p.slug))
   for (const g of live) {
-    if (g.kind !== 'tool') continue
+    if (g.kind !== 'tool' && g.kind !== 'toolOrLanguage') continue
     const valid = new Set(g.options.map((o) => o.slug))
     picksFor(g)
-      .filter((s) => valid.has(s))
+      .filter((s) => valid.has(s) && !isLanguage(s))
       .forEach((s) => toolProficiencies.add(s))
   }
 
@@ -648,6 +670,13 @@ export function resolveFeatures(rules: ResolverRules, draft: ResolverDraft): Res
       case 'skill':
       case 'tool':
         picks.forEach((s) => addProficiency(s, g.source, 'choice', g.key))
+        break
+      case 'toolOrLanguage':
+        picks.forEach((s) =>
+          isLanguage(s)
+            ? addLanguage(s, g.source, 'choice', g.key)
+            : addProficiency(s, g.source, 'choice', g.key)
+        )
         break
       case 'language':
         picks.forEach((s) => addLanguage(s, g.source, 'choice', g.key))

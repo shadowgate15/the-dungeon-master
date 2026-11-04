@@ -39,6 +39,28 @@ describe('reconcile', () => {
     expect(notices).toEqual([])
   })
 
+  it('starts without custom background text, and drops it when the background is not custom', () => {
+    expect(emptyDraft()).toMatchObject({ customBackgroundName: '', customBackgroundFeature: '' })
+    const kept = reconcile(
+      rules,
+      draftWith({
+        background: 'custom',
+        customBackgroundName: 'Wanderer',
+        customBackgroundFeature: 'x'
+      })
+    )
+    expect(kept.draft.customBackgroundName).toBe('Wanderer')
+    const { draft } = reconcile(
+      rules,
+      draftWith({
+        background: 'acolyte',
+        customBackgroundName: 'Wanderer',
+        customBackgroundFeature: 'x'
+      })
+    )
+    expect(draft).toMatchObject({ customBackgroundName: '', customBackgroundFeature: '' })
+  })
+
   it('clears picks whose choice no longer exists and says so', () => {
     const key = 'class/fighter/fightingStyle-0'
     const before = draftWith({ class: 'wizard', picks: { [key]: ['fighting-style-defense'] } })

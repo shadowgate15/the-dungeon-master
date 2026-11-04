@@ -35,6 +35,9 @@ export interface CharacterDraft {
   picks: Record<string, string[]>
   // Equipment (#113): full equipment choice key to the chosen option and wildcard items.
   equipment: Record<string, EquipmentPick>
+  /** Custom background (#94): required only while `background` is `custom`, empty otherwise. */
+  customBackgroundName: string
+  customBackgroundFeature: string
 }
 
 /** The Rules Data collections the wizard reads in the browser. */
@@ -70,7 +73,9 @@ export const LIMITS = {
   ideal: 500,
   bond: 500,
   flaw: 500,
-  backstory: 2000
+  backstory: 2000,
+  customBackgroundName: 80,
+  customBackgroundFeature: 1000
 } as const
 
 export function emptyDraft(): CharacterDraft {
@@ -93,7 +98,9 @@ export function emptyDraft(): CharacterDraft {
     baseScores: { str: null, dex: null, con: null, int: null, wis: null, cha: null },
     abilityRolls: null,
     picks: {},
-    equipment: {}
+    equipment: {},
+    customBackgroundName: '',
+    customBackgroundFeature: ''
   }
 }
 
@@ -137,6 +144,12 @@ export function reconcile(rules: WizardRules, input: CharacterDraft): Reconciled
       `Cleared the subclass ${nameOf(rules.subclasses, draft.subclass)}: it no longer fits your class.`
     )
     draft.subclass = null
+  }
+
+  // The service rejects custom background text on any other background.
+  if (draft.background !== 'custom') {
+    draft.customBackgroundName = ''
+    draft.customBackgroundFeature = ''
   }
 
   const resolved = resolveFeatures(rules, resolverDraft(draft))
