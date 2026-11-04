@@ -47,3 +47,7 @@ _Avoid_: Genre, theme, style
 **Length**:
 How much story a Campaign is meant to hold, one of: one-shot, short, medium, long. Ordered shortest to longest. one-shot is a single sitting; short is a few sessions; medium is a season of play; long is an open-ended saga. It measures story scope, not hours or session counts. The AI uses it to pace how much story to plan.
 _Avoid_: Duration, session count, size
+
+**Roll card**:
+A set of six ability score rolls made by code at the AI's request during the Character creation conversation and shown as a card the player can accept or dismiss. Accepting it records it as the Character's rolled set, replacing any earlier one; dismissing it discards it. Like a Proposal, it changes nothing until accepted.
+_Avoid_: AI roll, dice result
