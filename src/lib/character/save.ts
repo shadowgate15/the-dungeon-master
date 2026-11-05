@@ -37,7 +37,8 @@ export function draftToCharacterInput(rules: WizardRules, draft: CharacterDraft)
     background: need('background', draft.background),
     abilityMethod: method === 'rolling' ? 'roll' : method,
     scores,
-    ...(rolls ? { abilityRolls: rolls } : {}),
+    // The draft keeps the rolled set across method switches; only the roll method may save it.
+    ...(method === 'rolling' && rolls ? { abilityRolls: rolls } : {}),
     // Required by the service for the custom background and forbidden otherwise.
     ...(custom
       ? {
