@@ -452,15 +452,25 @@ const spellsModule: StepModule = {
     const problems = flags.map((f) => f.reason)
     const flagged = new Set(flags.map((f) => f.slug))
     const allowance = spellAllowance(wizard, full.class)
-    const count = (level: 0 | 1) =>
+    const named = (level: 0 | 1) =>
       slugs.filter(
         (s) => !flagged.has(s) && wizard.spells.find((x) => x.slug === s)?.level === level
-      ).length
+      )
+    const count = (level: 0 | 1) => named(level).length
+    // Small models miscount because they mix the two lists; show how each slug was classified.
+    const tally = (level: 0 | 1) => {
+      const list = named(level)
+      return `${list.length}${list.length ? ` (${list.join(', ')})` : ''}`
+    }
     if (count(0) !== allowance.cantrips) {
-      problems.push(`Pick exactly ${allowance.cantrips} cantrips, you proposed ${count(0)}.`)
+      problems.push(
+        `Pick exactly ${allowance.cantrips} cantrips, you proposed ${tally(0)}. Cantrips come only from the "Cantrips" list.`
+      )
     }
     if (count(1) !== allowance.spells) {
-      problems.push(`Pick exactly ${allowance.spells} level 1 spells, you proposed ${count(1)}.`)
+      problems.push(
+        `Pick exactly ${allowance.spells} level 1 spells, you proposed ${tally(1)}. Level 1 spells come only from the "Level 1 spells" list.`
+      )
     }
     return problems
   }

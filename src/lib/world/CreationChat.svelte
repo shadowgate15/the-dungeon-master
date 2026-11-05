@@ -209,7 +209,10 @@
 
   function failureText(failure: TurnFailure | null) {
     if (failure?.kind === 'reasoning-model') return failure.message
-    return (failure && FAILURE_TEXT[failure.kind]) ?? 'The assistant could not reply.'
+    return (
+      (failure && FAILURE_TEXT[failure.kind]) ??
+      'The assistant could not reply. Try rephrasing, or use the form.'
+    )
   }
 
   async function compactNow() {
