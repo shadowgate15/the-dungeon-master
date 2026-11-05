@@ -1,0 +1,23 @@
+import type { Component } from 'svelte'
+import AbilitiesStep from './AbilitiesStep.svelte'
+import ConceptStep from './ConceptStep.svelte'
+import EquipmentStep from './EquipmentStep.svelte'
+import SkillsStep from './SkillsStep.svelte'
+import ReviewStep from './ReviewStep.svelte'
+import SpellsStep from './SpellsStep.svelte'
+import type { StepId } from './steps.ts'
+import type { CharacterWizard } from './wizard.svelte.ts'
+
+/**
+ * The component rendered in the centre column for each step. A step's component is mapped here, next to its `STEPS` entry in
+ * `steps.ts`. A step component takes one prop, the shared `wizard`, and reads and writes the
+ * draft through `wizard.update`.
+ */
+export const STEP_VIEWS: Record<StepId, Component<{ wizard: CharacterWizard }>> = {
+  concept: ConceptStep,
+  abilities: AbilitiesStep,
+  skills: SkillsStep,
+  equipment: EquipmentStep,
+  spells: SpellsStep,
+  review: ReviewStep
+}

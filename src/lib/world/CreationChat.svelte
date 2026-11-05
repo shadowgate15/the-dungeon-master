@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import ContextMeter from './ContextMeter.svelte'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
@@ -12,6 +13,7 @@
     applyCompaction,
     dismissCard,
     dismissedNotes,
+    dropStaleCards,
     emptyConversation,
     failMessage,
     historyOf,
@@ -41,6 +43,15 @@
     extraSystemPrompts?: string[]
     /** Called when a turn fails because the selected Worlds changed (Campaign only). */
     onworldschanged?: () => void
+    /** Called with the fields of the still-pending cards whenever they change (Character rail dot). */
+    onpending?: (fields: string[]) => void
+    /**
+     * Flags pending cards that the live seed or draft made impossible to accept (one flag per card,
+     * in order). Re-evaluated whenever what it reads changes; flagged cards are dropped.
+     */
+    isStale?: (pending: { field: string; value: string }[]) => boolean[]
+    /** Renders a card's value for display (Character Roll cards); the raw value is still sent. */
+    formatValue?: (field: string, value: string) => string
     /** True when AI controls must be off (a reasoning model was detected). */
     disabled?: boolean
     /** Called when a turn shows the model is a reasoning model. */
@@ -62,6 +73,9 @@
     extraBody,
     extraSystemPrompts,
     onworldschanged,
+    onpending,
+    isStale,
+    formatValue,
     disabled = false,
     onreasoningmodel,
     onunavailable,
@@ -98,6 +112,19 @@
   const canCompact = $derived(history.length - KEEP_MESSAGES > conversation.summarizedCount)
   const locked = $derived(disabled || blocked !== null || finished)
 
+  $effect(() => {
+    if (!isStale) return
+    const next = dropStaleCards(
+      untrack(() => conversation),
+      isStale
+    )
+    if (next !== untrack(() => conversation)) conversation = next
+  })
+
+  $effect(() => {
+    onpending?.(pendingProposals(conversation).map((p) => p.field))
+  })
+
   function contextPayload() {
     return {
       summary: conversation.summary ?? undefined,
@@ -109,7 +136,9 @@
   const FAILURE_TEXT: Record<string, string> = {
     timeout: 'The assistant took too long to reply.',
     cancelled: 'Stopped before the assistant replied.',
-    'worlds-changed': 'A selected World was archived or deleted. Reload the Worlds and try again.'
+    'worlds-changed': 'A selected World was archived or deleted. Reload the Worlds and try again.',
+    'options-changed':
+      'A choice in your draft is no longer in the Rules Data. Review it and try again.'
   }
 
   async function send(message: string) {
@@ -280,7 +309,11 @@
             <ul aria-label="Proposals" class="space-y-1">
               {#each cards as card (card.id)}
                 <li>
-                  <ProposalCard label={labels[card.field]} value={card.value} status={card.status}>
+                  <ProposalCard
+                    label={labels[card.field]}
+                    value={formatValue?.(card.field, card.value) ?? card.value}
+                    status={card.status}
+                  >
                     {#snippet actions()}
                       {#if card.status === 'pending'}
                         <Button size="sm" onclick={() => accept(card.id)}>Accept</Button>

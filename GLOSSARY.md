@@ -25,7 +25,7 @@ A suggested value for one Seed field, offered by the AI in the creation conversa
 _Avoid_: Suggestion, draft
 
 **Creation conversation**:
-The chat beside the Seed card in which the player talks through a World or a Campaign with the AI and receives Proposals. It is also used when editing an existing World or Campaign. Its transcript lives only in the browser and is discarded when the World or Campaign is saved or abandoned; nothing is stored.
+The chat beside the Seed card, or beside the Character creation wizard, in which the player talks through a World, a Campaign or a Character with the AI and receives Proposals (and, for Characters, Roll cards). It is also used when editing an existing World, Campaign or Character. Its transcript lives only in the browser and is discarded when the World, Campaign or Character is saved or abandoned; nothing is stored.
 _Avoid_: Chat history, session
 
 **Campaign**:
@@ -47,3 +47,51 @@ _Avoid_: Genre, theme, style
 **Length**:
 How much story a Campaign is meant to hold, one of: one-shot, short, medium, long. Ordered shortest to longest. one-shot is a single sitting; short is a few sessions; medium is a season of play; long is an open-ended saga. It measures story scope, not hours or session counts. The AI uses it to pace how much story to plan.
 _Avoid_: Duration, session count, size
+
+**Character**:
+A player's hero, created at level 1 from the D&D 5e SRD 5.1 and stored as the player's choices only: race, class, background, ability scores, picked skills, spells and equipment, and narrative details. Everything computed from those choices (modifiers, hit points, armor class, saves, spell slots) is derived and never stored. A Character stands alone, owned by the player, and is linked to Campaigns separately. A Character is either active or archived.
+_Avoid_: Player character sheet, PC, hero, avatar
+
+**Archived Character**:
+A Character set aside by its author. It is hidden from the main Character list, shown under the Archived view, and is read-only until restored: it can be viewed but not edited. Archiving is reversible; deleting a Character is not. Unlike a Campaign, a Character depends on nothing, so nothing else, including anything about its Campaigns, can make it read-only.
+_Avoid_: Disabled Character, hidden Character, retired Character
+
+**Character creation wizard**:
+The step-by-step flow in which a player builds a Character: Concept (name, race, class, background and personal details), ability scores, skills and proficiencies, equipment, spells (only for classes that cast at level 1), then review and save. Concept must be valid before the later steps open, and a Character can only be saved once every step is valid. The player may revisit and change an earlier step; choices that no longer fit are flagged, not removed. The same wizard is used to edit an existing Character.
+_Avoid_: Character form, character builder
+
+**Character draft**:
+The unsaved state of a Character while the wizard is open. It lives only in the browser and is discarded on abandon or reload; nothing is stored until the Character is saved.
+_Avoid_: Saved draft, work in progress
+
+**Ability Score Method**:
+One of the three ways a Character's six base ability scores are set: **standard array** (the fixed values 15, 14, 13, 12, 10, 8, each assigned to one ability), **point buy** (a 27-point budget spent on scores from 8 to 15, up to the budget) or **rolling** (six rolls of four six-sided dice with the lowest dropped, assigned freely). None of the three is in the SRD; they are rules the app defines itself. The player chooses the method and the assignment; the AI may only propose which method and how to arrange the values, never the values themselves or a roll. Code makes any rolls and the Character keeps the rolled dice, so the assigned scores can be checked against them. Racial bonuses are applied on top of the base scores, never part of them.
+_Avoid_: Stat generation, stat roll
+
+**Roll card**:
+A set of six ability score rolls made by code at the AI's request during the Creation conversation and shown as a card the player can accept or dismiss. Accepting it records it as the Character's rolled set, replacing any earlier one; dismissing it discards it. Like a Proposal, it changes nothing until accepted.
+_Avoid_: AI roll, dice result
+
+**Background**:
+A Character's history before adventuring. It grants two skill proficiencies, two tool or language proficiencies, a feature and a starting equipment package, and carries the Character's personality trait, ideal, bond and flaw. A Character has exactly one. The choices are Acolyte, the only background the SRD ships, or a Custom background.
+_Avoid_: Origin, past, profession
+
+**Custom background**:
+A Background the player builds from the SRD's customization rule rather than choosing Acolyte: a name, two skill proficiencies and two tool or language proficiencies (picked by the player, with code enforcing the counts and the rule that a duplicate proficiency must be replaced by another of the same kind), a feature written as narrative text with no mechanics, and a fixed equipment package. The AI may propose any of these as Proposals; nothing counts until the player accepts.
+_Avoid_: Homebrew background, new background
+
+**Feature choice**:
+A decision a race, subrace, class, subclass or background leaves to the player, such as a Dwarf's tool proficiency, a Fighter's fighting style, a Dragonborn's draconic ancestry or a Half-Elf's bonus abilities. Each one belongs to a named group with a fixed number of picks and a set of options. Fixed benefits that need no decision are granted automatically and are not choices.
+_Avoid_: Option, trait pick, perk
+
+**Equipment choice group**:
+One of the "this or that" choices in a class's starting equipment, such as "a greataxe or any martial melee weapon". The player picks one option per group, and where an option allows any weapon or instrument of a kind, picks the specific item. Options can be unavailable when the Character lacks the proficiency they require. Items a class or background gives with no choice are not part of any group.
+_Avoid_: Loadout, kit
+
+**Granted spell**:
+A spell a Character has for free from race, subrace or subclass, such as Tiefling's thaumaturgy. It is shown beside the Character's chosen spells but is never one of them: it does not count against the class's cantrip or spell numbers.
+_Avoid_: Bonus spell, free spell
+
+**Rules Data**:
+The D&D 5e SRD 5.1 reference content (races, classes, backgrounds, spells, equipment and so on) held in the database. It is read-only to the app and seeded from a pinned dataset. Characters refer to it rather than copy it.
+_Avoid_: Reference data, compendium

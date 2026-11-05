@@ -1,11 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
 
-  let { current }: { current: 'worlds' | 'campaigns' } = $props()
+  let { current }: { current: 'worlds' | 'campaigns' | 'characters' } = $props()
 
   const links = [
     { key: 'worlds', label: 'Worlds', href: () => resolve('/') },
-    { key: 'campaigns', label: 'Campaigns', href: () => resolve('/campaigns') }
+    { key: 'campaigns', label: 'Campaigns', href: () => resolve('/campaigns') },
+    { key: 'characters', label: 'Characters', href: () => resolve('/characters') }
   ] as const
 </script>
 

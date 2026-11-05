@@ -15,5 +15,8 @@ describe('SectionNav', () => {
       .element(page.getByRole('link', { name: 'Worlds' }))
       .not.toHaveAttribute('aria-current')
     await expect.element(page.getByRole('link', { name: 'Worlds' })).toHaveAttribute('href', '/')
+    await expect
+      .element(page.getByRole('link', { name: 'Characters' }))
+      .toHaveAttribute('href', '/characters')
   })
 })

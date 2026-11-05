@@ -18,6 +18,7 @@
     "test:e2e": "playwright install && playwright test",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
+    "rules:normalize": "node src/lib/rules/build/run.ts",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
