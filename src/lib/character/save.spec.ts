@@ -52,6 +52,23 @@ describe('draftToCharacterInput', () => {
     expect(input.customBackgroundName).toBeUndefined()
   })
 
+  it.each(['standard-array', 'point-buy'] as const)(
+    'drops the kept rolled dice when the method is %s',
+    (abilityMethod) => {
+      const abilityRolls = [
+        [6, 5, 3, 1],
+        [6, 6, 6, 1],
+        [4, 4, 4, 4],
+        [3, 3, 2, 1],
+        [5, 4, 4, 2],
+        [2, 2, 2, 2]
+      ]
+      const input = draftToCharacterInput(rules, complete({ abilityMethod, abilityRolls }))
+      expect(input.abilityMethod).toBe(abilityMethod)
+      expect(input.abilityRolls).toBeUndefined()
+    }
+  )
+
   it('maps the custom background name and feature only for the custom background', () => {
     const custom = draftToCharacterInput(
       rules,
