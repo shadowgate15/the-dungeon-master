@@ -3,6 +3,7 @@
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Checkbox from '#lib/ui/Checkbox.svelte'
+  import SpellDisclosure from './SpellDisclosure.svelte'
   import { spellPickFlags, spellsView } from './spells.ts'
   import { groupIssues, groupLabel } from './steps.ts'
   import type { CharacterWizard } from './wizard.svelte.ts'
@@ -22,6 +23,7 @@
     { id: 'cantrips', title: 'Cantrips', ...view.cantrips },
     { id: 'spells', title: 'Level 1 spells', ...view.spells }
   ])
+  const spellOf = (slug: string) => wizard.rules.spells.find((s) => s.slug === slug)
   const nameOf = (slug: string) => wizard.rules.spells.find((s) => s.slug === slug)?.name ?? slug
 
   /** Spells that cannot be ticked again: granted, or the racial cantrip. */
@@ -64,9 +66,19 @@
       </p>
       <ul class="list-disc pl-6">
         {#each view.granted as g (g.spell)}
+          {@const spell = spellOf(g.spell)}
           <li>
-            {g.name}
-            <span class="text-sm text-muted">({g.level === 0 ? 'cantrip' : 'level 1'})</span>
+            {#snippet name()}
+              <span>
+                {g.name}
+                <span class="text-sm text-muted">({g.level === 0 ? 'cantrip' : 'level 1'})</span>
+              </span>
+            {/snippet}
+            {#if spell}
+              <SpellDisclosure {spell} row={name} />
+            {:else}
+              {@render name()}
+            {/if}
           </li>
         {/each}
       </ul>
@@ -83,10 +95,14 @@
         {#each g.options as o (o.slug)}
           {@const mine = g.picks.includes(o.slug)}
           {@const dup = !mine && wizard.draft.classSpells.includes(o.slug)}
-          <label class={['flex items-center gap-2', dup && 'text-muted']}>
-            <Checkbox checked={mine} disabled={dup} onchange={() => toggleGroup(g, o.slug)} />
-            <span>{o.name}{dup ? ' (picked as a class cantrip)' : ''}</span>
-          </label>
+          <SpellDisclosure spell={spellOf(o.slug)!}>
+            {#snippet row()}
+              <label class={['flex items-center gap-2', dup && 'text-muted']}>
+                <Checkbox checked={mine} disabled={dup} onchange={() => toggleGroup(g, o.slug)} />
+                <span>{o.name}{dup ? ' (picked as a class cantrip)' : ''}</span>
+              </label>
+            {/snippet}
+          </SpellDisclosure>
         {/each}
       </div>
       {#each groupIssues(g) as issue (issue)}
@@ -154,10 +170,14 @@
                 : level.picked.length >= level.max
                   ? 'limit reached'
                   : null}
-            <label class={['flex items-center gap-2', why && 'text-muted']}>
-              <Checkbox checked={on} disabled={!!why} onchange={() => toggle(o.slug)} />
-              <span>{o.name}{why ? ` (${why})` : ''}</span>
-            </label>
+            <SpellDisclosure spell={spellOf(o.slug)!}>
+              {#snippet row()}
+                <label class={['flex items-center gap-2', why && 'text-muted']}>
+                  <Checkbox checked={on} disabled={!!why} onchange={() => toggle(o.slug)} />
+                  <span>{o.name}{why ? ` (${why})` : ''}</span>
+                </label>
+              {/snippet}
+            </SpellDisclosure>
           {/each}
         </div>
       </fieldset>
