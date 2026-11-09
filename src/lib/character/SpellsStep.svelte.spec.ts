@@ -215,5 +215,41 @@ describe('SpellsStep', () => {
         .toHaveAttribute('aria-expanded', 'true')
       expect(wizard.draft.picks['trait/high-elf-cantrip/cantrip-0']).toBeUndefined()
     })
+
+    it('shows a Tiefling thaumaturgy as a granted spell with details', async () => {
+      const wizard = setup({ race: 'tiefling' })
+      const granted = page.getByTestId('granted-spells')
+      await expect.element(granted).toHaveTextContent(/Thaumaturgy/)
+      const button = detailsOf(granted, 'Thaumaturgy')
+      await button.click()
+      await expect.element(button).toHaveAttribute('aria-expanded', 'true')
+      const panelId = button.element().getAttribute('aria-controls')!
+      const panel = page.elementLocator(document.getElementById(panelId)!)
+      await expect.element(panel).toHaveTextContent(/Transmutation/)
+      await expect.element(panel).toHaveTextContent(/Cantrip/)
+      expect(wizard.draft.classSpells).toEqual([])
+    })
+
+    it('never toggles a racial pick when its details are opened, from the keyboard too', async () => {
+      const wizard = setup({ race: 'elf', subrace: 'high-elf' })
+      const key = 'trait/high-elf-cantrip/cantrip-0'
+      const fieldset = page.getByRole('group', { name: /One wizard cantrip/ })
+      const box = fieldset.getByRole('checkbox', { name: 'Prestidigitation' })
+      await box.click()
+      expect(wizard.draft.picks[key]).toEqual(['prestidigitation'])
+
+      const button = detailsOf(fieldset, 'Prestidigitation')
+      await button.click()
+      await button.click()
+      expect(wizard.draft.picks[key]).toEqual(['prestidigitation'])
+      await expect.element(box).toBeChecked()
+
+      box.element().focus()
+      await userEvent.tab()
+      expect(document.activeElement).toBe(button.element())
+      await userEvent.keyboard('{Enter}')
+      await expect.element(button).toHaveAttribute('aria-expanded', 'true')
+      expect(wizard.draft.picks[key]).toEqual(['prestidigitation'])
+    })
   })
 })
