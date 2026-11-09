@@ -1,0 +1,687 @@
+{
+ "model": "qwen2.5-1.5b-instruct-mlx",
+ "gen": [
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"In the shadow of ancient stone towers, **Vael Dorun** pulses with a timeless energy. The city is bathed in the soft glow of firelit skies, where ancient runes etched into the stone remind residents that their world is not as isolated as it seems. The city's streets are a labyrinth of cobblestone and shadow, where whispers carry through the quiet. Here, **hope** is a rare commodity, scattered among the few who dare venture deep into the city's secrets. The people are as much a part of **history** as they are of **today**, living by their own codes that blend tradition with survival under the **\"}",
+   "value": "In the shadow of ancient stone towers, **Vael Dorun** pulses with a timeless energy. The city is bathed in the soft glow of firelit skies, where ancient runes etched into the stone remind residents that their world is not as isolated as it seems. The city's streets are a labyrinth of cobblestone and shadow, where whispers carry through the quiet. Here, **hope** is a rare commodity, scattered among the few who dare venture deep into the city's secrets. The people are as much a part of **history** as they are of **today**, living by their own codes that blend tradition with survival under the **",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 138,
+   "ms": 8055,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"The Ashen Reach is an isolated coastal region covered in ancient ash, where the air is thick with a sense of melancholy. The land is dotted with crumbling stone castles and abandoned villages, hidden among the trees that stretch towards the sky. Legend tells of a curse laid upon it by an ancient sorcerer, who was ultimately defeated but not vanquished. The only living inhabitants are the remnants of a once-thriving cult, now hidden from prying eyes. The inhabitants struggle to maintain order and survival against the dark forces that haunt their land, seeking answers to a mystery that has elude\"}",
+   "value": "The Ashen Reach is an isolated coastal region covered in ancient ash, where the air is thick with a sense of melancholy. The land is dotted with crumbling stone castles and abandoned villages, hidden among the trees that stretch towards the sky. Legend tells of a curse laid upon it by an ancient sorcerer, who was ultimately defeated but not vanquished. The only living inhabitants are the remnants of a once-thriving cult, now hidden from prying eyes. The inhabitants struggle to maintain order and survival against the dark forces that haunt their land, seeking answers to a mystery that has elude",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 128,
+   "ms": 1091,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Korrin's Rest is a sprawling, sun-baked haven nestled between the shifting sands of an ancient desert and the mist-shrouded peaks of a forgotten mountain range. The land is marked by towering mesas, ancient ruins scattered like bones on the surface of a chessboard. Crafted from an earth rich with veins of precious metals, Korrin's Rest is a place where prosperity and decay coexist in the shadow of mystery. The people here are as diverse as they are ancient, each whispering tales of a bygone age and hidden treasures. Tensions lurk beneath the surface, fanning flames into small-scale confronts, \"}",
+   "value": "Korrin's Rest is a sprawling, sun-baked haven nestled between the shifting sands of an ancient desert and the mist-shrouded peaks of a forgotten mountain range. The land is marked by towering mesas, ancient ruins scattered like bones on the surface of a chessboard. Crafted from an earth rich with veins of precious metals, Korrin's Rest is a place where prosperity and decay coexist in the shadow of mystery. The people here are as diverse as they are ancient, each whispering tales of a bygone age and hidden treasures. Tensions lurk beneath the surface, fanning flames into small-scale confronts, ",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 138,
+   "ms": 1150,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Mistmoor is a sprawling, treacherous realm nestled within the mist-shrouded peaks of the Archstone Mountains. The air is thick with a damp, metallic scent, and the sky is perpetually gray. The land is dotted with ancient ruins of forgotten kingdoms, each crumbling edifice a testament to the brutal conquests and futile revivals that shaped its history. The people are wary, their whispers of the forgotten past a constant reminder of hidden dangers. **The mistmoor** is a place where time lags, where the dead walk among the living and whispers of the damned call to new sacrifices. It is a world te\"}",
+   "value": "Mistmoor is a sprawling, treacherous realm nestled within the mist-shrouded peaks of the Archstone Mountains. The air is thick with a damp, metallic scent, and the sky is perpetually gray. The land is dotted with ancient ruins of forgotten kingdoms, each crumbling edifice a testament to the brutal conquests and futile revivals that shaped its history. The people are wary, their whispers of the forgotten past a constant reminder of hidden dangers. **The mistmoor** is a place where time lags, where the dead walk among the living and whispers of the damned call to new sacrifices. It is a world te",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 137,
+   "ms": 1174,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"In the shadow of towering stone spires, Thalassar is a realm where ancient forests stretch to the ocean's edge, and skies are dyed irridescent by celestial storms. The realm is a plane of endless blue, where the tides sculpt landscapes into mythic stories and creatures that weave their own destinies. Here, the unyielding winds of fate carry whispers of lost empires and hidden treasures beneath the waves. In this stark beauty, each day is a struggle to survive in a world that never sleeps, where honor and duty are the only certainties.\"}",
+   "value": "In the shadow of towering stone spires, Thalassar is a realm where ancient forests stretch to the ocean's edge, and skies are dyed irridescent by celestial storms. The realm is a plane of endless blue, where the tides sculpt landscapes into mythic stories and creatures that weave their own destinies. Here, the unyielding winds of fate carry whispers of lost empires and hidden treasures beneath the waves. In this stark beauty, each day is a struggle to survive in a world that never sleeps, where honor and duty are the only certainties.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 124,
+   "ms": 1036,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"In the ancient city of The Hollow Crown, nestled deep within the shadowy recesses of a forgotten empire, legends whisper of hidden treasures and ancient ruins. The streets are lined with cobblestone that shifts underfoot, revealing the ever-present threat of shadowy specters. The air is thick with a sense of mystery, as if something unseen roams the city's ancient alleys. The people are wary but resilient, their lives intertwined with secrets and whispers of another world. The Hollow Crown is a place where past meets present, hidden truths lurk in every shadow, and the air never quite carries.\"}",
+   "value": "In the ancient city of The Hollow Crown, nestled deep within the shadowy recesses of a forgotten empire, legends whisper of hidden treasures and ancient ruins. The streets are lined with cobblestone that shifts underfoot, revealing the ever-present threat of shadowy specters. The air is thick with a sense of mystery, as if something unseen roams the city's ancient alleys. The people are wary but resilient, their lives intertwined with secrets and whispers of another world. The Hollow Crown is a place where past meets present, hidden truths lurk in every shadow, and the air never quite carries.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 129,
+   "ms": 1076,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"The Ember Isles are a lush but perilous land of ancient forests and misty mountains. **Swept by** unseen winds, the Isles are a place of enchantment and peril, ruled by the elusive Goddess **Celestial Flora**. Here, within the **lush**, **greenhearted** forests,** a guardian of secrets**, old and wise but never afraid, lives the **Dragon Queen**. She guards the hidden gem of wisdom within the ancient library, a sacred place where knowledge **is** as precious as life. The Isles are a land of feasts, banquets in the **green fields** under moonlit skies, and **the night** itself is a time of **mø\"}",
+   "value": "The Ember Isles are a lush but perilous land of ancient forests and misty mountains. **Swept by** unseen winds, the Isles are a place of enchantment and peril, ruled by the elusive Goddess **Celestial Flora**. Here, within the **lush**, **greenhearted** forests,** a guardian of secrets**, old and wise but never afraid, lives the **Dragon Queen**. She guards the hidden gem of wisdom within the ancient library, a sacred place where knowledge **is** as precious as life. The Isles are a land of feasts, banquets in the **green fields** under moonlit skies, and **the night** itself is a time of **mø",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 150,
+   "ms": 1254,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"In the shadow of ancient spires, Quillhaven whispers secrets carved into its very fabric. A continent where shadows stretch as far as the eye can see, Quillhaven is a realm of perilous landscapes and untamed mysteries. The land's very soul is enshrined in the whispers from forgotten stone carvings, ancient texts, and cyclops-eyed prophets. From dawn to dusk, the sun blazes with a fierce intensity that drowns out all but the bravest of adventurers. Quillhaven's magic is a dark brew, brewed from the very bones of nature and crafted by titanic sorcerers. The ancient city's labyrinthine streets c…\"}",
+   "value": "In the shadow of ancient spires, Quillhaven whispers secrets carved into its very fabric. A continent where shadows stretch as far as the eye can see, Quillhaven is a realm of perilous landscapes and untamed mysteries. The land's very soul is enshrined in the whispers from forgotten stone carvings, ancient texts, and cyclops-eyed prophets. From dawn to dusk, the sun blazes with a fierce intensity that drowns out all but the bravest of adventurers. Quillhaven's magic is a dark brew, brewed from the very bones of nature and crafted by titanic sorcerers. The ancient city's labyrinthine streets c…",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 143,
+   "ms": 1195,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"In the steampunk city of Dreadmere, steam-powered machinery hums through a bygone world where Victorian ingenuity and ancient technology blend in unexpected harmony. The streets are lined with cobblestone alleys, where artisans weave intricate patterns into their creations, and the air is thick with the scent of leather and ink. The city's defenses stand as a testament to past battles, their rusted cannons pointing towards the horizon. As night falls, lanterns flicker and cast colorful shadows on the cobblestones, while whispers of legends fill the air. In this world that never was, where time\"}",
+   "value": "In the steampunk city of Dreadmere, steam-powered machinery hums through a bygone world where Victorian ingenuity and ancient technology blend in unexpected harmony. The streets are lined with cobblestone alleys, where artisans weave intricate patterns into their creations, and the air is thick with the scent of leather and ink. The city's defenses stand as a testament to past battles, their rusted cannons pointing towards the horizon. As night falls, lanterns flicker and cast colorful shadows on the cobblestones, while whispers of legends fill the air. In this world that never was, where time",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 128,
+   "ms": 1066,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"In the shadow of ancient cities, the Sunken Aurel is a realm where once-great structures lie partially submerged beneath the surface. The land is reclaimed from the sea, transformed by natural forces into a world that defies gravity and time. The Aurelites, once the inhabitants of these submerged cities, struggle to survive in a world that is both hostile and beautiful. Magic exists but is limited by the environment, often unseen or muted to keep them from disrupting the balance. The core of the world is a single, vast, underwater city, its architecture lost to history, yet always present in a\"}",
+   "value": "In the shadow of ancient cities, the Sunken Aurel is a realm where once-great structures lie partially submerged beneath the surface. The land is reclaimed from the sea, transformed by natural forces into a world that defies gravity and time. The Aurelites, once the inhabitants of these submerged cities, struggle to survive in a world that is both hostile and beautiful. Magic exists but is limited by the environment, often unseen or muted to keep them from disrupting the balance. The core of the world is a single, vast, underwater city, its architecture lost to history, yet always present in a",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 128,
+   "ms": 1052,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"In the slums of Vael Dorun, a city so ancient it seems to breathe with its own arcane whispers, life is a relentless dance under the watchful eyes of ancient stone guardians. The city's streets are carved from living rock, where shadows dance in the light of lanterns and torches. The air is thick with a mist of history, as fresh as the acrid scent of sweat on the skin of homeless children. Amidst this turmoil, a mithril knight's apprentice dreams of forging the legendary blade that could end suffering, while whispers of ancient spells and forgotten rituals stir unseen beneath the surface. The缚\"}",
+   "value": "In the slums of Vael Dorun, a city so ancient it seems to breathe with its own arcane whispers, life is a relentless dance under the watchful eyes of ancient stone guardians. The city's streets are carved from living rock, where shadows dance in the light of lanterns and torches. The air is thick with a mist of history, as fresh as the acrid scent of sweat on the skin of homeless children. Amidst this turmoil, a mithril knight's apprentice dreams of forging the legendary blade that could end suffering, while whispers of ancient spells and forgotten rituals stir unseen beneath the surface. The缚",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 134,
+   "ms": 1123,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"The Ashen Reach is a region ravaged by an ancient curse, now cloaked in an eternal twilight. The once-generous sun has faded to a pale yellow, casting a sickly glow that seems to mock the living. In this place of broken dreams and whispered secrets, creatures both benevolent and malevolent lurk unseen. The air is thick with a mist that drowns out the faintest sound, and shadows shift with each breath. The Ashen Reach is a realm of forgotten terrors, where the living must contend with unseen forces that whisper their own dark truths.\"}",
+   "value": "The Ashen Reach is a region ravaged by an ancient curse, now cloaked in an eternal twilight. The once-generous sun has faded to a pale yellow, casting a sickly glow that seems to mock the living. In this place of broken dreams and whispered secrets, creatures both benevolent and malevolent lurk unseen. The air is thick with a mist that drowns out the faintest sound, and shadows shift with each breath. The Ashen Reach is a realm of forgotten terrors, where the living must contend with unseen forces that whisper their own dark truths.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 126,
+   "ms": 1065,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Korrin's Rest is a sprawling, hidden haven nestled within the wilds of an ancient continent. Towering mountains, dense forests, and a mist-shrouded river carve the landscape into jagged channels. The sun rises on golden sand and sets in a sea of stars, painting the skies with hues that never fade. The people here live by their own rules, a way of life untouched by the modern world's conveniences. They are pirates, traders, adventurers seeking fortune or adventure, bound by a code that celebrates freedom and survival. The essence of Korrin's Rest is in its eternal peace, a place where the last \"}",
+   "value": "Korrin's Rest is a sprawling, hidden haven nestled within the wilds of an ancient continent. Towering mountains, dense forests, and a mist-shrouded river carve the landscape into jagged channels. The sun rises on golden sand and sets in a sea of stars, painting the skies with hues that never fade. The people here live by their own rules, a way of life untouched by the modern world's conveniences. They are pirates, traders, adventurers seeking fortune or adventure, bound by a code that celebrates freedom and survival. The essence of Korrin's Rest is in its eternal peace, a place where the last ",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 137,
+   "ms": 1136,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"In the drowsy haze of a sun-baked afternoon, Mistmoor whispers secrets through its ancient streets. The earth hums underfoot of the dying embers, a testament to cycles long forgotten or lost. The skies are a silent chorus of storm clouds, a symphony of rain gauges and lightning strikes. The trees stand as silent sentinels to the old ways, their roots a testament to generations of survival. The winds carry whispers from beyond, carrying tales of forgotten dreams and unbreakable bonds. Yet, beneath the surface, there lies a force unseen, latent within the very soil of Mistmoor. It is not an ally\"}",
+   "value": "In the drowsy haze of a sun-baked afternoon, Mistmoor whispers secrets through its ancient streets. The earth hums underfoot of the dying embers, a testament to cycles long forgotten or lost. The skies are a silent chorus of storm clouds, a symphony of rain gauges and lightning strikes. The trees stand as silent sentinels to the old ways, their roots a testament to generations of survival. The winds carry whispers from beyond, carrying tales of forgotten dreams and unbreakable bonds. Yet, beneath the surface, there lies a force unseen, latent within the very soil of Mistmoor. It is not an ally",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 139,
+   "ms": 1147,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Thalassar is a vast, primordial ocean realm where the sea itself is both a living entity and a source of power. The Waterkin, humans with aquatic abilities, are its guardians, maintaining the delicate ecosystem and commanding the elemental forces. Beneath the waves lies a hidden world of dark, enchanted caverns where ancient sorcery thrives. The sunken citadels stand silent sentinels, relics of a lost civilization that once ruled the seas. The air is thick with the scent of salt and mystery, contrasting sharply against the eerie silence of deep waters. The currents are a living force, shifting\"}",
+   "value": "Thalassar is a vast, primordial ocean realm where the sea itself is both a living entity and a source of power. The Waterkin, humans with aquatic abilities, are its guardians, maintaining the delicate ecosystem and commanding the elemental forces. Beneath the waves lies a hidden world of dark, enchanted caverns where ancient sorcery thrives. The sunken citadels stand silent sentinels, relics of a lost civilization that once ruled the seas. The air is thick with the scent of salt and mystery, contrasting sharply against the eerie silence of deep waters. The currents are a living force, shifting",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 131,
+   "ms": 1094,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"In the shadow of ancient blackwood, The Hollow Crown stands as a testament to forgotten glory. Once a bustling hub of commerce and sorcery, it now whispers secrets to the winds that sweep its streets. The city's buildings rise like jagged teeth in a tide of decay, while the ancient eldritch tome that once adorned the library's shelves lies forgotten in a dimly lit alley. The air is thick with the scent of age and decay, as the very stones that sustained it are now pitted with unseen maladies. But amidst its decay, a faint spark of magic still pulses through the air - an ancient curse bound to,\"}",
+   "value": "In the shadow of ancient blackwood, The Hollow Crown stands as a testament to forgotten glory. Once a bustling hub of commerce and sorcery, it now whispers secrets to the winds that sweep its streets. The city's buildings rise like jagged teeth in a tide of decay, while the ancient eldritch tome that once adorned the library's shelves lies forgotten in a dimly lit alley. The air is thick with the scent of age and decay, as the very stones that sustained it are now pitted with unseen maladies. But amidst its decay, a faint spark of magic still pulses through the air - an ancient curse bound to,",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 136,
+   "ms": 1151,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"In the ancient forests of Ember Isles, a mystical forest whispers secrets to those brave enough to listen. The land is divided into four kingdoms ruled by fairies, each with their own enchanting tales and challenges. The forest itself is a living source of magic - its trees are adorned with blooms that dance in the wind, and waterfalls shimmer with a magical touch. The air is filled with sweet scents of flowers and the earth's own perfume, creating a tranquil yet mystical atmosphere. The fairies are in charge of maintaining these enchantments and ensuring peace, but their rule is challenged by\"}",
+   "value": "In the ancient forests of Ember Isles, a mystical forest whispers secrets to those brave enough to listen. The land is divided into four kingdoms ruled by fairies, each with their own enchanting tales and challenges. The forest itself is a living source of magic - its trees are adorned with blooms that dance in the wind, and waterfalls shimmer with a magical touch. The air is filled with sweet scents of flowers and the earth's own perfume, creating a tranquil yet mystical atmosphere. The fairies are in charge of maintaining these enchantments and ensuring peace, but their rule is challenged by",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 125,
+   "ms": 1061,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Quillhaven, a sprawling continent of verdant forests and ancient cities, is a place where the past echoes with shadows. The land is divided into fractious kingdoms, each kingdom ruled by a king or queen, but united under the grand magistrates of the Council. Power struggles and trade rivalries stir beneath the surface, while ancient curses loom on forgotten ruins. The world is a tapestry woven with threads of magic, from the whispers of nature to the dark rituals performed by those who hunger for power. In Quillhaven, history is a living force, shaping destiny and igniting conflict, as seasons\"}",
+   "value": "Quillhaven, a sprawling continent of verdant forests and ancient cities, is a place where the past echoes with shadows. The land is divided into fractious kingdoms, each kingdom ruled by a king or queen, but united under the grand magistrates of the Council. Power struggles and trade rivalries stir beneath the surface, while ancient curses loom on forgotten ruins. The world is a tapestry woven with threads of magic, from the whispers of nature to the dark rituals performed by those who hunger for power. In Quillhaven, history is a living force, shaping destiny and igniting conflict, as seasons",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 130,
+   "ms": 1079,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Dreadmere is a sprawling city of intricate gears and polished brass, nestled between the towering Spire towers that dominate both sky and sea. In this steampunk world, machinery whispers secrets of the past to those daring enough to listen. The streets are lined with workshops and laboratories, where inventors experiment with steam-powered clocks in the scorching heat of summer or struggle to keep their cogs turning against winter's chill. The city, **a world of gears**, is a testament to human ingenuity and the unwavering pursuit of progress, even as it's marked by a **slothful economy** and \"}",
+   "value": "Dreadmere is a sprawling city of intricate gears and polished brass, nestled between the towering Spire towers that dominate both sky and sea. In this steampunk world, machinery whispers secrets of the past to those daring enough to listen. The streets are lined with workshops and laboratories, where inventors experiment with steam-powered clocks in the scorching heat of summer or struggle to keep their cogs turning against winter's chill. The city, **a world of gears**, is a testament to human ingenuity and the unwavering pursuit of progress, even as it's marked by a **slothful economy** and ",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 133,
+   "ms": 1118,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"In the depths of forgotten lands, a shattered world thrives on the remnants of magic and despair. The sunken Aurel is a realm where the ancient Order of the White Veil toils to restore its power, battling against dark sorcery that seeks to enslave the realm. Diverse races struggle for survival, from the resilient humans with arcane knowledge to the fierce dragons and towering trees that guard their secrets. The future is uncertain, but hope flickers in the light of forgotten spells and the will to make a new world.\"}",
+   "value": "In the depths of forgotten lands, a shattered world thrives on the remnants of magic and despair. The sunken Aurel is a realm where the ancient Order of the White Veil toils to restore its power, battling against dark sorcery that seeks to enslave the realm. Diverse races struggle for survival, from the resilient humans with arcane knowledge to the fierce dragons and towering trees that guard their secrets. The future is uncertain, but hope flickers in the light of forgotten spells and the will to make a new world.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 114,
+   "ms": 964,
+   "reasoning": false
+  }
+ ],
+ "rev": [
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "make it darker",
+   "before": "In the shadow of ancient stone towers, **Vael Dorun** pulses with a timeless energy. The city is bathed in the soft glow of firelit skies, where ancient runes etched into the stone remind residents that their world is not as isolated as it seems. The city's streets are a labyrinth of cobblestone and shadow, where whispers carry through the quiet. Here, **hope** is a rare commodity, scattered among the few who dare venture deep into the city's secrets. The people are as much a part of **history** as they are of **today**, living by their own codes that blend tradition with survival under the **",
+   "raw": "{\"premise\": \"In the shadow of ancient stone towers, **Vael Dorun** pulses with a timeless energy. The city is bathed in the soft glow of firelit skies, where ancient runes etched into the stone remind residents that their world is not as isolated as it seems. The streets are a labyrinth of cobblestone and shadow, where whispers carry through the quiet. Here, **hope** is a rare commodity, scattered among the few who dare venture deep into the city's secrets. The people are as much a part of **history** as they are of **today**, living by their own codes that blend tradition with survival under the watchful,\"}",
+   "value": "In the shadow of ancient stone towers, **Vael Dorun** pulses with a timeless energy. The city is bathed in the soft glow of firelit skies, where ancient runes etched into the stone remind residents that their world is not as isolated as it seems. The streets are a labyrinth of cobblestone and shadow, where whispers carry through the quiet. Here, **hope** is a rare commodity, scattered among the few who dare venture deep into the city's secrets. The people are as much a part of **history** as they are of **today**, living by their own codes that blend tradition with survival under the watchful,",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 138,
+   "ms": 1219,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "shorter",
+   "before": "The Ashen Reach is an isolated coastal region covered in ancient ash, where the air is thick with a sense of melancholy. The land is dotted with crumbling stone castles and abandoned villages, hidden among the trees that stretch towards the sky. Legend tells of a curse laid upon it by an ancient sorcerer, who was ultimately defeated but not vanquished. The only living inhabitants are the remnants of a once-thriving cult, now hidden from prying eyes. The inhabitants struggle to maintain order and survival against the dark forces that haunt their land, seeking answers to a mystery that has elude",
+   "raw": "{\"premise\": \"The Ashen Reach is a desolate, ancient wasteland shrouded in mist. Once a bustling port town, it now stands as nothing more than charred ruins, hidden deep within the ashes. The air is heavy with dust and sorrow, a constant reminder of its dark past. Sparse settlements are scattered among the ruins, barely clinging to survival. Legends whisper of a curse laid upon it by an ancient sorcerer, who was finally vanquished but never fully stilled. Amidst the ruins, a cult remains hidden, seeking answers to an unsolved mystery. The inhabitants fight to maintain order and honor within the shadow of a \"}",
+   "value": "The Ashen Reach is a desolate, ancient wasteland shrouded in mist. Once a bustling port town, it now stands as nothing more than charred ruins, hidden deep within the ashes. The air is heavy with dust and sorrow, a constant reminder of its dark past. Sparse settlements are scattered among the ruins, barely clinging to survival. Legends whisper of a curse laid upon it by an ancient sorcerer, who was finally vanquished but never fully stilled. Amidst the ruins, a cult remains hidden, seeking answers to an unsolved mystery. The inhabitants fight to maintain order and honor within the shadow of a ",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 136,
+   "ms": 1233,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "more political intrigue",
+   "before": "Korrin's Rest is a sprawling, sun-baked haven nestled between the shifting sands of an ancient desert and the mist-shrouded peaks of a forgotten mountain range. The land is marked by towering mesas, ancient ruins scattered like bones on the surface of a chessboard. Crafted from an earth rich with veins of precious metals, Korrin's Rest is a place where prosperity and decay coexist in the shadow of mystery. The people here are as diverse as they are ancient, each whispering tales of a bygone age and hidden treasures. Tensions lurk beneath the surface, fanning flames into small-scale confronts, ",
+   "raw": "{\"premise\": \"Korrin's Rest is a sprawling, sun-baked haven nestled between the shifting sands of an ancient desert and the mist-shrouded peaks of a forgotten mountain range. The land is marked by towering mesas, ancient ruins scattered like bones on the surface of a chessboard. Crafted from an earth rich with veins of precious metals, Korrin's Rest is a place where prosperity and decay coexist in the shadow of mystery soliloquized by whispers and echoes. The people here are as diverse as they are ancient, each bearing the weight of a bygone age and hidden treasures. Tensions lurk beneath the surface, fathm\"}",
+   "value": "Korrin's Rest is a sprawling, sun-baked haven nestled between the shifting sands of an ancient desert and the mist-shrouded peaks of a forgotten mountain range. The land is marked by towering mesas, ancient ruins scattered like bones on the surface of a chessboard. Crafted from an earth rich with veins of precious metals, Korrin's Rest is a place where prosperity and decay coexist in the shadow of mystery soliloquized by whispers and echoes. The people here are as diverse as they are ancient, each bearing the weight of a bygone age and hidden treasures. Tensions lurk beneath the surface, fathm",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 139,
+   "ms": 1259,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "less magic, more mundane",
+   "before": "Mistmoor is a sprawling, treacherous realm nestled within the mist-shrouded peaks of the Archstone Mountains. The air is thick with a damp, metallic scent, and the sky is perpetually gray. The land is dotted with ancient ruins of forgotten kingdoms, each crumbling edifice a testament to the brutal conquests and futile revivals that shaped its history. The people are wary, their whispers of the forgotten past a constant reminder of hidden dangers. **The mistmoor** is a place where time lags, where the dead walk among the living and whispers of the damned call to new sacrifices. It is a world te",
+   "raw": "{\"premise\": \"Mistmoor is a sprawling, treacherous realm nestled within the mist-shrouded peaks of the Archstone Mountains. The air is thick with a damp, metallic scent, and the sky is perpetually gray. The land is dotted with ancient ruins of forgotten kingdoms, each crumbling edifice a testament to the brutal conquests and futile revivals that shaped its history. The people are wary, their whispers of the forgotten past a constant reminder of hidden dangers. **The mistmoor** is a place where time lags, where the dead walk among the living and whispers of the damned call to new sacrifices. It is a realm of\"}",
+   "value": "Mistmoor is a sprawling, treacherous realm nestled within the mist-shrouded peaks of the Archstone Mountains. The air is thick with a damp, metallic scent, and the sky is perpetually gray. The land is dotted with ancient ruins of forgotten kingdoms, each crumbling edifice a testament to the brutal conquests and futile revivals that shaped its history. The people are wary, their whispers of the forgotten past a constant reminder of hidden dangers. **The mistmoor** is a place where time lags, where the dead walk among the living and whispers of the damned call to new sacrifices. It is a realm of",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 137,
+   "ms": 1246,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "add a mention of trade",
+   "before": "In the shadow of towering stone spires, Thalassar is a realm where ancient forests stretch to the ocean's edge, and skies are dyed irridescent by celestial storms. The realm is a plane of endless blue, where the tides sculpt landscapes into mythic stories and creatures that weave their own destinies. Here, the unyielding winds of fate carry whispers of lost empires and hidden treasures beneath the waves. In this stark beauty, each day is a struggle to survive in a world that never sleeps, where honor and duty are the only certainties.",
+   "raw": "{\"premise\": \"In Thalassar, a realm of shadowy stone spires and ancient forests stretching to the ocean's edge, where skies are dyed irridescent by celestial storms and winds carry whispers of lost empires beneath the waves, each day is a struggle to survive in an endless blue realm. Here, the unyielding winds of fate weave tales of honor and duty into a tapestry of mythic stories. Trade is the delicate thread that weaves through this fabric, connecting distant shores and fostering a rich exchange of goods. From exotic spices to shimmering gemstones, Thalassar's inhabitants trade treasures both literal and,\"}",
+   "value": "In Thalassar, a realm of shadowy stone spires and ancient forests stretching to the ocean's edge, where skies are dyed irridescent by celestial storms and winds carry whispers of lost empires beneath the waves, each day is a struggle to survive in an endless blue realm. Here, the unyielding winds of fate weave tales of honor and duty into a tapestry of mythic stories. Trade is the delicate thread that weaves through this fabric, connecting distant shores and fostering a rich exchange of goods. From exotic spices to shimmering gemstones, Thalassar's inhabitants trade treasures both literal and,",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 135,
+   "ms": 1223,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make it feel hopeful",
+   "before": "In the ancient city of The Hollow Crown, nestled deep within the shadowy recesses of a forgotten empire, legends whisper of hidden treasures and ancient ruins. The streets are lined with cobblestone that shifts underfoot, revealing the ever-present threat of shadowy specters. The air is thick with a sense of mystery, as if something unseen roams the city's ancient alleys. The people are wary but resilient, their lives intertwined with secrets and whispers of another world. The Hollow Crown is a place where past meets present, hidden truths lurk in every shadow, and the air never quite carries.",
+   "raw": "{\"premise\": \"In the ancient city of The Hollow Crown, nestled deep within the shadowy recesses of a forgotten empire, legends whisper of hidden treasures and ancient ruins. The streets are lined with cobblestone that shifts underfoot, revealing the ever-present threat of shadowy specters. The air is thick with a sense of mystery, as if something unseen roams the city's ancient alleys. The people are wary but resilient, their lives intertwined with secrets and whispers of another world. The Hollow Crown is a place where past meets present, hidden truths lurk in every shadow, and the air never quite carries.\"}",
+   "value": "In the ancient city of The Hollow Crown, nestled deep within the shadowy recesses of a forgotten empire, legends whisper of hidden treasures and ancient ruins. The streets are lined with cobblestone that shifts underfoot, revealing the ever-present threat of shadowy specters. The air is thick with a sense of mystery, as if something unseen roams the city's ancient alleys. The people are wary but resilient, their lives intertwined with secrets and whispers of another world. The Hollow Crown is a place where past meets present, hidden truths lurk in every shadow, and the air never quite carries.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 129,
+   "ms": 1156,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "focus on the weather and landscape",
+   "before": "The Ember Isles are a lush but perilous land of ancient forests and misty mountains. **Swept by** unseen winds, the Isles are a place of enchantment and peril, ruled by the elusive Goddess **Celestial Flora**. Here, within the **lush**, **greenhearted** forests,** a guardian of secrets**, old and wise but never afraid, lives the **Dragon Queen**. She guards the hidden gem of wisdom within the ancient library, a sacred place where knowledge **is** as precious as life. The Isles are a land of feasts, banquets in the **green fields** under moonlit skies, and **the night** itself is a time of **mø",
+   "raw": "{\"premise\": \"The Ember Isles are a lush but perilous land of ancient forests and misty mountains, **swept by** unseen winds. The Isles are a place of enchantment and peril, ruled by the elusive Goddess **Celestial Flora**. Here, within the lush, greenhearted forests,** a guardian of secrets**, old and wise but never afraid, lives the **Dragon Queen**. She guards the hidden gem of wisdom within the ancient library, a sacred place where knowledge **is** as precious as life. The Isles are a land of feasts, banquets in the **green fields** under moonlit skies, and **the night** itself is a time of **mølle**, a\"}",
+   "value": "The Ember Isles are a lush but perilous land of ancient forests and misty mountains, **swept by** unseen winds. The Isles are a place of enchantment and peril, ruled by the elusive Goddess **Celestial Flora**. Here, within the lush, greenhearted forests,** a guardian of secrets**, old and wise but never afraid, lives the **Dragon Queen**. She guards the hidden gem of wisdom within the ancient library, a sacred place where knowledge **is** as precious as life. The Isles are a land of feasts, banquets in the **green fields** under moonlit skies, and **the night** itself is a time of **mølle**, a",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 150,
+   "ms": 1340,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "more mysterious",
+   "before": "In the shadow of ancient spires, Quillhaven whispers secrets carved into its very fabric. A continent where shadows stretch as far as the eye can see, Quillhaven is a realm of perilous landscapes and untamed mysteries. The land's very soul is enshrined in the whispers from forgotten stone carvings, ancient texts, and cyclops-eyed prophets. From dawn to dusk, the sun blazes with a fierce intensity that drowns out all but the bravest of adventurers. Quillhaven's magic is a dark brew, brewed from the very bones of nature and crafted by titanic sorcerers. The ancient city's labyrinthine streets c…",
+   "raw": "{\"premise\": \"In the shadow of ancient spires, Quillhaven whispers secrets carved into its very fabric. A continent where shadows stretch as far as the eye can see, Quillhaven is a realm of perilous landscapes and untamed mysteries. The land's very soul is enshrined in the whispers from forgotten stone carvings, ancient texts, and cyclops-eyed prophets. From dawn to dusk, the sun blazes with a fierce intensity that drowns out all but the bravest of adventurers. Quillhaven's magic is a dark brew, brewed from the very bones of nature and crafted by titanic sorcerers. The ancient city's labyrinthine streets c…\"}",
+   "value": "In the shadow of ancient spires, Quillhaven whispers secrets carved into its very fabric. A continent where shadows stretch as far as the eye can see, Quillhaven is a realm of perilous landscapes and untamed mysteries. The land's very soul is enshrined in the whispers from forgotten stone carvings, ancient texts, and cyclops-eyed prophets. From dawn to dusk, the sun blazes with a fierce intensity that drowns out all but the bravest of adventurers. Quillhaven's magic is a dark brew, brewed from the very bones of nature and crafted by titanic sorcerers. The ancient city's labyrinthine streets c…",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 143,
+   "ms": 1269,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "emphasize a looming threat to everyone",
+   "before": "In the steampunk city of Dreadmere, steam-powered machinery hums through a bygone world where Victorian ingenuity and ancient technology blend in unexpected harmony. The streets are lined with cobblestone alleys, where artisans weave intricate patterns into their creations, and the air is thick with the scent of leather and ink. The city's defenses stand as a testament to past battles, their rusted cannons pointing towards the horizon. As night falls, lanterns flicker and cast colorful shadows on the cobblestones, while whispers of legends fill the air. In this world that never was, where time",
+   "raw": "{\"premise\": \"In the steampunk city of Dreadmere, where Victorian ingenuity and ancient technology blend harmoniously, a looming threat looms large. The city's defenses stand as a testament to past battles, their rusted cannons pointing towards the horizon. As night falls and lanterns flicker to cast colorful shadows on the cobblestones, whispers of legends fill the air. The residents are divided, some seeking to protect their way of life while others fear an unknown menace that threatens everything they hold dear. In this world that never was, where time and technology intersect in unexpected ways, the <b>\"}",
+   "value": "In the steampunk city of Dreadmere, where Victorian ingenuity and ancient technology blend harmoniously, a looming threat looms large. The city's defenses stand as a testament to past battles, their rusted cannons pointing towards the horizon. As night falls and lanterns flicker to cast colorful shadows on the cobblestones, whispers of legends fill the air. The residents are divided, some seeking to protect their way of life while others fear an unknown menace that threatens everything they hold dear. In this world that never was, where time and technology intersect in unexpected ways, the <b>",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 127,
+   "ms": 1157,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make it funnier",
+   "before": "In the shadow of ancient cities, the Sunken Aurel is a realm where once-great structures lie partially submerged beneath the surface. The land is reclaimed from the sea, transformed by natural forces into a world that defies gravity and time. The Aurelites, once the inhabitants of these submerged cities, struggle to survive in a world that is both hostile and beautiful. Magic exists but is limited by the environment, often unseen or muted to keep them from disrupting the balance. The core of the world is a single, vast, underwater city, its architecture lost to history, yet always present in a",
+   "raw": "{\"premise\": \"In the shadow of ancient cities, the Sunken Aurel is a realm where once-great structures lie partially submerged beneath the surface. The land is reclaimed from the sea, transformed by natural forces into a world that defies gravity and time. The Aurelites, once the inhabitants of these submerged cities, struggle to survive in a world that is both hostile and beautiful. Magic exists but is limited by the environment, often unseen or muted to keep them from disrupting the balance. The core of the world is a single, vast, underwater city, its architecture lost to history yet always present in a\\n\"}",
+   "value": "In the shadow of ancient cities, the Sunken Aurel is a realm where once-great structures lie partially submerged beneath the surface. The land is reclaimed from the sea, transformed by natural forces into a world that defies gravity and time. The Aurelites, once the inhabitants of these submerged cities, struggle to survive in a world that is both hostile and beautiful. Magic exists but is limited by the environment, often unseen or muted to keep them from disrupting the balance. The core of the world is a single, vast, underwater city, its architecture lost to history yet always present in a\n",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 128,
+   "ms": 1158,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "mention an ancient ruin",
+   "before": "In the slums of Vael Dorun, a city so ancient it seems to breathe with its own arcane whispers, life is a relentless dance under the watchful eyes of ancient stone guardians. The city's streets are carved from living rock, where shadows dance in the light of lanterns and torches. The air is thick with a mist of history, as fresh as the acrid scent of sweat on the skin of homeless children. Amidst this turmoil, a mithril knight's apprentice dreams of forging the legendary blade that could end suffering, while whispers of ancient spells and forgotten rituals stir unseen beneath the surface. The缚",
+   "raw": "{\"premise\": \"In the slums of Vael Dorun, a city so ancient it seems to breathe with its own arcane whispers, life is a relentless dance under the watchful eyes of ancient stone guardians. The city's streets are carved from living rock, where shadows dance in the light of lanterns and torches. The air is thick with a mist of history, as fresh as the acrid scent of sweat on the skin of homeless children. Amidst this turmoil, a mithril knight's apprentice dreams of forging the legendary blade that could end suffering, while whispers of ancient spells and forgotten rituals stir unseen beneath the surface. The缚\"}",
+   "value": "In the slums of Vael Dorun, a city so ancient it seems to breathe with its own arcane whispers, life is a relentless dance under the watchful eyes of ancient stone guardians. The city's streets are carved from living rock, where shadows dance in the light of lanterns and torches. The air is thick with a mist of history, as fresh as the acrid scent of sweat on the skin of homeless children. Amidst this turmoil, a mithril knight's apprentice dreams of forging the legendary blade that could end suffering, while whispers of ancient spells and forgotten rituals stir unseen beneath the surface. The缚",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 134,
+   "ms": 1218,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "simplify the wording",
+   "before": "The Ashen Reach is a region ravaged by an ancient curse, now cloaked in an eternal twilight. The once-generous sun has faded to a pale yellow, casting a sickly glow that seems to mock the living. In this place of broken dreams and whispered secrets, creatures both benevolent and malevolent lurk unseen. The air is thick with a mist that drowns out the faintest sound, and shadows shift with each breath. The Ashen Reach is a realm of forgotten terrors, where the living must contend with unseen forces that whisper their own dark truths.",
+   "raw": "{\"premise\": \"The Ashen Reach is a region where the sun's light has been extinguished, casting an eternal twilight. In this place of broken dreams and whispered secrets, the creatures that once flourished are now extinct, leaving only whispers of their presence. The air is thick with mist that drowns out the faintest sound, and shadows shift unseen. The Ashen Reach is a realm of forgotten terrors where the living must contend with unseen forces seeking their own dark truths.\"}",
+   "value": "The Ashen Reach is a region where the sun's light has been extinguished, casting an eternal twilight. In this place of broken dreams and whispered secrets, the creatures that once flourished are now extinct, leaving only whispers of their presence. The air is thick with mist that drowns out the faintest sound, and shadows shift unseen. The Ashen Reach is a realm of forgotten terrors where the living must contend with unseen forces seeking their own dark truths.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 102,
+   "ms": 959,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "more about religion",
+   "before": "Korrin's Rest is a sprawling, hidden haven nestled within the wilds of an ancient continent. Towering mountains, dense forests, and a mist-shrouded river carve the landscape into jagged channels. The sun rises on golden sand and sets in a sea of stars, painting the skies with hues that never fade. The people here live by their own rules, a way of life untouched by the modern world's conveniences. They are pirates, traders, adventurers seeking fortune or adventure, bound by a code that celebrates freedom and survival. The essence of Korrin's Rest is in its eternal peace, a place where the last ",
+   "raw": "{\"premise\": \"Korrin's Rest is a sprawling, hidden haven nestled within the wilds of an ancient continent. Towering mountains, dense forests, and a mist-shrouded river carve the landscape into jagged channels. The people here live by their own rules, a way of life untouched by the modern world's conveniences. They are pirates, traders, adventurers seeking fortune or adventure, bound by a code that celebrates freedom and survival. The essence of Korrin's Rest is in its eternal peace, a place where the last days are spent by the sea and the stars. The people of Korrin's Rest worship various deities, interwove\"}",
+   "value": "Korrin's Rest is a sprawling, hidden haven nestled within the wilds of an ancient continent. Towering mountains, dense forests, and a mist-shrouded river carve the landscape into jagged channels. The people here live by their own rules, a way of life untouched by the modern world's conveniences. They are pirates, traders, adventurers seeking fortune or adventure, bound by a code that celebrates freedom and survival. The essence of Korrin's Rest is in its eternal peace, a place where the last days are spent by the sea and the stars. The people of Korrin's Rest worship various deities, interwove",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 139,
+   "ms": 1262,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make the people poorer",
+   "before": "In the drowsy haze of a sun-baked afternoon, Mistmoor whispers secrets through its ancient streets. The earth hums underfoot of the dying embers, a testament to cycles long forgotten or lost. The skies are a silent chorus of storm clouds, a symphony of rain gauges and lightning strikes. The trees stand as silent sentinels to the old ways, their roots a testament to generations of survival. The winds carry whispers from beyond, carrying tales of forgotten dreams and unbreakable bonds. Yet, beneath the surface, there lies a force unseen, latent within the very soil of Mistmoor. It is not an ally",
+   "raw": "{\"premise\": \"In the drowsy haze of a sun-baked afternoon, Mistmoor whispers secrets through its ancient streets. The earth hums underfoot of the dying embers, a testament to cycles long forgotten or lost. The skies are a silent chorus of storm clouds, a symphony of rain gauges and lightning strikes. The trees stand as silent sentinels to the old ways, their roots a testament to generations of survival. The winds carry whispers from beyond, carrying tales of forgotten dreams and unbreakable bonds. Yet, beneath the surface there lies a force unseen, latent within the very soil of Mistmoor. It is not an ally,\"}",
+   "value": "In the drowsy haze of a sun-baked afternoon, Mistmoor whispers secrets through its ancient streets. The earth hums underfoot of the dying embers, a testament to cycles long forgotten or lost. The skies are a silent chorus of storm clouds, a symphony of rain gauges and lightning strikes. The trees stand as silent sentinels to the old ways, their roots a testament to generations of survival. The winds carry whispers from beyond, carrying tales of forgotten dreams and unbreakable bonds. Yet, beneath the surface there lies a force unseen, latent within the very soil of Mistmoor. It is not an ally,",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 139,
+   "ms": 1237,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "add a rival faction",
+   "before": "Thalassar is a vast, primordial ocean realm where the sea itself is both a living entity and a source of power. The Waterkin, humans with aquatic abilities, are its guardians, maintaining the delicate ecosystem and commanding the elemental forces. Beneath the waves lies a hidden world of dark, enchanted caverns where ancient sorcery thrives. The sunken citadels stand silent sentinels, relics of a lost civilization that once ruled the seas. The air is thick with the scent of salt and mystery, contrasting sharply against the eerie silence of deep waters. The currents are a living force, shifting",
+   "raw": "{\"premise\": \"Thalassar is a vast, primordial ocean realm where the sea itself is both a living entity and a source of power. The Waterkin, humans with aquatic abilities, are its guardians, maintaining the delicate ecosystem and commanding the elemental forces. Beneath the waves lies a hidden world of dark, enchanted caverns where ancient sorcery thrives. The sunken citadels stand silent sentinels, relics of a lost civilization that once ruled the seas. The air is thick with the scent of salt and mystery, contrasting sharply against the eerie silence of deep waters. The currents are a living force, shifting\"}",
+   "value": "Thalassar is a vast, primordial ocean realm where the sea itself is both a living entity and a source of power. The Waterkin, humans with aquatic abilities, are its guardians, maintaining the delicate ecosystem and commanding the elemental forces. Beneath the waves lies a hidden world of dark, enchanted caverns where ancient sorcery thrives. The sunken citadels stand silent sentinels, relics of a lost civilization that once ruled the seas. The air is thick with the scent of salt and mystery, contrasting sharply against the eerie silence of deep waters. The currents are a living force, shifting",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 131,
+   "ms": 1207,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "make it more cinematic",
+   "before": "In the shadow of ancient blackwood, The Hollow Crown stands as a testament to forgotten glory. Once a bustling hub of commerce and sorcery, it now whispers secrets to the winds that sweep its streets. The city's buildings rise like jagged teeth in a tide of decay, while the ancient eldritch tome that once adorned the library's shelves lies forgotten in a dimly lit alley. The air is thick with the scent of age and decay, as the very stones that sustained it are now pitted with unseen maladies. But amidst its decay, a faint spark of magic still pulses through the air - an ancient curse bound to,",
+   "raw": "{\"premise\": \"In the shadow of ancient blackwood, The Hollow Crown stands as a testament to forgotten glory. Once a bustling hub of commerce and sorcery, it now whispers secrets to the winds that sweep its streets. The city's buildings rise like jagged teeth in a tide of decay, while the ancient eldritch tome that once adorned the library's shelves lies forgotten in a dimly lit alley. The air is thick with the scent of age and decay, as the very stones that sustained it are now pitted with unseen maladies. But amidst its decay, a faint spark of magic still pulses through the air - an ancient curse bound to,\"}",
+   "value": "In the shadow of ancient blackwood, The Hollow Crown stands as a testament to forgotten glory. Once a bustling hub of commerce and sorcery, it now whispers secrets to the winds that sweep its streets. The city's buildings rise like jagged teeth in a tide of decay, while the ancient eldritch tome that once adorned the library's shelves lies forgotten in a dimly lit alley. The air is thick with the scent of age and decay, as the very stones that sustained it are now pitted with unseen maladies. But amidst its decay, a faint spark of magic still pulses through the air - an ancient curse bound to,",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 136,
+   "ms": 1235,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "focus on a single dominant power",
+   "before": "In the ancient forests of Ember Isles, a mystical forest whispers secrets to those brave enough to listen. The land is divided into four kingdoms ruled by fairies, each with their own enchanting tales and challenges. The forest itself is a living source of magic - its trees are adorned with blooms that dance in the wind, and waterfalls shimmer with a magical touch. The air is filled with sweet scents of flowers and the earth's own perfume, creating a tranquil yet mystical atmosphere. The fairies are in charge of maintaining these enchantments and ensuring peace, but their rule is challenged by",
+   "raw": "{\"premise\": \"In the ancient forests of Ember Isles, a single dominant power reigns supreme. The land is ruled by a benevolent yet powerful sorcerer, whose arcane knowledge and dark magic forge a complex web of alliances and rivalries. The forests themselves are under his spell, with their very essence shaped by the dark arts of black magic. The air is tainted with a toxic blend of spells, creating both harmony and chaos. Despite the sorcerer's presence, the fairies still claim their land as a sanctuary of peace and magic. Their tales of enchantment are woven into the very heart of the forest, a testament -\"}",
+   "value": "In the ancient forests of Ember Isles, a single dominant power reigns supreme. The land is ruled by a benevolent yet powerful sorcerer, whose arcane knowledge and dark magic forge a complex web of alliances and rivalries. The forests themselves are under his spell, with their very essence shaped by the dark arts of black magic. The air is tainted with a toxic blend of spells, creating both harmony and chaos. Despite the sorcerer's presence, the fairies still claim their land as a sanctuary of peace and magic. Their tales of enchantment are woven into the very heart of the forest, a testament -",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 130,
+   "ms": 1164,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "less grim",
+   "before": "Quillhaven, a sprawling continent of verdant forests and ancient cities, is a place where the past echoes with shadows. The land is divided into fractious kingdoms, each kingdom ruled by a king or queen, but united under the grand magistrates of the Council. Power struggles and trade rivalries stir beneath the surface, while ancient curses loom on forgotten ruins. The world is a tapestry woven with threads of magic, from the whispers of nature to the dark rituals performed by those who hunger for power. In Quillhaven, history is a living force, shaping destiny and igniting conflict, as seasons",
+   "raw": "{\"premise\": \"Quillhaven, a sprawling continent of verdant forests and ancient cities, is a place where the past echoes with whispers. The land is divided into fractious kingdoms, each ruled by a king or queen, but united under the grand magistrates of the Council. Power struggles and trade rivalries stir beneath the surface, while ancient curses loom on forgotten ruins. The world is a tapestry woven with threads of magic, from the gentle rustle of leaves to the dark rituals performed by those who hunger for power. In Quillhaven, history is a living force, shaping destiny and igniting conflict, as seasons e\"}",
+   "value": "Quillhaven, a sprawling continent of verdant forests and ancient cities, is a place where the past echoes with whispers. The land is divided into fractious kingdoms, each ruled by a king or queen, but united under the grand magistrates of the Council. Power struggles and trade rivalries stir beneath the surface, while ancient curses loom on forgotten ruins. The world is a tapestry woven with threads of magic, from the gentle rustle of leaves to the dark rituals performed by those who hunger for power. In Quillhaven, history is a living force, shaping destiny and igniting conflict, as seasons e",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 132,
+   "ms": 1194,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "more detail about food and daily life",
+   "before": "Dreadmere is a sprawling city of intricate gears and polished brass, nestled between the towering Spire towers that dominate both sky and sea. In this steampunk world, machinery whispers secrets of the past to those daring enough to listen. The streets are lined with workshops and laboratories, where inventors experiment with steam-powered clocks in the scorching heat of summer or struggle to keep their cogs turning against winter's chill. The city, **a world of gears**, is a testament to human ingenuity and the unwavering pursuit of progress, even as it's marked by a **slothful economy** and ",
+   "raw": "{\"premise\": \"Dreadmere is a sprawling city of intricate gears and polished brass, nestled between the towering Spire towers that dominate both sky and sea. In this steampunk world, machinery whispers secrets of the past to those daring enough to listen. The streets are lined with workshops and laboratories, where inventors experiment with steam-powered clocks in the scorching heat of summer or struggle to keep their cogs turning against winter's chill. The city, **a world of gears**, is a testament to human ingenuity and the unwavering pursuit of progress, even as it's marked by a **slothful economy** and \"}",
+   "value": "Dreadmere is a sprawling city of intricate gears and polished brass, nestled between the towering Spire towers that dominate both sky and sea. In this steampunk world, machinery whispers secrets of the past to those daring enough to listen. The streets are lined with workshops and laboratories, where inventors experiment with steam-powered clocks in the scorching heat of summer or struggle to keep their cogs turning against winter's chill. The city, **a world of gears**, is a testament to human ingenuity and the unwavering pursuit of progress, even as it's marked by a **slothful economy** and ",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 133,
+   "ms": 1194,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "make it stranger",
+   "before": "In the depths of forgotten lands, a shattered world thrives on the remnants of magic and despair. The sunken Aurel is a realm where the ancient Order of the White Veil toils to restore its power, battling against dark sorcery that seeks to enslave the realm. Diverse races struggle for survival, from the resilient humans with arcane knowledge to the fierce dragons and towering trees that guard their secrets. The future is uncertain, but hope flickers in the light of forgotten spells and the will to make a new world.",
+   "raw": "{\"premise\": \"In the forgotten depths of the sunken Aurel, a world shrouded in shadow and whispers of ancient magic thrives. Lava pits once teeming with life now lie barren, choked by stony crevices and forgotten artifacts. The remnants of the ancients' beacon, the White Veil Order, struggles to maintain its power amidst relentless dark sorcery. Races of the dead—dragons with iron scales, trees with gnarled bark, and humans with arcane knowledge—are pitted against the encroaching darkness. Amidst the ruins, hope flickers like faint flames lit by ancient spells, drawing humanity to a new dawn. The future is晦\"}",
+   "value": "In the forgotten depths of the sunken Aurel, a world shrouded in shadow and whispers of ancient magic thrives. Lava pits once teeming with life now lie barren, choked by stony crevices and forgotten artifacts. The remnants of the ancients' beacon, the White Veil Order, struggles to maintain its power amidst relentless dark sorcery. Races of the dead—dragons with iron scales, trees with gnarled bark, and humans with arcane knowledge—are pitted against the encroaching darkness. Amidst the ruins, hope flickers like faint flames lit by ancient spells, drawing humanity to a new dawn. The future is晦",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 142,
+   "ms": 1353,
+   "reasoning": false
+  }
+ ]
+}

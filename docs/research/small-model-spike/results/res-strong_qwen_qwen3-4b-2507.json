@@ -1,0 +1,687 @@
+{
+ "model": "qwen/qwen3-4b-2507",
+ "gen": [
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Vael Dorun rises from the mist-shrouded mountains, its stone spires carved by wind and time. Every resident tends to the Great Stone, a living monolith that pulses with warmth and whispers forgotten names. Life flows in quiet rhythm—seasons shift, crops grow, and the mountain breathes, keeping the city alive through its slow, unbroken song.\"}",
+   "value": "Vael Dorun rises from the mist-shrouded mountains, its stone spires carved by wind and time. Every resident tends to the Great Stone, a living monolith that pulses with warmth and whispers forgotten names. Life flows in quiet rhythm—seasons shift, crops grow, and the mountain breathes, keeping the city alive through its slow, unbroken song.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 82,
+   "ms": 1617,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"The Ashen Reach is a region of perpetual twilight, where forests grow backwards and rivers run black with sediment. Ancient stone monoliths hum faintly, their inscriptions slowly erasing themselves in the wind. The land breathes in long, slow cycles—each season bleeds into the next, and the dead walk only in fog, their footsteps leaving no trace.\"}",
+   "value": "The Ashen Reach is a region of perpetual twilight, where forests grow backwards and rivers run black with sediment. Ancient stone monoliths hum faintly, their inscriptions slowly erasing themselves in the wind. The land breathes in long, slow cycles—each season bleeds into the next, and the dead walk only in fog, their footsteps leaving no trace.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 81,
+   "ms": 1270,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Korrin's Rest is a continent of jagged peaks and sun-scorched dunes, where sword-forged clans duel beneath crimson skies. Ancient magic pulses through ley lines, granting warriors temporary strength and elemental whispers. A silent war rages between the sun-worshipping Sunkin and the shadowed Nightmarch, each believing they hold the world’s true balance.\"}",
+   "value": "Korrin's Rest is a continent of jagged peaks and sun-scorched dunes, where sword-forged clans duel beneath crimson skies. Ancient magic pulses through ley lines, granting warriors temporary strength and elemental whispers. A silent war rages between the sun-worshipping Sunkin and the shadowed Nightmarch, each believing they hold the world’s true balance.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 84,
+   "ms": 1308,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Mistmoor stretches under a sky of shifting, iridescent fog, where saloon-lit towns cling to jagged cliffs and wind-sculpted forests hum with ancient, sentient trees. Ghostly astral steeds and rusted telegraph lines carry whispers of forgotten gods, while frontier outlaws wield cursed silver and oil-slicked magic that burns the land. The air thrums with unseen forces—each sunset bleeds into the next, and the land remembers every lie told beneath its dusty soil.\"}",
+   "value": "Mistmoor stretches under a sky of shifting, iridescent fog, where saloon-lit towns cling to jagged cliffs and wind-sculpted forests hum with ancient, sentient trees. Ghostly astral steeds and rusted telegraph lines carry whispers of forgotten gods, while frontier outlaws wield cursed silver and oil-slicked magic that burns the land. The air thrums with unseen forces—each sunset bleeds into the next, and the land remembers every lie told beneath its dusty soil.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 112,
+   "ms": 1698,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Thalassar is a vast, swirling ocean of sentient tides that rise and fall in rhythmic waves, each crest shaping mountains and valleys beneath. Ancient, stone-age tribes sail on obsidian-skinned vessels, navigating the tides with oral knowledge and celestial signs. The land and sea shift constantly, and those who listen to the waves gain fleeting visions—yet the deeper they go, the more the tides pull them under.\"}",
+   "value": "Thalassar is a vast, swirling ocean of sentient tides that rise and fall in rhythmic waves, each crest shaping mountains and valleys beneath. Ancient, stone-age tribes sail on obsidian-skinned vessels, navigating the tides with oral knowledge and celestial signs. The land and sea shift constantly, and those who listen to the waves gain fleeting visions—yet the deeper they go, the more the tides pull them under.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 95,
+   "ms": 1468,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"The Hollow Crown floats above the clouds, its spires woven from living silver and lit by eternal, whispering lanterns. Below, the city's people trade secrets for gold, bound by a forgotten pact that makes truth bleed when spoken too loudly. A slow, silent rot spreads through the foundations—some say the city dreams, and dreams can never truly wake.\"}",
+   "value": "The Hollow Crown floats above the clouds, its spires woven from living silver and lit by eternal, whispering lanterns. Below, the city's people trade secrets for gold, bound by a forgotten pact that makes truth bleed when spoken too loudly. A slow, silent rot spreads through the foundations—some say the city dreams, and dreams can never truly wake.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 80,
+   "ms": 1251,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"The Ember Isles float on a network of bioluminescent clouds, each island shaped like a living flame. Ancient forests breathe with ember-furred creatures, and the land pulses with gentle magic born of forgotten songs. Every dawn, the islands shift slightly, as if dreaming—stabilized only by the quiet, rhythmic hum of the people who listen to the wind's lullabies.\"}",
+   "value": "The Ember Isles float on a network of bioluminescent clouds, each island shaped like a living flame. Ancient forests breathe with ember-furred creatures, and the land pulses with gentle magic born of forgotten songs. Every dawn, the islands shift slightly, as if dreaming—stabilized only by the quiet, rhythmic hum of the people who listen to the wind's lullabies.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 86,
+   "ms": 1336,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Quillhaven is a continent where ink and memory breathe, and every blade of grass hums with forgotten words. Mountains of written paper rise like monuments, their pages bleeding into the soil, feeding the cursed forests that grow only in ink-stained twilight. Time fractures in libraries, and those who write truth risk becoming ghosts trapped in their own sentences.\"}",
+   "value": "Quillhaven is a continent where ink and memory breathe, and every blade of grass hums with forgotten words. Mountains of written paper rise like monuments, their pages bleeding into the soil, feeding the cursed forests that grow only in ink-stained twilight. Time fractures in libraries, and those who write truth risk becoming ghosts trapped in their own sentences.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 77,
+   "ms": 1205,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Dreadmere is a world of iron lungs and clockwork beasts, where steam hisses from mountain vents and cities rise like cogs from the earth. Rivers run with oil and time moves in bursts, synced to the great gears beneath the surface. All life is shaped by the Pulse—periodic tremors that awaken buried engines and reshape the land in slow, mechanical waves.\"}",
+   "value": "Dreadmere is a world of iron lungs and clockwork beasts, where steam hisses from mountain vents and cities rise like cogs from the earth. Rivers run with oil and time moves in bursts, synced to the great gears beneath the surface. All life is shaped by the Pulse—periodic tremors that awaken buried engines and reshape the land in slow, mechanical waves.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 83,
+   "ms": 1288,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Sunken Aurel drifts beneath a forgotten sky, its sunken cities half-submerged in coral and rust. Bioluminescent flora pulse faintly, feeding on the planet’s lingering magic, while ancient, rune-etched machines hum in forgotten corners. Tides of shadow-winds rise and fall, carrying whispers of drowned gods—each wave a reminder that the world remembers what it lost.\"}",
+   "value": "Sunken Aurel drifts beneath a forgotten sky, its sunken cities half-submerged in coral and rust. Bioluminescent flora pulse faintly, feeding on the planet’s lingering magic, while ancient, rune-etched machines hum in forgotten corners. Tides of shadow-winds rise and fall, carrying whispers of drowned gods—each wave a reminder that the world remembers what it lost.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 87,
+   "ms": 1353,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Vael Dorun floats above the world on a network of floating islands, tethered by ancient magic and woven with living stone. The city’s towers pulse with faint light, powered by the breath of the earth and the songs of wind spirits. Below, the land is silent and unbroken—forever still, untouched by time, while the city thrives on balance, fearing the unraveling of its fragile, sky-bound harmony.\"}",
+   "value": "Vael Dorun floats above the world on a network of floating islands, tethered by ancient magic and woven with living stone. The city’s towers pulse with faint light, powered by the breath of the earth and the songs of wind spirits. Below, the land is silent and unbroken—forever still, untouched by time, while the city thrives on balance, fearing the unraveling of its fragile, sky-bound harmony.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 94,
+   "ms": 1444,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"The Ashen Reach is a region of crumbling spires and whispering forests, where the air smells of rust and forgotten prayers. Ancient magic bleeds from the earth, manifesting as spectral storms and cursed flora that feed on fear. Cities rise like bone cages, their foundations sealed by forgotten oaths—any breach awakens the dead beneath.\"}",
+   "value": "The Ashen Reach is a region of crumbling spires and whispering forests, where the air smells of rust and forgotten prayers. Ancient magic bleeds from the earth, manifesting as spectral storms and cursed flora that feed on fear. Cities rise like bone cages, their foundations sealed by forgotten oaths—any breach awakens the dead beneath.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 76,
+   "ms": 1208,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Korrin's Rest is a continent of jagged mountains and sun-baked plains, where villages cling to rocky outcrops, trading blades, leather, and hand-crafted tools. Frequent skirmishes between clans and rogue outlaws define the frontier, with duels fought under the open sky as a matter of honor. The land is shaped by ancient winds and a relentless sun, where survival depends on strength, cunning, and the unyielding will to defend one's name.\"}",
+   "value": "Korrin's Rest is a continent of jagged mountains and sun-baked plains, where villages cling to rocky outcrops, trading blades, leather, and hand-crafted tools. Frequent skirmishes between clans and rogue outlaws define the frontier, with duels fought under the open sky as a matter of honor. The land is shaped by ancient winds and a relentless sun, where survival depends on strength, cunning, and the unyielding will to defend one's name.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 105,
+   "ms": 1599,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Mistmoor is a ragged frontier where saloon signs glow with faint, cursed light and dry wells whisper secrets in forgotten tongues. Weather shifts suddenly—fog banks swallow towns, and storms carry strange, insect-like hums that shatter glass. Old frontier myths persist, and the land itself remembers, blooming with thorns when truth is spoken too loudly.\"}",
+   "value": "Mistmoor is a ragged frontier where saloon signs glow with faint, cursed light and dry wells whisper secrets in forgotten tongues. Weather shifts suddenly—fog banks swallow towns, and storms carry strange, insect-like hums that shatter glass. Old frontier myths persist, and the land itself remembers, blooming with thorns when truth is spoken too loudly.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 82,
+   "ms": 1281,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Thalassar is a planar realm of swirling tides and jagged, living mountains that breathe with ancient magic. The land pulses with arcane energy, manifesting as storms of light and shadow that shape the terrain and grant fleeting, powerful spells to those who survive their wrath. Between the wild, sentient seas and the sun-scorched deserts, tribes of sword-wielders and sorcerers wage eternal, unending wars over the last known source of true power: the Sunken Spire.\"}",
+   "value": "Thalassar is a planar realm of swirling tides and jagged, living mountains that breathe with ancient magic. The land pulses with arcane energy, manifesting as storms of light and shadow that shape the terrain and grant fleeting, powerful spells to those who survive their wrath. Between the wild, sentient seas and the sun-scorched deserts, tribes of sword-wielders and sorcerers wage eternal, unending wars over the last known source of true power: the Sunken Spire.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 110,
+   "ms": 1671,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"In the Hollow Crown, the city floats above a chasm of whispering stone, its spires woven from living crystal that hums with ancient magic. Every citizen carries a shard of the Crown’s core, granting them fleeting power—but each use fractures their memories. Time flows unevenly beneath the city, and the deeper one descends, the more the past bleeds into the present, shaping fate with quiet, terrible certainty.\"}",
+   "value": "In the Hollow Crown, the city floats above a chasm of whispering stone, its spires woven from living crystal that hums with ancient magic. Every citizen carries a shard of the Crown’s core, granting them fleeting power—but each use fractures their memories. Time flows unevenly beneath the city, and the deeper one descends, the more the past bleeds into the present, shaping fate with quiet, terrible certainty.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 93,
+   "ms": 1439,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"The Ember Isles are a cluster of lush, forested islands where fireflies glow in patterns that mark seasons and tides. Each island has a unique, self-sustaining ecosystem shaped by ancient winds and seasonal rains. Communities live in harmony with nature, guided by oral traditions and the quiet rhythms of the land.\"}",
+   "value": "The Ember Isles are a cluster of lush, forested islands where fireflies glow in patterns that mark seasons and tides. Each island has a unique, self-sustaining ecosystem shaped by ancient winds and seasonal rains. Communities live in harmony with nature, guided by oral traditions and the quiet rhythms of the land.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 70,
+   "ms": 1117,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Quillhaven is a continent where ink and paper bleed into reality, and every written word shapes the world—small, fleeting changes ripple through villages, but great truths fracture landscapes. Cities rise from ancient manuscripts, their spires whispering forgotten sentences that grow roots and bloom into living forests. A silent war rages between scribes who bind fate and erasers who seek to delete history, their shadows stretching across the land like ink-stained wind.\"}",
+   "value": "Quillhaven is a continent where ink and paper bleed into reality, and every written word shapes the world—small, fleeting changes ripple through villages, but great truths fracture landscapes. Cities rise from ancient manuscripts, their spires whispering forgotten sentences that grow roots and bloom into living forests. A silent war rages between scribes who bind fate and erasers who seek to delete history, their shadows stretching across the land like ink-stained wind.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 97,
+   "ms": 1484,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Dreadmere floats on a sea of perpetual fog, its cities forged from brass and coal, powered by geothermal vents beneath the surface. Steam-punk engineers and shadow-weavers harness ley-line currents to control weather and minor miracles, but the land groans beneath them—cracks bloom like wounds, and the sky bleeds ink. Life thrives in uneasy balance: progress fuels tremors, and silence between the chimes of the great engines holds the unspoken truth of the world’s slow, inevitable collapse.\"}",
+   "value": "Dreadmere floats on a sea of perpetual fog, its cities forged from brass and coal, powered by geothermal vents beneath the surface. Steam-punk engineers and shadow-weavers harness ley-line currents to control weather and minor miracles, but the land groans beneath them—cracks bloom like wounds, and the sky bleeds ink. Life thrives in uneasy balance: progress fuels tremors, and silence between the chimes of the great engines holds the unspoken truth of the world’s slow, inevitable collapse.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 111,
+   "ms": 1684,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Sunken Aurel drifts beneath a fractured sky, its coral cities rising from drowned mountains, glowing with ancient magic. The sun never rises, but bioluminescent storms pulse across the ocean floor, feeding the land through ley-line veins. Every living thing hums with latent power—some grow stronger with time, others fade into silence, a silent war between light and shadow beneath the waves.\"}",
+   "value": "Sunken Aurel drifts beneath a fractured sky, its coral cities rising from drowned mountains, glowing with ancient magic. The sun never rises, but bioluminescent storms pulse across the ocean floor, feeding the land through ley-line veins. Every living thing hums with latent power—some grow stronger with time, others fade into silence, a silent war between light and shadow beneath the waves.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 87,
+   "ms": 1351,
+   "reasoning": false
+  }
+ ],
+ "rev": [
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "make it darker",
+   "before": "Vael Dorun rises from the mist-shrouded mountains, its stone spires carved by wind and time. Every resident tends to the Great Stone, a living monolith that pulses with warmth and whispers forgotten names. Life flows in quiet rhythm—seasons shift, crops grow, and the mountain breathes, keeping the city alive through its slow, unbroken song.",
+   "raw": "{\"premise\": \"Vael Dorun clings to the mist-choked peaks, its stone spires cracked and weeping rust. The Great Stone pulses, not with warmth, but with a slow, hollow groan—each beat cracks the earth and stirs buried things. Life thrives on silence, for the mountain dreams in whispers that no one dares to hear, and every season ends with a tremor that remembers what was lost.\"}",
+   "value": "Vael Dorun clings to the mist-choked peaks, its stone spires cracked and weeping rust. The Great Stone pulses, not with warmth, but with a slow, hollow groan—each beat cracks the earth and stirs buried things. Life thrives on silence, for the mountain dreams in whispers that no one dares to hear, and every season ends with a tremor that remembers what was lost.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 93,
+   "ms": 1625,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "shorter",
+   "before": "The Ashen Reach is a region of perpetual twilight, where forests grow backwards and rivers run black with sediment. Ancient stone monoliths hum faintly, their inscriptions slowly erasing themselves in the wind. The land breathes in long, slow cycles—each season bleeds into the next, and the dead walk only in fog, their footsteps leaving no trace.",
+   "raw": "{\"premise\": \"The Ashen Reach is a region of perpetual twilight. Forests grow backwards, rivers run black, and stone monoliths hum softly, their carvings fading in the wind. Dead walk in fog, leaving no footsteps—only silence.\"}",
+   "value": "The Ashen Reach is a region of perpetual twilight. Forests grow backwards, rivers run black, and stone monoliths hum softly, their carvings fading in the wind. Dead walk in fog, leaving no footsteps—only silence.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 56,
+   "ms": 1104,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "more political intrigue",
+   "before": "Korrin's Rest is a continent of jagged peaks and sun-scorched dunes, where sword-forged clans duel beneath crimson skies. Ancient magic pulses through ley lines, granting warriors temporary strength and elemental whispers. A silent war rages between the sun-worshipping Sunkin and the shadowed Nightmarch, each believing they hold the world’s true balance.",
+   "raw": "{\"premise\": \"Korrin's Rest is a continent of jagged peaks and sun-scorched dunes, where sword-forged clans duel beneath crimson skies. Ancient magic flows through ley lines, granting warriors fleeting power and elemental hints—each clan claims divine right to rule. A silent war rages between the sun-worshipping Sunkin and the shadowed Nightmarch, their rival courts manipulating alliances, trade routes, and prophecy to control the land's fading magic.\"}",
+   "value": "Korrin's Rest is a continent of jagged peaks and sun-scorched dunes, where sword-forged clans duel beneath crimson skies. Ancient magic flows through ley lines, granting warriors fleeting power and elemental hints—each clan claims divine right to rule. A silent war rages between the sun-worshipping Sunkin and the shadowed Nightmarch, their rival courts manipulating alliances, trade routes, and prophecy to control the land's fading magic.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 102,
+   "ms": 1752,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "less magic, more mundane",
+   "before": "Mistmoor stretches under a sky of shifting, iridescent fog, where saloon-lit towns cling to jagged cliffs and wind-sculpted forests hum with ancient, sentient trees. Ghostly astral steeds and rusted telegraph lines carry whispers of forgotten gods, while frontier outlaws wield cursed silver and oil-slicked magic that burns the land. The air thrums with unseen forces—each sunset bleeds into the next, and the land remembers every lie told beneath its dusty soil.",
+   "raw": "{\"premise\": \"Mistmoor stretches under a sky of swirling, iridescent fog, where saloon-lit towns cling to jagged cliffs and wind-sculpted forests grow wild and unpredictable. Outlaws ride rusted, oil-streaked machinery and trade secrets for survival, while the land itself cracks and shifts with the weight of unspoken rumors. Every sunset dulls the horizon, and the dust remembers every lie told beneath it.\"}",
+   "value": "Mistmoor stretches under a sky of swirling, iridescent fog, where saloon-lit towns cling to jagged cliffs and wind-sculpted forests grow wild and unpredictable. Outlaws ride rusted, oil-streaked machinery and trade secrets for survival, while the land itself cracks and shifts with the weight of unspoken rumors. Every sunset dulls the horizon, and the dust remembers every lie told beneath it.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 95,
+   "ms": 1712,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "add a mention of trade",
+   "before": "Thalassar is a vast, swirling ocean of sentient tides that rise and fall in rhythmic waves, each crest shaping mountains and valleys beneath. Ancient, stone-age tribes sail on obsidian-skinned vessels, navigating the tides with oral knowledge and celestial signs. The land and sea shift constantly, and those who listen to the waves gain fleeting visions—yet the deeper they go, the more the tides pull them under.",
+   "raw": "{\"premise\": \"Thalassar is a vast, swirling ocean of sentient tides that rise and fall in rhythmic waves, each crest reshaping mountains and valleys beneath. Ancient stone-age tribes sail obsidian-skinned vessels, trading sea-iron and tide-lore across shifting coastlines. The land and sea shift constantly, and those who listen to the waves gain fleeting visions—yet the deeper they go, the more the tides pull them under.\"}",
+   "value": "Thalassar is a vast, swirling ocean of sentient tides that rise and fall in rhythmic waves, each crest reshaping mountains and valleys beneath. Ancient stone-age tribes sail obsidian-skinned vessels, trading sea-iron and tide-lore across shifting coastlines. The land and sea shift constantly, and those who listen to the waves gain fleeting visions—yet the deeper they go, the more the tides pull them under.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 96,
+   "ms": 1672,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make it feel hopeful",
+   "before": "The Hollow Crown floats above the clouds, its spires woven from living silver and lit by eternal, whispering lanterns. Below, the city's people trade secrets for gold, bound by a forgotten pact that makes truth bleed when spoken too loudly. A slow, silent rot spreads through the foundations—some say the city dreams, and dreams can never truly wake.",
+   "raw": "{\"premise\": \"The Hollow Crown floats above the clouds, its silver spires glowing softly with lanterns that hum with quiet joy. Below, people trade secrets for gold, bound by a pact that makes truth bloom like flowers when spoken gently. A slow, quiet awakening stirs the foundations—some say the city dreams, and now it begins to remember how to breathe.\"}",
+   "value": "The Hollow Crown floats above the clouds, its silver spires glowing softly with lanterns that hum with quiet joy. Below, people trade secrets for gold, bound by a pact that makes truth bloom like flowers when spoken gently. A slow, quiet awakening stirs the foundations—some say the city dreams, and now it begins to remember how to breathe.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 78,
+   "ms": 1415,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "focus on the weather and landscape",
+   "before": "The Ember Isles float on a network of bioluminescent clouds, each island shaped like a living flame. Ancient forests breathe with ember-furred creatures, and the land pulses with gentle magic born of forgotten songs. Every dawn, the islands shift slightly, as if dreaming—stabilized only by the quiet, rhythmic hum of the people who listen to the wind's lullabies.",
+   "raw": "{\"premise\": \"The Ember Isles drift on a web of shimmering, living clouds, their jagged flame-shaped islands glinting in perpetual twilight. Rain falls in soft, golden mist that fuels the land, and winds carry embers that spiral through the air like slow, glowing fireflies. Each night, the sky pulses with a slow, warm breath—shifting the isles slightly, as if the clouds themselves are dreaming.\"}",
+   "value": "The Ember Isles drift on a web of shimmering, living clouds, their jagged flame-shaped islands glinting in perpetual twilight. Rain falls in soft, golden mist that fuels the land, and winds carry embers that spiral through the air like slow, glowing fireflies. Each night, the sky pulses with a slow, warm breath—shifting the isles slightly, as if the clouds themselves are dreaming.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 91,
+   "ms": 1602,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "more mysterious",
+   "before": "Quillhaven is a continent where ink and memory breathe, and every blade of grass hums with forgotten words. Mountains of written paper rise like monuments, their pages bleeding into the soil, feeding the cursed forests that grow only in ink-stained twilight. Time fractures in libraries, and those who write truth risk becoming ghosts trapped in their own sentences.",
+   "raw": "{\"premise\": \"Quillhaven pulses with silent ink—each blade of grass holds a whispered thought, forgotten and unspoken. Paper mountains weep script into the earth, birthing forests that grow only where memory is absent. Time dissolves in libraries, and words written in the dark become living things, feeding on the silence between breaths.\"}",
+   "value": "Quillhaven pulses with silent ink—each blade of grass holds a whispered thought, forgotten and unspoken. Paper mountains weep script into the earth, birthing forests that grow only where memory is absent. Time dissolves in libraries, and words written in the dark become living things, feeding on the silence between breaths.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 73,
+   "ms": 1293,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "emphasize a looming threat to everyone",
+   "before": "Dreadmere is a world of iron lungs and clockwork beasts, where steam hisses from mountain vents and cities rise like cogs from the earth. Rivers run with oil and time moves in bursts, synced to the great gears beneath the surface. All life is shaped by the Pulse—periodic tremors that awaken buried engines and reshape the land in slow, mechanical waves.",
+   "raw": "{\"premise\": \"Dreadmere is a world of iron lungs and clockwork beasts, where steam hisses from mountain vents and cities rise like cogs from the earth. Rivers run with oil and time moves in bursts, synced to the great gears beneath the surface. A silent, creeping collapse threatens all—every Pulse stirs dormant engines, and beneath the ground, the world’s core groans, slowly unspooling into ruin.\"}",
+   "value": "Dreadmere is a world of iron lungs and clockwork beasts, where steam hisses from mountain vents and cities rise like cogs from the earth. Rivers run with oil and time moves in bursts, synced to the great gears beneath the surface. A silent, creeping collapse threatens all—every Pulse stirs dormant engines, and beneath the ground, the world’s core groans, slowly unspooling into ruin.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 92,
+   "ms": 1612,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make it funnier",
+   "before": "Sunken Aurel drifts beneath a forgotten sky, its sunken cities half-submerged in coral and rust. Bioluminescent flora pulse faintly, feeding on the planet’s lingering magic, while ancient, rune-etched machines hum in forgotten corners. Tides of shadow-winds rise and fall, carrying whispers of drowned gods—each wave a reminder that the world remembers what it lost.",
+   "raw": "{\"premise\": \"Sunken Aurel floats beneath a sky that’s just giving up its rental agreement, its cities half-buried in coral and rust. Bioluminescent plants glow like cheap neon signs, powered by forgotten spells and a few stubbornly cheerful ghosts. Shadow-winds rise and fall, bringing only bad jokes and a hint of tuna—because, apparently, the drowned gods have a side hustle in deep-sea tuna fishing.\"}",
+   "value": "Sunken Aurel floats beneath a sky that’s just giving up its rental agreement, its cities half-buried in coral and rust. Bioluminescent plants glow like cheap neon signs, powered by forgotten spells and a few stubbornly cheerful ghosts. Shadow-winds rise and fall, bringing only bad jokes and a hint of tuna—because, apparently, the drowned gods have a side hustle in deep-sea tuna fishing.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 93,
+   "ms": 1621,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "mention an ancient ruin",
+   "before": "Vael Dorun floats above the world on a network of floating islands, tethered by ancient magic and woven with living stone. The city’s towers pulse with faint light, powered by the breath of the earth and the songs of wind spirits. Below, the land is silent and unbroken—forever still, untouched by time, while the city thrives on balance, fearing the unraveling of its fragile, sky-bound harmony.",
+   "raw": "{\"premise\": \"Vael Dorun floats above a silent, time-still world, tethered by ancient magic and woven with living stone. The city’s towers pulse with earth-breath and wind-song, maintaining balance through delicate harmony. Below, a forgotten ruin of crumbling spires lies buried—its stones still humming with the dead magic that once held the islands together.\"}",
+   "value": "Vael Dorun floats above a silent, time-still world, tethered by ancient magic and woven with living stone. The city’s towers pulse with earth-breath and wind-song, maintaining balance through delicate harmony. Below, a forgotten ruin of crumbling spires lies buried—its stones still humming with the dead magic that once held the islands together.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 78,
+   "ms": 1424,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "simplify the wording",
+   "before": "The Ashen Reach is a region of crumbling spires and whispering forests, where the air smells of rust and forgotten prayers. Ancient magic bleeds from the earth, manifesting as spectral storms and cursed flora that feed on fear. Cities rise like bone cages, their foundations sealed by forgotten oaths—any breach awakens the dead beneath.",
+   "raw": "{\"premise\": \"The Ashen Reach is a region of crumbling spires and whispering woods, where the air smells of rust and old prayers. Magic seeps from the ground, bringing ghostly storms and plants that feed on fear. Cities stand like bone cages, their foundations bound by forgotten oaths—breaking them wakes the dead beneath.\"}",
+   "value": "The Ashen Reach is a region of crumbling spires and whispering woods, where the air smells of rust and old prayers. Magic seeps from the ground, bringing ghostly storms and plants that feed on fear. Cities stand like bone cages, their foundations bound by forgotten oaths—breaking them wakes the dead beneath.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 72,
+   "ms": 1270,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "more about religion",
+   "before": "Korrin's Rest is a continent of jagged mountains and sun-baked plains, where villages cling to rocky outcrops, trading blades, leather, and hand-crafted tools. Frequent skirmishes between clans and rogue outlaws define the frontier, with duels fought under the open sky as a matter of honor. The land is shaped by ancient winds and a relentless sun, where survival depends on strength, cunning, and the unyielding will to defend one's name.",
+   "raw": "{\"premise\": \"Korrin's Rest is a continent of jagged mountains and sun-baked plains, where villages cling to rocky outcrops, worshipping the Sun-Bringer and the Wind-Speaker in daily rites. Clans swear oaths to ancient deities, believing honor is a divine mandate, and duels are performed under the open sky as offerings to the gods of fate. The land burns under a relentless sun, and survival is measured not just by strength, but by devotion to a creed that shapes every blade, every step, and every whispered prayer.\"}",
+   "value": "Korrin's Rest is a continent of jagged mountains and sun-baked plains, where villages cling to rocky outcrops, worshipping the Sun-Bringer and the Wind-Speaker in daily rites. Clans swear oaths to ancient deities, believing honor is a divine mandate, and duels are performed under the open sky as offerings to the gods of fate. The land burns under a relentless sun, and survival is measured not just by strength, but by devotion to a creed that shapes every blade, every step, and every whispered prayer.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 120,
+   "ms": 2013,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make the people poorer",
+   "before": "Mistmoor is a ragged frontier where saloon signs glow with faint, cursed light and dry wells whisper secrets in forgotten tongues. Weather shifts suddenly—fog banks swallow towns, and storms carry strange, insect-like hums that shatter glass. Old frontier myths persist, and the land itself remembers, blooming with thorns when truth is spoken too loudly.",
+   "raw": "{\"premise\": \"Mistmoor is a broken frontier where saloon signs flicker weakly, and dry wells bubble with rusted coins and dust. People live hand-to-mouth, their fortunes siphoned by the land’s slow, hungry hunger—fog steals crops, storms strip roofs, and the soil forgets names. The land remembers, but only the truth that’s already been buried survives.\"}",
+   "value": "Mistmoor is a broken frontier where saloon signs flicker weakly, and dry wells bubble with rusted coins and dust. People live hand-to-mouth, their fortunes siphoned by the land’s slow, hungry hunger—fog steals crops, storms strip roofs, and the soil forgets names. The land remembers, but only the truth that’s already been buried survives.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 86,
+   "ms": 1522,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "add a rival faction",
+   "before": "Thalassar is a planar realm of swirling tides and jagged, living mountains that breathe with ancient magic. The land pulses with arcane energy, manifesting as storms of light and shadow that shape the terrain and grant fleeting, powerful spells to those who survive their wrath. Between the wild, sentient seas and the sun-scorched deserts, tribes of sword-wielders and sorcerers wage eternal, unending wars over the last known source of true power: the Sunken Spire.",
+   "raw": "{\"premise\": \"Thalassar is a planar realm of swirling tides and jagged, living mountains that breathe with ancient magic. The land pulses with arcane energy, manifesting as storms of light and shadow that shape the terrain and grant fleeting, powerful spells to those who survive their wrath. Between the wild, sentient seas and sun-scorched deserts, sword-wielder tribes and shadow-woven sorcerers wage eternal wars over the Sunken Spire—each faction believing it holds the key to dominion over the tides and the sky.\"}",
+   "value": "Thalassar is a planar realm of swirling tides and jagged, living mountains that breathe with ancient magic. The land pulses with arcane energy, manifesting as storms of light and shadow that shape the terrain and grant fleeting, powerful spells to those who survive their wrath. Between the wild, sentient seas and sun-scorched deserts, sword-wielder tribes and shadow-woven sorcerers wage eternal wars over the Sunken Spire—each faction believing it holds the key to dominion over the tides and the sky.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 118,
+   "ms": 2028,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "make it more cinematic",
+   "before": "In the Hollow Crown, the city floats above a chasm of whispering stone, its spires woven from living crystal that hums with ancient magic. Every citizen carries a shard of the Crown’s core, granting them fleeting power—but each use fractures their memories. Time flows unevenly beneath the city, and the deeper one descends, the more the past bleeds into the present, shaping fate with quiet, terrible certainty.",
+   "raw": "{\"premise\": \"The Hollow Crown arcs above a chasm of singing stone, its crystal spires pulsing like living veins, casting ever-shifting shadows. Citizens glow with stolen light from the Crown’s core, each shard blazing with power that erases memories in jagged, silent bursts. Time fractures below—past and future bleed together, and every breath echoes with the weight of what has already happened.\"}",
+   "value": "The Hollow Crown arcs above a chasm of singing stone, its crystal spires pulsing like living veins, casting ever-shifting shadows. Citizens glow with stolen light from the Crown’s core, each shard blazing with power that erases memories in jagged, silent bursts. Time fractures below—past and future bleed together, and every breath echoes with the weight of what has already happened.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 85,
+   "ms": 1510,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "focus on a single dominant power",
+   "before": "The Ember Isles are a cluster of lush, forested islands where fireflies glow in patterns that mark seasons and tides. Each island has a unique, self-sustaining ecosystem shaped by ancient winds and seasonal rains. Communities live in harmony with nature, guided by oral traditions and the quiet rhythms of the land.",
+   "raw": "{\"premise\": \"The Ember Isles are a cluster of lush, forested islands where fireflies pulse in unbroken, synchronized patterns—each blink a shared truth whispered by the wind. These patterns, known as the Ember Tongue, govern all life: planting, harvest, and even sleep, with every community bound by its rhythm. No one controls the fireflies; they simply exist, and the land remembers, ensuring harmony through silent, ever-present alignment.\"}",
+   "value": "The Ember Isles are a cluster of lush, forested islands where fireflies pulse in unbroken, synchronized patterns—each blink a shared truth whispered by the wind. These patterns, known as the Ember Tongue, govern all life: planting, harvest, and even sleep, with every community bound by its rhythm. No one controls the fireflies; they simply exist, and the land remembers, ensuring harmony through silent, ever-present alignment.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 95,
+   "ms": 1590,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "less grim",
+   "before": "Quillhaven is a continent where ink and paper bleed into reality, and every written word shapes the world—small, fleeting changes ripple through villages, but great truths fracture landscapes. Cities rise from ancient manuscripts, their spires whispering forgotten sentences that grow roots and bloom into living forests. A silent war rages between scribes who bind fate and erasers who seek to delete history, their shadows stretching across the land like ink-stained wind.",
+   "raw": "{\"premise\": \"Quillhaven is a continent where ink and paper bleed into reality, and every written word shapes the world—small, fleeting changes bloom in villages, like flowers in spring. Cities rise from ancient manuscripts, their spires whispering forgotten sentences that grow into living forests, breathing with quiet wonder. A quiet tension hums between scribes who weave fate and erasers who seek to delete history, their shadows stretching like ink in wind.\"}",
+   "value": "Quillhaven is a continent where ink and paper bleed into reality, and every written word shapes the world—small, fleeting changes bloom in villages, like flowers in spring. Cities rise from ancient manuscripts, their spires whispering forgotten sentences that grow into living forests, breathing with quiet wonder. A quiet tension hums between scribes who weave fate and erasers who seek to delete history, their shadows stretching like ink in wind.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 94,
+   "ms": 1638,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "more detail about food and daily life",
+   "before": "Dreadmere floats on a sea of perpetual fog, its cities forged from brass and coal, powered by geothermal vents beneath the surface. Steam-punk engineers and shadow-weavers harness ley-line currents to control weather and minor miracles, but the land groans beneath them—cracks bloom like wounds, and the sky bleeds ink. Life thrives in uneasy balance: progress fuels tremors, and silence between the chimes of the great engines holds the unspoken truth of the world’s slow, inevitable collapse.",
+   "raw": "{\"premise\": \"Dreadmere floats on a sea of perpetual fog, its cities forged from brass and coal, powered by geothermal vents beneath the surface. Citizens eat steamed root-meat and fog-farmed algae, cooking with steam-lamps and foraging in mist-lit bogs; their days are marked by the chime of engines and the scent of coal-dust. Life thrives in uneasy balance: progress fuels tremors, and silence between the chimes holds the unspoken truth of the world’s slow, inevitable collapse.\"}",
+   "value": "Dreadmere floats on a sea of perpetual fog, its cities forged from brass and coal, powered by geothermal vents beneath the surface. Citizens eat steamed root-meat and fog-farmed algae, cooking with steam-lamps and foraging in mist-lit bogs; their days are marked by the chime of engines and the scent of coal-dust. Life thrives in uneasy balance: progress fuels tremors, and silence between the chimes holds the unspoken truth of the world’s slow, inevitable collapse.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 113,
+   "ms": 1965,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "make it stranger",
+   "before": "Sunken Aurel drifts beneath a fractured sky, its coral cities rising from drowned mountains, glowing with ancient magic. The sun never rises, but bioluminescent storms pulse across the ocean floor, feeding the land through ley-line veins. Every living thing hums with latent power—some grow stronger with time, others fade into silence, a silent war between light and shadow beneath the waves.",
+   "raw": "{\"premise\": \"Sunken Aurel drifts in the void between dying stars, its cities grown from fossilized jellyfish, pulsing with captured starlight. The ocean floor breathes in tidal sighs, and every tide brings a new tide of forgotten gods—awakening, then dissolving into mist. Time flows in spirals: some remember the future, others exist only in dreams that never end.\"}",
+   "value": "Sunken Aurel drifts in the void between dying stars, its cities grown from fossilized jellyfish, pulsing with captured starlight. The ocean floor breathes in tidal sighs, and every tide brings a new tide of forgotten gods—awakening, then dissolving into mist. Time flows in spirals: some remember the future, others exist only in dreams that never end.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 86,
+   "ms": 1522,
+   "reasoning": false
+  }
+ ]
+}

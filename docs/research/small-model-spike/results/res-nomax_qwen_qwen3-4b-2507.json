@@ -1,0 +1,687 @@
+{
+ "model": "qwen/qwen3-4b-2507",
+ "gen": [
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Vael Dorun stands atop a jagged plateau, its towering stone spires carved from a single, ancient rock that hums faintly under the touch of weathered hands. The city is built upon a network of winding tunnels and terraced walkways, linked by suspension bridges strung between colossal, petrified trees. Every structure is shaped by the wind and rain, eroding and reassembling over centuries in a slow, inevitable rhythm. No magic exists—only the quiet, unrelenting force of time, and the knowledge that every stone was once part of a living forest, now silent beneath the city's breath.\"}",
+   "value": "Vael Dorun stands atop a jagged plateau, its towering stone spires carved from a single, ancient rock that hums faintly under the touch of weathered hands. The city is built upon a network of winding tunnels and terraced walkways, linked by suspension bridges strung between colossal, petrified trees. Every structure is shaped by the wind and rain, eroding and reassembling over centuries in a slow, inevitable rhythm. No magic exists—only the quiet, unrelenting force of time, and the knowledge that every stone was once part of a living forest, now silent beneath the city's breath.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 135,
+   "ms": 2903,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"The Ashen Reach is a desolate expanse of crumbling stone and skeletal forests, where the sun never fully rises, casting a perpetual twilight that stains the air with a fine, grey dust. Ancient, decaying towers rise from the earth like broken teeth, their foundations whispering with forgotten prayers. The land is slowly devouring itself—plants withered and twisted, growing only from the bones of long-dead things. Here, the wind carries voices that aren’t human, and the few surviving townsfolk live in fear, bound by oaths to the earth’s slow, gnawing hunger. Magic is rare and unstable, appearing only as fleeting, feverish visions in the sick or the dying. The air tastes of rust and old blood, and every season brings a new, silent erosion of memory.\"}",
+   "value": "The Ashen Reach is a desolate expanse of crumbling stone and skeletal forests, where the sun never fully rises, casting a perpetual twilight that stains the air with a fine, grey dust. Ancient, decaying towers rise from the earth like broken teeth, their foundations whispering with forgotten prayers. The land is slowly devouring itself—plants withered and twisted, growing only from the bones of long-dead things. Here, the wind carries voices that aren’t human, and the few surviving townsfolk live in fear, bound by oaths to the earth’s slow, gnawing hunger. Magic is rare and unstable, appearing only as fleeting, feverish visions in the sick or the dying. The air tastes of rust and old blood, and every season brings a new, silent erosion of memory.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 170,
+   "ms": 2536,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Korrin's Rest is a continent of wind-scarred mountains and sun-baked plains, where steel and swords are as common as stone tools, and duels are as frequent as barter. Ancient magic stirs in the roots of the great forests, manifesting as wild, unpredictable storms and fleeting illusions that shape village fates. Cities rise along riverbanks, built of sun-baked brick and steel-reinforced timber, where guilds of swordmasters, alchemists, and mercenaries trade secrets, honor, and survival. A constant undercurrent of unrest pulses through the land—tribes clash over territory, kingdoms vie for dominance, and the wind carries whispers of forgotten gods stirring beneath the earth.\"}",
+   "value": "Korrin's Rest is a continent of wind-scarred mountains and sun-baked plains, where steel and swords are as common as stone tools, and duels are as frequent as barter. Ancient magic stirs in the roots of the great forests, manifesting as wild, unpredictable storms and fleeting illusions that shape village fates. Cities rise along riverbanks, built of sun-baked brick and steel-reinforced timber, where guilds of swordmasters, alchemists, and mercenaries trade secrets, honor, and survival. A constant undercurrent of unrest pulses through the land—tribes clash over territory, kingdoms vie for dominance, and the wind carries whispers of forgotten gods stirring beneath the earth.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 151,
+   "ms": 2277,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Mistmoor is a windswept, fog-drenched frontier where sun-baked saloons line the cracked earth and ghostly wind spirits ride the dunes, whispering secrets in forgotten tongues. Cattle are ridden by spectral mounts, and every town has a cursed well that sings at midnight, drawing out buried memories. Iron-scarred outlaws trade in enchanted relics, while frontier alchemists brew potions from moonlit moss. The land itself pulses with latent magic—geothermal vents bloom with bioluminescent flora, and the horizon is always just out of reach, shifting like a fevered dream. No two sunrises are alike, and the sky bleeds color when the old gods stir beneath the earth.\"}",
+   "value": "Mistmoor is a windswept, fog-drenched frontier where sun-baked saloons line the cracked earth and ghostly wind spirits ride the dunes, whispering secrets in forgotten tongues. Cattle are ridden by spectral mounts, and every town has a cursed well that sings at midnight, drawing out buried memories. Iron-scarred outlaws trade in enchanted relics, while frontier alchemists brew potions from moonlit moss. The land itself pulses with latent magic—geothermal vents bloom with bioluminescent flora, and the horizon is always just out of reach, shifting like a fevered dream. No two sunrises are alike, and the sky bleeds color when the old gods stir beneath the earth.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 155,
+   "ms": 2304,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Thalassar is a vast, shifting sea of floating islands tethered by ancient, living coral bridges that pulse with bioluminescent energy. The islands drift across a perpetual twilight sky, where storms of salt and shadow rise from the deep. Life thrives in rugged, mountainous peaks and sunken caverns, with tribes of warriors and seers navigating the tides of shifting terrain. All creatures, from apex predators to the smallest crustaceans, are bound by the rhythm of the tides—each day, the islands shift position, and those who fail to adapt are swept into the abyssal currents. Magic does not exist; instead, the land responds to will, courage, and the strength of communal belief, making survival a test of endurance, skill, and faith in the unseen tides that shape the world.\"}",
+   "value": "Thalassar is a vast, shifting sea of floating islands tethered by ancient, living coral bridges that pulse with bioluminescent energy. The islands drift across a perpetual twilight sky, where storms of salt and shadow rise from the deep. Life thrives in rugged, mountainous peaks and sunken caverns, with tribes of warriors and seers navigating the tides of shifting terrain. All creatures, from apex predators to the smallest crustaceans, are bound by the rhythm of the tides—each day, the islands shift position, and those who fail to adapt are swept into the abyssal currents. Magic does not exist; instead, the land responds to will, courage, and the strength of communal belief, making survival a test of endurance, skill, and faith in the unseen tides that shape the world.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 175,
+   "ms": 2620,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"In the heart of the Hollow Crown, time folds like paper beneath the city’s ancient stone spines. Towering clockwork spires mark the hours with chimes that echo through the streets, their gears driven by wind and the slow pulse of the city’s central heart—a mechanism said to have been forged from the bones of forgotten gods. Below, the streets are paved with obsidian that hums when touched, and every resident carries a small, engraved timepiece that never shows the same time twice. Magic is rare, felt only in the flicker of shadows during twilight, and the city’s power lies in its intricate system of time-based trade and ritual. All clocks are linked, and those who break the rhythm risk being lost in the city’s memory—replaced by a version of themselves from a forgotten hour.\"}",
+   "value": "In the heart of the Hollow Crown, time folds like paper beneath the city’s ancient stone spines. Towering clockwork spires mark the hours with chimes that echo through the streets, their gears driven by wind and the slow pulse of the city’s central heart—a mechanism said to have been forged from the bones of forgotten gods. Below, the streets are paved with obsidian that hums when touched, and every resident carries a small, engraved timepiece that never shows the same time twice. Magic is rare, felt only in the flicker of shadows during twilight, and the city’s power lies in its intricate system of time-based trade and ritual. All clocks are linked, and those who break the rhythm risk being lost in the city’s memory—replaced by a version of themselves from a forgotten hour.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 172,
+   "ms": 2522,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"The Ember Isles are a scattered archipelago where sunlit forests burn with gentle, bioluminescent embers that feed the land’s magic. Each island pulses with a unique flame—some glow like embers in the dark, others flicker with soft song, and a few are silent, where fire has long gone. People live in harmony with the flames, tending to ember-trees and weaving stories into the wind to stoke the fires. Magic flows through touch and song, bending plants, shaping stone, and healing wounds—but only if the heart is true and the flame still burns within.\"}",
+   "value": "The Ember Isles are a scattered archipelago where sunlit forests burn with gentle, bioluminescent embers that feed the land’s magic. Each island pulses with a unique flame—some glow like embers in the dark, others flicker with soft song, and a few are silent, where fire has long gone. People live in harmony with the flames, tending to ember-trees and weaving stories into the wind to stoke the fires. Magic flows through touch and song, bending plants, shaping stone, and healing wounds—but only if the heart is true and the flame still burns within.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 129,
+   "ms": 1955,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Quillhaven is a continent where ink and memory are alive, and every word spoken or written leaves a trace that slowly reshapes reality. Mountains of parchment rise like fanged beasts, their surfaces etched with forgotten truths that whisper through the wind. Magic flows through the veins of the land, drawn from the ink of the dead—each soul’s final thought becomes a living sigil that can wound, heal, or possess. Cities are built on the bones of ancient libraries, where scholars wield quills as swords, and silence is a weapon. Time bends in ink-stained corridors, and history remembers what was never written, feeding the hungry shadows that dwell in the margins of forgotten pages.\"}",
+   "value": "Quillhaven is a continent where ink and memory are alive, and every word spoken or written leaves a trace that slowly reshapes reality. Mountains of parchment rise like fanged beasts, their surfaces etched with forgotten truths that whisper through the wind. Magic flows through the veins of the land, drawn from the ink of the dead—each soul’s final thought becomes a living sigil that can wound, heal, or possess. Cities are built on the bones of ancient libraries, where scholars wield quills as swords, and silence is a weapon. Time bends in ink-stained corridors, and history remembers what was never written, feeding the hungry shadows that dwell in the margins of forgotten pages.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 146,
+   "ms": 2176,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Dreadmere is a world of rusted gears, coal-burning steam engines, and sky-piercing clockwork spires, where cities rise like great, creaking organs from the mudflats. Rivers run thick with oil and steam, and the air hums with the constant, low growl of pistons and whistles. People trade time for labor, measured in the ticking of public timepieces, and each village maintains its own steam-powered clock to regulate work, sleep, and festivals. The land is scarred by ancient, unexplained steam vents that bubble up in forgotten places, and no one knows if they are natural or the result of long-buried, forgotten machinery. Travel is slow, perilous, and always accompanied by the scent of hot metal and wet coal.\"}",
+   "value": "Dreadmere is a world of rusted gears, coal-burning steam engines, and sky-piercing clockwork spires, where cities rise like great, creaking organs from the mudflats. Rivers run thick with oil and steam, and the air hums with the constant, low growl of pistons and whistles. People trade time for labor, measured in the ticking of public timepieces, and each village maintains its own steam-powered clock to regulate work, sleep, and festivals. The land is scarred by ancient, unexplained steam vents that bubble up in forgotten places, and no one knows if they are natural or the result of long-buried, forgotten machinery. Travel is slow, perilous, and always accompanied by the scent of hot metal and wet coal.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 169,
+   "ms": 2506,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Sunken Aurel drifts in the void between dying stars, a fractured realm of sunken cities beneath a sky of perpetual twilight. Ancient magic, once woven into the land, now sputters in forgotten ley lines, fueling bioluminescent forests and ghostly storms. Human survivors live in walled enclaves, trading salvaged Renaissance tools and tamed spirits for survival. The land slowly sinks deeper, consumed by a slow, whispering tide of entropy that erodes memory and reality alike. Magic is rare, unstable, and often misinterpreted—some say it’s the land breathing, others that it’s the world remembering itself.\"}",
+   "value": "Sunken Aurel drifts in the void between dying stars, a fractured realm of sunken cities beneath a sky of perpetual twilight. Ancient magic, once woven into the land, now sputters in forgotten ley lines, fueling bioluminescent forests and ghostly storms. Human survivors live in walled enclaves, trading salvaged Renaissance tools and tamed spirits for survival. The land slowly sinks deeper, consumed by a slow, whispering tide of entropy that erodes memory and reality alike. Magic is rare, unstable, and often misinterpreted—some say it’s the land breathing, others that it’s the world remembering itself.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 138,
+   "ms": 2059,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Vael Dorun rises from the obsidian cliffs of the Shattered Spine, a city of interlocking stone towers carved from ancient lava rock, each spire pulsing with faint, bioluminescent veins of crystal that hum with residual magic. The air thrums with the scent of silver moss and ozone, and the people of the city move with quiet reverence, their lives governed by the Council of Echoes—elders who hear the city’s magic through shared dreams. Below, the deep roots of the city anchor into the earth, feeding a network of living roots that whisper secrets and sustain the feral forests. Magic flows through touch, memory, and song, and though it is unpredictable, it shapes the land, making storms, blooms, and even time seem malleable. The city breathes, and it remembers every soul that has walked its streets.\"}",
+   "value": "Vael Dorun rises from the obsidian cliffs of the Shattered Spine, a city of interlocking stone towers carved from ancient lava rock, each spire pulsing with faint, bioluminescent veins of crystal that hum with residual magic. The air thrums with the scent of silver moss and ozone, and the people of the city move with quiet reverence, their lives governed by the Council of Echoes—elders who hear the city’s magic through shared dreams. Below, the deep roots of the city anchor into the earth, feeding a network of living roots that whisper secrets and sustain the feral forests. Magic flows through touch, memory, and song, and though it is unpredictable, it shapes the land, making storms, blooms, and even time seem malleable. The city breathes, and it remembers every soul that has walked its streets.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 183,
+   "ms": 2691,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"The Ashen Reach is a region of perpetual twilight, where the sky hangs thick and gray, streaked with ghostly ash that drifts like pollen. Ancient forests grow inward, their trees twisted and weeping black sap, their roots pulsing with a slow, subterranean hum. The land remembers death—every village bears the mark of silent, shapeless horrors that rise from the soil only when moonlight touches the earth. Magic flows through the bones of the world, manifesting as whispers in the wind and sudden, unexplained illnesses that follow no known cause. People live in stone cottages with barred windows, believing the air itself is sentient and hungry. Strange sigils appear in the walls, slowly eroding, as if the land is rewriting history from within.\"}",
+   "value": "The Ashen Reach is a region of perpetual twilight, where the sky hangs thick and gray, streaked with ghostly ash that drifts like pollen. Ancient forests grow inward, their trees twisted and weeping black sap, their roots pulsing with a slow, subterranean hum. The land remembers death—every village bears the mark of silent, shapeless horrors that rise from the soil only when moonlight touches the earth. Magic flows through the bones of the world, manifesting as whispers in the wind and sudden, unexplained illnesses that follow no known cause. People live in stone cottages with barred windows, believing the air itself is sentient and hungry. Strange sigils appear in the walls, slowly eroding, as if the land is rewriting history from within.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 163,
+   "ms": 2400,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Korrin's Rest is a continent of jagged mountains, sun-baked deserts, and river-carved valleys, where honor and blade are currency. Clans of warriors ride wild steeds and fight for territory, reputation, and the right to wear the silver crest. Cities rise in fortified stone, built on ancient riverbeds, their streets paved with recycled bone and metal. Trade winds carry news of duels and betrayals, and every village maintains a public arena where young men and women spar for survival. No magic, only steel, strength, and the unbreakable code of the blade—where a wound is a mark of strength, and a name is earned in battle.\"}",
+   "value": "Korrin's Rest is a continent of jagged mountains, sun-baked deserts, and river-carved valleys, where honor and blade are currency. Clans of warriors ride wild steeds and fight for territory, reputation, and the right to wear the silver crest. Cities rise in fortified stone, built on ancient riverbeds, their streets paved with recycled bone and metal. Trade winds carry news of duels and betrayals, and every village maintains a public arena where young men and women spar for survival. No magic, only steel, strength, and the unbreakable code of the blade—where a wound is a mark of strength, and a name is earned in battle.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 147,
+   "ms": 2180,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Mistmoor stretches across sun-baked plains and fog-choked canyons, where wind-swept saloons line the edges of rusted rail lines and outlaws ride on horseback through shifting mirages. Strange, whispering winds carry forgotten folklore, and the land itself leaks time—distant echoes of the past bleed into the present, causing clocks to stutter and old men to remember events that never happened. Cattle are rare, replaced by sentient, horned oxen that graze only at twilight. The only true magic is in the soil: when a man digs deep enough, he might unearth a memory, a lost name, or a whisper that changes his fate. All roads lead to the Mistmoor Divide, a silent, unmarked pass where the air turns thick and the sun never rises—yet some say it's the only place where true justice might still be found.\"}",
+   "value": "Mistmoor stretches across sun-baked plains and fog-choked canyons, where wind-swept saloons line the edges of rusted rail lines and outlaws ride on horseback through shifting mirages. Strange, whispering winds carry forgotten folklore, and the land itself leaks time—distant echoes of the past bleed into the present, causing clocks to stutter and old men to remember events that never happened. Cattle are rare, replaced by sentient, horned oxen that graze only at twilight. The only true magic is in the soil: when a man digs deep enough, he might unearth a memory, a lost name, or a whisper that changes his fate. All roads lead to the Mistmoor Divide, a silent, unmarked pass where the air turns thick and the sun never rises—yet some say it's the only place where true justice might still be found.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 190,
+   "ms": 2779,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Thalassar is a vast, storm-lashed plane where mountains rise like jagged teeth from the sea, and rivers flow upward into the sky. Ancient, whispering forests pulse with latent magic, their roots threaded with living runes that react to emotion and intent. Fierce, lone warriors wield swords forged from star-metal, their blades singing when drawn near sentient magic. Below, sunken cities of coral and obsidian crumble slowly, their ruins whispering forgotten laws. The air thrums with the constant hum of a forgotten cosmic tide—each tide surge reshapes the land, erasing and reforming terrain in weeks. No two places are truly the same, for the world remembers only what is felt, and forgets the rest.\"}",
+   "value": "Thalassar is a vast, storm-lashed plane where mountains rise like jagged teeth from the sea, and rivers flow upward into the sky. Ancient, whispering forests pulse with latent magic, their roots threaded with living runes that react to emotion and intent. Fierce, lone warriors wield swords forged from star-metal, their blades singing when drawn near sentient magic. Below, sunken cities of coral and obsidian crumble slowly, their ruins whispering forgotten laws. The air thrums with the constant hum of a forgotten cosmic tide—each tide surge reshapes the land, erasing and reforming terrain in weeks. No two places are truly the same, for the world remembers only what is felt, and forgets the rest.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 157,
+   "ms": 2337,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"In the heart of the Hollow Crown, the city breathes with the pulse of ancient magic woven into its stone, steel, and sky. Towers rise like ribs of a living beast, their spires humming with latent power, each one tethered to a forgotten god’s will. Below, the streets shimmer with enchanted currents—water flows uphill in forgotten fountains, and shadows move without cause. The air thrums with the scent of incense and unspoken oaths, and every door has a name only the dead remember. Magic is not controlled—it is felt, lived, and sometimes, inevitably, consumed. The city endures, not because it is protected, but because its citizens believe they are the last echoes of a world that once truly listened.\"}",
+   "value": "In the heart of the Hollow Crown, the city breathes with the pulse of ancient magic woven into its stone, steel, and sky. Towers rise like ribs of a living beast, their spires humming with latent power, each one tethered to a forgotten god’s will. Below, the streets shimmer with enchanted currents—water flows uphill in forgotten fountains, and shadows move without cause. The air thrums with the scent of incense and unspoken oaths, and every door has a name only the dead remember. Magic is not controlled—it is felt, lived, and sometimes, inevitably, consumed. The city endures, not because it is protected, but because its citizens believe they are the last echoes of a world that once truly listened.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 159,
+   "ms": 2351,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"The Ember Isles are a archipelago of sun-baked, forested islands where fireflies bloom in synchronized patterns, guiding lost travelers through the misty valleys. Each island has a distinct rhythm—some burn gently in twilight, others stay cool and quiet beneath towering, wind-sculpted trees. People live in harmony with the land, building homes from sun-bleached stone and woven reed, relying on seasonal migrations and oral traditions passed down by elders. Fireflies are not just light—they are the memory of the wind, and when they fade, the land remembers what was forgotten. Tensions simmer beneath the surface: the ancient belief that one island holds the last true flame, and if it dies, the islands will fall into silence.\"}",
+   "value": "The Ember Isles are a archipelago of sun-baked, forested islands where fireflies bloom in synchronized patterns, guiding lost travelers through the misty valleys. Each island has a distinct rhythm—some burn gently in twilight, others stay cool and quiet beneath towering, wind-sculpted trees. People live in harmony with the land, building homes from sun-bleached stone and woven reed, relying on seasonal migrations and oral traditions passed down by elders. Fireflies are not just light—they are the memory of the wind, and when they fade, the land remembers what was forgotten. Tensions simmer beneath the surface: the ancient belief that one island holds the last true flame, and if it dies, the islands will fall into silence.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 158,
+   "ms": 2336,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Quillhaven is a continent where ink and memory shape reality—each thought written in ink leaves a trace, and forgotten words fade, while misused quills birth grotesque, semi-sentient scribbles that haunt the shadows. Rivers run black with old letters, and towns rise only where parchment is buried beneath the soil. Magic is rare and fragile, existing only in the ink’s whisper, and every scribe is both prophet and prisoner, bound by the weight of what they’ve written. The land breathes in patterns of script, and silence is the most dangerous thing, for in stillness, the unrecorded truths grow feral and hungry.\"}",
+   "value": "Quillhaven is a continent where ink and memory shape reality—each thought written in ink leaves a trace, and forgotten words fade, while misused quills birth grotesque, semi-sentient scribbles that haunt the shadows. Rivers run black with old letters, and towns rise only where parchment is buried beneath the soil. Magic is rare and fragile, existing only in the ink’s whisper, and every scribe is both prophet and prisoner, bound by the weight of what they’ve written. The land breathes in patterns of script, and silence is the most dangerous thing, for in stillness, the unrecorded truths grow feral and hungry.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 141,
+   "ms": 2095,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "{\"premise\": \"Dreadmere is a world of rusted iron spires and steam-hung engines, where clockwork contraptions scuttle through fog-laced cities powered by coal and the breath of living steam. Rivers run with oily water, and the air hums with the low growl of gears buried beneath the soil. Magic pulses in the form of 'steam-songs'—faint, resonant melodies that can bend metal, summon weather, or wake dormant gears in forgotten machines. The land is split between the Ashen Clans, who worship the dying embers of ancient steam, and the Iron Mire, where machines grow wild and feed on human emotion. Both coexist under the constant, suffocating pressure of the Dreadmere Sky—thick with pressure, storms, and the slow, inevitable collapse of the world's great heat engine.\"}",
+   "value": "Dreadmere is a world of rusted iron spires and steam-hung engines, where clockwork contraptions scuttle through fog-laced cities powered by coal and the breath of living steam. Rivers run with oily water, and the air hums with the low growl of gears buried beneath the soil. Magic pulses in the form of 'steam-songs'—faint, resonant melodies that can bend metal, summon weather, or wake dormant gears in forgotten machines. The land is split between the Ashen Clans, who worship the dying embers of ancient steam, and the Iron Mire, where machines grow wild and feed on human emotion. Both coexist under the constant, suffocating pressure of the Dreadmere Sky—thick with pressure, storms, and the slow, inevitable collapse of the world's great heat engine.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 180,
+   "ms": 2662,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "{\"premise\": \"Sunken Aurel drifts beneath a shattered sky, its sunken cities half-submerged in bioluminescent coral forests. Above, the sky is a permanent twilight, fractured by floating islands of petrified magic that hum with residual enchantments. Life thrives in symbiosis—shifting, root-like entities weave through ruins, feeding on forgotten spells. The air tastes of rust and starlight; ancient magic leaks through the cracks in reality, warping time in localized pockets. Below, the deep currents pulse with sentient tides, and the dead rise not as ghosts, but as spectral guardians of lost knowledge. All know the truth: the world remembers itself, and memory is the only currency.\"}",
+   "value": "Sunken Aurel drifts beneath a shattered sky, its sunken cities half-submerged in bioluminescent coral forests. Above, the sky is a permanent twilight, fractured by floating islands of petrified magic that hum with residual enchantments. Life thrives in symbiosis—shifting, root-like entities weave through ruins, feeding on forgotten spells. The air tastes of rust and starlight; ancient magic leaks through the cracks in reality, warping time in localized pockets. Below, the deep currents pulse with sentient tides, and the dead rise not as ghosts, but as spectral guardians of lost knowledge. All know the truth: the world remembers itself, and memory is the only currency.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 149,
+   "ms": 2211,
+   "reasoning": false
+  }
+ ],
+ "rev": [
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "make it darker",
+   "before": "Vael Dorun stands atop a jagged plateau, its towering stone spires carved from a single, ancient rock that hums faintly under the touch of weathered hands. The city is built upon a network of winding tunnels and terraced walkways, linked by suspension bridges strung between colossal, petrified trees. Every structure is shaped by the wind and rain, eroding and reassembling over centuries in a slow, inevitable rhythm. No magic exists—only the quiet, unrelenting force of time, and the knowledge that every stone was once part of a living forest, now silent beneath the city's breath.",
+   "raw": "{\"premise\": \"Vael Dorun crouches on the edge of a dying plateau, its stone spires cracked and bleeding rust from unseen fissures. The city grows only through erosion—stone collapses into the chasms below, reassembling in jagged, hollow shapes that never quite settle. Suspension bridges sag between petrified trees, their roots now hollow veins of blackened bone. Rain does not fall; it seeps, thick and acidic, dissolving mortar and turning the streets into wet, greasy graves. No magic, only the slow rot of time and the city’s hunger—every structure a fossil of a forest that died screaming, its breath now a whisper in the cracks of the earth.\"}",
+   "value": "Vael Dorun crouches on the edge of a dying plateau, its stone spires cracked and bleeding rust from unseen fissures. The city grows only through erosion—stone collapses into the chasms below, reassembling in jagged, hollow shapes that never quite settle. Suspension bridges sag between petrified trees, their roots now hollow veins of blackened bone. Rain does not fall; it seeps, thick and acidic, dissolving mortar and turning the streets into wet, greasy graves. No magic, only the slow rot of time and the city’s hunger—every structure a fossil of a forest that died screaming, its breath now a whisper in the cracks of the earth.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 149,
+   "ms": 2467,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "shorter",
+   "before": "The Ashen Reach is a desolate expanse of crumbling stone and skeletal forests, where the sun never fully rises, casting a perpetual twilight that stains the air with a fine, grey dust. Ancient, decaying towers rise from the earth like broken teeth, their foundations whispering with forgotten prayers. The land is slowly devouring itself—plants withered and twisted, growing only from the bones of long-dead things. Here, the wind carries voices that aren’t human, and the few surviving townsfolk live in fear, bound by oaths to the earth’s slow, gnawing hunger. Magic is rare and unstable, appearing only as fleeting, feverish visions in the sick or the dying. The air tastes of rust and old blood, and every season brings a new, silent erosion of memory.",
+   "raw": "{\"premise\": \"The Ashen Reach is a twilight expanse of crumbling stone and dead forests, where the sun never rises and the air tastes of rust and blood. Ancient towers lean like broken teeth, their foundations murmuring with forgotten words. Plants grow from bones, and the wind carries voices that aren’t human. Townsfolk live in fear, bound by oaths to a land that slowly eats its own memories. Magic is rare—fleeting, feverish visions in the sick. Each season, more memories vanish silently.\"}",
+   "value": "The Ashen Reach is a twilight expanse of crumbling stone and dead forests, where the sun never rises and the air tastes of rust and blood. Ancient towers lean like broken teeth, their foundations murmuring with forgotten words. Plants grow from bones, and the wind carries voices that aren’t human. Townsfolk live in fear, bound by oaths to a land that slowly eats its own memories. Magic is rare—fleeting, feverish visions in the sick. Each season, more memories vanish silently.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 111,
+   "ms": 2012,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "more political intrigue",
+   "before": "Korrin's Rest is a continent of wind-scarred mountains and sun-baked plains, where steel and swords are as common as stone tools, and duels are as frequent as barter. Ancient magic stirs in the roots of the great forests, manifesting as wild, unpredictable storms and fleeting illusions that shape village fates. Cities rise along riverbanks, built of sun-baked brick and steel-reinforced timber, where guilds of swordmasters, alchemists, and mercenaries trade secrets, honor, and survival. A constant undercurrent of unrest pulses through the land—tribes clash over territory, kingdoms vie for dominance, and the wind carries whispers of forgotten gods stirring beneath the earth.",
+   "raw": "{\"premise\": \"Korrin's Rest is a wind-scoured continent where steel and swords are as common as flint, and duels are as routine as trade. Cities rise along rivers, their stone walls and steel-laced towers guarded by mercenary guilds who broker peace through oath-bound alliances. Beneath the surface, ancient magic pulses in the earth—fueled by forgotten gods and buried empires—manifesting as storm-spirits and shifting tides of illusion. Kings rule through intrigue, their courts filled with spies, forged oaths, and sealed blood-pacts. Tribes and city-states vie for control of the Wind Vents, where magic leaks and secrets can be stolen from the air. Loyalty is currency, and every blade bears a whisper of a past betrayal.\"}",
+   "value": "Korrin's Rest is a wind-scoured continent where steel and swords are as common as flint, and duels are as routine as trade. Cities rise along rivers, their stone walls and steel-laced towers guarded by mercenary guilds who broker peace through oath-bound alliances. Beneath the surface, ancient magic pulses in the earth—fueled by forgotten gods and buried empires—manifesting as storm-spirits and shifting tides of illusion. Kings rule through intrigue, their courts filled with spies, forged oaths, and sealed blood-pacts. Tribes and city-states vie for control of the Wind Vents, where magic leaks and secrets can be stolen from the air. Loyalty is currency, and every blade bears a whisper of a past betrayal.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 165,
+   "ms": 2766,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "less magic, more mundane",
+   "before": "Mistmoor is a windswept, fog-drenched frontier where sun-baked saloons line the cracked earth and ghostly wind spirits ride the dunes, whispering secrets in forgotten tongues. Cattle are ridden by spectral mounts, and every town has a cursed well that sings at midnight, drawing out buried memories. Iron-scarred outlaws trade in enchanted relics, while frontier alchemists brew potions from moonlit moss. The land itself pulses with latent magic—geothermal vents bloom with bioluminescent flora, and the horizon is always just out of reach, shifting like a fevered dream. No two sunrises are alike, and the sky bleeds color when the old gods stir beneath the earth.",
+   "raw": "{\"premise\": \"Mistmoor is a windswept, fog-drenched frontier where sun-baked saloons line the cracked earth and dust storms carry forgotten voices. Cattle are driven by spectral mounts, and every town has a cursed well that sings at midnight, drawing out buried memories. Iron-scarred outlaws trade in salvaged relics, while frontier alchemists brew potions from moonlit moss. The land hums with subtle, unexplained forces—geothermal vents bubble with strange gases, and the horizon shifts like a mirage. No two sunrises are alike, and the sky sometimes streaks with unnatural colors, as if the earth itself is remembering something lost.\"}",
+   "value": "Mistmoor is a windswept, fog-drenched frontier where sun-baked saloons line the cracked earth and dust storms carry forgotten voices. Cattle are driven by spectral mounts, and every town has a cursed well that sings at midnight, drawing out buried memories. Iron-scarred outlaws trade in salvaged relics, while frontier alchemists brew potions from moonlit moss. The land hums with subtle, unexplained forces—geothermal vents bubble with strange gases, and the horizon shifts like a mirage. No two sunrises are alike, and the sky sometimes streaks with unnatural colors, as if the earth itself is remembering something lost.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 143,
+   "ms": 2459,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "add a mention of trade",
+   "before": "Thalassar is a vast, shifting sea of floating islands tethered by ancient, living coral bridges that pulse with bioluminescent energy. The islands drift across a perpetual twilight sky, where storms of salt and shadow rise from the deep. Life thrives in rugged, mountainous peaks and sunken caverns, with tribes of warriors and seers navigating the tides of shifting terrain. All creatures, from apex predators to the smallest crustaceans, are bound by the rhythm of the tides—each day, the islands shift position, and those who fail to adapt are swept into the abyssal currents. Magic does not exist; instead, the land responds to will, courage, and the strength of communal belief, making survival a test of endurance, skill, and faith in the unseen tides that shape the world.",
+   "raw": "{\"premise\": \"Thalassar is a vast, shifting sea of floating islands tethered by ancient, living coral bridges that pulse with bioluminescent energy. The islands drift across a perpetual twilight sky, where storms of salt and shadow rise from the deep. Life thrives in rugged, mountainous peaks and sunken caverns, with tribes of warriors and seers navigating the tides of shifting terrain. Trade routes—carved into the coral and sustained by shared stories—link the islands, carrying salt, bone tools, and rare tidesilk between clans. All creatures, from apex predators to the smallest crustaceans, are bound by the rhythm of the tides: each day, the islands shift, and those who fail to adapt are swept into the abyssal currents. Magic does not exist; instead, the land responds to will, courage, and the strength of communal belief, making survival a test of endurance, skill, and faith in the unseen tides that shape the world.\"}",
+   "value": "Thalassar is a vast, shifting sea of floating islands tethered by ancient, living coral bridges that pulse with bioluminescent energy. The islands drift across a perpetual twilight sky, where storms of salt and shadow rise from the deep. Life thrives in rugged, mountainous peaks and sunken caverns, with tribes of warriors and seers navigating the tides of shifting terrain. Trade routes—carved into the coral and sustained by shared stories—link the islands, carrying salt, bone tools, and rare tidesilk between clans. All creatures, from apex predators to the smallest crustaceans, are bound by the rhythm of the tides: each day, the islands shift, and those who fail to adapt are swept into the abyssal currents. Magic does not exist; instead, the land responds to will, courage, and the strength of communal belief, making survival a test of endurance, skill, and faith in the unseen tides that shape the world.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 206,
+   "ms": 3390,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make it feel hopeful",
+   "before": "In the heart of the Hollow Crown, time folds like paper beneath the city’s ancient stone spines. Towering clockwork spires mark the hours with chimes that echo through the streets, their gears driven by wind and the slow pulse of the city’s central heart—a mechanism said to have been forged from the bones of forgotten gods. Below, the streets are paved with obsidian that hums when touched, and every resident carries a small, engraved timepiece that never shows the same time twice. Magic is rare, felt only in the flicker of shadows during twilight, and the city’s power lies in its intricate system of time-based trade and ritual. All clocks are linked, and those who break the rhythm risk being lost in the city’s memory—replaced by a version of themselves from a forgotten hour.",
+   "raw": "{\"premise\": \"In the heart of the Hollow Crown, time flows like sunlight through stained glass—gentle, mending, and always returning. Towering clockwork spires chime with quiet precision, their gears turned by wind and the steady breath of the city’s central heart, a rhythm nurtured by its people. Obsidian streets glow softly under foot, warm and alive, and every resident carries a timepiece that marks not just moments, but shared memories—each tick a quiet promise of reunion. Magic is rare, appearing as brief, shimmering moments of clarity in twilight, when the past and future briefly touch. The city thrives on rhythm: when clocks align, the streets bloom with light, and lost things—forgotten words, missed connections—return like seeds in soil. To break time is not punishment, but a reminder: time is not a prison, but a gift given back, again and again, with care.\"}",
+   "value": "In the heart of the Hollow Crown, time flows like sunlight through stained glass—gentle, mending, and always returning. Towering clockwork spires chime with quiet precision, their gears turned by wind and the steady breath of the city’s central heart, a rhythm nurtured by its people. Obsidian streets glow softly under foot, warm and alive, and every resident carries a timepiece that marks not just moments, but shared memories—each tick a quiet promise of reunion. Magic is rare, appearing as brief, shimmering moments of clarity in twilight, when the past and future briefly touch. The city thrives on rhythm: when clocks align, the streets bloom with light, and lost things—forgotten words, missed connections—return like seeds in soil. To break time is not punishment, but a reminder: time is not a prison, but a gift given back, again and again, with care.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 194,
+   "ms": 3162,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "focus on the weather and landscape",
+   "before": "The Ember Isles are a scattered archipelago where sunlit forests burn with gentle, bioluminescent embers that feed the land’s magic. Each island pulses with a unique flame—some glow like embers in the dark, others flicker with soft song, and a few are silent, where fire has long gone. People live in harmony with the flames, tending to ember-trees and weaving stories into the wind to stoke the fires. Magic flows through touch and song, bending plants, shaping stone, and healing wounds—but only if the heart is true and the flame still burns within.",
+   "raw": "{\"premise\": \"The Ember Isles drift on a sea of perpetual twilight, where sunsets blaze crimson and sunrises dissolve into embers that rise like smoke from the forest floor. Each island is carved by wind and flame—sloping hills of blackened stone, meadows of silver grass that glows when touched by wind, and rivers that run hot and clear, shimmering with slow, golden currents. The air is thick with warmth and the scent of burning leaves; storms come rarely, but when they do, they bring downpour of embers that settle like ash, awakening dormant flames in the soil. Nights are lit by floating ember-buds, drifting like lanterns above the trees, their light pulsing with the rhythm of the wind.\"}",
+   "value": "The Ember Isles drift on a sea of perpetual twilight, where sunsets blaze crimson and sunrises dissolve into embers that rise like smoke from the forest floor. Each island is carved by wind and flame—sloping hills of blackened stone, meadows of silver grass that glows when touched by wind, and rivers that run hot and clear, shimmering with slow, golden currents. The air is thick with warmth and the scent of burning leaves; storms come rarely, but when they do, they bring downpour of embers that settle like ash, awakening dormant flames in the soil. Nights are lit by floating ember-buds, drifting like lanterns above the trees, their light pulsing with the rhythm of the wind.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 156,
+   "ms": 2578,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "more mysterious",
+   "before": "Quillhaven is a continent where ink and memory are alive, and every word spoken or written leaves a trace that slowly reshapes reality. Mountains of parchment rise like fanged beasts, their surfaces etched with forgotten truths that whisper through the wind. Magic flows through the veins of the land, drawn from the ink of the dead—each soul’s final thought becomes a living sigil that can wound, heal, or possess. Cities are built on the bones of ancient libraries, where scholars wield quills as swords, and silence is a weapon. Time bends in ink-stained corridors, and history remembers what was never written, feeding the hungry shadows that dwell in the margins of forgotten pages.",
+   "raw": "{\"premise\": \"Quillhaven breathes in silence, its land a tapestry woven from unspoken words. Rivers of ink flow beneath the soil, stirring only when minds grow still, and the dead speak in margins—fragments of thought that bloom into shapes, half-formed and nameless. Mountains pulse with the weight of unsaid regrets, and cities rise from the collapse of ink-stained dreams, their streets veiled in ephemeral script that dissolves when seen. Time is not linear—it spirals in forgotten margins, and every erased sentence crumbles into a hollow echo that feeds the shadows. Here, memory is not preserved but *felt*, and the more a truth is hidden, the more it seeps into the world, whispering through the cracks of reality.\"}",
+   "value": "Quillhaven breathes in silence, its land a tapestry woven from unspoken words. Rivers of ink flow beneath the soil, stirring only when minds grow still, and the dead speak in margins—fragments of thought that bloom into shapes, half-formed and nameless. Mountains pulse with the weight of unsaid regrets, and cities rise from the collapse of ink-stained dreams, their streets veiled in ephemeral script that dissolves when seen. Time is not linear—it spirals in forgotten margins, and every erased sentence crumbles into a hollow echo that feeds the shadows. Here, memory is not preserved but *felt*, and the more a truth is hidden, the more it seeps into the world, whispering through the cracks of reality.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 160,
+   "ms": 2680,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "emphasize a looming threat to everyone",
+   "before": "Dreadmere is a world of rusted gears, coal-burning steam engines, and sky-piercing clockwork spires, where cities rise like great, creaking organs from the mudflats. Rivers run thick with oil and steam, and the air hums with the constant, low growl of pistons and whistles. People trade time for labor, measured in the ticking of public timepieces, and each village maintains its own steam-powered clock to regulate work, sleep, and festivals. The land is scarred by ancient, unexplained steam vents that bubble up in forgotten places, and no one knows if they are natural or the result of long-buried, forgotten machinery. Travel is slow, perilous, and always accompanied by the scent of hot metal and wet coal.",
+   "raw": "{\"premise\": \"Dreadmere is a world of rusted gears, coal-burning steam engines, and sky-piercing clockwork spires, where cities rise like creaking organs from the mudflats. Rivers run thick with oil and steam, and the air hums with the low growl of pistons—yet beneath the surface, the land pulses with a creeping, unnatural heat. Ancient steam vents, once sealed, now bleed steam in waves, expanding and swallowing villages like ripples in a wound. Every time a timepiece ticks, the ground trembles, and the clocks grow erratic, as if the world itself is unraveling. No one knows what lies beneath the crust, but the pressure mounts—something deep, ancient, and mechanical is awakening, and it feeds on time, labor, and the rhythm of human work. The clockwork spires no longer just regulate life—they are beginning to twitch, to *breathe*, and one day, the world will stop ticking—and begin to break apart.\"}",
+   "value": "Dreadmere is a world of rusted gears, coal-burning steam engines, and sky-piercing clockwork spires, where cities rise like creaking organs from the mudflats. Rivers run thick with oil and steam, and the air hums with the low growl of pistons—yet beneath the surface, the land pulses with a creeping, unnatural heat. Ancient steam vents, once sealed, now bleed steam in waves, expanding and swallowing villages like ripples in a wound. Every time a timepiece ticks, the ground trembles, and the clocks grow erratic, as if the world itself is unraveling. No one knows what lies beneath the crust, but the pressure mounts—something deep, ancient, and mechanical is awakening, and it feeds on time, labor, and the rhythm of human work. The clockwork spires no longer just regulate life—they are beginning to twitch, to *breathe*, and one day, the world will stop ticking—and begin to break apart.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 212,
+   "ms": 3430,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make it funnier",
+   "before": "Sunken Aurel drifts in the void between dying stars, a fractured realm of sunken cities beneath a sky of perpetual twilight. Ancient magic, once woven into the land, now sputters in forgotten ley lines, fueling bioluminescent forests and ghostly storms. Human survivors live in walled enclaves, trading salvaged Renaissance tools and tamed spirits for survival. The land slowly sinks deeper, consumed by a slow, whispering tide of entropy that erodes memory and reality alike. Magic is rare, unstable, and often misinterpreted—some say it’s the land breathing, others that it’s the world remembering itself.",
+   "raw": "{\"premise\": \"Sunken Aurel drifts in the void between dying stars, a realm of sunken cities where the inhabitants run Renaissance-style guilds that sell 'soul-salvage' and 'memory-canning' services. Bioluminescent forests glow like mood rings, and the wind carries whispers that sound like bad poetry—some say it’s the land remembering itself, others just that the local barista forgot to turn off the espresso machine. Magic? It’s mostly just weird static that makes old maps grow mossy and occasionally start quoting Shakespeare. And yes, the tide of entropy is slowly eroding reality—so much so that last week, the town council declared a day of ‘normalcy’ and forgot to change the calendar. Everyone just assumes it’s Tuesday.\"}",
+   "value": "Sunken Aurel drifts in the void between dying stars, a realm of sunken cities where the inhabitants run Renaissance-style guilds that sell 'soul-salvage' and 'memory-canning' services. Bioluminescent forests glow like mood rings, and the wind carries whispers that sound like bad poetry—some say it’s the land remembering itself, others just that the local barista forgot to turn off the espresso machine. Magic? It’s mostly just weird static that makes old maps grow mossy and occasionally start quoting Shakespeare. And yes, the tide of entropy is slowly eroding reality—so much so that last week, the town council declared a day of ‘normalcy’ and forgot to change the calendar. Everyone just assumes it’s Tuesday.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 163,
+   "ms": 2717,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "mention an ancient ruin",
+   "before": "Vael Dorun rises from the obsidian cliffs of the Shattered Spine, a city of interlocking stone towers carved from ancient lava rock, each spire pulsing with faint, bioluminescent veins of crystal that hum with residual magic. The air thrums with the scent of silver moss and ozone, and the people of the city move with quiet reverence, their lives governed by the Council of Echoes—elders who hear the city’s magic through shared dreams. Below, the deep roots of the city anchor into the earth, feeding a network of living roots that whisper secrets and sustain the feral forests. Magic flows through touch, memory, and song, and though it is unpredictable, it shapes the land, making storms, blooms, and even time seem malleable. The city breathes, and it remembers every soul that has walked its streets.",
+   "raw": "{\"premise\": \"Vael Dorun rises from the obsidian cliffs of the Shattered Spine, a city of interlocking stone towers carved from ancient lava rock, each spire pulsing with bioluminescent crystal veins that hum with residual magic. Below, the deep roots of the city anchor into the earth, feeding a network of living roots that whisper secrets and sustain the feral forests. The air thrums with silver moss and ozone, and the people, guided by the Council of Echoes, hear the city’s magic in shared dreams. Hidden beneath the city’s foundation lies an ancient ruin—its stone carvings still glowing faintly with forgotten runes—where echoes of a lost civilization linger, whispering warnings and forgotten songs that stir the wind and sometimes trigger sudden, unpredictable shifts in time and terrain.\"}",
+   "value": "Vael Dorun rises from the obsidian cliffs of the Shattered Spine, a city of interlocking stone towers carved from ancient lava rock, each spire pulsing with bioluminescent crystal veins that hum with residual magic. Below, the deep roots of the city anchor into the earth, feeding a network of living roots that whisper secrets and sustain the feral forests. The air thrums with silver moss and ozone, and the people, guided by the Council of Echoes, hear the city’s magic in shared dreams. Hidden beneath the city’s foundation lies an ancient ruin—its stone carvings still glowing faintly with forgotten runes—where echoes of a lost civilization linger, whispering warnings and forgotten songs that stir the wind and sometimes trigger sudden, unpredictable shifts in time and terrain.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 169,
+   "ms": 2869,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "simplify the wording",
+   "before": "The Ashen Reach is a region of perpetual twilight, where the sky hangs thick and gray, streaked with ghostly ash that drifts like pollen. Ancient forests grow inward, their trees twisted and weeping black sap, their roots pulsing with a slow, subterranean hum. The land remembers death—every village bears the mark of silent, shapeless horrors that rise from the soil only when moonlight touches the earth. Magic flows through the bones of the world, manifesting as whispers in the wind and sudden, unexplained illnesses that follow no known cause. People live in stone cottages with barred windows, believing the air itself is sentient and hungry. Strange sigils appear in the walls, slowly eroding, as if the land is rewriting history from within.",
+   "raw": "{\"premise\": \"The Ashen Reach is a land of eternal twilight, with gray skies streaked by drifting ash. Ancient forests grow inward, their trees twisted and weeping black sap, their roots pulsing softly beneath the ground. Death lingers—silent horrors rise from the soil when moonlight hits the earth. Magic runs through the land, whispering in the wind and causing sudden, unexplained illnesses. People live in stone cottages with barred windows, fearing the air is alive and hungry. Strange symbols appear on walls, slowly fading as if the land itself is rewriting the past.\"}",
+   "value": "The Ashen Reach is a land of eternal twilight, with gray skies streaked by drifting ash. Ancient forests grow inward, their trees twisted and weeping black sap, their roots pulsing softly beneath the ground. Death lingers—silent horrors rise from the soil when moonlight hits the earth. Magic runs through the land, whispering in the wind and causing sudden, unexplained illnesses. People live in stone cottages with barred windows, fearing the air is alive and hungry. Strange symbols appear on walls, slowly fading as if the land itself is rewriting the past.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 122,
+   "ms": 2156,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "more about religion",
+   "before": "Korrin's Rest is a continent of jagged mountains, sun-baked deserts, and river-carved valleys, where honor and blade are currency. Clans of warriors ride wild steeds and fight for territory, reputation, and the right to wear the silver crest. Cities rise in fortified stone, built on ancient riverbeds, their streets paved with recycled bone and metal. Trade winds carry news of duels and betrayals, and every village maintains a public arena where young men and women spar for survival. No magic, only steel, strength, and the unbreakable code of the blade—where a wound is a mark of strength, and a name is earned in battle.",
+   "raw": "{\"premise\": \"Korrin's Rest is a continent of jagged mountains, sun-baked deserts, and river-carved valleys, where honor and blade are currency. Clans of warriors ride wild steeds and fight for territory, reputation, and the right to wear the silver crest. Cities rise in fortified stone on ancient riverbeds, their streets paved with recycled bone and metal. Trade winds carry news of duels and betrayals, and every village maintains a public arena where young men and women spar for survival. A deep, sun-worshipping religion thrives across the land—believers chant to the Golden Sun, who they claim forged the first blade and set the laws of the blade. They say the sun’s rays sharpen steel, and its shadow marks the end of a man’s strength. Priests, known as Sun-Speakers, maintain the ritual of the First Cut, where a new warrior must duel to the death before a sunstone to earn a name. No magic, only steel, strength, and the unbreakable code of the blade—where a wound is a mark of strength, and a name is earned in battle, under the watchful gaze of the sun.\"}",
+   "value": "Korrin's Rest is a continent of jagged mountains, sun-baked deserts, and river-carved valleys, where honor and blade are currency. Clans of warriors ride wild steeds and fight for territory, reputation, and the right to wear the silver crest. Cities rise in fortified stone on ancient riverbeds, their streets paved with recycled bone and metal. Trade winds carry news of duels and betrayals, and every village maintains a public arena where young men and women spar for survival. A deep, sun-worshipping religion thrives across the land—believers chant to the Golden Sun, who they claim forged the first blade and set the laws of the blade. They say the sun’s rays sharpen steel, and its shadow marks the end of a man’s strength. Priests, known as Sun-Speakers, maintain the ritual of the First Cut, where a new warrior must duel to the death before a sunstone to earn a name. No magic, only steel, strength, and the unbreakable code of the blade—where a wound is a mark of strength, and a name is earned in battle, under the watchful gaze of the sun.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 248,
+   "ms": 3906,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make the people poorer",
+   "before": "Mistmoor stretches across sun-baked plains and fog-choked canyons, where wind-swept saloons line the edges of rusted rail lines and outlaws ride on horseback through shifting mirages. Strange, whispering winds carry forgotten folklore, and the land itself leaks time—distant echoes of the past bleed into the present, causing clocks to stutter and old men to remember events that never happened. Cattle are rare, replaced by sentient, horned oxen that graze only at twilight. The only true magic is in the soil: when a man digs deep enough, he might unearth a memory, a lost name, or a whisper that changes his fate. All roads lead to the Mistmoor Divide, a silent, unmarked pass where the air turns thick and the sun never rises—yet some say it's the only place where true justice might still be found.",
+   "raw": "{\"premise\": \"Mistmoor stretches across sun-baked plains and fog-choked canyons, where wind-swept saloons line rusted rail lines and outlaws ride through shifting mirages, their coinless pockets filled with dust and borrowed promises. Strange winds carry forgotten songs, and the land leaks time—clocks stutter, old men recount events that never happened, and wages vanish with each passing week. Cattle are rare, replaced by sentient, horned oxen that graze only at twilight, their milk now a dull, rust-colored paste. The soil holds memory, but digging deep costs a man his hands or his tongue—what’s unearthed is rarely useful, often just more debt or a lie to feed the next lie. All roads lead to the Mistmoor Divide, where the sun never rises and the wind speaks only in broken numbers—yet few dare go, for even the Divide is just another frontier of scarcity, hunger, and forgotten hope.\"}",
+   "value": "Mistmoor stretches across sun-baked plains and fog-choked canyons, where wind-swept saloons line rusted rail lines and outlaws ride through shifting mirages, their coinless pockets filled with dust and borrowed promises. Strange winds carry forgotten songs, and the land leaks time—clocks stutter, old men recount events that never happened, and wages vanish with each passing week. Cattle are rare, replaced by sentient, horned oxen that graze only at twilight, their milk now a dull, rust-colored paste. The soil holds memory, but digging deep costs a man his hands or his tongue—what’s unearthed is rarely useful, often just more debt or a lie to feed the next lie. All roads lead to the Mistmoor Divide, where the sun never rises and the wind speaks only in broken numbers—yet few dare go, for even the Divide is just another frontier of scarcity, hunger, and forgotten hope.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 203,
+   "ms": 3383,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "add a rival faction",
+   "before": "Thalassar is a vast, storm-lashed plane where mountains rise like jagged teeth from the sea, and rivers flow upward into the sky. Ancient, whispering forests pulse with latent magic, their roots threaded with living runes that react to emotion and intent. Fierce, lone warriors wield swords forged from star-metal, their blades singing when drawn near sentient magic. Below, sunken cities of coral and obsidian crumble slowly, their ruins whispering forgotten laws. The air thrums with the constant hum of a forgotten cosmic tide—each tide surge reshapes the land, erasing and reforming terrain in weeks. No two places are truly the same, for the world remembers only what is felt, and forgets the rest.",
+   "raw": "{\"premise\": \"Thalassar is a vast, storm-lashed plane where mountains rise like jagged teeth from the sea, and rivers flow upward into the sky. Ancient, whispering forests pulse with latent magic, their roots threaded with living runes that react to emotion and intent. Fierce, lone warriors wield swords forged from star-metal, their blades singing when drawn near sentient magic. Below, sunken cities of coral and obsidian crumble slowly, their ruins whispering forgotten laws. The air thrums with the constant hum of a forgotten cosmic tide—each tide surge reshapes the land, erasing and reforming terrain in weeks. No two places are truly the same, for the world remembers only what is felt, and forgets the rest. In the shadowed valleys beneath the storm, the Order of the Drowned Currents rises—a faction of silent, water-bound sorcerers who bind the tides to their will, believing the world’s true form lies in stillness and silence, and that true magic is in mastering the ocean’s erasure, not its song.\"}",
+   "value": "Thalassar is a vast, storm-lashed plane where mountains rise like jagged teeth from the sea, and rivers flow upward into the sky. Ancient, whispering forests pulse with latent magic, their roots threaded with living runes that react to emotion and intent. Fierce, lone warriors wield swords forged from star-metal, their blades singing when drawn near sentient magic. Below, sunken cities of coral and obsidian crumble slowly, their ruins whispering forgotten laws. The air thrums with the constant hum of a forgotten cosmic tide—each tide surge reshapes the land, erasing and reforming terrain in weeks. No two places are truly the same, for the world remembers only what is felt, and forgets the rest. In the shadowed valleys beneath the storm, the Order of the Drowned Currents rises—a faction of silent, water-bound sorcerers who bind the tides to their will, believing the world’s true form lies in stillness and silence, and that true magic is in mastering the ocean’s erasure, not its song.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 224,
+   "ms": 3580,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "make it more cinematic",
+   "before": "In the heart of the Hollow Crown, the city breathes with the pulse of ancient magic woven into its stone, steel, and sky. Towers rise like ribs of a living beast, their spires humming with latent power, each one tethered to a forgotten god’s will. Below, the streets shimmer with enchanted currents—water flows uphill in forgotten fountains, and shadows move without cause. The air thrums with the scent of incense and unspoken oaths, and every door has a name only the dead remember. Magic is not controlled—it is felt, lived, and sometimes, inevitably, consumed. The city endures, not because it is protected, but because its citizens believe they are the last echoes of a world that once truly listened.",
+   "raw": "{\"premise\": \"The Hollow Crown rises like a cathedral of bone and flame, its towers pulsing with the slow, ancient breath of drowned gods. Stone weeps silver light at dusk, and the wind carries voices from beneath the city—whispers of forgotten rulers, their names etched in the walls like scars. Above, the sky splits in patterns of living constellations, shifting with every scream or prayer. Below, the streets drink the light of candles that burn without fuel, and shadows rise to watch, never moving, always waiting. Magic doesn’t obey—it *watches back*. Every resident carries a memory that doesn’t belong to them, and the city itself grows, slowly, with every unspoken truth spoken in the dark. This is not a place of power—it is a living wound, stitched together by belief, and it will not stop breathing until the last echo of its old name fades.\"}",
+   "value": "The Hollow Crown rises like a cathedral of bone and flame, its towers pulsing with the slow, ancient breath of drowned gods. Stone weeps silver light at dusk, and the wind carries voices from beneath the city—whispers of forgotten rulers, their names etched in the walls like scars. Above, the sky splits in patterns of living constellations, shifting with every scream or prayer. Below, the streets drink the light of candles that burn without fuel, and shadows rise to watch, never moving, always waiting. Magic doesn’t obey—it *watches back*. Every resident carries a memory that doesn’t belong to them, and the city itself grows, slowly, with every unspoken truth spoken in the dark. This is not a place of power—it is a living wound, stitched together by belief, and it will not stop breathing until the last echo of its old name fades.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 187,
+   "ms": 3067,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "focus on a single dominant power",
+   "before": "The Ember Isles are a archipelago of sun-baked, forested islands where fireflies bloom in synchronized patterns, guiding lost travelers through the misty valleys. Each island has a distinct rhythm—some burn gently in twilight, others stay cool and quiet beneath towering, wind-sculpted trees. People live in harmony with the land, building homes from sun-bleached stone and woven reed, relying on seasonal migrations and oral traditions passed down by elders. Fireflies are not just light—they are the memory of the wind, and when they fade, the land remembers what was forgotten. Tensions simmer beneath the surface: the ancient belief that one island holds the last true flame, and if it dies, the islands will fall into silence.",
+   "raw": "{\"premise\": \"The Ember Isles are a sun-scorched archipelago where fireflies pulse in perfect unison, forming a living map of the land. Each island pulses with a unique rhythm, sustained by the breath of the wind—stolen from the air itself and stored in the roots of ancient trees. This wind-memory is the only source of warmth, light, and life, and each generation must gather at the central fire-circle to feed the wind with song and breath. If the wind-storm fades, the fireflies die, and the islands fall into stillness. The people live in quiet balance, for the wind is both their sustenance and their fate.\"}",
+   "value": "The Ember Isles are a sun-scorched archipelago where fireflies pulse in perfect unison, forming a living map of the land. Each island pulses with a unique rhythm, sustained by the breath of the wind—stolen from the air itself and stored in the roots of ancient trees. This wind-memory is the only source of warmth, light, and life, and each generation must gather at the central fire-circle to feed the wind with song and breath. If the wind-storm fades, the fireflies die, and the islands fall into stillness. The people live in quiet balance, for the wind is both their sustenance and their fate.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 140,
+   "ms": 2431,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "less grim",
+   "before": "Quillhaven is a continent where ink and memory shape reality—each thought written in ink leaves a trace, and forgotten words fade, while misused quills birth grotesque, semi-sentient scribbles that haunt the shadows. Rivers run black with old letters, and towns rise only where parchment is buried beneath the soil. Magic is rare and fragile, existing only in the ink’s whisper, and every scribe is both prophet and prisoner, bound by the weight of what they’ve written. The land breathes in patterns of script, and silence is the most dangerous thing, for in stillness, the unrecorded truths grow feral and hungry.",
+   "raw": "{\"premise\": \"Quillhaven is a continent where ink and memory shape reality—each thought written in ink leaves a trace, and forgotten words gently fade, while misused quills birth fleeting, curious scribbles that dance in the twilight. Rivers flow with old letters, shimmering softly, and towns bloom where parchment is buried beneath the soil. Magic is rare and quiet, existing in the quiet hum of written words, and every scribe is both artist and guardian, bound by the weight of what they’ve penned. The land breathes in rhythms of script, and silence is a stillness, not a threat—but a space where stories can be found, if one dares to look.\"}",
+   "value": "Quillhaven is a continent where ink and memory shape reality—each thought written in ink leaves a trace, and forgotten words gently fade, while misused quills birth fleeting, curious scribbles that dance in the twilight. Rivers flow with old letters, shimmering softly, and towns bloom where parchment is buried beneath the soil. Magic is rare and quiet, existing in the quiet hum of written words, and every scribe is both artist and guardian, bound by the weight of what they’ve penned. The land breathes in rhythms of script, and silence is a stillness, not a threat—but a space where stories can be found, if one dares to look.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 144,
+   "ms": 2392,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "more detail about food and daily life",
+   "before": "Dreadmere is a world of rusted iron spires and steam-hung engines, where clockwork contraptions scuttle through fog-laced cities powered by coal and the breath of living steam. Rivers run with oily water, and the air hums with the low growl of gears buried beneath the soil. Magic pulses in the form of 'steam-songs'—faint, resonant melodies that can bend metal, summon weather, or wake dormant gears in forgotten machines. The land is split between the Ashen Clans, who worship the dying embers of ancient steam, and the Iron Mire, where machines grow wild and feed on human emotion. Both coexist under the constant, suffocating pressure of the Dreadmere Sky—thick with pressure, storms, and the slow, inevitable collapse of the world's great heat engine.",
+   "raw": "{\"premise\": \"Dreadmere is a world of rusted iron spires and steam-hung engines, where clockwork scuttles through fog-laced cities powered by coal and the breath of living steam. Daily life revolves around gruel made from crushed ore and algae, boiled in iron cauldrons; bread is rare, baked only in ovens fed by spent steam. People trade in grease, tallow, and salvaged metal, bartering for warmth and light. Rivers run oily, their currents thick with sludge and the occasional floating scrap of a forgotten machine. Magic manifests as 'steam-songs'—soft, resonant hums that can melt ice, mend cracked gears, or stir the sleep of rusted contraptions. The Ashen Clans live in high, crumbling towers, cooking over coal fires and whispering to the dying heat. Below, in the Iron Mire, machines grow wild, feeding on fear and hunger, their whines echoing through the damp earth. All live under the ever-present dread of the Sky—thick with pressure, storms, and the slow, inevitable collapse of the world’s great heat engine.\"}",
+   "value": "Dreadmere is a world of rusted iron spires and steam-hung engines, where clockwork scuttles through fog-laced cities powered by coal and the breath of living steam. Daily life revolves around gruel made from crushed ore and algae, boiled in iron cauldrons; bread is rare, baked only in ovens fed by spent steam. People trade in grease, tallow, and salvaged metal, bartering for warmth and light. Rivers run oily, their currents thick with sludge and the occasional floating scrap of a forgotten machine. Magic manifests as 'steam-songs'—soft, resonant hums that can melt ice, mend cracked gears, or stir the sleep of rusted contraptions. The Ashen Clans live in high, crumbling towers, cooking over coal fires and whispering to the dying heat. Below, in the Iron Mire, machines grow wild, feeding on fear and hunger, their whines echoing through the damp earth. All live under the ever-present dread of the Sky—thick with pressure, storms, and the slow, inevitable collapse of the world’s great heat engine.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 238,
+   "ms": 3851,
+   "reasoning": false
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "make it stranger",
+   "before": "Sunken Aurel drifts beneath a shattered sky, its sunken cities half-submerged in bioluminescent coral forests. Above, the sky is a permanent twilight, fractured by floating islands of petrified magic that hum with residual enchantments. Life thrives in symbiosis—shifting, root-like entities weave through ruins, feeding on forgotten spells. The air tastes of rust and starlight; ancient magic leaks through the cracks in reality, warping time in localized pockets. Below, the deep currents pulse with sentient tides, and the dead rise not as ghosts, but as spectral guardians of lost knowledge. All know the truth: the world remembers itself, and memory is the only currency.",
+   "raw": "{\"premise\": \"Sunken Aurel drifts in the belly of a dying cosmos, its cities grown from the bones of drowned gods, their spires pulsing with stolen starlight and whispering in languages that rewrite gravity. Above, the sky is a weeping void—tears of liquid time drip down, crystallizing into sentient hourglasses that count backward, erasing the past as they fall. Floating islands of petrified magic now breed *silence*, feeding on the absence of sound to grow denser, heavier, and more dangerous. Coral forests breathe in reverse, blooming only when the dead stop remembering themselves. The tides are not water—they are memories given form, and every current holds a forgotten thought that, if drowned, becomes a new god. To survive, one must forget their name, for only amnesia grants passage through the living ruins.\"}",
+   "value": "Sunken Aurel drifts in the belly of a dying cosmos, its cities grown from the bones of drowned gods, their spires pulsing with stolen starlight and whispering in languages that rewrite gravity. Above, the sky is a weeping void—tears of liquid time drip down, crystallizing into sentient hourglasses that count backward, erasing the past as they fall. Floating islands of petrified magic now breed *silence*, feeding on the absence of sound to grow denser, heavier, and more dangerous. Coral forests breathe in reverse, blooming only when the dead stop remembering themselves. The tides are not water—they are memories given form, and every current holds a forgotten thought that, if drowned, becomes a new god. To survive, one must forget their name, for only amnesia grants passage through the living ruins.",
+   "parseOk": true,
+   "finish": "stop",
+   "tokens": 181,
+   "ms": 2976,
+   "reasoning": false
+  }
+ ]
+}

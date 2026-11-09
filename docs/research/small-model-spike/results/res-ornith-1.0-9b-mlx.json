@@ -1,0 +1,687 @@
+{
+ "model": "ornith-1.0-9b-mlx",
+ "gen": [
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 87,
+   "ms": 19783,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 85,
+   "ms": 3901,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 131,
+   "ms": 5462,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 130,
+   "ms": 5425,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 120,
+   "ms": 5158,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 94,
+   "ms": 4232,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 92,
+   "ms": 4144,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 108,
+   "ms": 4696,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 129,
+   "ms": 5439,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 104,
+   "ms": 4544,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 123,
+   "ms": 5183,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 92,
+   "ms": 4119,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 58,
+   "ms": 3002,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 66,
+   "ms": 3186,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 103,
+   "ms": 4470,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 84,
+   "ms": 3819,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 86,
+   "ms": 3965,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 97,
+   "ms": 4364,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 128,
+   "ms": 5362,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 100,
+   "ms": 4423,
+   "reasoning": true
+  }
+ ],
+ "rev": [
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "make it darker",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 105,
+   "ms": 4579,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "shorter",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 59,
+   "ms": 3044,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "more political intrigue",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 78,
+   "ms": 3622,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "less magic, more mundane",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 110,
+   "ms": 4796,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "add a mention of trade",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 62,
+   "ms": 3209,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make it feel hopeful",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 95,
+   "ms": 4332,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "focus on the weather and landscape",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 86,
+   "ms": 4026,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "more mysterious",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 107,
+   "ms": 4673,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "emphasize a looming threat to everyone",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 71,
+   "ms": 3392,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make it funnier",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 84,
+   "ms": 3926,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Vael Dorun",
+    "genreFlavor": "high fantasy",
+    "scale": "a single city",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "mention an ancient ruin",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 95,
+   "ms": 4602,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "The Ashen Reach",
+    "genreFlavor": "gothic horror",
+    "scale": "a region",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "simplify the wording",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 77,
+   "ms": 3762,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Korrin's Rest",
+    "genreFlavor": "swashbuckling",
+    "scale": "a continent",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "more about religion",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 105,
+   "ms": 4606,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Mistmoor",
+    "genreFlavor": "weird west",
+    "scale": "a world",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "make the people poorer",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 86,
+   "ms": 3955,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Thalassar",
+    "genreFlavor": "sword and sorcery",
+    "scale": "a planar realm",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "add a rival faction",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 120,
+   "ms": 5099,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "The Hollow Crown",
+    "genreFlavor": "mythic",
+    "scale": "a single city",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "make it more cinematic",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 84,
+   "ms": 4074,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Ember Isles",
+    "genreFlavor": "fairy tale",
+    "scale": "a region",
+    "magicLevel": "none",
+    "techLevel": "stone age"
+   },
+   "note": "focus on a single dominant power",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 81,
+   "ms": 3751,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Quillhaven",
+    "genreFlavor": "dark fantasy",
+    "scale": "a continent",
+    "magicLevel": "low",
+    "techLevel": "renaissance"
+   },
+   "note": "less grim",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 112,
+   "ms": 4831,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Dreadmere",
+    "genreFlavor": "steampunk",
+    "scale": "a world",
+    "magicLevel": "medium",
+    "techLevel": "stone age"
+   },
+   "note": "more detail about food and daily life",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 141,
+   "ms": 5877,
+   "reasoning": true
+  },
+  {
+   "ctx": {
+    "name": "Sunken Aurel",
+    "genreFlavor": "post-apocalyptic fantasy",
+    "scale": "a planar realm",
+    "magicLevel": "high",
+    "techLevel": "renaissance"
+   },
+   "note": "make it stranger",
+   "before": "",
+   "raw": "",
+   "value": null,
+   "parseOk": false,
+   "finish": "stop",
+   "tokens": 62,
+   "ms": 3131,
+   "reasoning": true
+  }
+ ]
+}
