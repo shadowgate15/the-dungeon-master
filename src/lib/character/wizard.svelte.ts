@@ -10,6 +10,9 @@ import {
 import { ownedEquipment } from './equipment.ts'
 import type { CharacterInput } from '#lib/server/character/service.ts'
 import { tryDraftToCharacterInput } from './save.ts'
+import { inertFieldAi } from '#lib/ai/field-ai.svelte.ts'
+import type { CharacterAiField } from './ai-fields.ts'
+import type { CharacterFieldAi } from './field-ai.svelte.ts'
 import { computeSteps, STEPS, type StepDefinition, type StepId, type StepState } from './steps.ts'
 
 /**
@@ -29,6 +32,10 @@ export class CharacterWizard {
   current = $state<StepId>('concept')
   /** Pending (un-accepted) AI suggestions per step, for the rail's dot (#116 maintains it). */
   suggestions = $state<Partial<Record<StepId, number>>>({})
+  /** Bumped by every edit (and every AI write); a field's AI Undo expires when it changes. */
+  revision = $state(0)
+  /** The per-field AI controller; set by the shell during init. Without it the controls are inert. */
+  ai: CharacterFieldAi | undefined
   /** True once the player has changed anything; guards leaving the page. */
   dirty = $state(false)
   /** True while the draft is being saved; the footer's Save button and Back are disabled. */
@@ -84,6 +91,24 @@ export class CharacterWizard {
     this.draft = draft
     this.notices.push(...notices)
     this.dirty = true
+    this.revision++
+  }
+
+  /** The props for one field's `FieldAi`; inert and disabled when no controller is attached. */
+  aiField(field: CharacterAiField) {
+    return this.ai?.field(field) ?? inertFieldAi('AI is not available here')
+  }
+
+  /** Everything an AI write may change (the draft and the notices it adds), for Field Undo. */
+  snapshot() {
+    return { draft: $state.snapshot(this.draft) as CharacterDraft, notices: [...this.notices] }
+  }
+
+  /** Puts a snapshot back as one edit: restores the field and everything cleared with it. */
+  restore(snapshot: ReturnType<CharacterWizard['snapshot']>) {
+    this.draft = snapshot.draft
+    this.notices = [...snapshot.notices]
+    this.revision++
   }
 
   dismissNotice(index: number) {

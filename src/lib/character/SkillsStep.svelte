@@ -4,8 +4,8 @@
   import Button from '#lib/ui/Button.svelte'
   import Checkbox from '#lib/ui/Checkbox.svelte'
   import Field from '#lib/ui/Field.svelte'
+  import FieldAi from '#lib/ui/FieldAi.svelte'
   import Select from '#lib/ui/Select.svelte'
-  import TextInput from '#lib/ui/TextInput.svelte'
   import Textarea from '#lib/ui/Textarea.svelte'
   import { LIMITS } from './draft.ts'
   import { groupIssues, groupLabel, skillsStepGroups } from './steps.ts'
@@ -80,34 +80,37 @@
   {#if draft.background === 'custom'}
     <section class="space-y-3" aria-label="Custom background">
       <h3 class="font-display text-lg">Custom background</h3>
-      <Field label="Background name" hint="Required.">
-        {#snippet children(id, describedby)}
-          <TextInput
-            {id}
-            aria-describedby={describedby}
-            maxlength={LIMITS.customBackgroundName}
-            value={draft.customBackgroundName}
-            oninput={(e) => wizard.update({ customBackgroundName: e.currentTarget.value })}
-          />
-        {/snippet}
-      </Field>
-      <Field
+      <!-- Name first: the feature is generated given the name. -->
+      <FieldAi
+        {...wizard.aiField('customBackgroundName')}
+        label="Background name"
+        kind="text"
+        bind:value={
+          () => draft.customBackgroundName, (v) => wizard.update({ customBackgroundName: v })
+        }
+      />
+      {#if draft.customBackgroundName.length > LIMITS.customBackgroundName}
+        <p class="text-sm font-medium text-danger" role="alert">
+          Over the {LIMITS.customBackgroundName} character limit.
+        </p>
+      {/if}
+      <FieldAi
+        {...wizard.aiField('customBackgroundFeature')}
         label="Background feature"
-        hint="Required. Free text; it has no game mechanics."
-        error={draft.customBackgroundFeature.length > LIMITS.customBackgroundFeature
-          ? `Over the ${LIMITS.customBackgroundFeature} character limit.`
-          : undefined}
-      >
-        {#snippet children(id, describedby)}
-          <Textarea
-            {id}
-            aria-describedby={describedby}
-            rows={3}
-            value={draft.customBackgroundFeature}
-            oninput={(e) => wizard.update({ customBackgroundFeature: e.currentTarget.value })}
-          />
-        {/snippet}
-      </Field>
+        kind="textarea"
+        rows={3}
+        bind:value={
+          () => draft.customBackgroundFeature, (v) => wizard.update({ customBackgroundFeature: v })
+        }
+      />
+      <p class="text-sm text-muted">
+        Both required. The feature is free text; it has no game mechanics.
+      </p>
+      {#if draft.customBackgroundFeature.length > LIMITS.customBackgroundFeature}
+        <p class="text-sm font-medium text-danger" role="alert">
+          Over the {LIMITS.customBackgroundFeature} character limit.
+        </p>
+      {/if}
       <p class="text-sm text-muted">
         A custom background grants two skills and two tool or language proficiencies (below), plus a
         fixed package: common clothes and a pouch with 15 gp.

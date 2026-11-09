@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import CharacterChat from '#lib/character/CharacterChat.svelte'
   import WizardShell from '#lib/character/WizardShell.svelte'
   import { CharacterWizard } from '#lib/character/wizard.svelte.ts'
   import type { PageProps } from './$types'
@@ -19,8 +18,4 @@
   {wizard}
   backHref={resolve('/characters')}
   onabandon={() => goto(resolve('/characters'))}
->
-  {#snippet aside()}
-    <CharacterChat {wizard} />
-  {/snippet}
-</WizardShell>
+></WizardShell>

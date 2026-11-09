@@ -1,8 +1,7 @@
 <script lang="ts">
+  import FieldAi from '#lib/ui/FieldAi.svelte'
   import Field from '#lib/ui/Field.svelte'
   import Select from '#lib/ui/Select.svelte'
-  import TextInput from '#lib/ui/TextInput.svelte'
-  import Textarea from '#lib/ui/Textarea.svelte'
   import { LIMITS } from './draft.ts'
   import type { CharacterWizard } from './wizard.svelte.ts'
 
@@ -24,64 +23,56 @@
   ] as const
 
   const orNull = (e: Event) => (e.currentTarget as HTMLSelectElement).value || null
+
+  const choose = { value: '', label: 'Choose…' }
+  const opts = (list: readonly { slug: string; name: string }[], first = choose) => [
+    first,
+    ...list.map((e) => ({ value: e.slug, label: e.name }))
+  ]
 </script>
 
 <div class="space-y-4">
-  <Field label="Name" hint="Required. Names need not be unique.">
-    {#snippet children(id, describedby)}
-      <TextInput
-        {id}
-        aria-describedby={describedby}
-        maxlength={LIMITS.name}
-        value={draft.name}
-        oninput={(e) => wizard.update({ name: e.currentTarget.value })}
-      />
-    {/snippet}
-  </Field>
+  <div>
+    <FieldAi
+      {...wizard.aiField('name')}
+      label="Name"
+      kind="text"
+      bind:value={() => draft.name, (v) => wizard.update({ name: v })}
+    />
+    <p class="mt-1 text-sm text-muted">
+      Required. Names need not be unique.
+      {#if draft.name.length > LIMITS.name}
+        <span class="text-danger">Over the {LIMITS.name} character limit.</span>
+      {/if}
+    </p>
+  </div>
 
   <div class="grid gap-3 sm:grid-cols-2">
-    <Field label="Race">
-      {#snippet children(id)}
-        <Select {id} value={draft.race ?? ''} onchange={(e) => wizard.update({ race: orNull(e) })}>
-          <option value="">Choose…</option>
-          {#each rules.races as race (race.slug)}
-            <option value={race.slug}>{race.name}</option>
-          {/each}
-        </Select>
-      {/snippet}
-    </Field>
+    <FieldAi
+      {...wizard.aiField('race')}
+      label="Race"
+      kind="enum"
+      options={opts(rules.races)}
+      bind:value={() => draft.race ?? '', (v) => wizard.update({ race: v || null })}
+    />
 
     {#if subraces.length > 0}
-      <Field label="Subrace">
-        {#snippet children(id)}
-          <Select
-            {id}
-            value={draft.subrace ?? ''}
-            onchange={(e) => wizard.update({ subrace: orNull(e) })}
-          >
-            <option value="">Choose…</option>
-            {#each subraces as subrace (subrace.slug)}
-              <option value={subrace.slug}>{subrace.name}</option>
-            {/each}
-          </Select>
-        {/snippet}
-      </Field>
+      <FieldAi
+        {...wizard.aiField('subrace')}
+        label="Subrace"
+        kind="enum"
+        options={opts(subraces)}
+        bind:value={() => draft.subrace ?? '', (v) => wizard.update({ subrace: v || null })}
+      />
     {/if}
 
-    <Field label="Class">
-      {#snippet children(id)}
-        <Select
-          {id}
-          value={draft.class ?? ''}
-          onchange={(e) => wizard.update({ class: orNull(e) })}
-        >
-          <option value="">Choose…</option>
-          {#each rules.classes as cls (cls.slug)}
-            <option value={cls.slug}>{cls.name}</option>
-          {/each}
-        </Select>
-      {/snippet}
-    </Field>
+    <FieldAi
+      {...wizard.aiField('class')}
+      label="Class"
+      kind="enum"
+      options={opts(rules.classes)}
+      bind:value={() => draft.class ?? '', (v) => wizard.update({ class: v || null })}
+    />
 
     {#if subclassGroup}
       <Field
@@ -104,55 +95,38 @@
       </Field>
     {/if}
 
-    <Field label="Background">
-      {#snippet children(id)}
-        <Select
-          {id}
-          value={draft.background ?? ''}
-          onchange={(e) => wizard.update({ background: orNull(e) })}
-        >
-          <option value="">Choose…</option>
-          {#each rules.backgrounds as background (background.slug)}
-            <option value={background.slug}>{background.name}</option>
-          {/each}
-        </Select>
-      {/snippet}
-    </Field>
+    <FieldAi
+      {...wizard.aiField('background')}
+      label="Background"
+      kind="enum"
+      options={opts(rules.backgrounds)}
+      bind:value={() => draft.background ?? '', (v) => wizard.update({ background: v || null })}
+    />
 
-    <Field label="Alignment" hint="Optional.">
-      {#snippet children(id, describedby)}
-        <Select
-          {id}
-          aria-describedby={describedby}
-          value={draft.alignment ?? ''}
-          onchange={(e) => wizard.update({ alignment: orNull(e) })}
-        >
-          <option value="">Unspecified</option>
-          {#each rules.alignments as alignment (alignment.slug)}
-            <option value={alignment.slug}>{alignment.name}</option>
-          {/each}
-        </Select>
-      {/snippet}
-    </Field>
+    <FieldAi
+      {...wizard.aiField('alignment')}
+      label="Alignment"
+      kind="enum"
+      options={opts(rules.alignments, { value: '', label: 'Unspecified' })}
+      bind:value={() => draft.alignment ?? '', (v) => wizard.update({ alignment: v || null })}
+    />
   </div>
 
   <h3 class="font-display text-lg">Details <span class="text-sm text-muted">(optional)</span></h3>
   {#each text as field (field.key)}
-    <Field
-      label={field.label}
-      error={draft[field.key].length > LIMITS[field.key]
-        ? `Over the ${LIMITS[field.key]} character limit.`
-        : undefined}
-    >
-      {#snippet children(id, describedby)}
-        <Textarea
-          {id}
-          aria-describedby={describedby}
-          rows={field.rows}
-          value={draft[field.key]}
-          oninput={(e) => wizard.update({ [field.key]: e.currentTarget.value })}
-        />
-      {/snippet}
-    </Field>
+    <div>
+      <FieldAi
+        {...wizard.aiField(field.key)}
+        label={field.label}
+        kind="textarea"
+        rows={field.rows}
+        bind:value={() => draft[field.key], (v) => wizard.update({ [field.key]: v })}
+      />
+      {#if draft[field.key].length > LIMITS[field.key]}
+        <p class="mt-1 text-sm text-danger" role="alert">
+          Over the {LIMITS[field.key]} character limit.
+        </p>
+      {/if}
+    </div>
   {/each}
 </div>

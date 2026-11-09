@@ -58,11 +58,12 @@ function otherFields(
   values: Record<string, string>
 ) {
   const lines = Object.entries(flowSpecs)
-    .filter(([key]) => key !== request.field)
+    .filter(([key, spec]) => key !== request.field && (spec.relevant?.(values) ?? true))
     .map(([key, spec]) => {
       const value = values[key]?.trim()
       const legal = spec.kind === 'enum' ? spec.options(values).includes(value ?? '') : true
-      return `- ${spec.label}: ${value && legal ? value : '(unset)'}`
+      const shown = value && spec.kind === 'enum' && spec.display ? spec.display(value) : value
+      return `- ${spec.label}: ${value && legal ? shown : '(unset)'}`
     })
   return `Other fields (the player may have edited them):\n${lines.join('\n')}`
 }
@@ -83,8 +84,10 @@ function buildRequest(
     otherFields(flowSpecs, request, values)
   ]
   if (request.mode === 'feedback') {
+    const current =
+      spec.kind === 'enum' && spec.display ? spec.display(request.current ?? '') : request.current
     system.push(
-      `Current value of ${spec.label}: ${request.current}\nThe player's note: ${request.note}\nRewrite it to follow the note; do not return the same text.`
+      `Current value of ${spec.label}: ${current}\nThe player's note: ${request.note}\nRewrite it to follow the note; do not return the same text.`
     )
   }
   const task =

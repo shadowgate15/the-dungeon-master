@@ -1,9 +1,11 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
   import { beforeNavigate, goto } from '$app/navigation'
+  import AiPanel from '#lib/ai/AiPanel.svelte'
+  import { createAiStatus } from '#lib/ai/ai-status.svelte.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Dialog from '#lib/ui/Dialog.svelte'
+  import { createCharacterFieldAi } from './field-ai.svelte.ts'
   import StatsStrip from './StatsStrip.svelte'
   import StepRail from './StepRail.svelte'
   import { STEP_VIEWS } from './step-views.ts'
@@ -16,14 +18,22 @@
     backHref: string
     /** Called after the player confirms abandoning the draft. */
     onabandon: () => void
-    /**
-     * The persistent creation conversation (#116). Rendered in the right column on every step;
-     * when absent the layout is two columns.
-     */
-    aside?: Snippet
   }
 
-  let { wizard, backHref, onabandon, aside }: Props = $props()
+  let { wizard, backHref, onabandon }: Props = $props()
+
+  // Per-field AI for every step. Each step view is keyed on the step id below, so changing
+  // step unmounts it; the controller lives here, so it also aborts in-flight calls on a step
+  // change (and, via its own cleanup, on leaving the wizard) and discards their results.
+  const aiStatus = createAiStatus()
+  // svelte-ignore state_referenced_locally
+  const fieldAi = createCharacterFieldAi(wizard, aiStatus)
+  // svelte-ignore state_referenced_locally
+  wizard.ai = fieldAi
+  $effect(() => {
+    void wizard.current
+    return () => fieldAi.abortAll()
+  })
 
   let confirming = $state(false)
   /** Where an in-app navigation was headed when it was held back to ask about the draft. */
@@ -49,12 +59,7 @@
   }}
 />
 
-<main
-  class={[
-    'mx-auto grid max-w-7xl gap-4 p-4',
-    aside ? 'lg:grid-cols-[13rem_1fr_22rem]' : 'lg:grid-cols-[13rem_1fr]'
-  ]}
->
+<main class="mx-auto grid max-w-7xl gap-4 p-4 lg:grid-cols-[13rem_1fr]">
   <div class="lg:sticky lg:top-4 lg:self-start">
     <StepRail
       steps={wizard.steps.map((s) => ({
@@ -68,6 +73,8 @@
   </div>
 
   <section class="min-w-0 space-y-4">
+    <AiPanel ai={aiStatus} />
+
     {#each wizard.notices as notice, i (i + notice)}
       <Alert variant="info" class="flex items-center justify-between gap-2">
         <span>{notice}</span>
@@ -111,12 +118,6 @@
       {/if}
     </div>
   </section>
-
-  {#if aside}
-    <aside aria-label="Creation conversation" class="lg:sticky lg:top-4 lg:self-start">
-      {@render aside()}
-    </aside>
-  {/if}
 </main>
 
 <Dialog

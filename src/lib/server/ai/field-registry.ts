@@ -1,3 +1,9 @@
+import {
+  CHARACTER_AI_FIELDS,
+  CHARACTER_AI_LABELS,
+  CHARACTER_TEXT_LIMITS,
+  type CharacterAiField
+} from '#lib/character/ai-fields.ts'
 import { LENGTHS, TONES } from '#lib/campaign/enums.ts'
 import { CAMPAIGN_FIELD_LABELS, CAMPAIGN_SEED_FIELDS } from '#lib/campaign/seed.ts'
 import {
@@ -7,6 +13,7 @@ import {
   SCALES,
   TECH_LEVELS
 } from '#lib/world/enums.ts'
+import { loadWizardRules } from '../character/wizard-rules.ts'
 import { FIELD_LABELS, NAME_MAX, SEED_FIELDS, type SeedField } from '#lib/world/seed.ts'
 
 /**
@@ -23,6 +30,8 @@ interface BaseSpec {
   label: string
   /** What the model is asked to write, including any structural length wording. */
   instruction: string
+  /** False when the field means nothing for these values (it is then left out of the context). */
+  relevant?: (values: Record<string, string>) => boolean
 }
 
 /** Free text: `{ value }`. Over `maxChars` is trimmed to the last sentence boundary. */
@@ -36,6 +45,8 @@ export interface EnumFieldSpec extends BaseSpec {
   kind: 'enum'
   /** The legal slugs for a request; an empty list means the field cannot be generated now. */
   options: (values: Record<string, string>) => readonly string[]
+  /** How a legal value reads in the prompt (a Rules Data slug as its name); default the value. */
+  display?: (value: string) => string
 }
 
 export type FieldSpec = TextFieldSpec | EnumFieldSpec
@@ -117,7 +128,115 @@ const CAMPAIGN: Record<(typeof CAMPAIGN_SEED_FIELDS)[number], FieldSpec> = {
   )
 }
 
+// --- Character ----------------------------------------------------------------------------------
+
+const rules = () => loadWizardRules()
+type Named = readonly { slug: string; name: string }[]
+const nameIn = (list: Named) => (slug: string) => list.find((e) => e.slug === slug)?.name ?? slug
+
+const characterText = (
+  field: CharacterAiField & keyof typeof CHARACTER_TEXT_LIMITS,
+  instruction: string,
+  relevant?: TextFieldSpec['relevant']
+): TextFieldSpec => ({
+  kind: 'text',
+  label: CHARACTER_AI_LABELS[field],
+  instruction: `${instruction} Never more than ${CHARACTER_TEXT_LIMITS[field]} characters.`,
+  maxChars: CHARACTER_TEXT_LIMITS[field],
+  relevant
+})
+
+const characterSlug = (
+  field: CharacterAiField,
+  instruction: string,
+  options: (values: Record<string, string>) => readonly string[],
+  display: (slug: string) => string
+): EnumFieldSpec => ({
+  kind: 'enum',
+  label: CHARACTER_AI_LABELS[field],
+  instruction,
+  options,
+  display
+})
+
+const isCustom = (values: Record<string, string>) => values.background === 'custom'
+
+const CHARACTER: Record<CharacterAiField, FieldSpec> = {
+  name: characterText(
+    'name',
+    'Write the name of the player character: one fitting name of 1 to 3 words, about 15 characters. A name only, not a sentence.'
+  ),
+  race: characterSlug(
+    'race',
+    'Choose the race that best fits the character.',
+    () => rules().races.map((r) => r.slug),
+    (slug) => nameIn(rules().races)(slug)
+  ),
+  subrace: characterSlug(
+    'subrace',
+    'Choose the subrace that best fits the character. It must belong to the chosen race.',
+    (v) =>
+      rules()
+        .subraces.filter((s) => s.race === v.race)
+        .map((s) => s.slug),
+    (slug) => nameIn(rules().subraces)(slug)
+  ),
+  class: characterSlug(
+    'class',
+    'Choose the class that best fits the character.',
+    () => rules().classes.map((c) => c.slug),
+    (slug) => nameIn(rules().classes)(slug)
+  ),
+  background: characterSlug(
+    'background',
+    'Choose the background that best fits the character. "custom" lets the player write their own.',
+    () => rules().backgrounds.map((b) => b.slug),
+    (slug) => nameIn(rules().backgrounds)(slug)
+  ),
+  alignment: characterSlug(
+    'alignment',
+    'Choose the alignment that best fits the character.',
+    () => rules().alignments.map((a) => a.slug),
+    (slug) => nameIn(rules().alignments)(slug)
+  ),
+  appearance: characterText(
+    'appearance',
+    "Write the character's appearance: exactly 2 sentences, about 200 characters, describing what others notice at a glance."
+  ),
+  personality: characterText(
+    'personality',
+    "Write the character's personality traits: exactly 2 sentences, about 200 characters, in the third person."
+  ),
+  ideal: characterText(
+    'ideal',
+    "Write the character's ideal: exactly 1 sentence, about 100 characters, the principle they believe in most."
+  ),
+  bond: characterText(
+    'bond',
+    "Write the character's bond: exactly 1 sentence, about 120 characters, a person, place or oath they are tied to."
+  ),
+  flaw: characterText(
+    'flaw',
+    "Write the character's flaw: exactly 1 sentence, about 120 characters, a weakness or vice that could cause trouble."
+  ),
+  backstory: characterText(
+    'backstory',
+    "Write the character's backstory: exactly 4 sentences, about 600 characters, in the third person, covering where they come from and what set them on the road. Stay consistent with the other fields."
+  ),
+  customBackgroundName: characterText(
+    'customBackgroundName',
+    "Write the name of the character's custom background (an occupation or upbringing): 1 to 3 words, about 20 characters. A name only.",
+    isCustom
+  ),
+  customBackgroundFeature: characterText(
+    'customBackgroundFeature',
+    "Write the feature of the character's custom background, given its name: exactly 2 sentences, about 250 characters, describing a social or practical advantage it gives. It has no game mechanics.",
+    isCustom
+  )
+}
+
 export const FIELD_REGISTRY: FieldRegistry = {
   world: Object.fromEntries(SEED_FIELDS.map((f) => [f, WORLD[f]])),
-  campaign: Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, CAMPAIGN[f]]))
+  campaign: Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, CAMPAIGN[f]])),
+  character: Object.fromEntries(CHARACTER_AI_FIELDS.map((f) => [f, CHARACTER[f]]))
 }

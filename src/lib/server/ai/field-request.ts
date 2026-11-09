@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { CAMPAIGN_SEED_FIELDS } from '#lib/campaign/seed.ts'
+import { CHARACTER_AI_FIELDS } from '#lib/character/ai-fields.ts'
 import { SEED_FIELDS } from '#lib/world/seed.ts'
 
 /**
@@ -7,7 +8,6 @@ import { SEED_FIELDS } from '#lib/world/seed.ts'
  * own field names and form values. Stateless: the form values, the target field, the mode and,
  * for feedback, the current value and the player's note are the whole request.
  *
- * Further flows (campaign, character) add their own member here and entries in the registry.
  */
 
 const VALUE_MAX = 2000
@@ -51,6 +51,23 @@ const campaign = z.object({
   ...common
 })
 
-export const fieldRequestSchema = z.discriminatedUnion('flow', [world, campaign])
+/**
+ * The Character draft is browser-only, so the form values travel with the request: Rules Data
+ * slugs for race, subrace, class, background and alignment, text for the rest. The server
+ * resolves slugs to names for the prompt. Empty means unset.
+ */
+const character = z.object({
+  flow: z.literal('character'),
+  field: z.enum(CHARACTER_AI_FIELDS),
+  values: z.object(
+    Object.fromEntries(CHARACTER_AI_FIELDS.map((f) => [f, z.string().max(VALUE_MAX)])) as Record<
+      (typeof CHARACTER_AI_FIELDS)[number],
+      z.ZodString
+    >
+  ),
+  ...common
+})
+
+export const fieldRequestSchema = z.discriminatedUnion('flow', [world, campaign, character])
 
 export type FieldRequest = z.infer<typeof fieldRequestSchema>

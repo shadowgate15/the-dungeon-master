@@ -24,7 +24,7 @@ class FieldState {
   error = $state('')
   retryable = $state(true)
   /** The value an AI write replaced and the value it wrote; Undo expires when they diverge. */
-  undo = $state<{ previous: string; written: string }>()
+  undo = $state<{ previous: string; written: string; snapshot?: unknown; version?: unknown }>()
   controller?: AbortController
   last?: Call
 }
@@ -39,6 +39,15 @@ export interface FieldAiOptions<F extends string> {
   extra?: () => Record<string, unknown>
   /** Writes a value into the form (AI result or Undo). */
   set: (field: F, value: string) => void
+  /**
+   * For flows where one write can change other fields (the Character's reconcile-and-flag
+   * path): `snapshot` captures everything an AI write may touch just before it, `restore` puts
+   * it back on Undo, and `version` returns a token that changes on every edit of the form, so
+   * Undo expires on the next edit (of any field) instead of when this field's value changes.
+   */
+  snapshot?: () => unknown
+  restore?: (snapshot: unknown) => void
+  version?: () => unknown
   /** Archived or read-only: both icons disabled with this reason, and the field read-only. */
   readonlyReason?: () => string | undefined
   /** A per-field reason the field cannot be generated now (e.g. "Choose a class first"). */
@@ -107,8 +116,14 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
 
       if (result && 'ok' in result && result.ok) {
         s.status = 'idle'
-        s.undo = { previous: current, written: result.value }
+        const snapshot = options.snapshot?.()
         options.set(field, result.value)
+        s.undo = {
+          previous: current,
+          written: result.value,
+          snapshot,
+          version: options.version?.()
+        }
       } else if (result && 'ok' in result) {
         if (result.failure.kind === 'reasoning-model') options.ai.reasoningModel()
         if (result.status) options.ai.unavailable(result.status)
@@ -124,17 +139,22 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
     }
   }
 
-  // Leaving the form aborts everything in flight and discards the results.
-  $effect(() => () => {
+  /** Aborts everything in flight and discards the results. */
+  function abortAll() {
     for (const s of Object.values<FieldState | undefined>(states)) {
       if (!s) continue
       const controller = s.controller
       s.controller = undefined
+      if (controller) s.status = 'idle'
       controller?.abort()
     }
-  })
+  }
+
+  // Leaving the form aborts everything in flight and discards the results.
+  $effect(() => abortAll)
 
   return {
+    abortAll,
     /** The props for one `FieldAi`. */
     field(field: F) {
       const s = state(field)
@@ -150,7 +170,10 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
           return s.retryable
         },
         get canUndo() {
-          return !!s.undo && options.values()[field] === s.undo.written
+          if (!s.undo) return false
+          return options.version
+            ? options.version() === s.undo.version
+            : options.values()[field] === s.undo.written
         },
         get readonly() {
           return !!options.readonlyReason?.()
@@ -175,7 +198,8 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
         },
         onUndo: () => {
           if (!s.undo) return
-          options.set(field, s.undo.previous)
+          if (s.undo.snapshot !== undefined) options.restore?.(s.undo.snapshot)
+          else options.set(field, s.undo.previous)
           s.undo = undefined
         }
       }
@@ -184,3 +208,22 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
 }
 
 export type FieldAi<F extends string> = ReturnType<typeof createFieldAi<F>>
+
+/** Props for a control with no AI behind it (a form rendered without a controller): disabled. */
+export function inertFieldAi(reason: string) {
+  const noop = () => {}
+  return {
+    status: 'idle' as const,
+    error: '',
+    retryable: true,
+    canUndo: false,
+    readonly: false,
+    disabledReason: reason,
+    onGenerate: noop,
+    onFeedback: noop,
+    onStop: noop,
+    onRetry: noop,
+    onDismiss: noop,
+    onUndo: noop
+  }
+}
