@@ -51,3 +51,15 @@ export function draftToCharacterInput(rules: WizardRules, draft: CharacterDraft)
     classSpells: draft.classSpells
   }
 }
+
+/** `draftToCharacterInput`, or null when the draft is not complete enough to map. */
+export function tryDraftToCharacterInput(
+  rules: WizardRules,
+  draft: CharacterDraft
+): CharacterInput | null {
+  try {
+    return draftToCharacterInput(rules, draft)
+  } catch {
+    return null
+  }
+}

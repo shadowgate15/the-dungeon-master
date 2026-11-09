@@ -1,11 +1,11 @@
 import { goto } from '$app/navigation'
 import { resolve } from '$app/paths'
-import { draftToCharacterInput } from './save.ts'
 import type { CharacterWizard } from './wizard.svelte.ts'
 
 /** Posts (or, when editing, puts) the draft. Success lands on the summary; failure keeps the draft and sets `wizard.saveError`. */
 export async function submitDraft(wizard: CharacterWizard) {
-  if (!wizard.canSave) return
+  const input = wizard.characterInput
+  if (!input) return
   wizard.saving = true
   wizard.saveError = null
   try {
@@ -15,7 +15,7 @@ export async function submitDraft(wizard: CharacterWizard) {
       {
         method: editing ? 'PUT' : 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(draftToCharacterInput(wizard.rules, wizard.draft))
+        body: JSON.stringify(input)
       }
     )
     const result = (await response.json()) as { id?: string; error?: string }

@@ -8,7 +8,8 @@ import {
   type WizardRules
 } from './draft.ts'
 import { ownedEquipment } from './equipment.ts'
-import { draftToCharacterInput } from './save.ts'
+import type { CharacterInput } from '#lib/server/character/service.ts'
+import { tryDraftToCharacterInput } from './save.ts'
 import { computeSteps, STEPS, type StepDefinition, type StepId, type StepState } from './steps.ts'
 
 /**
@@ -41,8 +42,8 @@ export class CharacterWizard {
   stats: DerivedStats
   /** Rail state for each applicable step, in order. */
   steps: StepState[]
-  /** Whether the draft maps to a `CharacterInput`, so saving can be attempted. */
-  canSave: boolean
+  /** The draft as the service's `CharacterInput`, or null while it cannot be saved. */
+  characterInput: CharacterInput | null
 
   /**
    * @param initial a saved Character's draft (edit page): the wizard opens on it with nothing
@@ -68,14 +69,7 @@ export class CharacterWizard {
         equipment: ownedEquipment(rules, this.draft, this.resolved)
       })
     )
-    this.canSave = $derived.by(() => {
-      try {
-        draftToCharacterInput(rules, this.draft)
-        return true
-      } catch {
-        return false
-      }
-    })
+    this.characterInput = $derived(tryDraftToCharacterInput(rules, this.draft))
     this.steps = $derived(
       computeSteps(
         { rules, draft: this.draft, resolved: this.resolved, stats: this.stats },
@@ -100,10 +94,10 @@ export class CharacterWizard {
     return this.steps.find((s) => s.id === id)
   }
 
-  /** Moves to a step unless it is locked or skipped. Returns whether it moved. */
+  /** Moves to a step unless it is locked, skipped, or a save is in flight. Returns whether it moved. */
   go(id: StepId): boolean {
     const target = this.step(id)
-    if (!target || target.status === 'locked') return false
+    if (!target || target.status === 'locked' || this.saving) return false
     this.current = id
     this.saveError = null
     return true

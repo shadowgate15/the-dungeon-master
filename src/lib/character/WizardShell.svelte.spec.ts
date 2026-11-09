@@ -235,6 +235,9 @@ describe('WizardShell footer on the Review step', () => {
 
     await expect.element(page.getByRole('button', { name: 'Saving…' })).toBeDisabled()
     await expect.element(page.getByRole('button', { name: 'Back' })).toBeDisabled()
+    // The rail is another way off Review; it must not leave mid-save either.
+    await page.getByRole('button', { name: /Concept/ }).click()
+    await expect.element(page.getByRole('heading', { name: 'Review' })).toBeVisible()
     finish(Response.json({ error: 'nope' }, { status: 400 }))
     await expect.element(page.getByRole('button', { name: 'Save Character' })).toBeEnabled()
   })

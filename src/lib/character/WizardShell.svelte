@@ -40,7 +40,6 @@
   })
   const active = $derived(wizard.step(wizard.current))
   const View = $derived(STEP_VIEWS[wizard.current])
-  const next = $derived(wizard.next ? wizard.step(wizard.next) : undefined)
 </script>
 
 <svelte:window
@@ -97,12 +96,16 @@
         onclick={() => wizard.previous && wizard.go(wizard.previous)}>Back</Button
       >
       {#if wizard.next}
+        {@const target = wizard.next}
         <Button
-          disabled={!next || next.status === 'locked'}
-          onclick={() => wizard.next && wizard.go(wizard.next)}>Next</Button
+          disabled={wizard.step(target)?.status === 'locked'}
+          onclick={() => wizard.go(target)}>Next</Button
         >
       {:else}
-        <Button disabled={!wizard.canSave || wizard.saving} onclick={() => submitDraft(wizard)}>
+        <Button
+          disabled={!wizard.characterInput || wizard.saving}
+          onclick={() => submitDraft(wizard)}
+        >
           {wizard.saving ? 'Saving…' : wizard.characterId ? 'Save changes' : 'Save Character'}
         </Button>
       {/if}
