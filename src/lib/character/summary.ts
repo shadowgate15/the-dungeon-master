@@ -1,6 +1,7 @@
 import type { CharacterDetail } from '#lib/server/character/service.ts'
 import { deriveStats, type DerivedStats } from '#lib/rules/derive-stats.ts'
 import { resolveFeatures, type ResolvedFeatures } from '#lib/rules/resolver.ts'
+import type { Spell } from '#lib/rules/schema.ts'
 import { resolverDraft, type CharacterDraft, type WizardRules } from './draft.ts'
 import { equipmentRows, fixedEquipment } from './equipment.ts'
 
@@ -48,7 +49,7 @@ export interface SummaryModel {
     alignment: string | null
   }
   equipment: { name: string; quantity: number }[]
-  spells: { name: string; level: number }[]
+  spells: Spell[]
 }
 
 export function draftToSummaryData(rules: WizardRules, draft: CharacterDraft): SummaryData {
@@ -138,7 +139,7 @@ export function buildSummary(rules: WizardRules, data: SummaryData): SummaryMode
       quantity: e.quantity
     })),
     spells: [...new Set(spellSlugs)]
-      .map((slug) => ({ name: spellNames.get(slug)!.name, level: spellNames.get(slug)!.level }))
+      .map((slug) => spellNames.get(slug)!)
       .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
   }
 }

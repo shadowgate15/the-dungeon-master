@@ -81,4 +81,20 @@ describe('CharacterSummary', () => {
     await expect.element(page.getByText('Longsword: +5 to hit')).toBeVisible()
     await expect.element(page.getByText('Born under a bad sign')).toBeVisible()
   })
+
+  it('expands a spell row to its details and collapses it again', async () => {
+    render(CharacterSummary, {
+      model: buildSummary(rules, { ...fighter, classSpells: ['fire-bolt'] })
+    })
+    const button = page.getByRole('button', { name: 'Details for Fire Bolt', exact: true })
+    await expect.element(button).toHaveAttribute('aria-expanded', 'false')
+    await button.click()
+    await expect.element(button).toHaveAttribute('aria-expanded', 'true')
+    const panelId = button.element().getAttribute('aria-controls')!
+    const panel = page.elementLocator(document.getElementById(panelId)!)
+    await expect.element(panel).toHaveTextContent(/Evocation/)
+    await expect.element(panel).toHaveTextContent(/120 feet/)
+    await button.click()
+    await expect.element(button).toHaveAttribute('aria-expanded', 'false')
+  })
 })
