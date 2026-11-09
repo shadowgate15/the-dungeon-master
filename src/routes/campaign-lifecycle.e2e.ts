@@ -14,9 +14,9 @@ async function createCampaign(page: Page, name: string, worlds: string[], url = 
     if (!picked) await dialog.getByLabel('Add World').selectOption({ label: world })
   }
   await dialog.getByLabel('Name', { exact: true }).fill(name)
-  await dialog.getByLabel('Premise').fill('Escort a relic across the ash plains.')
-  await dialog.getByLabel('Tone').selectOption('tense')
-  await dialog.getByLabel('Length').selectOption('short')
+  await dialog.getByLabel('Premise', { exact: true }).fill('Escort a relic across the ash plains.')
+  await dialog.getByLabel('Tone', { exact: true }).selectOption('tense')
+  await dialog.getByLabel('Length', { exact: true }).selectOption('short')
   await dialog.getByRole('button', { name: 'Create Campaign' }).click()
   await expect(dialog).toBeHidden()
   return dialog

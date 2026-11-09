@@ -3,12 +3,20 @@ import { createWorld } from './world-helpers'
 
 const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
 
-async function setChat(request: APIRequestContext, content: unknown) {
-  const response = await request.post(`${FAKE_LM_STUDIO}/__control/chat-content`, {
-    data: content
+async function queue(request: APIRequestContext, ...values: string[]) {
+  const response = await request.post(`${FAKE_LM_STUDIO}/__control/answers`, {
+    data: { answers: values.map((value) => ({ content: { value } })) }
   })
   expect(response.ok()).toBe(true)
 }
+
+// The fake's answer queue is process-wide state.
+test.describe.configure({ mode: 'serial' })
+test.afterEach(async ({ request }) => {
+  await request.post(`${FAKE_LM_STUDIO}/__control/answers`, {
+    data: { answers: [], replace: true }
+  })
+})
 
 const row = (page: Page, name: string) => page.getByRole('row').filter({ hasText: name })
 
@@ -22,7 +30,7 @@ async function setWorldArchived(page: Page, world: string, archived: boolean) {
 }
 
 // The whole lifecycle of a Campaign in one story. The per-feature specs
-// (campaigns, campaign-edit, campaign-lifecycle, campaign-conversation) cover the
+// (campaigns, campaign-edit, campaign-lifecycle, campaign-field-ai) cover the
 // edge cases; this one proves the pieces work together, with the model stubbed.
 test('a Campaign goes from AI-assisted creation through edit, filter, read-only, archive, restore and delete', async ({
   page,
@@ -36,45 +44,33 @@ test('a Campaign goes from AI-assisted creation through edit, filter, read-only,
   await createWorld(page, ash)
   await createWorld(page, bramble)
 
-  // Create with the AI: Proposals fill the Seed card only once accepted.
-  await setChat(request, {
-    reply: 'Here is a first draft.',
-    proposals: { name, premise: 'Escort a relic.', tone: 'tense', length: 'short' }
-  })
+  // Create with the AI: each field is generated on request.
+  await queue(request, name, 'Escort a relic.', 'tense', 'short')
   await page.goto('/campaigns')
   await page.waitForLoadState('networkidle') // the dialog only becomes a modal after hydration
   await page.getByRole('link', { name: 'New Campaign' }).click()
   const dialog = page.getByRole('dialog', { name: 'New Campaign' })
   await dialog.getByLabel('Add World').selectOption({ label: ash })
-  const panel = dialog.getByRole('region', { name: 'AI' })
-  await panel.getByLabel('Message').fill('Draft me a tense campaign')
-  await panel.getByRole('button', { name: 'Send' }).click()
-  await expect(panel.getByText('Here is a first draft.')).toBeVisible()
-  await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('')
+  await expect(dialog.getByText('Connected')).toBeVisible()
   const create = dialog.getByRole('button', { name: 'Create Campaign' })
   await expect(create).toBeDisabled()
-  const cards = panel.getByRole('list', { name: 'Proposals' }).getByRole('listitem')
-  await expect(cards).toHaveCount(4)
-  for (let remaining = 4; remaining > 0; remaining--) {
-    await panel.getByRole('button', { name: 'Accept' }).first().click()
-    await expect(panel.getByRole('button', { name: 'Accept' })).toHaveCount(remaining - 1)
+  for (const field of ['Name', 'Premise', 'Tone', 'Length']) {
+    await dialog.getByRole('button', { name: `Generate ${field}` }).click()
+    await expect(dialog.getByText(`${field} updated by AI.`)).toBeVisible()
   }
   await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue(name)
-  await expect(dialog.getByLabel('Length')).toHaveValue('short')
+  await expect(dialog.getByLabel('Length', { exact: true })).toHaveValue('short')
   await create.click()
   await expect(dialog).toBeHidden()
   await expect(row(page, name).getByText(ash)).toBeVisible()
   await expect(row(page, name).getByRole('cell', { name: 'tense', exact: true })).toBeVisible()
 
-  // Edit, with the AI too: change the tone through a Proposal and add a second World.
+  // Edit, with the AI too: change the tone and add a second World.
   await page.getByRole('table').getByRole('link', { name }).click()
   await page.waitForLoadState('networkidle')
-  await setChat(request, { reply: 'Darker?', proposals: { tone: 'dark' } })
-  const editPanel = page.getByRole('region', { name: 'AI' })
-  await editPanel.getByLabel('Message').fill('make it darker')
-  await editPanel.getByRole('button', { name: 'Send' }).click()
-  await expect(editPanel.getByText('Darker?')).toBeVisible()
-  await editPanel.getByRole('button', { name: 'Accept' }).click()
+  await queue(request, 'dark')
+  await page.getByRole('button', { name: 'Generate Tone' }).click()
+  await expect(page.getByLabel('Tone', { exact: true })).toHaveValue('dark')
   await page.getByLabel('Add World').selectOption({ label: bramble })
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByText('Saved')).toBeVisible()
@@ -88,9 +84,9 @@ test('a Campaign goes from AI-assisted creation through edit, filter, read-only,
   const second = page.getByRole('dialog', { name: 'New Campaign' })
   await second.getByLabel('Add World').selectOption({ label: ash })
   await second.getByLabel('Name', { exact: true }).fill(other)
-  await second.getByLabel('Premise').fill('Hold the pass.')
-  await second.getByLabel('Tone').selectOption('epic')
-  await second.getByLabel('Length').selectOption('long')
+  await second.getByLabel('Premise', { exact: true }).fill('Hold the pass.')
+  await second.getByLabel('Tone', { exact: true }).selectOption('epic')
+  await second.getByLabel('Length', { exact: true }).selectOption('long')
   await second.getByRole('button', { name: 'Create Campaign' }).click()
   await expect(second).toBeHidden()
 

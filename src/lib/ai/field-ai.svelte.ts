@@ -35,6 +35,8 @@ export interface FieldAiOptions<F extends string> {
   ai: AiStatusStore
   /** The form's live values (all fields, empty string for unset): the request's context. */
   values: () => Record<F, string>
+  /** Extra request-body keys the flow needs beyond the field values (e.g. the Campaign's World ids). */
+  extra?: () => Record<string, unknown>
   /** Writes a value into the form (AI result or Undo). */
   set: (field: F, value: string) => void
   /** Archived or read-only: both icons disabled with this reason, and the field read-only. */
@@ -91,6 +93,7 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
           field,
           mode: call.mode,
           values: options.values(),
+          ...options.extra?.(),
           ...(call.mode === 'feedback' ? { current, note: call.note } : {})
         })
       })

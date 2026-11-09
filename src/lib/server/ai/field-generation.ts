@@ -39,6 +39,8 @@ export interface RunFieldOptions {
   /** The single deadline, retry included. Injectable for tests. */
   timeoutMs?: number
   registry?: FieldRegistry
+  /** Flow context loaded outside the request (e.g. the Campaign's Worlds), added to the system prompts. */
+  extraSystemPrompts?: string[]
 }
 
 const PREAMBLE =
@@ -71,11 +73,13 @@ function buildRequest(
   request: FieldRequest,
   options: readonly string[],
   correction: string | null,
-  signal: AbortSignal
+  signal: AbortSignal,
+  extraSystemPrompts: string[] = []
 ): ChatRequest {
   const values: Record<string, string> = request.values
   const system = [
     `${PREAMBLE}\n${spec.instruction}${spec.kind === 'enum' ? `\nAllowed values: ${options.join(', ')}.` : ''}`,
+    ...extraSystemPrompts,
     otherFields(flowSpecs, request, values)
   ]
   if (request.mode === 'feedback') {
@@ -201,7 +205,15 @@ export async function runField(
   const attempt = async (correction: string | null): Promise<Checked | FieldResult> => {
     const call = await callModel(
       port,
-      buildRequest(spec, flowSpecs, request, legal, correction, controller.signal)
+      buildRequest(
+        spec,
+        flowSpecs,
+        request,
+        legal,
+        correction,
+        controller.signal,
+        options.extraSystemPrompts
+      )
     )
     if (!call.ok) {
       return call.failure.kind === 'invalid-output'

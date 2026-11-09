@@ -5,7 +5,6 @@ import {
   CampaignNotFoundError,
   CampaignValidationError
 } from '#lib/server/campaign/service.ts'
-import { worldWithSeed } from '#lib/server/campaign/world-seed.ts'
 import { createWorldService } from '#lib/server/world/service.ts'
 import type { ActionNotice } from '#lib/world/ActionToast.svelte'
 import type { Actions, PageServerLoad } from './$types'
@@ -44,7 +43,7 @@ export const load: PageServerLoad = ({ url }) => {
     activeCount: active.length,
     archivedCount: archived.length,
     // Only active Worlds may be newly linked.
-    worlds: worlds.list().map(worldWithSeed)
+    worlds: worlds.list().map((w) => ({ id: w.id, name: w.name }))
   }
 }
 

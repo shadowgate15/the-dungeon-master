@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { CAMPAIGN_SEED_FIELDS } from '#lib/campaign/seed.ts'
 import { ABILITY_KEYS } from '#lib/character/ability-scores.ts'
 import { ALL_FIELDS, CONVERSATION_STEPS } from '#lib/character/conversation.ts'
 import { LIMITS } from '#lib/character/draft.ts'
@@ -60,14 +59,6 @@ function requestSchemas<F extends readonly [string, ...string[]], E extends z.Zo
 const world = requestSchemas(SEED_FIELDS, {})
 export const turnRequestSchema = world.turn
 export const compactRequestSchema = world.compact
-
-/** The Worlds are sent as ids; the server loads their Seeds and checks they are still active. */
-export const WORLD_IDS_MAX = 100
-const campaign = requestSchemas(CAMPAIGN_SEED_FIELDS, {
-  worldIds: z.array(z.string().max(200)).max(WORLD_IDS_MAX)
-})
-export const campaignTurnRequestSchema = campaign.turn
-export const campaignCompactRequestSchema = campaign.compact
 
 /**
  * The Character draft is browser-only, so it is sent every turn (with the active step) and

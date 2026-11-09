@@ -6,7 +6,9 @@ import {
   lockReasoningModel
 } from '#lib/server/ai/index.ts'
 import { unavailableFailure } from '#lib/server/ai/availability.ts'
-import { fieldRequestSchema, runField } from '#lib/server/ai/field-generation.ts'
+import { runFieldRequest } from '#lib/server/ai/field-flow.ts'
+import { fieldRequestSchema } from '#lib/server/ai/field-generation.ts'
+import { db } from '#lib/server/db/index.ts'
 import type { RequestHandler } from './$types'
 
 /**
@@ -32,7 +34,7 @@ export const POST: RequestHandler = async ({ request }) => {
   if (unavailable) return json({ ok: false, failure: unavailable, status }, { status: 503 })
 
   // request.signal fires when the browser drops the request (Stop), cancelling the call.
-  const result = await runField(port, parsed.data, { signal: request.signal })
+  const result = await runFieldRequest(port, db, parsed.data, { signal: request.signal })
   if (!result.ok && result.failure.kind === 'reasoning-model') lockReasoningModel()
   return json(result)
 }

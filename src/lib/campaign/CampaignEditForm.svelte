@@ -1,6 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
-  import type { Snippet } from 'svelte'
+  import AiPanel from '#lib/ai/AiPanel.svelte'
+  import { createAiStatus } from '#lib/ai/ai-status.svelte.ts'
+  import { createFieldAi } from '#lib/ai/field-ai.svelte.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import CampaignSeedCard from './CampaignSeedCard.svelte'
@@ -14,39 +16,39 @@
     /** Service validation error from the last save attempt, shown inline. */
     error?: string
     saved?: boolean
-    /** Slot for the chat pane, on the left; the Seed card is the right-hand column. */
-    chat?: Snippet<[Seed, (field: CampaignSeedField, value: string) => void]>
   }
 
-  let { initial, worlds, error, saved = false, chat }: Props = $props()
+  let { initial, worlds, error, saved = false }: Props = $props()
 
   // svelte-ignore state_referenced_locally
   let seed = $state<Seed>({ ...initial, worldIds: [...initial.worldIds] })
-  // Bumped after a successful save, which discards the chat's transcript.
-  let chatKey = $state(0)
-
-  function accept(field: CampaignSeedField, value: string) {
-    seed[field] = value
-  }
+  const aiStatus = createAiStatus()
+  const fieldAi = createFieldAi<CampaignSeedField>({
+    flow: 'campaign',
+    ai: aiStatus,
+    values: () => ({
+      name: seed.name,
+      premise: seed.premise,
+      tone: seed.tone,
+      length: seed.length
+    }),
+    extra: () => ({ worldIds: seed.worldIds }),
+    set: (field, value) => (seed[field] = value)
+  })
 </script>
 
-<div class="grid gap-6 {chat ? 'lg:grid-cols-2' : ''}">
-  {#if chat}
-    <div class="space-y-2">
-      {#key chatKey}{@render chat(seed, accept)}{/key}
-    </div>
-  {/if}
+<div class="space-y-3">
+  <AiPanel ai={aiStatus} />
   <form
     method="POST"
     action="?/save"
     use:enhance={() =>
-      async ({ result, update }) => {
+      async ({ update }) => {
         await update({ reset: false })
-        if (result.type === 'success') chatKey++
       }}
     class="space-y-3"
   >
-    <CampaignSeedCard bind:seed {worlds} />
+    <CampaignSeedCard bind:seed {worlds} {fieldAi} />
     {#if error}
       <Alert variant="danger">{error}</Alert>
     {/if}
