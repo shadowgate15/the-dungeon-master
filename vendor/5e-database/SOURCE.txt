@@ -1,0 +1,6 @@
+Vendored from https://github.com/5e-bits/5e-database at release tag v5.12.0
+(path: src/2014/en). Only the files the normalizer reads are copied, unmodified.
+License: MIT, see LICENSE.md.
+
+To refresh: replace the files in 2014/en from a newer release tag, update the tag in
+src/lib/rules/build/source.ts, run `pnpm rules:normalize`, and review the data diff.

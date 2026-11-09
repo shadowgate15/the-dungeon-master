@@ -1,0 +1,54 @@
+[
+  {
+    "slug": "standard-array",
+    "name": "Standard array",
+    "description": "Assign 15, 14, 13, 12, 10 and 8 to the six abilities, one value each.",
+    "appAuthored": true,
+    "config": {
+      "type": "standardArray",
+      "values": [
+        15,
+        14,
+        13,
+        12,
+        10,
+        8
+      ]
+    }
+  },
+  {
+    "slug": "point-buy",
+    "name": "Point buy",
+    "description": "Spend up to 27 points. Every ability starts at 8 and can be raised to 15 before racial bonuses.",
+    "appAuthored": true,
+    "config": {
+      "type": "pointBuy",
+      "budget": 27,
+      "min": 8,
+      "max": 15,
+      "costs": {
+        "8": 0,
+        "9": 1,
+        "10": 2,
+        "11": 3,
+        "12": 4,
+        "13": 5,
+        "14": 7,
+        "15": 9
+      }
+    }
+  },
+  {
+    "slug": "roll",
+    "name": "Roll",
+    "description": "Roll 4d6 six times, dropping the lowest die each time, then assign the totals to the abilities.",
+    "appAuthored": true,
+    "config": {
+      "type": "roll",
+      "count": 6,
+      "dice": 4,
+      "sides": 6,
+      "dropLowest": 1
+    }
+  }
+]

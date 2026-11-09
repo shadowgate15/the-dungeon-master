@@ -1,5 +1,8 @@
 import { z } from 'zod'
 import { CAMPAIGN_SEED_FIELDS } from '#lib/campaign/seed.ts'
+import { ABILITY_KEYS } from '#lib/character/ability-scores.ts'
+import { ALL_FIELDS, CONVERSATION_STEPS } from '#lib/character/conversation.ts'
+import { LIMITS } from '#lib/character/draft.ts'
 import { SEED_FIELDS } from '#lib/world/seed.ts'
 import { SUMMARY_MAX } from './world-conversation.ts'
 
@@ -65,3 +68,57 @@ const campaign = requestSchemas(CAMPAIGN_SEED_FIELDS, {
 })
 export const campaignTurnRequestSchema = campaign.turn
 export const campaignCompactRequestSchema = campaign.compact
+
+/**
+ * The Character draft is browser-only, so it is sent every turn (with the active step) and
+ * bounded here. Unknown keys are stripped: a step that adds draft fields adds them below.
+ */
+const slugOrNull = z.string().max(100).nullable()
+const draftSchema = z.object({
+  name: z.string().max(LIMITS.name),
+  race: slugOrNull,
+  subrace: slugOrNull,
+  class: slugOrNull,
+  subclass: slugOrNull,
+  background: slugOrNull,
+  alignment: slugOrNull,
+  appearance: z.string().max(LIMITS.appearance * 2),
+  personality: z.string().max(LIMITS.personality * 2),
+  backstory: z.string().max(LIMITS.backstory * 2),
+  // Ability scores (#118)
+  abilityMethod: z.enum(['standard-array', 'point-buy', 'rolling']).nullable().optional(),
+  baseScores: z
+    .object(
+      Object.fromEntries(
+        ABILITY_KEYS.map((k) => [k, z.number().int().min(0).max(30).nullable()])
+      ) as Record<(typeof ABILITY_KEYS)[number], z.ZodNullable<z.ZodNumber>>
+    )
+    .optional(),
+  abilityRolls: z
+    .array(z.array(z.number().int().min(1).max(6)).length(4))
+    .max(6)
+    .nullable()
+    .optional(),
+  // Feature choices, equipment and class spells (#117)
+  picks: z
+    .record(z.string().max(120), z.array(z.string().max(100)).max(20))
+    .refine((r) => Object.keys(r).length <= 60)
+    .optional(),
+  equipment: z
+    .record(
+      z.string().max(120),
+      z.object({
+        option: z.number().int().min(0).max(20),
+        wild: z.array(z.string().max(100).nullable()).max(10)
+      })
+    )
+    .refine((r) => Object.keys(r).length <= 30)
+    .optional(),
+  classSpells: z.array(z.string().max(100)).max(40).optional()
+})
+const character = requestSchemas(ALL_FIELDS as unknown as readonly [string, ...string[]], {
+  step: z.enum(CONVERSATION_STEPS),
+  draft: draftSchema
+})
+export const characterTurnRequestSchema = character.turn
+export const characterCompactRequestSchema = character.compact

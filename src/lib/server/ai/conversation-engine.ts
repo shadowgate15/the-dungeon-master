@@ -1,4 +1,4 @@
-import { chat } from '@tanstack/ai'
+import { chat, toolDefinition } from '@tanstack/ai'
 import { z } from 'zod'
 import { REASONING_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import {
@@ -61,6 +61,18 @@ export interface TurnInput<F extends string = string> {
   summarizedCount?: number
   /** The model's context window and the last response's total tokens, if known. */
   context?: { limit: number; lastUsedTokens?: number }
+  /** Server-run tools offered to the model this turn (best-effort: see `ChatTool`). */
+  tools?: ChatTool[]
+}
+
+/**
+ * A tool the model may call during a turn. `execute` is server code with no arguments from the
+ * model; its return value goes back to the model. Provider-neutral: the port adapts it.
+ */
+export interface ChatTool {
+  name: string
+  description: string
+  execute: () => unknown
 }
 
 /** What a consumer plugs into the engine. */
@@ -85,6 +97,8 @@ export interface ChatRequest {
   maxTokens: number
   threadId: string
   outputSchema: z.ZodObject
+  /** Tools the model may call before answering; absent when none are offered. */
+  tools?: ChatTool[]
   /** Aborted on timeout or cancel; the port must stop the provider call when it fires. */
   signal: AbortSignal
 }
@@ -110,6 +124,8 @@ export type TurnFailure = {
     | 'model-unavailable'
     /** A Campaign's selected Worlds were archived or deleted; non-retryable, no model call is made. */
     | 'worlds-changed'
+    /** A Character draft slug no longer resolves in Rules Data; non-retryable, no model call is made. */
+    | 'options-changed'
   message: string
 }
 
@@ -312,6 +328,7 @@ export function createConversationEngine<F extends string>(
       // chat() requires a non-empty threadId; nothing is persisted, so each turn is its own.
       threadId: crypto.randomUUID(),
       outputSchema: config.turnSchema,
+      ...(input.tools?.length && { tools: input.tools }),
       signal
     }
   }
@@ -518,6 +535,15 @@ export function createChatPort(adapter: ReturnType<typeof createChatAdapter>): C
       messages: request.messages,
       threadId: request.threadId,
       outputSchema: request.outputSchema,
+      ...(request.tools?.length && {
+        tools: request.tools.map((t) =>
+          toolDefinition({
+            name: t.name,
+            description: t.description,
+            inputSchema: z.object({})
+          }).server(async () => t.execute())
+        )
+      }),
       // The cap goes through the adapter's model options, not the top-level option.
       modelOptions: { max_tokens: request.maxTokens },
       stream: true,

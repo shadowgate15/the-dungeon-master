@@ -1,0 +1,421 @@
+[
+  {
+    "subclass": "berserker",
+    "level": 3,
+    "features": [
+      "frenzy"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "berserker",
+    "level": 6,
+    "features": [
+      "mindless-rage"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "berserker",
+    "level": 10,
+    "features": [
+      "intimidating-presence"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "berserker",
+    "level": 14,
+    "features": [
+      "retaliation"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "champion",
+    "level": 3,
+    "features": [
+      "improved-critical"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "champion",
+    "level": 7,
+    "features": [
+      "remarkable-athlete"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "champion",
+    "level": 10,
+    "features": [
+      "additional-fighting-style"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "champion",
+    "level": 15,
+    "features": [
+      "superior-critical"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "champion",
+    "level": 18,
+    "features": [
+      "survivor"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "devotion",
+    "level": 3,
+    "features": [
+      "channel-divinity-sacred-weapon",
+      "channel-divinity-turn-the-unholy"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "devotion",
+    "level": 7,
+    "features": [
+      "aura-of-devotion"
+    ],
+    "subclassSpecific": {
+      "aura_range": 10
+    }
+  },
+  {
+    "subclass": "devotion",
+    "level": 15,
+    "features": [
+      "purity-of-spirit"
+    ],
+    "subclassSpecific": {
+      "aura_range": 10
+    }
+  },
+  {
+    "subclass": "devotion",
+    "level": 18,
+    "features": [],
+    "subclassSpecific": {
+      "aura_range": 30
+    }
+  },
+  {
+    "subclass": "devotion",
+    "level": 20,
+    "features": [
+      "holy-nimbus"
+    ],
+    "subclassSpecific": {
+      "aura_range": 30
+    }
+  },
+  {
+    "subclass": "draconic",
+    "level": 1,
+    "features": [
+      "dragon-ancestor",
+      "draconic-resilience"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "draconic",
+    "level": 6,
+    "features": [
+      "elemental-affinity"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "draconic",
+    "level": 14,
+    "features": [
+      "dragon-wings"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "draconic",
+    "level": 18,
+    "features": [
+      "draconic-presence"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "evocation",
+    "level": 2,
+    "features": [
+      "evocation-savant",
+      "sculpt-spells"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "evocation",
+    "level": 6,
+    "features": [
+      "potent-cantrip"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "evocation",
+    "level": 10,
+    "features": [
+      "empowered-evocation"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "evocation",
+    "level": 14,
+    "features": [
+      "overchannel"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "fiend",
+    "level": 1,
+    "features": [
+      "dark-ones-blessing"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "fiend",
+    "level": 6,
+    "features": [
+      "dark-ones-own-luck"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "fiend",
+    "level": 10,
+    "features": [
+      "fiendish-resilience"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "fiend",
+    "level": 14,
+    "features": [
+      "hurl-through-hell"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "hunter",
+    "level": 3,
+    "features": [
+      "hunters-prey"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "hunter",
+    "level": 7,
+    "features": [
+      "defensive-tactics"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "hunter",
+    "level": 11,
+    "features": [
+      "multiattack"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "hunter",
+    "level": 15,
+    "features": [
+      "superior-hunters-defense"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "land",
+    "level": 2,
+    "features": [
+      "bonus-cantrip",
+      "natural-recovery"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "land",
+    "level": 6,
+    "features": [
+      "druid-lands-stride"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "land",
+    "level": 10,
+    "features": [
+      "natures-ward"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "land",
+    "level": 14,
+    "features": [
+      "natures-sanctuary"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "life",
+    "level": 1,
+    "features": [
+      "bonus-proficiency",
+      "disciple-of-life"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "life",
+    "level": 2,
+    "features": [
+      "channel-divinity-preserve-life"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "life",
+    "level": 6,
+    "features": [
+      "blessed-healer"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "life",
+    "level": 8,
+    "features": [
+      "divine-strike"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "life",
+    "level": 17,
+    "features": [
+      "supreme-healing"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "lore",
+    "level": 3,
+    "features": [
+      "bonus-proficiencies",
+      "cutting-words"
+    ],
+    "subclassSpecific": {
+      "additional_magical_secrets_max_lvl": 0
+    }
+  },
+  {
+    "subclass": "lore",
+    "level": 6,
+    "features": [
+      "additional-magical-secrets"
+    ],
+    "subclassSpecific": {
+      "additional_magical_secrets_max_lvl": 3
+    }
+  },
+  {
+    "subclass": "lore",
+    "level": 14,
+    "features": [
+      "peerless-skill"
+    ],
+    "subclassSpecific": {
+      "additional_magical_secrets_max_lvl": 3
+    }
+  },
+  {
+    "subclass": "open-hand",
+    "level": 3,
+    "features": [
+      "open-hand-technique"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "open-hand",
+    "level": 6,
+    "features": [
+      "wholeness-of-body"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "open-hand",
+    "level": 11,
+    "features": [
+      "tranquility"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "open-hand",
+    "level": 17,
+    "features": [
+      "quivering-palm"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "thief",
+    "level": 3,
+    "features": [
+      "fast-hands",
+      "second-story-work"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "thief",
+    "level": 9,
+    "features": [
+      "supreme-sneak"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "thief",
+    "level": 13,
+    "features": [
+      "use-magic-device"
+    ],
+    "subclassSpecific": null
+  },
+  {
+    "subclass": "thief",
+    "level": 17,
+    "features": [
+      "thiefs-reflexes"
+    ],
+    "subclassSpecific": null
+  }
+]

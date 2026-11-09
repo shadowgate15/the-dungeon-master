@@ -1,0 +1,1055 @@
+[
+  {
+    "slug": "alchemists-supplies",
+    "name": "Alchemist's Supplies",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "alchemists-supplies"
+    }
+  },
+  {
+    "slug": "all-armor",
+    "name": "All armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment-category",
+      "slug": "armor"
+    }
+  },
+  {
+    "slug": "bagpipes",
+    "name": "Bagpipes",
+    "type": "Musical Instruments",
+    "reference": {
+      "type": "equipment",
+      "slug": "bagpipes"
+    }
+  },
+  {
+    "slug": "battleaxes",
+    "name": "Battleaxes",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "battleaxe"
+    }
+  },
+  {
+    "slug": "blowguns",
+    "name": "Blowguns",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "blowgun"
+    }
+  },
+  {
+    "slug": "breastplate",
+    "name": "Breastplate",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "breastplate"
+    }
+  },
+  {
+    "slug": "brewers-supplies",
+    "name": "Brewer's Supplies",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "brewers-supplies"
+    }
+  },
+  {
+    "slug": "calligraphers-supplies",
+    "name": "Calligrapher's Supplies",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "calligraphers-supplies"
+    }
+  },
+  {
+    "slug": "carpenters-tools",
+    "name": "Carpenter's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "carpenters-tools"
+    }
+  },
+  {
+    "slug": "cartographers-tools",
+    "name": "Cartographer's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "cartographers-tools"
+    }
+  },
+  {
+    "slug": "chain-mail",
+    "name": "Chain Mail",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "chain-mail"
+    }
+  },
+  {
+    "slug": "chain-shirt",
+    "name": "Chain Shirt",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "chain-shirt"
+    }
+  },
+  {
+    "slug": "clubs",
+    "name": "Clubs",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "club"
+    }
+  },
+  {
+    "slug": "cobblers-tools",
+    "name": "Cobbler's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "cobblers-tools"
+    }
+  },
+  {
+    "slug": "cooks-utensils",
+    "name": "Cook's utensils",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "cooks-utensils"
+    }
+  },
+  {
+    "slug": "crossbows-heavy",
+    "name": "Crossbows, heavy",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "crossbow-heavy"
+    }
+  },
+  {
+    "slug": "crossbows-light",
+    "name": "Crossbows, light",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "crossbow-light"
+    }
+  },
+  {
+    "slug": "daggers",
+    "name": "Daggers",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "dagger"
+    }
+  },
+  {
+    "slug": "darts",
+    "name": "Darts",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "dart"
+    }
+  },
+  {
+    "slug": "dice-set",
+    "name": "Dice Set",
+    "type": "Gaming Sets",
+    "reference": {
+      "type": "equipment",
+      "slug": "dice-set"
+    }
+  },
+  {
+    "slug": "disguise-kit",
+    "name": "Disguise Kit",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "disguise-kit"
+    }
+  },
+  {
+    "slug": "drum",
+    "name": "Drum",
+    "type": "Musical Instruments",
+    "reference": {
+      "type": "equipment",
+      "slug": "drum"
+    }
+  },
+  {
+    "slug": "dulcimer",
+    "name": "Dulcimer",
+    "type": "Musical Instruments",
+    "reference": {
+      "type": "equipment",
+      "slug": "dulcimer"
+    }
+  },
+  {
+    "slug": "flails",
+    "name": "Flails",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "flail"
+    }
+  },
+  {
+    "slug": "flute",
+    "name": "Flute",
+    "type": "Musical Instruments",
+    "reference": {
+      "type": "equipment",
+      "slug": "flute"
+    }
+  },
+  {
+    "slug": "forgery-kit",
+    "name": "Forgery Kit",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "forgery-kit"
+    }
+  },
+  {
+    "slug": "glaives",
+    "name": "Glaives",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "glaive"
+    }
+  },
+  {
+    "slug": "glassblowers-tools",
+    "name": "Glassblower's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "glassblowers-tools"
+    }
+  },
+  {
+    "slug": "greataxes",
+    "name": "Greataxes",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "greataxe"
+    }
+  },
+  {
+    "slug": "greatclubs",
+    "name": "Greatclubs",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "greatclub"
+    }
+  },
+  {
+    "slug": "greatswords",
+    "name": "Greatswords",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "greatsword"
+    }
+  },
+  {
+    "slug": "halberds",
+    "name": "Halberds",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "halberd"
+    }
+  },
+  {
+    "slug": "half-plate-armor",
+    "name": "Half Plate Armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "half-plate-armor"
+    }
+  },
+  {
+    "slug": "hand-crossbows",
+    "name": "Hand crossbows",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "crossbow-hand"
+    }
+  },
+  {
+    "slug": "handaxes",
+    "name": "Handaxes",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "handaxe"
+    }
+  },
+  {
+    "slug": "heavy-armor",
+    "name": "Heavy Armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment-category",
+      "slug": "heavy-armor"
+    }
+  },
+  {
+    "slug": "herbalism-kit",
+    "name": "Herbalism Kit",
+    "type": "Other",
+    "reference": {
+      "type": "equipment",
+      "slug": "herbalism-kit"
+    }
+  },
+  {
+    "slug": "hide-armor",
+    "name": "Hide Armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "hide-armor"
+    }
+  },
+  {
+    "slug": "horn",
+    "name": "Horn",
+    "type": "Musical Instruments",
+    "reference": {
+      "type": "equipment",
+      "slug": "horn"
+    }
+  },
+  {
+    "slug": "javelins",
+    "name": "Javelins",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "javelin"
+    }
+  },
+  {
+    "slug": "jewelers-tools",
+    "name": "Jeweler's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "jewelers-tools"
+    }
+  },
+  {
+    "slug": "lances",
+    "name": "Lances",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "lance"
+    }
+  },
+  {
+    "slug": "land-vehicles",
+    "name": "Land Vehicles",
+    "type": "Vehicles",
+    "reference": {
+      "type": "equipment-category",
+      "slug": "land-vehicles"
+    }
+  },
+  {
+    "slug": "leather-armor",
+    "name": "Leather Armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "leather-armor"
+    }
+  },
+  {
+    "slug": "leatherworkers-tools",
+    "name": "Leatherworker's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "leatherworkers-tools"
+    }
+  },
+  {
+    "slug": "light-armor",
+    "name": "Light Armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment-category",
+      "slug": "light-armor"
+    }
+  },
+  {
+    "slug": "light-hammers",
+    "name": "Light hammers",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "light-hammer"
+    }
+  },
+  {
+    "slug": "longbows",
+    "name": "Longbows",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "longbow"
+    }
+  },
+  {
+    "slug": "longswords",
+    "name": "Longswords",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "longsword"
+    }
+  },
+  {
+    "slug": "lute",
+    "name": "Lute",
+    "type": "Musical Instruments",
+    "reference": {
+      "type": "equipment",
+      "slug": "lute"
+    }
+  },
+  {
+    "slug": "lyre",
+    "name": "Lyre",
+    "type": "Musical Instruments",
+    "reference": {
+      "type": "equipment",
+      "slug": "lyre"
+    }
+  },
+  {
+    "slug": "maces",
+    "name": "Maces",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "mace"
+    }
+  },
+  {
+    "slug": "martial-weapons",
+    "name": "Martial Weapons",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment-category",
+      "slug": "martial-weapons"
+    }
+  },
+  {
+    "slug": "masons-tools",
+    "name": "Mason's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "masons-tools"
+    }
+  },
+  {
+    "slug": "mauls",
+    "name": "Mauls",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "maul"
+    }
+  },
+  {
+    "slug": "medium-armor",
+    "name": "Medium Armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment-category",
+      "slug": "medium-armor"
+    }
+  },
+  {
+    "slug": "morningstars",
+    "name": "Morningstars",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "morningstar"
+    }
+  },
+  {
+    "slug": "navigators-tools",
+    "name": "Navigator's Tools",
+    "type": "Other",
+    "reference": {
+      "type": "equipment",
+      "slug": "navigators-tools"
+    }
+  },
+  {
+    "slug": "nets",
+    "name": "Nets",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "net"
+    }
+  },
+  {
+    "slug": "padded-armor",
+    "name": "Padded Armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "padded-armor"
+    }
+  },
+  {
+    "slug": "painters-supplies",
+    "name": "Painter's Supplies",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "painters-supplies"
+    }
+  },
+  {
+    "slug": "pan-flute",
+    "name": "Pan flute",
+    "type": "Musical Instruments",
+    "reference": {
+      "type": "equipment",
+      "slug": "pan-flute"
+    }
+  },
+  {
+    "slug": "pikes",
+    "name": "Pikes",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "pike"
+    }
+  },
+  {
+    "slug": "plate-armor",
+    "name": "Plate Armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "plate-armor"
+    }
+  },
+  {
+    "slug": "playing-card-set",
+    "name": "Playing Card Set",
+    "type": "Gaming Sets",
+    "reference": {
+      "type": "equipment",
+      "slug": "playing-card-set"
+    }
+  },
+  {
+    "slug": "poisoners-kit",
+    "name": "Poisoner's Kit",
+    "type": "Other",
+    "reference": {
+      "type": "equipment",
+      "slug": "poisoners-kit"
+    }
+  },
+  {
+    "slug": "potters-tools",
+    "name": "Potter's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "potters-tools"
+    }
+  },
+  {
+    "slug": "quarterstaffs",
+    "name": "Quarterstaffs",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "quarterstaff"
+    }
+  },
+  {
+    "slug": "rapiers",
+    "name": "Rapiers",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "rapier"
+    }
+  },
+  {
+    "slug": "ring-mail",
+    "name": "Ring Mail",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "ring-mail"
+    }
+  },
+  {
+    "slug": "saving-throw-cha",
+    "name": "Saving Throw: CHA",
+    "type": "Saving Throws",
+    "reference": {
+      "type": "ability",
+      "slug": "cha"
+    }
+  },
+  {
+    "slug": "saving-throw-con",
+    "name": "Saving Throw: CON",
+    "type": "Saving Throws",
+    "reference": {
+      "type": "ability",
+      "slug": "con"
+    }
+  },
+  {
+    "slug": "saving-throw-dex",
+    "name": "Saving Throw: DEX",
+    "type": "Saving Throws",
+    "reference": {
+      "type": "ability",
+      "slug": "dex"
+    }
+  },
+  {
+    "slug": "saving-throw-int",
+    "name": "Saving Throw: INT",
+    "type": "Saving Throws",
+    "reference": {
+      "type": "ability",
+      "slug": "int"
+    }
+  },
+  {
+    "slug": "saving-throw-str",
+    "name": "Saving Throw: STR",
+    "type": "Saving Throws",
+    "reference": {
+      "type": "ability",
+      "slug": "str"
+    }
+  },
+  {
+    "slug": "saving-throw-wis",
+    "name": "Saving Throw: WIS",
+    "type": "Saving Throws",
+    "reference": {
+      "type": "ability",
+      "slug": "wis"
+    }
+  },
+  {
+    "slug": "scale-mail",
+    "name": "Scale Mail",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "scale-mail"
+    }
+  },
+  {
+    "slug": "scimitars",
+    "name": "Scimitars",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "scimitar"
+    }
+  },
+  {
+    "slug": "shawm",
+    "name": "Shawm",
+    "type": "Musical Instruments",
+    "reference": {
+      "type": "equipment",
+      "slug": "shawm"
+    }
+  },
+  {
+    "slug": "shields",
+    "name": "Shields",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "shield"
+    }
+  },
+  {
+    "slug": "shortbows",
+    "name": "Shortbows",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "shortbow"
+    }
+  },
+  {
+    "slug": "shortswords",
+    "name": "Shortswords",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "shortsword"
+    }
+  },
+  {
+    "slug": "sickles",
+    "name": "Sickles",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "sickle"
+    }
+  },
+  {
+    "slug": "simple-weapons",
+    "name": "Simple Weapons",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment-category",
+      "slug": "simple-weapons"
+    }
+  },
+  {
+    "slug": "skill-acrobatics",
+    "name": "Skill: Acrobatics",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "acrobatics"
+    }
+  },
+  {
+    "slug": "skill-animal-handling",
+    "name": "Skill: Animal Handling",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "animal-handling"
+    }
+  },
+  {
+    "slug": "skill-arcana",
+    "name": "Skill: Arcana",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "arcana"
+    }
+  },
+  {
+    "slug": "skill-athletics",
+    "name": "Skill: Athletics",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "athletics"
+    }
+  },
+  {
+    "slug": "skill-deception",
+    "name": "Skill: Deception",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "deception"
+    }
+  },
+  {
+    "slug": "skill-history",
+    "name": "Skill: History",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "history"
+    }
+  },
+  {
+    "slug": "skill-insight",
+    "name": "Skill: Insight",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "insight"
+    }
+  },
+  {
+    "slug": "skill-intimidation",
+    "name": "Skill: Intimidation",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "intimidation"
+    }
+  },
+  {
+    "slug": "skill-investigation",
+    "name": "Skill: Investigation",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "investigation"
+    }
+  },
+  {
+    "slug": "skill-medicine",
+    "name": "Skill: Medicine",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "medicine"
+    }
+  },
+  {
+    "slug": "skill-nature",
+    "name": "Skill: Nature",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "nature"
+    }
+  },
+  {
+    "slug": "skill-perception",
+    "name": "Skill: Perception",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "perception"
+    }
+  },
+  {
+    "slug": "skill-performance",
+    "name": "Skill: Performance",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "performance"
+    }
+  },
+  {
+    "slug": "skill-persuasion",
+    "name": "Skill: Persuasion",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "persuasion"
+    }
+  },
+  {
+    "slug": "skill-religion",
+    "name": "Skill: Religion",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "religion"
+    }
+  },
+  {
+    "slug": "skill-sleight-of-hand",
+    "name": "Skill: Sleight of Hand",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "sleight-of-hand"
+    }
+  },
+  {
+    "slug": "skill-stealth",
+    "name": "Skill: Stealth",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "stealth"
+    }
+  },
+  {
+    "slug": "skill-survival",
+    "name": "Skill: Survival",
+    "type": "Skills",
+    "reference": {
+      "type": "skill",
+      "slug": "survival"
+    }
+  },
+  {
+    "slug": "slings",
+    "name": "Slings",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "sling"
+    }
+  },
+  {
+    "slug": "smiths-tools",
+    "name": "Smith's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "smiths-tools"
+    }
+  },
+  {
+    "slug": "spears",
+    "name": "Spears",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "spear"
+    }
+  },
+  {
+    "slug": "splint-armor",
+    "name": "Splint Armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "splint-armor"
+    }
+  },
+  {
+    "slug": "studded-leather-armor",
+    "name": "Studded Leather Armor",
+    "type": "Armor",
+    "reference": {
+      "type": "equipment",
+      "slug": "studded-leather-armor"
+    }
+  },
+  {
+    "slug": "thieves-tools",
+    "name": "Thieves' Tools",
+    "type": "Other",
+    "reference": {
+      "type": "equipment",
+      "slug": "thieves-tools"
+    }
+  },
+  {
+    "slug": "tinkers-tools",
+    "name": "Tinker's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "tinkers-tools"
+    }
+  },
+  {
+    "slug": "tridents",
+    "name": "Tridents",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "trident"
+    }
+  },
+  {
+    "slug": "viol",
+    "name": "Viol",
+    "type": "Musical Instruments",
+    "reference": {
+      "type": "equipment",
+      "slug": "viol"
+    }
+  },
+  {
+    "slug": "war-picks",
+    "name": "War picks",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "war-pick"
+    }
+  },
+  {
+    "slug": "warhammers",
+    "name": "Warhammers",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "warhammer"
+    }
+  },
+  {
+    "slug": "water-vehicles",
+    "name": "Water Vehicles",
+    "type": "Vehicles",
+    "reference": {
+      "type": "equipment-category",
+      "slug": "waterborne-vehicles"
+    }
+  },
+  {
+    "slug": "weavers-tools",
+    "name": "Weaver's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "weavers-tools"
+    }
+  },
+  {
+    "slug": "whips",
+    "name": "Whips",
+    "type": "Weapons",
+    "reference": {
+      "type": "equipment",
+      "slug": "whip"
+    }
+  },
+  {
+    "slug": "woodcarvers-tools",
+    "name": "Woodcarver's Tools",
+    "type": "Artisan's Tools",
+    "reference": {
+      "type": "equipment",
+      "slug": "woodcarvers-tools"
+    }
+  }
+]
