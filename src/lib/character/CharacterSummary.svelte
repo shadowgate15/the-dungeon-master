@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ABILITY_KEYS, type Stat } from '#lib/rules/derive-stats.ts'
   import SpellDisclosure from './SpellDisclosure.svelte'
+  import { spellLevelLabel } from './spell-text.ts'
   import type { SummaryModel } from './summary.ts'
 
   /**
@@ -196,7 +197,7 @@
               {#snippet row()}
                 <span>
                   {s.name}
-                  <span class="text-muted">({s.level === 0 ? 'cantrip' : `level ${s.level}`})</span>
+                  <span class="text-muted">({spellLevelLabel(s.level)})</span>
                 </span>
               {/snippet}
             </SpellDisclosure>

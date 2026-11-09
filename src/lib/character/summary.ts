@@ -116,7 +116,7 @@ export function buildSummary(rules: WizardRules, data: SummaryData): SummaryMode
   })
   const name = (list: readonly { slug: string; name: string }[], slug: string | null) =>
     slug === null ? null : (list.find((e) => e.slug === slug)?.name ?? slug)
-  const spellNames = new Map(rules.spells.map((s) => [s.slug, s]))
+  const spellsBySlug = new Map(rules.spells.map((s) => [s.slug, s]))
   const spellSlugs = [
     ...resolved.grantedSpells.map((s) => s.spell),
     ...(data.classSpells ?? []),
@@ -139,7 +139,7 @@ export function buildSummary(rules: WizardRules, data: SummaryData): SummaryMode
       quantity: e.quantity
     })),
     spells: [...new Set(spellSlugs)]
-      .map((slug) => spellNames.get(slug)!)
+      .map((slug) => spellsBySlug.get(slug)!)
       .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
   }
 }
