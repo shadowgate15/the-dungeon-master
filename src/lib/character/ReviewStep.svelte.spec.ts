@@ -95,3 +95,18 @@ describe('ReviewStep save', () => {
     expect(init.method).toBe('PUT')
   })
 })
+
+describe('ReviewStep spell details', () => {
+  it('expands a spell row in the summary to its details', async () => {
+    const wizard = readyWizard()
+    wizard.update({ class: 'wizard', classSpells: ['fire-bolt'] })
+    render(ReviewStep, { wizard })
+    const button = page.getByRole('button', { name: 'Details for Fire Bolt', exact: true })
+    await expect.element(button).toHaveAttribute('aria-expanded', 'false')
+    await button.click()
+    await expect.element(button).toHaveAttribute('aria-expanded', 'true')
+    const panelId = button.element().getAttribute('aria-controls')!
+    const panel = page.elementLocator(document.getElementById(panelId)!)
+    await expect.element(panel).toHaveTextContent(/Evocation/)
+  })
+})

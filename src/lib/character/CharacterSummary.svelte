@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ABILITY_KEYS, type Stat } from '#lib/rules/derive-stats.ts'
+  import SpellDisclosure from './SpellDisclosure.svelte'
   import type { SummaryModel } from './summary.ts'
 
   /**
@@ -189,10 +190,16 @@
     <section aria-label="Spells" class="space-y-1">
       <h3 class="font-display text-lg">Spells</h3>
       <ul class="text-sm">
-        {#each model.spells as s (s.name)}
+        {#each model.spells as s (s.slug)}
           <li>
-            {s.name}
-            <span class="text-muted">({s.level === 0 ? 'cantrip' : `level ${s.level}`})</span>
+            <SpellDisclosure spell={s}>
+              {#snippet row()}
+                <span>
+                  {s.name}
+                  <span class="text-muted">({s.level === 0 ? 'cantrip' : `level ${s.level}`})</span>
+                </span>
+              {/snippet}
+            </SpellDisclosure>
           </li>
         {/each}
       </ul>
