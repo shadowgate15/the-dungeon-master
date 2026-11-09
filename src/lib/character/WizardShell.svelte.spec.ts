@@ -1,5 +1,5 @@
 import { page } from 'vitest/browser'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-svelte'
 import alignments from '#lib/rules/data/alignments.json'
 import backgrounds from '#lib/rules/data/backgrounds.json'
@@ -153,5 +153,92 @@ describe('WizardShell with the Concept step', () => {
     await expect
       .element(page.getByRole('complementary', { name: 'Creation conversation' }))
       .toHaveTextContent('Chat goes here')
+  })
+})
+
+function readyWizard(characterId: string | null = null) {
+  const wizard = new CharacterWizard(rules)
+  wizard.update({
+    name: 'Brannoch',
+    race: 'human',
+    class: 'fighter',
+    background: 'acolyte',
+    abilityMethod: 'standard-array',
+    baseScores: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 }
+  })
+  wizard.dirty = true
+  if (!characterId) return wizard
+  return new CharacterWizard(rules, undefined, wizard.draft, characterId)
+}
+
+function renderReview(wizard: CharacterWizard) {
+  wizard.current = 'review'
+  render(WizardShell, { wizard, backHref: '/', onabandon: () => {} })
+}
+
+describe('WizardShell footer on the Review step', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('offers Save Character in the forward slot instead of a disabled Next', async () => {
+    renderReview(readyWizard())
+
+    await expect.element(page.getByRole('button', { name: 'Save Character' })).toBeEnabled()
+    await expect.element(page.getByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+    expect(page.getByRole('button', { name: 'Save Character' }).elements()).toHaveLength(1)
+  })
+
+  it('posts the mapped CharacterInput and, when the save fails, shows the error and keeps the draft', async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({ error: 'Name is required' }, { status: 400 })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const wizard = readyWizard()
+    renderReview(wizard)
+
+    await page.getByRole('button', { name: 'Save Character' }).click()
+
+    await expect.element(page.getByRole('alert')).toHaveTextContent('Name is required')
+    expect(wizard.draft.name).toBe('Brannoch')
+    expect(wizard.dirty).toBe(true)
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }]
+    expect(JSON.parse(init.body)).toMatchObject({
+      name: 'Brannoch',
+      abilityMethod: 'standard-array',
+      scores: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 }
+    })
+  })
+
+  it('offers Save changes and puts to the saved Character when editing one', async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({ error: 'An archived Character cannot be edited' }, { status: 400 })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    renderReview(readyWizard('abc-123'))
+
+    await page.getByRole('button', { name: 'Save changes' }).click()
+
+    await expect.element(page.getByRole('alert')).toHaveTextContent('cannot be edited')
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { method: string }]
+    expect(url).toBe('/api/characters/abc-123')
+    expect(init.method).toBe('PUT')
+  })
+
+  it('disables Save and Back while the save is in flight', async () => {
+    let finish: (r: Response) => void = () => {}
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>((resolve) => (finish = resolve)))
+    )
+    renderReview(readyWizard())
+
+    await page.getByRole('button', { name: 'Save Character' }).click()
+
+    await expect.element(page.getByRole('button', { name: 'Saving…' })).toBeDisabled()
+    await expect.element(page.getByRole('button', { name: 'Back' })).toBeDisabled()
+    // The rail is another way off Review; it must not leave mid-save either.
+    await page.getByRole('button', { name: /Concept/ }).click()
+    await expect.element(page.getByRole('heading', { name: 'Review' })).toBeVisible()
+    finish(Response.json({ error: 'nope' }, { status: 400 }))
+    await expect.element(page.getByRole('button', { name: 'Save Character' })).toBeEnabled()
   })
 })

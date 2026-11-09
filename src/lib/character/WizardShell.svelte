@@ -7,6 +7,7 @@
   import StatsStrip from './StatsStrip.svelte'
   import StepRail from './StepRail.svelte'
   import { STEP_VIEWS } from './step-views.ts'
+  import { submitDraft } from './submit.ts'
   import type { CharacterWizard } from './wizard.svelte.ts'
 
   type Props = {
@@ -39,7 +40,6 @@
   })
   const active = $derived(wizard.step(wizard.current))
   const View = $derived(STEP_VIEWS[wizard.current])
-  const next = $derived(wizard.next ? wizard.step(wizard.next) : undefined)
 </script>
 
 <svelte:window
@@ -92,13 +92,23 @@
     <div class="flex justify-between">
       <Button
         variant="secondary"
-        disabled={!wizard.previous}
+        disabled={!wizard.previous || wizard.saving}
         onclick={() => wizard.previous && wizard.go(wizard.previous)}>Back</Button
       >
-      <Button
-        disabled={!next || next.status === 'locked'}
-        onclick={() => wizard.next && wizard.go(wizard.next)}>Next</Button
-      >
+      {#if wizard.next}
+        {@const target = wizard.next}
+        <Button
+          disabled={wizard.step(target)?.status === 'locked'}
+          onclick={() => wizard.go(target)}>Next</Button
+        >
+      {:else}
+        <Button
+          disabled={!wizard.characterInput || wizard.saving}
+          onclick={() => submitDraft(wizard)}
+        >
+          {wizard.saving ? 'Saving…' : wizard.characterId ? 'Save changes' : 'Save Character'}
+        </Button>
+      {/if}
     </div>
   </section>
 
