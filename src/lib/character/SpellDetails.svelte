@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Spell } from '#lib/rules/schema.ts'
-  import { parseSpellLine } from './spell-text.ts'
+  import { parseSpellLine, spellLevelLabel } from './spell-text.ts'
 
   /**
    * The shared spell-details view: every field of an SRD spell, read-only. It is the panel only;
@@ -9,7 +9,7 @@
   let { spell, id }: { spell: Spell; id?: string } = $props()
 
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-  const level = $derived(spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`)
+  const level = $derived(capitalize(spellLevelLabel(spell.level)))
   const components = $derived(
     spell.components.join(', ') + (spell.material ? ` (${spell.material})` : '')
   )

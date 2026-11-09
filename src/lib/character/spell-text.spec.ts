@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import spells from '#lib/rules/data/spells.json'
-import { parseSpellLine } from './spell-text.ts'
+import { parseSpellLine, spellLevelLabel } from './spell-text.ts'
 
 const command = spells.find((s) => s.slug === 'command')!
 
@@ -24,5 +24,12 @@ describe('parseSpellLine', () => {
       heading: null,
       text: 'You see ***this*** here.'
     })
+  })
+})
+
+describe('spellLevelLabel', () => {
+  it('names cantrips and numbers the rest', () => {
+    expect(spellLevelLabel(0)).toBe('cantrip')
+    expect(spellLevelLabel(3)).toBe('level 3')
   })
 })

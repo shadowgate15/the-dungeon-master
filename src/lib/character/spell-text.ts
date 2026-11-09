@@ -14,3 +14,8 @@ export function parseSpellLine(line: string): SpellLine {
   const m = RUN_IN_HEADING.exec(line)
   return m ? { heading: m[1], text: m[2] } : { heading: null, text: line }
 }
+
+/** A spell's level as lowercase text: `cantrip` or `level 3`. Capitalise at the call site if needed. */
+export function spellLevelLabel(level: number): string {
+  return level === 0 ? 'cantrip' : `level ${level}`
+}
