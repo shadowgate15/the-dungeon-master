@@ -7,6 +7,8 @@
 
   type Props = {
     label: string
+    /** The form field name, so the control submits with its form. */
+    name?: string
     kind: 'text' | 'textarea' | 'enum'
     /** The field's value. Bound so typing edits it; the parent writes AI results into it. */
     value?: string
@@ -35,6 +37,7 @@
 
   let {
     label,
+    name,
     kind,
     value = $bindable(''),
     options = [],
@@ -121,13 +124,16 @@
 
 <svelte:window onclick={outside} />
 
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="space-y-1" bind:this={root} {onkeydown} role="group" aria-label={label}>
+<!-- The wrapper only catches Escape bubbling up from the popover; it is deliberately unlabelled
+  so the field's own label is the one accessible name for the control. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="space-y-1" bind:this={root} {onkeydown}>
   <label for="{uid}-control" class="block text-sm font-medium text-text">{label}</label>
   <div class="relative">
     {#if kind === 'text'}
       <TextInput
         id="{uid}-control"
+        {name}
         bind:value
         readonly={readonly && !loading}
         disabled={loading}
@@ -137,6 +143,7 @@
     {:else if kind === 'textarea'}
       <Textarea
         id="{uid}-control"
+        {name}
         {rows}
         bind:value
         readonly={readonly && !loading}
@@ -147,6 +154,7 @@
     {:else}
       <Select
         id="{uid}-control"
+        {name}
         bind:value
         disabled={readonly || loading}
         aria-busy={loading}

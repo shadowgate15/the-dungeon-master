@@ -17,7 +17,7 @@ The small set of choices a World is created from: a name, a premise, and four en
 _Avoid_: Template, config
 
 **Seed card**:
-The live, directly editable form that holds the Seed while a World or a Campaign is being created or edited. It is the source of truth and works with no AI. Nothing reaches it from the AI until the player accepts a proposal.
+The live, directly editable form that holds the Seed while a World or a Campaign is being created or edited. It is the source of truth and works with no AI. For a World, the AI writes into it only through a Field AI control, one field per click; for a Campaign, nothing reaches it from the AI until the player accepts a proposal.
 _Avoid_: World form, draft
 
 **Proposal** / **proposal card**:
@@ -25,8 +25,20 @@ A suggested value for one Seed field, offered by the AI in the creation conversa
 _Avoid_: Suggestion, draft
 
 **Creation conversation**:
-The chat beside the Seed card, or beside the Character creation wizard, in which the player talks through a World, a Campaign or a Character with the AI and receives Proposals (and, for Characters, Roll cards). It is also used when editing an existing World, Campaign or Character. Its transcript lives only in the browser and is discarded when the World, Campaign or Character is saved or abandoned; nothing is stored.
+The chat beside the Campaign Seed card, or beside the Character creation wizard, in which the player talks through a Campaign or a Character with the AI and receives Proposals (and, for Characters, Roll cards). It is also used when editing an existing Campaign or Character. Worlds no longer have one: they use Field AI controls. Its transcript lives only in the browser and is discarded when the World, Campaign or Character is saved or abandoned; nothing is stored.
 _Avoid_: Chat history, session
+
+**Field AI control**:
+The pair of small icon buttons at a form field's corner: ✦ Generate and ✎ Give feedback. Each click is one stateless call that writes or revises that field alone, straight into the form, with no history kept between calls. While it runs the field is read-only and the pair becomes a Stop button; other fields stay usable and may run at the same time. The buttons are disabled, with the reason shown, when AI is unavailable or locked, and Give feedback is disabled while the field is empty. Replaces the Creation conversation for Worlds.
+_Avoid_: AI button, magic wand
+
+**Feedback note**:
+The short instruction a player types in the Field AI control's popover to say what should change in a field's current value ("darker", "shorter"). It is sent with the current value for one revision and is not remembered afterwards.
+_Avoid_: Prompt, comment
+
+**Field Undo**:
+The one-step Undo offered after a Field AI control writes a field, restoring the value it replaced. It belongs to that field alone and expires as soon as the player edits the field by hand.
+_Avoid_: History, revert
 
 **Campaign**:
 A story played out in one or more Worlds. A Campaign is always linked to at least one World, and Worlds can be added or removed over its life as long as one remains. A Campaign is either active or archived.

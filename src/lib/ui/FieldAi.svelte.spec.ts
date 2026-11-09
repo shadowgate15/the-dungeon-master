@@ -41,6 +41,20 @@ describe('FieldAi', () => {
       await expect.element(page.getByRole('option', { name: 'Dwarf' })).toBeInTheDocument()
     })
 
+    it('submits its value under the given form name', async () => {
+      render(FieldAi, {
+        label: 'Name',
+        name: 'name',
+        kind: 'text',
+        value: 'Eldoria',
+        ...callbacks()
+      })
+
+      const input = page.getByRole('textbox', { name: 'Name' }).element() as HTMLInputElement
+
+      expect(input.name).toBe('name')
+    })
+
     it('calls onGenerate when Generate is clicked', async () => {
       const cb = callbacks()
       render(FieldAi, { label: 'Name', kind: 'text', value: '', ...cb })

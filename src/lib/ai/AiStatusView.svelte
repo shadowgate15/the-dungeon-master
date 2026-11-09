@@ -15,10 +15,12 @@
      * detected so the transcript (with its failed turns) stays visible, disabled.
      * Otherwise disabled placeholder controls show.
      */
+    /** Show disabled chat controls when there is no chat to render. Defaults to on. */
+    chatPlaceholder?: boolean
     chat?: Snippet<[Extract<AiStatus, { state: 'ready' | 'reasoning-model' }>]>
   }
 
-  let { status, checking, oncheck, chat }: Props = $props()
+  let { status, checking, oncheck, chat, chatPlaceholder = true }: Props = $props()
 
   const ready = $derived(status?.state === 'ready' ? status : undefined)
   const chatStatus = $derived(
@@ -56,7 +58,7 @@
 
   {#if chatStatus && chat}
     {@render chat(chatStatus)}
-  {:else}
+  {:else if chatPlaceholder}
     <fieldset disabled={!ready} class="space-y-1">
       <label class="block">
         <span class="block text-sm font-medium">Message</span>
