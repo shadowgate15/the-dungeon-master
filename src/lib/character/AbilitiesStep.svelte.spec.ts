@@ -53,10 +53,13 @@ function setup(patch: Parameters<CharacterWizard['update']>[0] = {}) {
 
 afterEach(() => vi.restoreAllMocks())
 
+const chooseMethod = (label: string) =>
+  page.getByLabelText('Ability score method', { exact: true }).selectOptions(label)
+
 describe('AbilitiesStep point buy', () => {
   it('starts every ability at 8 with the full budget', async () => {
     const wizard = setup()
-    await page.getByRole('radio', { name: /Point buy/ }).click()
+    await chooseMethod('Point buy')
 
     expect(wizard.draft.abilityMethod).toBe('point-buy')
     await expect.element(page.getByTestId('points-remaining')).toHaveTextContent('27')
@@ -65,7 +68,7 @@ describe('AbilitiesStep point buy', () => {
 
   it('spends points by cost and stops at the budget', async () => {
     const wizard = setup()
-    await page.getByRole('radio', { name: /Point buy/ }).click()
+    await chooseMethod('Point buy')
     const up = (name: string) => page.getByRole('button', { name: `Increase ${name}` })
 
     // 8 to 15 costs 9 points: three abilities spend the whole 27.
@@ -84,14 +87,14 @@ describe('AbilitiesStep point buy', () => {
 
   it('cannot go below 8', async () => {
     setup()
-    await page.getByRole('radio', { name: /Point buy/ }).click()
+    await chooseMethod('Point buy')
     await expect.element(page.getByRole('button', { name: 'Decrease Strength' })).toBeDisabled()
   })
 
   it('shows racial bonuses separately and caps the final score at 20', async () => {
     // Human: +1 everywhere.
     setup()
-    await page.getByRole('radio', { name: /Point buy/ }).click()
+    await chooseMethod('Point buy')
     await expect.element(page.getByTestId('racial-str')).toHaveTextContent('+1')
     await expect.element(page.getByTestId('score-str')).toHaveTextContent('9')
     await expect.element(page.getByTestId('base-str')).toHaveTextContent('8')
@@ -102,7 +105,7 @@ describe('AbilitiesStep rolling', () => {
   it('rolls six sets in code, records every die and shows the dropped one', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5) // every die is 4
     const wizard = setup()
-    await page.getByRole('radio', { name: /Rolling/ }).click()
+    await chooseMethod('Rolling')
     await page.getByRole('button', { name: 'Roll scores' }).click()
 
     expect(wizard.draft.abilityRolls).toHaveLength(6)
@@ -114,7 +117,7 @@ describe('AbilitiesStep rolling', () => {
   it('assigns rolled totals freely and validates', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
     const wizard = setup()
-    await page.getByRole('radio', { name: /Rolling/ }).click()
+    await chooseMethod('Rolling')
     await page.getByRole('button', { name: 'Roll scores' }).click()
     expect(wizard.step('abilities')?.status).toBe('incomplete')
 
@@ -128,7 +131,7 @@ describe('AbilitiesStep rolling', () => {
 
   it('a reroll replaces the set and clears assignments', async () => {
     const wizard = setup()
-    await page.getByRole('radio', { name: /Rolling/ }).click()
+    await chooseMethod('Rolling')
     await page.getByRole('button', { name: 'Roll scores' }).click()
     const first = wizard.draft.abilityRolls
     const total = first!.map((d) =>
@@ -147,13 +150,13 @@ describe('AbilitiesStep rolling', () => {
 
   it('keeps the rolled set when switching method and back', async () => {
     const wizard = setup()
-    await page.getByRole('radio', { name: /Rolling/ }).click()
+    await chooseMethod('Rolling')
     await page.getByRole('button', { name: 'Roll scores' }).click()
     const rolls = wizard.draft.abilityRolls
 
-    await page.getByRole('radio', { name: /Standard array/ }).click()
+    await chooseMethod('Standard array')
     expect(wizard.draft.abilityRolls).toEqual(rolls)
-    await page.getByRole('radio', { name: /Rolling/ }).click()
+    await chooseMethod('Rolling')
     expect(wizard.draft.abilityRolls).toEqual(rolls)
     await expect.element(page.getByLabelText('Roll 1')).toBeVisible()
   })
@@ -162,7 +165,7 @@ describe('AbilitiesStep rolling', () => {
 describe('AbilitiesStep standard array', () => {
   it('offers each value once', async () => {
     const wizard = setup()
-    await page.getByRole('radio', { name: /Standard array/ }).click()
+    await chooseMethod('Standard array')
     await page.getByLabelText('Strength base score').selectOptions('15')
 
     expect(wizard.draft.baseScores.str).toBe(15)
@@ -174,7 +177,7 @@ describe('AbilitiesStep standard array', () => {
 describe('AbilitiesStep Half-Elf bonus picks', () => {
   it('requires two other abilities and shows them as racial bonuses', async () => {
     const wizard = setup({ race: 'half-elf' })
-    await page.getByRole('radio', { name: /Point buy/ }).click()
+    await chooseMethod('Point buy')
     expect(wizard.step('abilities')?.status).toBe('incomplete')
 
     await page.getByRole('checkbox', { name: 'Strength' }).click()

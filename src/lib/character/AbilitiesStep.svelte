@@ -2,6 +2,7 @@
   import { cappedScore, MAX_ABILITY_SCORE, type AbilityKey } from '#lib/rules/derive-stats.ts'
   import Button from '#lib/ui/Button.svelte'
   import Checkbox from '#lib/ui/Checkbox.svelte'
+  import FieldAi from '#lib/ui/FieldAi.svelte'
   import Select from '#lib/ui/Select.svelte'
   import {
     ABILITY_KEYS,
@@ -12,7 +13,6 @@
     methodPatch,
     pointCost,
     pointsSpent,
-    rollAbilityScores,
     rollTotal,
     rollTotals,
     type DraftAbilityMethod
@@ -34,6 +34,12 @@
         : []
   )
 
+  const summary = $derived(
+    ABILITY_KEYS.some((k) => draft.baseScores[k] === null)
+      ? ''
+      : ABILITY_KEYS.map((k) => `${ABILITY_LABELS[k]} ${draft.baseScores[k]}`).join(', ')
+  )
+
   const METHODS: { id: DraftAbilityMethod; label: string; hint: string }[] = [
     {
       id: 'standard-array',
@@ -51,8 +57,6 @@
       hint: 'Roll four dice six times and drop the lowest of each; assign the totals.'
     }
   ]
-
-  const unassigned = { str: null, dex: null, con: null, int: null, wis: null, cha: null }
 
   function chooseMethod(next: DraftAbilityMethod) {
     if (next === method) return
@@ -73,7 +77,7 @@
 
   /** A reroll replaces the whole set, so earlier assignments no longer mean anything. */
   function roll() {
-    wizard.update({ abilityRolls: rollAbilityScores(), baseScores: { ...unassigned } })
+    wizard.rollAbilities()
   }
 
   function togglePick(groupKey: string, slug: string, on: boolean, current: string[]) {
@@ -86,31 +90,26 @@
 </script>
 
 <div class="space-y-5">
-  <fieldset class="space-y-2">
-    <legend class="text-sm font-medium text-text">Method</legend>
-    <div class="grid gap-2 sm:grid-cols-3">
-      {#each METHODS as m (m.id)}
-        <label
-          class={[
-            'flex cursor-pointer flex-col gap-1 rounded-control border p-3',
-            method === m.id ? 'border-primary bg-surface' : 'border-control-border bg-raised'
-          ]}
-        >
-          <span class="flex items-center gap-2 font-medium text-text">
-            <input
-              type="radio"
-              name="ability-method"
-              value={m.id}
-              checked={method === m.id}
-              onchange={() => chooseMethod(m.id)}
-            />
-            {m.label}
-          </span>
-          <span class="text-sm text-muted">{m.hint}</span>
-        </label>
-      {/each}
-    </div>
-  </fieldset>
+  <div class="space-y-1">
+    <FieldAi
+      {...wizard.aiField('abilityMethod')}
+      label="Ability score method"
+      kind="enum"
+      options={[
+        { value: '', label: 'Choose…' },
+        ...METHODS.map((m) => ({ value: m.id, label: m.label }))
+      ]}
+      bind:value={
+        () => method ?? '',
+        (v) => {
+          if (v && v !== method) chooseMethod(v as DraftAbilityMethod)
+        }
+      }
+    />
+    {#if method}
+      <p class="text-sm text-muted">{METHODS.find((m) => m.id === method)?.hint}</p>
+    {/if}
+  </div>
 
   {#if method === 'point-buy'}
     <p class="text-sm font-medium text-text" aria-live="polite">
@@ -150,6 +149,22 @@
       {/if}
     </section>
   {/if}
+
+  <div class="space-y-1">
+    <!-- A read-only summary: the controls only write the whole arrangement. -->
+    <FieldAi
+      {...wizard.aiField('abilityScores')}
+      readonly
+      label="Ability scores"
+      kind="text"
+      bind:value={() => summary, () => {}}
+    />
+    <p class="text-sm text-muted">
+      {method === 'rolling' && !draft.abilityRolls
+        ? 'Arranging rolls a set first, then assigns the totals.'
+        : 'The AI assigns scores for the chosen method; it never sees or changes dice.'}
+    </p>
+  </div>
 
   {#if method && !(method === 'rolling' && !draft.abilityRolls)}
     <table class="w-full text-left text-sm">

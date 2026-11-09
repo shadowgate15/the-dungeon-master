@@ -4,13 +4,21 @@ import { runFieldRequest } from './field-flow.ts'
 import { fieldRequestSchema, type FieldRequest } from './field-generation.ts'
 import type { ChatPort, ChatRequest } from './port.ts'
 
+/** An ability arrangement answer is already the whole `{ scores }` object. */
+const isScores = (value: unknown) =>
+  typeof value === 'object' && value !== null && 'scores' in value
+
 function fakePort(...values: unknown[]) {
   const requests: ChatRequest[] = []
   const port: ChatPort = async function* (request) {
     requests.push(request)
     const value = values[Math.min(requests.length, values.length) - 1]
     yield { type: 'RUN_STARTED', threadId: 't', runId: 'r' }
-    yield { type: 'CUSTOM', name: 'structured-output.complete', value: { object: { value } } }
+    yield {
+      type: 'CUSTOM',
+      name: 'structured-output.complete',
+      value: { object: isScores(value) ? value : { value } }
+    }
     yield { type: 'RUN_FINISHED', threadId: 't', runId: 'r' }
   }
   return { port, requests }
@@ -31,6 +39,8 @@ const blank = {
   ideal: '',
   bond: '',
   flaw: '',
+  abilityMethod: '',
+  abilityScores: '',
   backstory: '',
   customBackgroundName: '',
   customBackgroundFeature: ''
@@ -163,5 +173,98 @@ describe('character field requests', () => {
 
   it('rejects a request for an unknown character field', () => {
     expect(() => request('level')).toThrow()
+  })
+})
+
+describe('character ability fields', () => {
+  const answer = (scores: Record<string, number>) => ({ scores })
+  const std = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 }
+  const arrange = (values: Record<string, string> = {}): FieldRequest =>
+    request('abilityScores', { abilityMethod: 'standard-array', ...values })
+
+  it('picks a method from the three', async () => {
+    const { port, requests } = fakePort('point-buy')
+
+    const result = await runFieldRequest(port, db, request('abilityMethod'))
+
+    expect(result).toEqual({ ok: true, value: 'point-buy' })
+    expect(system(requests[0])).toMatch(/Allowed values: standard-array, point-buy, rolling/)
+  })
+
+  it('arranges the standard array and returns the scores as JSON', async () => {
+    const { port, requests } = fakePort(answer(std))
+
+    const result = await runFieldRequest(port, db, arrange({ class: 'fighter' }))
+
+    expect(result).toEqual({ ok: true, value: JSON.stringify(std) })
+    const text = system(requests[0])
+    expect(text).toContain('15, 14, 13, 12, 10, 8')
+    expect(text).toContain('- Class: Fighter')
+  })
+
+  it('rejects an illegal arrangement, retries once, then fails', async () => {
+    const bad = answer({ ...std, str: 18 })
+    const { port, requests } = fakePort(bad, bad)
+
+    const result = await runFieldRequest(port, db, arrange())
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'invalid-output' } })
+    expect(requests).toHaveLength(2)
+  })
+
+  it('recovers when the retry is a legal arrangement', async () => {
+    const { port } = fakePort(answer({ ...std, str: 18 }), answer(std))
+    expect(await runFieldRequest(port, db, arrange())).toMatchObject({ ok: true })
+  })
+
+  it('arranges rolled totals; the model sees totals only', async () => {
+    const picked = { str: 9, dex: 11, con: 12, int: 13, wis: 14, cha: 16 }
+    const { port, requests } = fakePort(answer(picked))
+
+    const result = await runFieldRequest(
+      port,
+      db,
+      request(
+        'abilityScores',
+        { abilityMethod: 'rolling' },
+        { rolledTotals: [16, 14, 13, 12, 11, 9] }
+      )
+    )
+
+    expect(result).toEqual({ ok: true, value: JSON.stringify(picked) })
+    expect(system(requests[0])).toContain('16, 14, 13, 12, 11, 9')
+  })
+
+  it('spends a legal point buy', async () => {
+    const buy = { str: 15, dex: 14, con: 13, int: 8, wis: 8, cha: 8 }
+    const { port } = fakePort(answer(buy))
+    const result = await runFieldRequest(
+      port,
+      db,
+      request('abilityScores', { abilityMethod: 'point-buy' })
+    )
+    expect(result).toEqual({ ok: true, value: JSON.stringify(buy) })
+  })
+
+  it('has no options until a method is chosen, or until a rolling set exists', async () => {
+    const { port, requests } = fakePort(answer(std))
+    expect(await runFieldRequest(port, db, request('abilityScores'))).toMatchObject({
+      ok: false,
+      failure: { kind: 'no-options' }
+    })
+    expect(
+      await runFieldRequest(port, db, request('abilityScores', { abilityMethod: 'rolling' }))
+    ).toMatchObject({ ok: false, failure: { kind: 'no-options' } })
+    expect(requests).toHaveLength(0)
+  })
+
+  it('rejects an arrangement identical to the current one', async () => {
+    const other = { ...std, str: 14, dex: 15 }
+    const { port, requests } = fakePort(answer(std), answer(other))
+
+    const result = await runFieldRequest(port, db, arrange({ abilityScores: JSON.stringify(std) }))
+
+    expect(result).toEqual({ ok: true, value: JSON.stringify(other) })
+    expect(requests).toHaveLength(2)
   })
 })

@@ -24,6 +24,8 @@ class FieldState {
   error = $state('')
   retryable = $state(true)
   /** The value an AI write replaced and the value it wrote; Undo expires when they diverge. */
+  /** A snapshot taken by `prepare` before it changed the form; kept until a write succeeds. */
+  pre?: unknown
   undo = $state<{ previous: string; written: string; snapshot?: unknown; version?: unknown }>()
   controller?: AbortController
   last?: Call
@@ -48,6 +50,13 @@ export interface FieldAiOptions<F extends string> {
   snapshot?: () => unknown
   restore?: (snapshot: unknown) => void
   version?: () => unknown
+  /**
+   * Runs at the start of every call, before the request is built: a flow may change the form
+   * first (the Character rolls its ability scores when an arrangement needs a set). Return a
+   * snapshot taken before the change and Undo restores it instead of the usual just-before-write
+   * one; it is kept across Retry until a write succeeds.
+   */
+  prepare?: (field: F) => { snapshot: unknown } | void
   /** Archived or read-only: both icons disabled with this reason, and the field read-only. */
   readonlyReason?: () => string | undefined
   /** A per-field reason the field cannot be generated now (e.g. "Choose a class first"). */
@@ -88,6 +97,8 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
     s.last = call
     s.status = 'loading'
     s.error = ''
+    const prepared = options.prepare?.(field)
+    if (prepared) s.pre = prepared.snapshot
     const current = options.values()[field]
     // A superseded, stopped or abandoned call must not touch the field.
     const stale = () => s.controller !== controller
@@ -116,7 +127,8 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
 
       if (result && 'ok' in result && result.ok) {
         s.status = 'idle'
-        const snapshot = options.snapshot?.()
+        const snapshot = s.pre ?? options.snapshot?.()
+        s.pre = undefined
         options.set(field, result.value)
         s.undo = {
           previous: current,
@@ -193,6 +205,7 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
           if (s.last) void run(field, s.last)
         },
         onDismiss: () => {
+          s.pre = undefined
           s.status = 'idle'
           s.error = ''
         },
