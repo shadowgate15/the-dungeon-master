@@ -3,12 +3,7 @@
   import Alert from '#lib/ui/Alert.svelte'
   import Link from '#lib/ui/Link.svelte'
   import CampaignEditForm from '#lib/campaign/CampaignEditForm.svelte'
-  import CampaignChat from '#lib/campaign/CampaignChat.svelte'
-  import {
-    emptyCampaignSeed,
-    type CampaignSeedCard,
-    type CampaignSeedField
-  } from '#lib/campaign/seed.ts'
+  import { emptyCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
 
   let { data, form } = $props()
 
@@ -54,7 +49,6 @@
     {#key data.campaign.id}
       <CampaignEditForm
         {initial}
-        {chat}
         worlds={data.worlds}
         error={form && 'error' in form ? String(form.error) : undefined}
         saved={form !== null && form !== undefined && 'saved' in form}
@@ -62,7 +56,3 @@
     {/key}
   {/if}
 </main>
-
-{#snippet chat(seed: CampaignSeedCard, onaccept: (field: CampaignSeedField, value: string) => void)}
-  <CampaignChat {seed} {onaccept} worlds={data.worlds} />
-{/snippet}

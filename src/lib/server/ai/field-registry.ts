@@ -1,3 +1,5 @@
+import { LENGTHS, TONES } from '#lib/campaign/enums.ts'
+import { CAMPAIGN_FIELD_LABELS, CAMPAIGN_SEED_FIELDS } from '#lib/campaign/seed.ts'
 import {
   GENRE_FLAVORS,
   MAGIC_LEVELS,
@@ -79,6 +81,43 @@ const WORLD: Record<SeedField, FieldSpec> = {
   techLevel: choice('techLevel', TECH_LEVELS, 'Choose the technology level of the World.')
 }
 
+const campaignChoice = (
+  field: 'tone' | 'length',
+  options: readonly string[],
+  instruction: string
+): EnumFieldSpec => ({
+  kind: 'enum',
+  label: CAMPAIGN_FIELD_LABELS[field],
+  instruction,
+  options: () => options
+})
+
+const CAMPAIGN: Record<(typeof CAMPAIGN_SEED_FIELDS)[number], FieldSpec> = {
+  name: {
+    kind: 'text',
+    label: CAMPAIGN_FIELD_LABELS.name,
+    instruction: `Write the name of the Campaign: one name of 2 to 5 words, about 30 characters, never more than ${NAME_MAX}. A name only, not a sentence. A Campaign is a story set in the Worlds listed, so name the story, not the place.`,
+    maxChars: NAME_MAX
+  },
+  premise: {
+    kind: 'text',
+    label: CAMPAIGN_FIELD_LABELS.premise,
+    instruction: `Write the premise of the Campaign: a story hook of 3 to 4 sentences, about 350 characters, never more than ${PREMISE_SOFT_CAP}: a goal, a threat and a stake. It must fit the Worlds the Campaign is set in. Do not name protagonists and do not script a sequence of events; the players decide who they are and what happens.`,
+    maxChars: PREMISE_SOFT_CAP
+  },
+  tone: campaignChoice(
+    'tone',
+    TONES,
+    'Choose the mood of play: heroic (bold deeds, clear stakes), lighthearted (humor and warmth), tense (suspense and danger), dark (grim, costly, morally heavy), mysterious (secrets and discovery) or epic (grand scale, world-shaping events).'
+  ),
+  length: campaignChoice(
+    'length',
+    LENGTHS,
+    'Choose the scope of the story, not hours: one-shot (a single sitting), short (a few sessions), medium (a season of play) or long (an open-ended saga).'
+  )
+}
+
 export const FIELD_REGISTRY: FieldRegistry = {
-  world: Object.fromEntries(SEED_FIELDS.map((f) => [f, WORLD[f]]))
+  world: Object.fromEntries(SEED_FIELDS.map((f) => [f, WORLD[f]])),
+  campaign: Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, CAMPAIGN[f]]))
 }
