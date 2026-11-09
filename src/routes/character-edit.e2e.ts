@@ -72,6 +72,9 @@ async function createFighter(page: Page, name: string) {
   await steps(page)
     .getByRole('button', { name: /Review/ })
     .click()
+  // One Save, in the footer where Next sits on other steps, and no dead Next beside it.
+  await expect(page.getByRole('button', { name: 'Save Character' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Next', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Save Character' }).click()
   await expect(page).toHaveURL(/\/characters\/[^/?]+(\?saved)?$/)
   await expect(page.getByRole('status')).toContainText(`Saved ${name}`)

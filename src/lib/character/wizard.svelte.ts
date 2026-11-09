@@ -8,6 +8,7 @@ import {
   type WizardRules
 } from './draft.ts'
 import { ownedEquipment } from './equipment.ts'
+import { draftToCharacterInput } from './save.ts'
 import { computeSteps, STEPS, type StepDefinition, type StepId, type StepState } from './steps.ts'
 
 /**
@@ -29,6 +30,10 @@ export class CharacterWizard {
   suggestions = $state<Partial<Record<StepId, number>>>({})
   /** True once the player has changed anything; guards leaving the page. */
   dirty = $state(false)
+  /** True while the draft is being saved; the footer's Save button and Back are disabled. */
+  saving = $state(false)
+  /** Why the last save failed, shown on the Review step; null when none has failed. */
+  saveError = $state<string | null>(null)
 
   /** Resolver output for the draft: choice groups, grants, structural issues. */
   resolved: ResolvedFeatures
@@ -36,6 +41,8 @@ export class CharacterWizard {
   stats: DerivedStats
   /** Rail state for each applicable step, in order. */
   steps: StepState[]
+  /** Whether the draft maps to a `CharacterInput`, so saving can be attempted. */
+  canSave: boolean
 
   /**
    * @param initial a saved Character's draft (edit page): the wizard opens on it with nothing
@@ -61,6 +68,14 @@ export class CharacterWizard {
         equipment: ownedEquipment(rules, this.draft, this.resolved)
       })
     )
+    this.canSave = $derived.by(() => {
+      try {
+        draftToCharacterInput(rules, this.draft)
+        return true
+      } catch {
+        return false
+      }
+    })
     this.steps = $derived(
       computeSteps(
         { rules, draft: this.draft, resolved: this.resolved, stats: this.stats },
@@ -90,6 +105,7 @@ export class CharacterWizard {
     const target = this.step(id)
     if (!target || target.status === 'locked') return false
     this.current = id
+    this.saveError = null
     return true
   }
 
