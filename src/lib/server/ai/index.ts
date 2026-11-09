@@ -3,7 +3,7 @@ import { createChatAdapter } from './adapter.ts'
 import { resolveAiConfig, withContextFallback } from './config.ts'
 import { createReasoningLock } from './lock.ts'
 import { probeAi } from './probe.ts'
-import { createChatPort } from './world-conversation.ts'
+import { createChatPort } from './port.ts'
 import type { AiStatus } from '#lib/ai/status.ts'
 
 /** Server-only: never import this from browser code. */

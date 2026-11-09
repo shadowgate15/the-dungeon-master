@@ -26,9 +26,6 @@ async function openNewCampaign(page: Page) {
 
 // The canned chat content is process-wide state in the fake server.
 test.describe.configure({ mode: 'serial' })
-test.beforeEach(async ({ request }) => {
-  await post(request, '/__control/usage', { promptTokens: 10, completionTokens: 20 })
-})
 
 test('proposals fill the Seed card only when accepted, and newer ones supersede', async ({
   page,

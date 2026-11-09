@@ -296,9 +296,11 @@ describe('compaction against the fake LM Studio server', () => {
   it('summarizes through the real adapter and answers the turn on the compacted prompt', async () => {
     const fake = await startFakeLmStudio({ model: 'm' })
     try {
-      fake.setChatContent({ reply: 'Noted.', proposals: {} })
-      fake.setSummaryContent({ summary: 'A short fake gist.' })
-      fake.setUsage({ promptTokens: 200, completionTokens: 20 })
+      // The summary call comes first, then the turn.
+      fake.queueAnswers(
+        { content: { summary: 'A short fake gist.' } },
+        { content: { reply: 'Noted.', proposals: {} } }
+      )
       const { createChatAdapter } = await import('./adapter.ts')
       const port = createChatPort(createChatAdapter({ baseUrl: fake.baseUrl, model: 'm' }))
 
@@ -307,7 +309,7 @@ describe('compaction against the fake LM Studio server', () => {
       expect(result).toMatchObject({
         ok: true,
         reply: 'Noted.',
-        usage: { totalTokens: 220 },
+        usage: { totalTokens: 30 },
         compaction: { summary: 'A short fake gist.', summarizedCount: 6 }
       })
       expect(fake.requests.filter((r) => r.path === '/v1/chat/completions')).toHaveLength(2)

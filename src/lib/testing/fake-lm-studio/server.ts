@@ -8,10 +8,13 @@ import type { AddressInfo } from 'node:net'
  * ...) register another entry in `scenarios`; nothing else changes.
  * The active scenario can be switched while the server runs, either with `setScenario`
  * or by POSTing `{ "scenario": "..." }` to `/__control/scenario` (used by Playwright).
- * POSTing any JSON to `/__control/chat-content` replaces the canned chat completion object,
- * `/__control/summary-content` does the same for compaction requests, POSTing
- * `{ promptTokens, completionTokens }` to `/__control/usage` sets the reported usage,
- * and GET `/__control/requests` returns the chat requests received so far.
+ * Chat completions answer, in order of precedence: the next entry of the FIFO answer queue
+ * (POST `{ "answers": [{ "content": <json or raw string>, "delayMs"?: n }] }` to
+ * `/__control/answers`, `"replace": true` clears it first), then a canned object set by POSTing
+ * JSON to `/__control/chat-content` (the old chat's control), then a schema-aware default derived
+ * from the request's `response_format` (first enum slug, a short string for text, minimum-length
+ * arrays). POSTing `{ "ms": n }` to `/__control/delay` delays every response that has no delay of
+ * its own. GET `/__control/requests` returns the chat requests received so far.
  */
 
 export interface FakeRequest {
@@ -35,18 +38,60 @@ export interface ScenarioContext {
   path: string
   body: unknown
   options: { model: string; contextLength: number }
-  /** The canned structured-output object that chat completions stream back. */
-  chatContent: unknown
-  /** The canned object streamed back for context-compaction (summary) requests. */
-  summaryContent: unknown
-  /** The token counts reported in the final usage chunk. */
-  usage: { promptTokens: number; completionTokens: number }
+  /** The next answer for a chat completion: queued, canned, or derived from the schema. */
+  nextAnswer(): Answer
 }
 
-/** A compaction request is the one whose output schema has a `summary` property. */
-function isSummaryRequest(body: unknown) {
-  const format = (body as { response_format?: unknown } | undefined)?.response_format
-  return JSON.stringify(format ?? null).includes('"summary":{')
+/** One answer to a chat completion: a JSON value (or a raw string) and an optional delay. */
+export interface Answer {
+  content: unknown
+  delayMs?: number
+}
+
+type Schema = {
+  type?: string | string[]
+  enum?: unknown[]
+  properties?: Record<string, Schema>
+  required?: string[]
+  items?: Schema
+  minItems?: number
+  minimum?: number
+  anyOf?: Schema[]
+}
+
+/** The simplest value satisfying `schema`: the first enum slug, a short string, minimum arrays. */
+export function defaultFor(schema: Schema | undefined): unknown {
+  if (!schema) return null
+  if (schema.enum?.length) return schema.enum[0]
+  if (schema.anyOf?.length) {
+    return defaultFor(schema.anyOf.find((s) => s.type !== 'null') ?? schema.anyOf[0])
+  }
+  const type = Array.isArray(schema.type) ? schema.type.find((t) => t !== 'null') : schema.type
+  switch (type) {
+    case 'object':
+      return Object.fromEntries(
+        Object.entries(schema.properties ?? {})
+          .filter(([key]) => !schema.required || schema.required.includes(key))
+          .map(([key, sub]) => [key, defaultFor(sub)])
+      )
+    case 'array':
+      return Array.from({ length: schema.minItems ?? 0 }, () => defaultFor(schema.items))
+    case 'string':
+      return 'A fake value.'
+    case 'integer':
+    case 'number':
+      return schema.minimum ?? 0
+    case 'boolean':
+      return false
+    default:
+      return null
+  }
+}
+
+function requestSchema(body: unknown): Schema | undefined {
+  const format = (body as { response_format?: { json_schema?: { schema?: Schema } } } | undefined)
+    ?.response_format
+  return format?.json_schema?.schema
 }
 
 export type Scenario = (ctx: ScenarioContext) => void | Promise<void>
@@ -86,7 +131,13 @@ function modelList(ctx: ScenarioContext, ids: string[]): boolean {
  * Streams `content` as Chat Completions SSE chunks, in a few pieces like a real model.
  * A `reasoning` text is streamed first as `reasoning_content`, as a reasoning model does.
  */
-function streamChatCompletion(ctx: ScenarioContext, content: string, reasoning = '') {
+function streamChatCompletion(ctx: ScenarioContext, content: string, reasoning = '', delayMs = 0) {
+  if (delayMs > 0) {
+    // A client that gives up (Stop, timeout) before the delay ends gets nothing written.
+    const timer = setTimeout(() => streamChatCompletion(ctx, content, reasoning), delayMs)
+    ctx.res.on('close', () => clearTimeout(timer))
+    return
+  }
   const { res } = ctx
   res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
   const write = (choices: object[], extra: object = {}) =>
@@ -108,7 +159,8 @@ function streamChatCompletion(ctx: ScenarioContext, content: string, reasoning =
   const size = Math.max(1, Math.ceil(content.length / 3))
   for (let i = 0; i < content.length; i += size) delta({ content: content.slice(i, i + size) })
   delta({}, 'stop')
-  const { promptTokens, completionTokens } = ctx.usage
+  const promptTokens = 10
+  const completionTokens = 20
   write([], {
     usage: {
       prompt_tokens: promptTokens,
@@ -123,28 +175,17 @@ export const scenarios: Record<string, Scenario> = {
   ready: (ctx) => {
     if (modelList(ctx, [ctx.options.model])) return
     if (ctx.path === '/v1/chat/completions') {
-      const canned = isSummaryRequest(ctx.body) ? ctx.summaryContent : ctx.chatContent
-      return streamChatCompletion(ctx, JSON.stringify(canned))
+      const { content, delayMs } = ctx.nextAnswer()
+      const text = typeof content === 'string' ? content : JSON.stringify(content)
+      return streamChatCompletion(ctx, text, '', delayMs)
     }
     json(ctx.res, 404, { error: 'not found' })
   },
-  /** Turns work, but compaction (summary) requests come back broken. */
-  'summary-fails': (ctx) => {
-    if (modelList(ctx, [ctx.options.model])) return
-    if (ctx.path === '/v1/chat/completions') {
-      const canned = isSummaryRequest(ctx.body) ? { summary: 42 } : ctx.chatContent
-      return streamChatCompletion(ctx, JSON.stringify(canned))
-    }
-    json(ctx.res, 404, { error: 'not found' })
-  },
-  /** The model answers, but with JSON that breaks the turn schema. */
+  /** The model answers, but with JSON of the wrong shape for the requested schema. */
   'bad-output': (ctx) => {
     if (modelList(ctx, [ctx.options.model])) return
     if (ctx.path === '/v1/chat/completions') {
-      return streamChatCompletion(
-        ctx,
-        JSON.stringify({ reply: 'Broken.', proposals: { scale: 'galaxy' } })
-      )
+      return streamChatCompletion(ctx, JSON.stringify({ unexpected: 'wrong shape' }))
     }
     json(ctx.res, 404, { error: 'not found' })
   },
@@ -181,10 +222,10 @@ export interface FakeLmStudio {
   setScenario(name: string): void
   /** Replace the object that chat completions stream back in the `ready` scenario. */
   setChatContent(content: unknown): void
-  /** Replace the object that compaction (summary) requests stream back. */
-  setSummaryContent(content: unknown): void
-  /** Replace the token counts reported with each chat completion. */
-  setUsage(usage: { promptTokens: number; completionTokens: number }): void
+  /** Append answers to the FIFO queue, consumed one per chat completion in the `ready` scenario. */
+  queueAnswers(...answers: Answer[]): void
+  /** Delay every response that has no delay of its own. */
+  setDelay(ms: number): void
   /** Chat completion requests still open (not finished or dropped by the client). */
   openChatConnections(): number
   close(): Promise<void>
@@ -210,10 +251,10 @@ export async function startFakeLmStudio(
     contextLength: options.contextLength ?? 4096
   }
   let scenario = options.scenario ?? 'ready'
-  let chatContent: unknown = { reply: 'A fake reply.', proposal: {} }
+  let chatContent: unknown
   const requests: FakeRequest[] = []
-  let summaryContent: unknown = { summary: 'A fake summary of the earlier conversation.' }
-  let usage = { promptTokens: 10, completionTokens: 20 }
+  const queue: Answer[] = []
+  let delayMs = 0
   let openChat = 0
 
   const server: Server = createServer(async (req, res) => {
@@ -233,12 +274,14 @@ export async function startFakeLmStudio(
       return json(res, 200, { ok: true })
     }
 
-    if (path === '/__control/summary-content' && req.method === 'POST') {
-      summaryContent = body
-      return json(res, 200, { ok: true })
+    if (path === '/__control/answers' && req.method === 'POST') {
+      const data = body as { answers?: Answer[]; replace?: boolean } | undefined
+      if (data?.replace) queue.length = 0
+      queue.push(...(data?.answers ?? []))
+      return json(res, 200, { queued: queue.length })
     }
-    if (path === '/__control/usage' && req.method === 'POST') {
-      usage = body as typeof usage
+    if (path === '/__control/delay' && req.method === 'POST') {
+      delayMs = (body as { ms?: number } | undefined)?.ms ?? 0
       return json(res, 200, { ok: true })
     }
 
@@ -253,9 +296,12 @@ export async function startFakeLmStudio(
       path,
       body,
       options: resolved,
-      chatContent,
-      summaryContent,
-      usage
+      nextAnswer: () => {
+        const queued = queue.shift()
+        if (queued) return { delayMs, ...queued }
+        const content = chatContent !== undefined ? chatContent : defaultFor(requestSchema(body))
+        return { content, delayMs }
+      }
     })
   })
 
@@ -272,11 +318,11 @@ export async function startFakeLmStudio(
     setChatContent(content) {
       chatContent = content
     },
-    setSummaryContent(content) {
-      summaryContent = content
+    queueAnswers(...answers) {
+      queue.push(...answers)
     },
-    setUsage(next) {
-      usage = next
+    setDelay(ms) {
+      delayMs = ms
     },
     openChatConnections: () => openChat,
     close: () =>
