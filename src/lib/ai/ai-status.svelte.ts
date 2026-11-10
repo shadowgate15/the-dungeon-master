@@ -4,7 +4,7 @@ import { REASONING_MODEL_MESSAGE, type AiStatus } from './status.ts'
 /**
  * The shared AI availability: one query for the whole page, probed on mount and on "Check
  * connection" only (no polling, no refetch on focus). Call it once per page during component
- * init and hand the result to `AiPanel` (the status view with Check connection) and to
+ * init and hand the result to `AiStatusChip` (the status chip with Check connection) and to
  * `createFieldAi` (the per-field controls), so they always agree.
  */
 export function createAiStatus() {

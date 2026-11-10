@@ -1,7 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
   import { resolve } from '$app/paths'
-  import AiPanel from '#lib/ai/AiPanel.svelte'
+  import AiStatusChip from '#lib/ai/AiStatusChip.svelte'
   import { createAiStatus } from '#lib/ai/ai-status.svelte.ts'
   import { createFieldAi } from '#lib/ai/field-ai.svelte.ts'
   import Alert from '#lib/ui/Alert.svelte'
@@ -65,7 +65,7 @@
     </p>
   {:else}
     <div class="space-y-3">
-      <AiPanel ai={aiStatus} />
+      <AiStatusChip ai={aiStatus} />
       <form
         method="POST"
         action="?/createCampaign"

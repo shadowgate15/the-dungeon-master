@@ -1,6 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
-  import AiPanel from '#lib/ai/AiPanel.svelte'
+  import AiStatusChip from '#lib/ai/AiStatusChip.svelte'
   import { createAiStatus } from '#lib/ai/ai-status.svelte.ts'
   import { createFieldAi } from '#lib/ai/field-ai.svelte.ts'
   import FieldAi from '#lib/ui/FieldAi.svelte'
@@ -91,10 +91,8 @@
     if (page.url.searchParams.has('new')) replaceState(resolve('/'), {})
   }}
 >
-  <div class="grid gap-6 lg:grid-cols-2">
-    <div class="space-y-2 lg:max-h-[70vh] lg:overflow-y-auto">
-      <AiPanel ai={aiStatus} />
-    </div>
+  <div class="space-y-2">
+    <AiStatusChip ai={aiStatus} />
     <div class="lg:max-h-[70vh] lg:overflow-y-auto">
       <form
         method="POST"

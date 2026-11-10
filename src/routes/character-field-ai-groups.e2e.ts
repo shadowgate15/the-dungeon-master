@@ -19,7 +19,7 @@ test.afterEach(async ({ request }) => {
 async function openWizard(page: Page) {
   await page.goto('/characters/new')
   await page.waitForLoadState('networkidle') // the draft only works after hydration
-  await expect(page.getByText('Connected')).toBeVisible()
+  await expect(page.getByText('fake-model')).toBeVisible()
 }
 
 const steps = (page: Page) => page.getByRole('navigation', { name: 'Steps' })

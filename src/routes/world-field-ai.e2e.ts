@@ -19,7 +19,7 @@ test.afterEach(async ({ request }) => {
 
 async function ready(page: Page) {
   await openNewWorld(page)
-  await expect(page.getByText('Connected')).toBeVisible()
+  await expect(page.getByText('fake-model')).toBeVisible()
 }
 
 test('the World dialog has no chat and a control on every AI field', async ({ page }) => {
