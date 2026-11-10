@@ -25,7 +25,7 @@ const generate = (page: Page, label: string) =>
 async function openAbilities(page: Page) {
   await page.goto('/characters/new')
   await page.waitForLoadState('networkidle') // the draft only works after hydration
-  await expect(page.getByText('Connected')).toBeVisible()
+  await expect(page.getByText('fake-model')).toBeVisible()
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Brenna')
   await combobox(page, 'Race').selectOption('human')
   await combobox(page, 'Class').selectOption('fighter')

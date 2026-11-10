@@ -51,7 +51,7 @@ test('a Campaign goes from AI-assisted creation through edit, filter, read-only,
   await page.getByRole('link', { name: 'New Campaign' }).click()
   const dialog = page.getByRole('dialog', { name: 'New Campaign' })
   await dialog.getByLabel('Add World').selectOption({ label: ash })
-  await expect(dialog.getByText('Connected')).toBeVisible()
+  await expect(dialog.getByText('fake-model')).toBeVisible()
   const create = dialog.getByRole('button', { name: 'Create Campaign' })
   await expect(create).toBeDisabled()
   for (const field of ['Name', 'Premise', 'Tone', 'Length']) {

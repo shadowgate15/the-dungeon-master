@@ -20,6 +20,7 @@
 </script>
 
 <script lang="ts">
+  import type { Snippet } from 'svelte'
   import Button from '#lib/ui/Button.svelte'
 
   type Props = {
@@ -27,13 +28,16 @@
     current: StepId
     onselect: (id: StepId) => void
     onabandon: () => void
+    /** Sits under the heading, e.g. the AI status chip. */
+    header?: Snippet
   }
 
-  let { steps, current, onselect, onabandon }: Props = $props()
+  let { steps, current, onselect, onabandon, header }: Props = $props()
 </script>
 
 <nav aria-label="Steps" class="space-y-1">
   <h1 class="font-display text-xl">New Character</h1>
+  {@render header?.()}
   <ol class="space-y-1">
     {#each steps as step, i (step.id)}
       <li>

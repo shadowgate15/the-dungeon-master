@@ -1,6 +1,6 @@
 <script lang="ts">
   import { beforeNavigate, goto } from '$app/navigation'
-  import AiPanel from '#lib/ai/AiPanel.svelte'
+  import AiStatusChip from '#lib/ai/AiStatusChip.svelte'
   import { createAiStatus } from '#lib/ai/ai-status.svelte.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
@@ -69,12 +69,14 @@
       current={wizard.current}
       onselect={(id) => wizard.go(id)}
       onabandon={() => (confirming = true)}
-    />
+    >
+      {#snippet header()}
+        <AiStatusChip ai={aiStatus} align="left" />
+      {/snippet}
+    </StepRail>
   </div>
 
   <section class="min-w-0 space-y-4">
-    <AiPanel ai={aiStatus} />
-
     {#each wizard.notices as notice, i (i + notice)}
       <Alert variant="info" class="flex items-center justify-between gap-2">
         <span>{notice}</span>
