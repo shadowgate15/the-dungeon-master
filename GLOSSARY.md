@@ -115,3 +115,7 @@ _Avoid_: Check prompt, dice call
 **Roll result**:
 The player turn that answers a Roll request. The player clicks Roll; code rolls the d20, adds the Character's derived modifier and records the total against the DC. The AI never rolls and players do not type in results. The result is passed to the DM, which narrates the outcome in its next turn.
 _Avoid_: Dice result, outcome
+
+**Rolling summary**:
+A short prose account of a Session's earlier Turns, kept so the DM can continue once the transcript outgrows the model's window. It is written by a separate model call, not the DM, and rewritten rather than appended so it stays bounded. It records story (events, NPCs, places, promises, open hooks) and never numbers, which code and the database own. When a Session ends, a final summary is made and carried into the Campaign's next Session.
+_Avoid_: Recap, compaction, memory
