@@ -69,14 +69,14 @@
       current={wizard.current}
       onselect={(id) => wizard.go(id)}
       onabandon={() => (confirming = true)}
-    />
+    >
+      {#snippet header()}
+        <AiStatusChip ai={aiStatus} align="left" />
+      {/snippet}
+    </StepRail>
   </div>
 
   <section class="min-w-0 space-y-4">
-    <div class="flex justify-end">
-      <AiStatusChip ai={aiStatus} />
-    </div>
-
     {#each wizard.notices as notice, i (i + notice)}
       <Alert variant="info" class="flex items-center justify-between gap-2">
         <span>{notice}</span>

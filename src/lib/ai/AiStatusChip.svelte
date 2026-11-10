@@ -6,9 +6,11 @@
   type Props = {
     /** The page's shared availability store. */
     ai: Pick<AiStatusStore, 'status' | 'checking'> & { check: () => unknown }
+    /** Which edge of the chip the popover lines up with. */
+    align?: 'left' | 'right'
   }
 
-  let { ai }: Props = $props()
+  let { ai, align = 'right' }: Props = $props()
 
   let details: HTMLDetailsElement | undefined = $state()
 
@@ -64,7 +66,10 @@
       <span class={ready ? 'font-mono' : ''}>{label}</span>
     </summary>
     <div
-      class="absolute right-0 z-10 mt-1 w-72 space-y-2 rounded-control border border-border bg-surface p-3 text-sm shadow"
+      class={[
+        'absolute z-10 mt-1 w-72 space-y-2 rounded-control border border-border bg-surface p-3 text-sm shadow',
+        align === 'left' ? 'left-0' : 'right-0'
+      ]}
     >
       {#if model && !ready}<p>Model: <span class="font-mono">{model}</span></p>{/if}
       <p class={ready ? '' : 'text-muted'}>{explanation}</p>
