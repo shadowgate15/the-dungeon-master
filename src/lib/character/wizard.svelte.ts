@@ -7,14 +7,18 @@ import {
   type CharacterDraft,
   type WizardRules
 } from './draft.ts'
+import { rollAbilityScores } from './ability-scores.ts'
 import { ownedEquipment } from './equipment.ts'
 import type { CharacterInput } from '#lib/server/character/service.ts'
 import { tryDraftToCharacterInput } from './save.ts'
+import { inertFieldAi } from '#lib/ai/field-ai.svelte.ts'
+import { currentGroupValue, describeGroupValue, groupDefinition } from './ai-groups.ts'
+import type { CharacterFieldAi } from './field-ai.svelte.ts'
 import { computeSteps, STEPS, type StepDefinition, type StepId, type StepState } from './steps.ts'
 
 /**
  * The wizard's reactive state: the browser-only Character draft, the derived resolved features and
- * stats, and the step rail. One instance per open wizard. Steps and the conversation panel read it
+ * stats, and the step rail. One instance per open wizard. Steps read it
  * and call `update`; they never write `draft` directly, so change rules always run.
  */
 export class CharacterWizard {
@@ -29,6 +33,10 @@ export class CharacterWizard {
   current = $state<StepId>('concept')
   /** Pending (un-accepted) AI suggestions per step, for the rail's dot (#116 maintains it). */
   suggestions = $state<Partial<Record<StepId, number>>>({})
+  /** Bumped by every edit (and every AI write); a field's AI Undo expires when it changes. */
+  revision = $state(0)
+  /** The per-field AI controller; set by the shell during init. Without it the controls are inert. */
+  ai: CharacterFieldAi | undefined
   /** True once the player has changed anything; guards leaving the page. */
   dirty = $state(false)
   /** True while the draft is being saved; the footer's Save button and Back are disabled. */
@@ -84,6 +92,48 @@ export class CharacterWizard {
     this.draft = draft
     this.notices.push(...notices)
     this.dirty = true
+    this.revision++
+  }
+
+  /** Rolls a new ability set in code; a reroll replaces the whole set, so assignments reset. */
+  rollAbilities() {
+    this.update({
+      abilityRolls: rollAbilityScores(),
+      baseScores: { str: null, dex: null, con: null, int: null, wis: null, cha: null }
+    })
+  }
+
+  /** The props for one field's `FieldAi`; inert and disabled when no controller is attached. */
+  aiField(field: string) {
+    return this.ai?.field(field) ?? inertFieldAi('AI is not available here')
+  }
+
+  /** A pick group's current value as names ("Athletics, History"); empty when unset or missing. */
+  groupText(field: string): string {
+    const def = groupDefinition(this.rules, this.draft, field)
+    return def ? describeGroupValue(def, currentGroupValue(def)) : ''
+  }
+
+  /** A pick group's accessible label, e.g. "Skills (Fighter)". */
+  groupLabel(field: string): string {
+    return groupDefinition(this.rules, this.draft, field)?.label ?? ''
+  }
+
+  /** A plain field's current value as text; empty when unset. */
+  fieldText(field: string): string {
+    return ((this.draft as unknown as Record<string, string | null>)[field] as string | null) ?? ''
+  }
+
+  /** Everything an AI write may change (the draft and the notices it adds), for Field Undo. */
+  snapshot() {
+    return { draft: $state.snapshot(this.draft) as CharacterDraft, notices: [...this.notices] }
+  }
+
+  /** Puts a snapshot back as one edit: restores the field and everything cleared with it. */
+  restore(snapshot: ReturnType<CharacterWizard['snapshot']>) {
+    this.draft = snapshot.draft
+    this.notices = [...snapshot.notices]
+    this.revision++
   }
 
   dismissNotice(index: number) {

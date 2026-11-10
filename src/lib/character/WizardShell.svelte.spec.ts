@@ -18,7 +18,7 @@ import subclasses from '#lib/rules/data/subclasses.json'
 import subraces from '#lib/rules/data/subraces.json'
 import traits from '#lib/rules/data/traits.json'
 import type { WizardRules } from './draft.ts'
-import WizardShell from './WizardShell.svelte'
+import WizardShell from './WizardShell.harness.svelte'
 import { CharacterWizard } from './wizard.svelte.ts'
 
 const rules = {
@@ -140,19 +140,15 @@ describe('WizardShell with the Concept step', () => {
     expect(onabandon).toHaveBeenCalledOnce()
   })
 
-  it('renders the conversation slot beside every step when one is given', async () => {
-    const { createRawSnippet } = await import('svelte')
-    const aside = createRawSnippet(() => ({ render: () => '<p>Chat goes here</p>' }))
-    render(WizardShell, {
-      wizard: new CharacterWizard(rules),
-      backHref: '/',
-      onabandon: () => {},
-      aside
-    })
+  it('has no chat, and a Field AI control on the Concept fields', async () => {
+    setup()
 
-    await expect
-      .element(page.getByRole('complementary', { name: 'Creation conversation' }))
-      .toHaveTextContent('Chat goes here')
+    await expect.element(page.getByRole('complementary')).not.toBeInTheDocument()
+    for (const label of ['Name', 'Race', 'Class', 'Background', 'Alignment', 'Backstory']) {
+      await expect
+        .element(page.getByRole('button', { name: `Generate ${label}`, exact: true }))
+        .toBeVisible()
+    }
   })
 })
 

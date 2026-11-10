@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import CharacterChat from '#lib/character/CharacterChat.svelte'
   import WizardShell from '#lib/character/WizardShell.svelte'
   import { CharacterWizard } from '#lib/character/wizard.svelte.ts'
   import type { PageProps } from './$types'
@@ -16,8 +15,4 @@
 
 <svelte:head><title>Edit {data.draft.name}</title></svelte:head>
 
-<WizardShell {wizard} backHref={summaryHref} onabandon={() => goto(summaryHref)}>
-  {#snippet aside()}
-    <CharacterChat {wizard} />
-  {/snippet}
-</WizardShell>
+<WizardShell {wizard} backHref={summaryHref} onabandon={() => goto(summaryHref)}></WizardShell>

@@ -68,4 +68,25 @@ describe('CharacterWizard', () => {
     w.update({ name: 'B' })
     expect(w.dirty).toBe(true)
   })
+
+  it('restores a snapshot with everything a later write cleared, as one edit', () => {
+    const w = fresh()
+    w.update({
+      race: 'human',
+      class: 'fighter',
+      picks: { 'class/fighter/proficiency-0': ['skill-athletics'] }
+    })
+    const before = w.snapshot()
+    const revision = w.revision
+
+    w.update({ class: 'cleric' })
+    expect(w.draft.picks).toEqual({})
+    expect(w.notices).toHaveLength(1)
+    expect(w.revision).toBeGreaterThan(revision)
+
+    w.restore(before)
+    expect(w.draft.class).toBe('fighter')
+    expect(w.draft.picks).toEqual({ 'class/fighter/proficiency-0': ['skill-athletics'] })
+    expect(w.notices).toEqual([])
+  })
 })

@@ -4,6 +4,7 @@ import {
   POINT_BUY,
   ROLL,
   STANDARD_ARRAY,
+  arrangementProblem,
   availableValues,
   pointsSpent,
   rollAbilityScores,
@@ -112,5 +113,40 @@ describe('availableValues', () => {
     expect(availableValues(pool, { ...blank, str: 15 }, 'dex')).toEqual([15, 12])
     expect(availableValues(pool, { ...blank, str: 15, dex: 15 }, 'con')).toEqual([12])
     expect(availableValues(pool, { ...blank, str: 15 }, 'str')).toEqual([15, 15, 12])
+  })
+})
+
+describe('arrangementProblem', () => {
+  const standard = scores([15, 14, 13, 12, 10, 8])
+
+  it('accepts any permutation of the standard array', () => {
+    expect(arrangementProblem('standard-array', scores([8, 10, 12, 13, 14, 15]), [])).toBeNull()
+  })
+
+  it('rejects a standard array that repeats or invents a value', () => {
+    expect(arrangementProblem('standard-array', scores([15, 15, 13, 12, 10, 8]), [])).toMatch(
+      /15, 14, 13, 12, 10, 8/
+    )
+    expect(arrangementProblem('standard-array', scores([18, 14, 13, 12, 10, 8]), [])).not.toBeNull()
+  })
+
+  it('accepts a permutation of the rolled totals and rejects others', () => {
+    const pool = [16, 14, 13, 12, 11, 9]
+    expect(arrangementProblem('rolling', scores([9, 11, 12, 13, 14, 16]), pool)).toBeNull()
+    expect(arrangementProblem('rolling', standard, pool)).toMatch(/16, 14, 13, 12, 11, 9/)
+  })
+
+  it('accepts a legal point buy spend', () => {
+    expect(arrangementProblem('point-buy', scores([15, 15, 15, 8, 8, 8]), [])).toBeNull()
+    expect(arrangementProblem('point-buy', scores([8, 8, 8, 8, 8, 8]), [])).toBeNull()
+  })
+
+  it('rejects a point buy over budget or outside 8 to 15', () => {
+    expect(arrangementProblem('point-buy', scores([15, 15, 15, 15, 8, 8]), [])).toMatch(/27/)
+    expect(arrangementProblem('point-buy', scores([16, 8, 8, 8, 8, 8]), [])).toMatch(/8 and 15/)
+  })
+
+  it('rejects a missing method', () => {
+    expect(arrangementProblem(null, standard, [])).not.toBeNull()
   })
 })

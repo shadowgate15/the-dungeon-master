@@ -35,10 +35,10 @@ test('creates a Campaign in the dialog and lists it with its Worlds', async ({ p
 
   await dialog.getByLabel('Add World').selectOption({ label: worldName })
   await dialog.getByLabel('Name', { exact: true }).fill(name)
-  await dialog.getByLabel('Premise').fill('Escort a relic across the ash plains.')
-  await dialog.getByLabel('Tone').selectOption('tense')
+  await dialog.getByLabel('Premise', { exact: true }).fill('Escort a relic across the ash plains.')
+  await dialog.getByLabel('Tone', { exact: true }).selectOption('tense')
   await expect(create).toBeDisabled()
-  await dialog.getByLabel('Length').selectOption('short')
+  await dialog.getByLabel('Length', { exact: true }).selectOption('short')
   await expect(create).toBeEnabled()
   await create.click()
 
@@ -57,9 +57,9 @@ test('a long premise warns but still saves', async ({ page }) => {
   const dialog = await openNewCampaign(page)
   await dialog.getByLabel('Add World').selectOption({ label: worldName })
   await dialog.getByLabel('Name', { exact: true }).fill(name)
-  await dialog.getByLabel('Premise').fill('x'.repeat(520))
-  await dialog.getByLabel('Tone').selectOption('epic')
-  await dialog.getByLabel('Length').selectOption('long')
+  await dialog.getByLabel('Premise', { exact: true }).fill('x'.repeat(520))
+  await dialog.getByLabel('Tone', { exact: true }).selectOption('epic')
+  await dialog.getByLabel('Length', { exact: true }).selectOption('long')
   await expect(dialog.getByText(/Premise is long/)).toBeVisible()
   await dialog.getByRole('button', { name: 'Create Campaign' }).click()
 

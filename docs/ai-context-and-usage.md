@@ -17,13 +17,10 @@ The #29 probe (`src/lib/server/ai/probe.ts`) reads `loaded_context_length` for t
 How the code degrades when the field is missing:
 
 - The probe returns `contextLength: number | null`. It is `null` when the field is absent or not a number, when the model is not loaded, when LM Studio is old, when the request fails or times out, or when the server is not LM Studio. The probe never fails because of it.
-- With `contextLength` `null`, the meter and compaction use the configured fallback limit (`LM_STUDIO_CONTEXT_LIMIT`, server-only, default 4096), which the server adds to the ready status as `fallbackContextLength`, together with a character estimate (about 3 characters per token plus a fixed prompt overhead).
-- An estimate is shown with a `~` prefix.
+- With `contextLength` `null`, the server uses the configured fallback limit (`LM_STUDIO_CONTEXT_LIMIT`, server-only, default 4096), which the server adds to the ready status as `fallbackContextLength`.
 
 ## Token usage: confirmed through TanStack AI
 
-`chat()` with `stream: true` emits a `RUN_FINISHED` event whose `usage` is either AG-UI's `usage[]` (`inputTokens`, `outputTokens`, `totalTokens`) or TanStack's `TokenUsage` (`promptTokens`, `completionTokens`, `totalTokens`). Both shapes are read by `readUsage` in `src/lib/server/ai/world-conversation.ts`.
+`chat()` with `stream: true` emits a `RUN_FINISHED` event whose `usage` is either AG-UI's `usage[]` (`inputTokens`, `outputTokens`, `totalTokens`) or TanStack's `TokenUsage` (`promptTokens`, `completionTokens`, `totalTokens`). Both shapes are read by `readUsage` in `src/lib/server/ai/port.ts`.
 
-End to end, with the real `openaiCompatibleText` adapter against the fake LM Studio server (which sends a final usage chunk), `runTurn` returns `usage: { promptTokens, completionTokens, totalTokens }` (see the "surfaces usage end to end" spec). If a provider reports no usage the field is omitted and the client falls back to the estimate.
-
-The meter's "used" value is the last turn's `totalTokens` (prompt plus reply, which is what the next prompt will contain at least). It is dropped after a compaction, because it no longer describes the compacted prompt; the meter then shows an estimate until the next turn reports a fresh count.
+Per-field AI calls are stateless: each one sends the form's current values and nothing from earlier calls, so there is no transcript to measure or compact and no context meter. The usage count is read by the port but not shown; the probed (or fallback) context length is reported on the AI status only. Nothing uses it as a per-field prompt budget, and prompts are not trimmed to it.

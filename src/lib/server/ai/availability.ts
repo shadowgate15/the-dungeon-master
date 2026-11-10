@@ -1,8 +1,13 @@
 import type { AiStatus } from '#lib/ai/status.ts'
-import type { TurnFailure } from './world-conversation.ts'
+
+/** A typed failure for a probe that is not ready. */
+export interface UnavailableFailure {
+  kind: 'not-connected' | 'model-unavailable'
+  message: string
+}
 
 /** The typed failure for a probe that is not ready, or null when the model can be used. */
-export function unavailableFailure(status: AiStatus): TurnFailure | null {
+export function unavailableFailure(status: AiStatus): UnavailableFailure | null {
   switch (status.state) {
     case 'unreachable':
       return { kind: 'not-connected', message: 'Not connected to LM Studio' }

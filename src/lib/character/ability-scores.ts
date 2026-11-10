@@ -4,8 +4,8 @@ import type { StepContext, StepValidation } from './steps.ts'
 
 /**
  * The Ability Score Methods (#95): app-defined rules the SRD leaves out. Pure and shared by the
- * wizard step and, later, the conversation (#118), which may propose a method and an arrangement
- * but never numbers or rolls. The values mirror `rules/data/abilityScoreMethods.json` (a spec
+ * wizard step and the abilities Field AI control, which may arrange values but never invent numbers
+ * or rolls. The values mirror `rules/data/abilityScoreMethods.json` (a spec
  * checks they agree) and the Character service's validation.
  *
  * The draft names the third method `rolling`; the service and rules data name it `roll`.
@@ -107,6 +107,36 @@ export function availableValues(
     if (i >= 0) left.splice(i, 1)
   }
   return left.sort((a, b) => b - a)
+}
+
+/**
+ * Why an AI-proposed arrangement is not legal, or null when it is: a permutation of the standard
+ * array (or of the rolled `pool` of totals), or a point buy spend within the budget. Pure code
+ * decides legality; the model only ever sees totals.
+ */
+export function arrangementProblem(
+  method: CharacterDraft['abilityMethod'],
+  scores: Scores,
+  pool: readonly number[]
+): string | null {
+  const values = ABILITY_KEYS.map((k) => scores[k] as number)
+  if (values.some((v) => !Number.isInteger(v))) return 'every ability needs a whole-number score'
+  if (method === 'standard-array' || method === 'rolling') {
+    const allowed = method === 'standard-array' ? STANDARD_ARRAY : pool
+    return sorted(values) === sorted(allowed)
+      ? null
+      : `use each of ${allowed.join(', ')} exactly once`
+  }
+  if (method === 'point-buy') {
+    if (values.some((v) => pointCost(v) === undefined)) {
+      return `base scores must be between ${POINT_BUY.min} and ${POINT_BUY.max}`
+    }
+    const spent = pointsSpent(scores)
+    return spent > POINT_BUY.budget
+      ? `${spent} points is over the ${POINT_BUY.budget} budget`
+      : null
+  }
+  return 'no ability score method is chosen'
 }
 
 /** Checks the method, the six base scores and (for rolling) the rolled set. */

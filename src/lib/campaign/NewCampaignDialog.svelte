@@ -1,7 +1,9 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
   import { resolve } from '$app/paths'
-  import type { Snippet } from 'svelte'
+  import AiPanel from '#lib/ai/AiPanel.svelte'
+  import { createAiStatus } from '#lib/ai/ai-status.svelte.ts'
+  import { createFieldAi } from '#lib/ai/field-ai.svelte.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Dialog from '#lib/ui/Dialog.svelte'
@@ -25,40 +27,36 @@
     open?: boolean
     /** Called after the dialog closes. */
     onclose?: () => void
-    /** Slot for the chat pane, on the left; the Seed card is the right-hand column. */
-    chat?: Snippet<[Seed, (field: CampaignSeedField, value: string) => void]>
   }
 
-  let { worlds, initial = {}, error, open = false, onclose, chat }: Props = $props()
+  let { worlds, initial = {}, error, open = false, onclose }: Props = $props()
 
   // svelte-ignore state_referenced_locally
   let seed = $state<Seed>({ ...emptyCampaignSeed(), ...initial })
   // svelte-ignore state_referenced_locally
   let isOpen = $state(open)
-  // Bumped whenever the dialog opens or closes, which discards the chat's transcript.
-  let chatKey = $state(0)
-
-  function accept(field: CampaignSeedField, value: string) {
-    seed[field] = value
-  }
+  const aiStatus = createAiStatus()
+  const fieldAi = createFieldAi<CampaignSeedField>({
+    flow: 'campaign',
+    ai: aiStatus,
+    values: () => ({
+      name: seed.name,
+      premise: seed.premise,
+      tone: seed.tone,
+      length: seed.length
+    }),
+    extra: () => ({ worldIds: seed.worldIds }),
+    set: (field, value) => (seed[field] = value)
+  })
 
   /** Opens the modal with a fresh card, pre-selecting the given Worlds. */
   export function show(worldIds: string[] = []) {
     seed = emptyCampaignSeed(worldIds.filter((id) => worlds.some((w) => w.id === id)))
-    chatKey++
     isOpen = true
   }
 </script>
 
-<Dialog
-  bind:open={isOpen}
-  title="New Campaign"
-  closeHref={resolve('/campaigns')}
-  onclose={() => {
-    chatKey++
-    onclose?.()
-  }}
->
+<Dialog bind:open={isOpen} title="New Campaign" closeHref={resolve('/campaigns')} {onclose}>
   {#if worlds.length === 0}
     <p class="py-6">
       A Campaign is set in a World, and you have no active Worlds. <Link href={resolve('/')}
@@ -66,12 +64,8 @@
       >
     </p>
   {:else}
-    <div class="grid gap-6 {chat ? 'lg:grid-cols-2' : ''}">
-      {#if chat}
-        <div class="space-y-2 lg:max-h-[70vh] lg:overflow-y-auto">
-          {#key chatKey}{@render chat(seed, accept)}{/key}
-        </div>
-      {/if}
+    <div class="space-y-3">
+      <AiPanel ai={aiStatus} />
       <form
         method="POST"
         action="?/createCampaign"
@@ -82,7 +76,7 @@
           }}
         class="space-y-3 lg:max-h-[70vh] lg:overflow-y-auto"
       >
-        <CampaignSeedCard bind:seed {worlds} />
+        <CampaignSeedCard bind:seed {worlds} {fieldAi} />
         {#if error}
           <Alert variant="danger">{error}</Alert>
         {/if}

@@ -1,5 +1,7 @@
 import type { AiStatus } from '#lib/ai/status.ts'
-import { DEFAULT_CONTEXT_LIMIT } from '#lib/world/context.ts'
+
+/** Used when the model's context length is unknown and nothing is configured. */
+export const DEFAULT_CONTEXT_LIMIT = 4096
 
 export const DEFAULT_LM_STUDIO_BASE_URL = 'http://localhost:1234/v1'
 

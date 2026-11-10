@@ -10,9 +10,9 @@ async function createCampaign(page: Page, name: string, worldNames: string[]) {
     await dialog.getByLabel('Add World').selectOption({ label: worldName })
   }
   await dialog.getByLabel('Name', { exact: true }).fill(name)
-  await dialog.getByLabel('Premise').fill('Escort a relic across the ash plains.')
-  await dialog.getByLabel('Tone').selectOption('tense')
-  await dialog.getByLabel('Length').selectOption('short')
+  await dialog.getByLabel('Premise', { exact: true }).fill('Escort a relic across the ash plains.')
+  await dialog.getByLabel('Tone', { exact: true }).selectOption('tense')
+  await dialog.getByLabel('Length', { exact: true }).selectOption('short')
   await dialog.getByRole('button', { name: 'Create Campaign' }).click()
   await expect(dialog).toBeHidden()
 }
@@ -34,7 +34,7 @@ test('edits every field and the World set, and the table reflects it', async ({ 
 
   await openEdit(page, name)
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue(name)
-  await expect(page.getByLabel('Tone')).toHaveValue('tense')
+  await expect(page.getByLabel('Tone', { exact: true })).toHaveValue('tense')
   // The last World cannot be removed.
   await expect(page.getByRole('button', { name: `Remove ${first}` })).toBeDisabled()
 
@@ -42,9 +42,9 @@ test('edits every field and the World set, and the table reflects it', async ({ 
   await page.getByLabel('Add World').selectOption({ label: second })
   await page.getByRole('button', { name: `Remove ${first}` }).click()
   await page.getByLabel('Name', { exact: true }).fill(renamed)
-  await page.getByLabel('Premise').fill('A new hook.')
-  await page.getByLabel('Tone').selectOption('dark')
-  await page.getByLabel('Length').selectOption('long')
+  await page.getByLabel('Premise', { exact: true }).fill('A new hook.')
+  await page.getByLabel('Tone', { exact: true }).selectOption('dark')
+  await page.getByLabel('Length', { exact: true }).selectOption('long')
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByText('Saved')).toBeVisible()
 
@@ -64,7 +64,7 @@ test('a long premise warns but saves; a blank name shows an inline error', async
   await createCampaign(page, name, [worldName])
 
   await openEdit(page, name)
-  await page.getByLabel('Premise').fill('x'.repeat(520))
+  await page.getByLabel('Premise', { exact: true }).fill('x'.repeat(520))
   await expect(page.getByText(/Premise is long/)).toBeVisible()
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByText('Saved')).toBeVisible()
