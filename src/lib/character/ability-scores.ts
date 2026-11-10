@@ -4,8 +4,8 @@ import type { StepContext, StepValidation } from './steps.ts'
 
 /**
  * The Ability Score Methods (#95): app-defined rules the SRD leaves out. Pure and shared by the
- * wizard step and, later, the conversation (#118), which may propose a method and an arrangement
- * but never numbers or rolls. The values mirror `rules/data/abilityScoreMethods.json` (a spec
+ * wizard step and the abilities Field AI control, which may arrange values but never invent numbers
+ * or rolls. The values mirror `rules/data/abilityScoreMethods.json` (a spec
  * checks they agree) and the Character service's validation.
  *
  * The draft names the third method `rolling`; the service and rules data name it `roll`.

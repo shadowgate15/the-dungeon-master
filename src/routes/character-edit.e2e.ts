@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { seedCharacter } from './character-helpers'
 
-// The creation conversation talks to the fake LM Studio the Playwright config starts; these flows
+// The field AI controls talk to the fake LM Studio the Playwright config starts; these flows
 // never send a message, so the AI is stubbed out for the whole file.
 
 const steps = (page: Page) => page.getByRole('navigation', { name: 'Steps' })

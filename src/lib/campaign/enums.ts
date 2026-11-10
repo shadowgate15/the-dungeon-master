@@ -13,5 +13,5 @@ export const LENGTHS = ['one-shot', 'short', 'medium', 'long'] as const
 export type Tone = (typeof TONES)[number]
 export type Length = (typeof LENGTHS)[number]
 
-/** The service rejects a premise longer than this, the ceiling the conversation request accepts. */
+/** The service rejects a premise longer than this, the ceiling the field request accepts. */
 export const PREMISE_SERVICE_MAX = 2000
