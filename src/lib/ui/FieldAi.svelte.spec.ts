@@ -20,6 +20,50 @@ function callbacks() {
 }
 
 describe('FieldAi', () => {
+  describe('group', () => {
+    it('shows the picks as a summary, with the icon pair and no input', async () => {
+      render(FieldAi, {
+        label: 'Skills',
+        kind: 'group',
+        value: 'Athletics, History',
+        ...callbacks()
+      })
+
+      await expect.element(page.getByText('Athletics, History')).toBeVisible()
+      await expect.element(page.getByRole('textbox')).not.toBeInTheDocument()
+      await expect.element(page.getByRole('button', { name: 'Generate Skills' })).toBeVisible()
+      await expect
+        .element(page.getByRole('button', { name: 'Give feedback on Skills' }))
+        .toBeVisible()
+    })
+
+    it('disables Feedback while nothing is picked and Generate with a reason', async () => {
+      render(FieldAi, {
+        label: 'Skills',
+        kind: 'group',
+        value: '',
+        disabledReason: 'Choose a class first',
+        ...callbacks()
+      })
+
+      await expect.element(page.getByText('Nothing picked yet')).toBeVisible()
+      await expect
+        .element(page.getByRole('button', { name: 'Generate Skills' }))
+        .toHaveAttribute('aria-disabled', 'true')
+    })
+
+    it('sends feedback on the current picks', async () => {
+      const cb = callbacks()
+      render(FieldAi, { label: 'Skills', kind: 'group', value: 'Athletics, History', ...cb })
+
+      await page.getByRole('button', { name: 'Give feedback on Skills' }).click()
+      await page.getByLabelText('What should change?').fill('more social')
+      await page.getByRole('button', { name: 'Revise' }).click()
+
+      expect(cb.onFeedback).toHaveBeenCalledWith('more social')
+    })
+  })
+
   describe('idle', () => {
     it.each([
       ['text', 'textbox'],

@@ -3,6 +3,7 @@
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Checkbox from '#lib/ui/Checkbox.svelte'
+  import FieldAi from '#lib/ui/FieldAi.svelte'
   import SpellDisclosure from './SpellDisclosure.svelte'
   import { spellLevelLabel } from './spell-text.ts'
   import { spellPickFlags, spellsView } from './spells.ts'
@@ -88,6 +89,12 @@
         {groupLabel(g)}
         <span class="text-sm text-muted">({new Set(g.picks).size} of {g.choose})</span>
       </legend>
+      <FieldAi
+        {...wizard.aiField(`picks:${g.key}`)}
+        label={wizard.groupLabel(`picks:${g.key}`) || groupLabel(g)}
+        kind="group"
+        value={wizard.groupText(`picks:${g.key}`)}
+      />
       <div class="grid gap-x-4 gap-y-1 sm:grid-cols-2">
         {#each g.options as o (o.slug)}
           {@const mine = g.picks.includes(o.slug)}
@@ -157,6 +164,12 @@
           {level.title}
           <span class="text-sm text-muted">({level.picked.length} of {level.max})</span>
         </legend>
+        <FieldAi
+          {...wizard.aiField(`classSpells:${level.id}`)}
+          label={level.title}
+          kind="group"
+          value={wizard.groupText(`classSpells:${level.id}`)}
+        />
         <div class="grid gap-x-4 gap-y-1 sm:grid-cols-2">
           {#each level.options as o (o.slug)}
             {@const on = level.picked.includes(o.slug)}

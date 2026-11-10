@@ -9,7 +9,12 @@
     label: string
     /** The form field name, so the control submits with its form. */
     name?: string
-    kind: 'text' | 'textarea' | 'enum'
+    /**
+     * `group` is a pick group (skills, equipment, spells) whose picks are made elsewhere: no input,
+     * `value` is a read-only summary of the picks and the label is visually hidden (the group's
+     * own legend names it).
+     */
+    kind: 'text' | 'textarea' | 'enum' | 'group'
     /** The field's value. Bound so typing edits it; the parent writes AI results into it. */
     value?: string
     /** Legal choices for an `enum` field (Rules Data slugs or fixed lists). */
@@ -128,9 +133,19 @@
   so the field's own label is the one accessible name for the control. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="space-y-1" bind:this={root} {onkeydown}>
-  <label for="{uid}-control" class="block text-sm font-medium text-text">{label}</label>
+  {#if kind !== 'group'}
+    <label for="{uid}-control" class="block text-sm font-medium text-text">{label}</label>
+  {/if}
   <div class="relative">
-    {#if kind === 'text'}
+    {#if kind === 'group'}
+      <p
+        id="{uid}-control"
+        aria-busy={loading}
+        class="min-h-9 rounded-control border border-control-border bg-surface px-3 py-2 pr-16 text-sm break-words"
+      >
+        {value || 'Nothing picked yet'}
+      </p>
+    {:else if kind === 'text'}
       <TextInput
         id="{uid}-control"
         {name}
@@ -170,7 +185,7 @@
       class={[
         'absolute flex gap-0.5',
         kind === 'textarea' ? 'top-1.5 right-1.5' : 'top-1/2 -translate-y-1/2',
-        kind === 'enum' ? 'right-9' : kind === 'text' ? 'right-1.5' : ''
+        kind === 'enum' ? 'right-9' : kind === 'text' || kind === 'group' ? 'right-1.5' : ''
       ]}
     >
       {#if loading}

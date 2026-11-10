@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FieldAi from '#lib/ui/FieldAi.svelte'
   import Select from '#lib/ui/Select.svelte'
   import { categoryItems, emptyPick, equipmentGroups, fixedEquipment } from './equipment.ts'
   import type { CharacterWizard } from './wizard.svelte.ts'
@@ -24,6 +25,13 @@
       <legend class="font-medium text-text">
         {group.ownerName}: {group.label}
       </legend>
+
+      <FieldAi
+        {...wizard.aiField(`equipment:${group.key}`)}
+        label={wizard.groupLabel(`equipment:${group.key}`) || group.label}
+        kind="group"
+        value={wizard.groupText(`equipment:${group.key}`)}
+      />
 
       {#each group.options as option (option.index)}
         <div class="space-y-2">

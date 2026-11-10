@@ -11,7 +11,7 @@ import { ownedEquipment } from './equipment.ts'
 import type { CharacterInput } from '#lib/server/character/service.ts'
 import { tryDraftToCharacterInput } from './save.ts'
 import { inertFieldAi } from '#lib/ai/field-ai.svelte.ts'
-import type { CharacterAiField } from './ai-fields.ts'
+import { currentGroupValue, describeGroupValue, groupDefinition } from './ai-groups.ts'
 import type { CharacterFieldAi } from './field-ai.svelte.ts'
 import { computeSteps, STEPS, type StepDefinition, type StepId, type StepState } from './steps.ts'
 
@@ -95,8 +95,24 @@ export class CharacterWizard {
   }
 
   /** The props for one field's `FieldAi`; inert and disabled when no controller is attached. */
-  aiField(field: CharacterAiField) {
+  aiField(field: string) {
     return this.ai?.field(field) ?? inertFieldAi('AI is not available here')
+  }
+
+  /** A pick group's current value as names ("Athletics, History"); empty when unset or missing. */
+  groupText(field: string): string {
+    const def = groupDefinition(this.rules, this.draft, field)
+    return def ? describeGroupValue(def, currentGroupValue(def)) : ''
+  }
+
+  /** A pick group's accessible label, e.g. "Skills (Fighter)". */
+  groupLabel(field: string): string {
+    return groupDefinition(this.rules, this.draft, field)?.label ?? ''
+  }
+
+  /** A plain field's current value as text; empty when unset. */
+  fieldText(field: string): string {
+    return ((this.draft as unknown as Record<string, string | null>)[field] as string | null) ?? ''
   }
 
   /** Everything an AI write may change (the draft and the notices it adds), for Field Undo. */

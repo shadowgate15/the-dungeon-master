@@ -24,6 +24,7 @@ const blank = {
   race: '',
   subrace: '',
   class: '',
+  subclass: '',
   background: '',
   alignment: '',
   appearance: '',
@@ -157,8 +158,8 @@ describe('character field requests', () => {
 
     const result = await runFieldRequest(port, db, request('flaw'))
 
-    expect(result.ok && result.value.length).toBeLessThanOrEqual(500)
-    expect(result.ok && result.value.endsWith('.')).toBe(true)
+    expect(result.ok && (result.value as string).length).toBeLessThanOrEqual(500)
+    expect(result.ok && (result.value as string).endsWith('.')).toBe(true)
   })
 
   it('rejects a request for an unknown character field', () => {

@@ -134,6 +134,12 @@
                 ({new Set(g.picks).size} of {g.choose})
               </span>
             </legend>
+            <FieldAi
+              {...wizard.aiField(`picks:${g.key}`)}
+              label={wizard.groupLabel(`picks:${g.key}`) || groupLabel(g)}
+              kind="group"
+              value={wizard.groupText(`picks:${g.key}`)}
+            />
             <div class="grid gap-x-4 gap-y-1 sm:grid-cols-2">
               {#each g.options as o (o.slug)}
                 {@const why = blocked(g, o.slug)}

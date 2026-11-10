@@ -4,6 +4,15 @@ import {
   CHARACTER_TEXT_LIMITS,
   type CharacterAiField
 } from '#lib/character/ai-fields.ts'
+import {
+  describeGroupValue,
+  groupBlockedReason,
+  groupDefinition,
+  isGroupField,
+  type EquipmentGroupDefinition
+} from '#lib/character/ai-groups.ts'
+import { emptyDraft } from '#lib/character/draft.ts'
+import { resolveFeatures } from '#lib/rules/resolver.ts'
 import { LENGTHS, TONES } from '#lib/campaign/enums.ts'
 import { CAMPAIGN_FIELD_LABELS, CAMPAIGN_SEED_FIELDS } from '#lib/campaign/seed.ts'
 import {
@@ -49,7 +58,28 @@ export interface EnumFieldSpec extends BaseSpec {
   display?: (value: string) => string
 }
 
-export type FieldSpec = TextFieldSpec | EnumFieldSpec
+/**
+ * Pick groups (#148) are built per request, not listed here: `characterGroupSpec` turns a group
+ * field name and the request's draft into one of these. Code holds the count and the legal
+ * options; the model only chooses among them.
+ */
+
+/** `{ values }`: exactly `count` unique slugs from `options`. */
+export interface PicksFieldSpec extends BaseSpec {
+  kind: 'picks'
+  count: number
+  options: { slug: string; name: string }[]
+  /** The picks now in the form, to reject an unchanged answer and to show when revising. */
+  current: string[]
+}
+
+/** `{ option, wild }`: a legal option and one legal item per wildcard slot of that option. */
+export interface EquipmentFieldSpec extends BaseSpec {
+  kind: 'equipment'
+  group: EquipmentGroupDefinition
+}
+
+export type FieldSpec = TextFieldSpec | EnumFieldSpec | PicksFieldSpec | EquipmentFieldSpec
 
 /** `flow -> field -> spec`. Key order is the order of the "other fields" context block. */
 export type FieldRegistry = Record<string, Record<string, FieldSpec>>
@@ -159,6 +189,15 @@ const characterSlug = (
   display
 })
 
+/** The structural slugs of the request's values, as a draft (empty means unset). */
+const slugDraft = (v: Record<string, string>) => ({
+  race: v.race || null,
+  subrace: v.subrace || null,
+  class: v.class || null,
+  subclass: v.subclass || null,
+  background: v.background || null
+})
+
 const isCustom = (values: Record<string, string>) => values.background === 'custom'
 
 const CHARACTER: Record<CharacterAiField, FieldSpec> = {
@@ -186,6 +225,23 @@ const CHARACTER: Record<CharacterAiField, FieldSpec> = {
     'Choose the class that best fits the character.',
     () => rules().classes.map((c) => c.slug),
     (slug) => nameIn(rules().classes)(slug)
+  ),
+  subclass: characterSlug(
+    'subclass',
+    'Choose the subclass that best fits the character. It must belong to the chosen class.',
+    (v) => {
+      const draft = { ...emptyDraft(), ...slugDraft(v) }
+      const group = resolveFeatures(rules(), {
+        race: draft.race,
+        subrace: draft.subrace,
+        class: draft.class,
+        subclass: null,
+        background: draft.background,
+        picks: {}
+      }).groups.find((g) => g.kind === 'subclass')
+      return group ? group.options.map((o) => o.slug) : []
+    },
+    (slug) => nameIn(rules().subclasses)(slug)
   ),
   background: characterSlug(
     'background',
@@ -240,3 +296,66 @@ export const FIELD_REGISTRY: FieldRegistry = {
   campaign: Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, CAMPAIGN[f]])),
   character: Object.fromEntries(CHARACTER_AI_FIELDS.map((f) => [f, CHARACTER[f]]))
 }
+
+const listNames = (options: { slug: string; name: string }[]) =>
+  options.map((o) => (o.name === o.slug ? o.slug : `${o.slug} (${o.name})`)).join(', ')
+
+/** The spec of a Character pick group for this request, or undefined when the draft has no such group. */
+export function characterGroupSpec(
+  field: string,
+  values: Record<string, string>,
+  choices: {
+    picks: Record<string, string[]>
+    equipment: Record<string, { option: number; wild: (string | null)[] }>
+    classSpells: string[]
+  }
+): PicksFieldSpec | EquipmentFieldSpec | undefined {
+  if (!isGroupField(field)) return undefined
+  const draft = { ...emptyDraft(), ...slugDraft(values), ...choices }
+  const def = groupDefinition(rules(), draft, field)
+  if (!def) return undefined
+  if (groupBlockedReason(def, draft)) return undefined
+  if (def.kind === 'picks') {
+    return {
+      kind: 'picks',
+      label: def.label,
+      instruction: `Choose exactly ${def.count} different ${def.label.toLowerCase()} that best fit the character. Allowed values (slug, name): ${listNames(def.options)}.`,
+      count: def.count,
+      options: def.options,
+      current: def.current
+    }
+  }
+  const legal = def.options.filter((o) => !o.disabled)
+  const lines = legal.map((o) => {
+    const slots = o.slots.length
+      ? ` (wild: ${o.slots.length} item${o.slots.length === 1 ? '' : 's'}, one from each of: ${o.slots.join(', ')})`
+      : ' (wild: none, use an empty list)'
+    return `  ${o.index}: ${o.label}${slots}`
+  })
+  const items = Object.entries(def.items).map(
+    ([category, list]) => `  ${category}: ${list.map((i) => i.slug).join(', ')}`
+  )
+  return {
+    kind: 'equipment',
+    label: def.label,
+    instruction: `Choose the starting equipment option that best fits the character. "option" is the option number; "wild" lists one item slug for each wildcard slot of that option, in order, and is empty when the option has none.\nOptions:\n${lines.join('\n')}${items.length ? `\nAllowed items per wildcard category:\n${items.join('\n')}` : ''}`,
+    group: def
+  }
+}
+
+/** The current value of a group spec as text, for the revise prompt. */
+export const describeCurrent = (spec: PicksFieldSpec | EquipmentFieldSpec): string =>
+  spec.kind === 'picks'
+    ? describeGroupValue(
+        {
+          kind: 'picks',
+          field: '',
+          label: '',
+          count: spec.count,
+          options: spec.options,
+          current: spec.current,
+          needsClass: false
+        },
+        spec.current
+      )
+    : describeGroupValue(spec.group, spec.group.current)

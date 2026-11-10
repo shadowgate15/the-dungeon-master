@@ -1,7 +1,5 @@
 <script lang="ts">
   import FieldAi from '#lib/ui/FieldAi.svelte'
-  import Field from '#lib/ui/Field.svelte'
-  import Select from '#lib/ui/Select.svelte'
   import { LIMITS } from './draft.ts'
   import type { CharacterWizard } from './wizard.svelte.ts'
 
@@ -21,8 +19,6 @@
     { key: 'flaw', label: 'Flaw', rows: 2 },
     { key: 'backstory', label: 'Backstory', rows: 5 }
   ] as const
-
-  const orNull = (e: Event) => (e.currentTarget as HTMLSelectElement).value || null
 
   const choose = { value: '', label: 'Choose…' }
   const opts = (list: readonly { slug: string; name: string }[], first = choose) => [
@@ -75,24 +71,16 @@
     />
 
     {#if subclassGroup}
-      <Field
+      <FieldAi
+        {...wizard.aiField('subclass')}
         label="Subclass"
-        hint={single ? 'The SRD offers only one, so it is selected for you.' : undefined}
-      >
-        {#snippet children(id, describedby)}
-          <Select
-            {id}
-            aria-describedby={describedby}
-            value={draft.subclass ?? ''}
-            onchange={(e) => wizard.update({ subclass: orNull(e) })}
-          >
-            <option value="">Choose…</option>
-            {#each subclassGroup.options as option (option.slug)}
-              <option value={option.slug}>{option.name}</option>
-            {/each}
-          </Select>
-        {/snippet}
-      </Field>
+        kind="enum"
+        options={opts(subclassGroup.options)}
+        bind:value={() => draft.subclass ?? '', (v) => wizard.update({ subclass: v || null })}
+      />
+      {#if single}
+        <p class="text-sm text-muted">The SRD offers only one, so it is selected for you.</p>
+      {/if}
     {/if}
 
     <FieldAi

@@ -1,6 +1,18 @@
 import { z } from 'zod'
 import { callModel, type ChatPort, type ChatRequest } from './port.ts'
-import { FIELD_REGISTRY, type FieldRegistry, type FieldSpec } from './field-registry.ts'
+import type { EquipmentValue } from '#lib/character/ai-groups.ts'
+import {
+  characterGroupSpec,
+  describeCurrent,
+  FIELD_REGISTRY,
+  type EquipmentFieldSpec,
+  type FieldRegistry,
+  type FieldSpec,
+  type PicksFieldSpec,
+  type TextFieldSpec,
+  type EnumFieldSpec
+} from './field-registry.ts'
+import { isGroupField } from '#lib/character/ai-groups.ts'
 import type { FieldRequest } from './field-request.ts'
 
 export { fieldRequestSchema, type FieldRequest } from './field-request.ts'
@@ -31,7 +43,10 @@ export interface FieldFailure {
   message: string
 }
 
-export type FieldResult = { ok: true; value: string } | { ok: false; failure: FieldFailure }
+/** What a call writes: text or a slug for most fields, a list of slugs or an equipment option for pick groups. */
+export type FieldValue = string | string[] | EquipmentValue
+
+export type FieldResult = { ok: true; value: FieldValue } | { ok: false; failure: FieldFailure }
 
 export interface RunFieldOptions {
   /** Cancels the call (the player pressed Stop). */
@@ -68,6 +83,37 @@ function otherFields(
   return `Other fields (the player may have edited them):\n${lines.join('\n')}`
 }
 
+/** The one-key (or, for equipment, two-key) output schema of a field. */
+function outputSchema(spec: FieldSpec, options: readonly string[]): z.ZodObject {
+  if (spec.kind === 'picks') {
+    const slugs = spec.options.map((o) => o.slug) as [string, ...string[]]
+    return z.object({
+      values: z.array(z.enum(slugs)).min(spec.count).max(spec.count).meta({ uniqueItems: true })
+    })
+  }
+  if (spec.kind === 'equipment') {
+    const legal = spec.group.options.filter((o) => !o.disabled)
+    const items = [
+      ...new Set(Object.values(spec.group.items).flatMap((list) => list.map((i) => i.slug)))
+    ]
+    const slots = Math.max(0, ...legal.map((o) => o.slots.length))
+    return z.object({
+      option: z
+        .number()
+        .int()
+        .min(0)
+        .max(spec.group.options.length - 1),
+      wild: (items.length
+        ? z.array(z.enum(items as [string, ...string[]]))
+        : z.array(z.string())
+      ).max(slots)
+    })
+  }
+  return z.object({
+    value: spec.kind === 'enum' ? z.enum(options as [string, ...string[]]) : z.string()
+  })
+}
+
 function buildRequest(
   spec: FieldSpec,
   flowSpecs: Record<string, FieldSpec>,
@@ -85,7 +131,11 @@ function buildRequest(
   ]
   if (request.mode === 'feedback') {
     const current =
-      spec.kind === 'enum' && spec.display ? spec.display(request.current ?? '') : request.current
+      spec.kind === 'picks' || spec.kind === 'equipment'
+        ? describeCurrent(spec)
+        : spec.kind === 'enum' && spec.display
+          ? spec.display(request.current ?? '')
+          : request.current
     system.push(
       `Current value of ${spec.label}: ${current}\nThe player's note: ${request.note}\nRewrite it to follow the note; do not return the same text.`
     )
@@ -103,9 +153,7 @@ function buildRequest(
     maxTokens: MAX_TOKENS,
     threadId: crypto.randomUUID(),
     // One key, and no `maxLength`: length is steered by the prompt and trimmed in code.
-    outputSchema: z.object({
-      value: spec.kind === 'enum' ? z.enum(options as [string, ...string[]]) : z.string()
-    }),
+    outputSchema: outputSchema(spec, options),
     signal
   }
 }
@@ -134,9 +182,88 @@ function trimToSentence(text: string, max: number): string | null {
   return end > 0 ? text.slice(0, end).trim() : null
 }
 
-type Checked = { ok: true; value: string } | { ok: false; problem: string }
+type Checked = { ok: true; value: FieldValue } | { ok: false; problem: string }
+
+/** A comparable form of a value, to tell whether a result is the same as what is in the form. */
+const canon = (value: FieldValue | null | undefined): string =>
+  value === null || value === undefined
+    ? ''
+    : typeof value === 'string'
+      ? value.trim()
+      : Array.isArray(value)
+        ? [...value].sort().join(',')
+        : `${value.option}:${value.wild.join(',')}`
+
+function checkPicks(spec: PicksFieldSpec, raw: unknown): Checked {
+  const parsed = z.object({ values: z.array(z.string()) }).safeParse(raw)
+  if (!parsed.success) return { ok: false, problem: 'the answer was not the requested JSON object' }
+  const values = parsed.data.values.map((v) => stripWrappers(v))
+  const legal = new Set(spec.options.map((o) => o.slug))
+  const illegal = values.filter((v) => !legal.has(v))
+  if (illegal.length) {
+    return {
+      ok: false,
+      problem: `${illegal.map((v) => `"${v}"`).join(', ')} not allowed; choose only from: ${[...legal].join(', ')}`
+    }
+  }
+  if (new Set(values).size !== values.length) {
+    return { ok: false, problem: 'a value was picked more than once; every pick must differ' }
+  }
+  if (values.length !== spec.count) {
+    return { ok: false, problem: `${values.length} picks were given; choose exactly ${spec.count}` }
+  }
+  return { ok: true, value: values }
+}
+
+function checkEquipment(spec: EquipmentFieldSpec, raw: unknown): Checked {
+  const parsed = z.object({ option: z.number().int(), wild: z.array(z.string()) }).safeParse(raw)
+  if (!parsed.success) return { ok: false, problem: 'the answer was not the requested JSON object' }
+  const { option, wild } = parsed.data
+  const chosen = spec.group.options[option]
+  if (!chosen || chosen.disabled) {
+    const legal = spec.group.options.filter((o) => !o.disabled).map((o) => o.index)
+    return {
+      ok: false,
+      problem: `option ${option} is not allowed; choose one of: ${legal.join(', ')}`
+    }
+  }
+  if (wild.length !== chosen.slots.length) {
+    return {
+      ok: false,
+      problem: `option ${option} needs exactly ${chosen.slots.length} wild item(s), but ${wild.length} were given`
+    }
+  }
+  for (let i = 0; i < wild.length; i++) {
+    const item = stripWrappers(wild[i])
+    if (!spec.group.items[chosen.slots[i]]?.some((x) => x.slug === item)) {
+      return {
+        ok: false,
+        problem: `"${item}" is not a legal ${chosen.slots[i]} item for wild slot ${i + 1}`
+      }
+    }
+    wild[i] = item
+  }
+  return { ok: true, value: { option, wild } }
+}
 
 function check(spec: FieldSpec, raw: unknown, options: readonly string[], same: string): Checked {
+  const checked =
+    spec.kind === 'picks'
+      ? checkPicks(spec, raw)
+      : spec.kind === 'equipment'
+        ? checkEquipment(spec, raw)
+        : checkValue(spec, raw, options)
+  if (checked.ok && same && canon(checked.value) === same) {
+    return { ok: false, problem: 'it was identical to the current value; write a different one' }
+  }
+  return checked
+}
+
+function checkValue(
+  spec: TextFieldSpec | EnumFieldSpec,
+  raw: unknown,
+  options: readonly string[]
+): Checked {
   const parsed = z.object({ value: z.string() }).safeParse(raw)
   if (!parsed.success) return { ok: false, problem: 'the answer was not the requested JSON object' }
   let value = stripWrappers(parsed.data.value)
@@ -158,9 +285,6 @@ function check(spec: FieldSpec, raw: unknown, options: readonly string[], same: 
     }
     value = trimmed
   }
-  if (same && value === same.trim()) {
-    return { ok: false, problem: 'it was identical to the current value; write a different one' }
-  }
   return { ok: true, value }
 }
 
@@ -170,14 +294,28 @@ export async function runField(
   options: RunFieldOptions = {}
 ): Promise<FieldResult> {
   const flowSpecs = (options.registry ?? FIELD_REGISTRY)[request.flow]
-  const spec = flowSpecs?.[request.field]
-  if (!spec) return fail('context-invalid', `Unknown field ${request.flow}.${request.field}`)
-
   const values: Record<string, string> = request.values
+  const group =
+    request.flow === 'character' && flowSpecs?.[request.field] === undefined
+      ? characterGroupSpec(request.field, values, request.choices)
+      : undefined
+  const spec = flowSpecs?.[request.field] ?? group
+  if (!spec) {
+    // A pick group the draft does not have (or has no legal options for) is `no-options`.
+    return request.flow === 'character' && isGroupField(request.field)
+      ? fail('no-options', 'There is nothing to choose from for this yet')
+      : fail('context-invalid', `Unknown field ${request.flow}.${request.field}`)
+  }
+
+  const currentGroup =
+    spec.kind === 'picks'
+      ? canon(spec.current)
+      : spec.kind === 'equipment'
+        ? canon(spec.group.current)
+        : ''
   if (request.mode === 'feedback') {
-    if (!request.current?.trim()) {
-      return fail('context-invalid', 'There is nothing to give feedback on yet')
-    }
+    const hasCurrent = group ? !!currentGroup : !!request.current?.trim()
+    if (!hasCurrent) return fail('context-invalid', 'There is nothing to give feedback on yet')
     if (!request.note?.trim()) return fail('context-invalid', 'The feedback note is empty')
   }
   const legal = spec.kind === 'enum' ? spec.options(values) : []
@@ -185,7 +323,11 @@ export async function runField(
     return fail('no-options', `There are no options for ${spec.label} yet`)
   }
   // The value a result must differ from: the feedback's current value, else what is in the form.
-  const same = request.mode === 'feedback' ? (request.current ?? '') : (values[request.field] ?? '')
+  const same = group
+    ? currentGroup
+    : request.mode === 'feedback'
+      ? (request.current ?? '').trim()
+      : (values[request.field] ?? '').trim()
 
   const controller = new AbortController()
   let outcome: FieldResult | undefined

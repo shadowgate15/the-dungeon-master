@@ -11,6 +11,7 @@ export const CHARACTER_AI_FIELDS = [
   'race',
   'subrace',
   'class',
+  'subclass',
   'background',
   'alignment',
   'appearance',
@@ -33,6 +34,7 @@ export const CHARACTER_AI_LABELS: Record<CharacterAiField, string> = {
   race: 'Race',
   subrace: 'Subrace',
   class: 'Class',
+  subclass: 'Subclass',
   background: 'Background',
   alignment: 'Alignment',
   appearance: 'Appearance',
@@ -50,6 +52,7 @@ export const CHARACTER_SLUG_FIELDS = [
   'race',
   'subrace',
   'class',
+  'subclass',
   'background',
   'alignment'
 ] as const

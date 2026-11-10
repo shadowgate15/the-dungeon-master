@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { CAMPAIGN_SEED_FIELDS } from '#lib/campaign/seed.ts'
 import { CHARACTER_AI_FIELDS } from '#lib/character/ai-fields.ts'
+import { CLASS_SPELL_FIELDS, EQUIPMENT_PREFIX, PICKS_PREFIX } from '#lib/character/ai-groups.ts'
 import { SEED_FIELDS } from '#lib/world/seed.ts'
 
 /**
@@ -56,9 +57,44 @@ const campaign = z.object({
  * slugs for race, subrace, class, background and alignment, text for the rest. The server
  * resolves slugs to names for the prompt. Empty means unset.
  */
+const GROUP_KEY_MAX = 200
+const GROUP_ITEMS_MAX = 100
+const slugList = z.array(z.string().max(GROUP_KEY_MAX)).max(GROUP_ITEMS_MAX)
+
+/**
+ * A pick group's field name carries its key (`picks:<key>`, `equipment:<key>`, or a class spell
+ * list); the group's own choices travel in `choices` so the server can build its legal options.
+ */
+const groupField = z
+  .string()
+  .max(GROUP_KEY_MAX)
+  .refine(
+    (f) =>
+      (f.startsWith(PICKS_PREFIX) && f.length > PICKS_PREFIX.length) ||
+      (f.startsWith(EQUIPMENT_PREFIX) && f.length > EQUIPMENT_PREFIX.length) ||
+      (CLASS_SPELL_FIELDS as readonly string[]).includes(f),
+    'Unknown group field'
+  )
+
+/** The draft's pick groups: feature picks, equipment picks and class spells. */
+const choices = z
+  .object({
+    picks: z.record(z.string().max(GROUP_KEY_MAX), slugList),
+    equipment: z.record(
+      z.string().max(GROUP_KEY_MAX),
+      z.object({
+        option: z.number().int().min(0).max(GROUP_ITEMS_MAX),
+        wild: z.array(z.string().max(GROUP_KEY_MAX).nullable()).max(GROUP_ITEMS_MAX)
+      })
+    ),
+    classSpells: slugList
+  })
+  .default({ picks: {}, equipment: {}, classSpells: [] })
+
 const character = z.object({
   flow: z.literal('character'),
-  field: z.enum(CHARACTER_AI_FIELDS),
+  field: z.union([z.enum(CHARACTER_AI_FIELDS), groupField]),
+  choices,
   values: z.object(
     Object.fromEntries(CHARACTER_AI_FIELDS.map((f) => [f, z.string().max(VALUE_MAX)])) as Record<
       (typeof CHARACTER_AI_FIELDS)[number],

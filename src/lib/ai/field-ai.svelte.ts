@@ -24,21 +24,27 @@ class FieldState {
   error = $state('')
   retryable = $state(true)
   /** The value an AI write replaced and the value it wrote; Undo expires when they diverge. */
-  undo = $state<{ previous: string; written: string; snapshot?: unknown; version?: unknown }>()
+  undo = $state<{ previous: unknown; written: unknown; snapshot?: unknown; version?: unknown }>()
   controller?: AbortController
   last?: Call
 }
 
-export interface FieldAiOptions<F extends string> {
+/** `V` is what a write carries: a string, or for pick groups a list of slugs or an equipment option. */
+export interface FieldAiOptions<F extends string, V = string> {
   /** The flow in the request body, e.g. 'world'. */
   flow: string
   ai: AiStatusStore
   /** The form's live values (all fields, empty string for unset): the request's context. */
   values: () => Record<F, string>
+  /**
+   * The field's current value as text, when it is not a plain entry of `values` (a pick group,
+   * shown as names). Sent as `current` on feedback.
+   */
+  current?: (field: F) => string
   /** Extra request-body keys the flow needs beyond the field values (e.g. the Campaign's World ids). */
   extra?: () => Record<string, unknown>
   /** Writes a value into the form (AI result or Undo). */
-  set: (field: F, value: string) => void
+  set: (field: F, value: V) => void
   /**
    * For flows where one write can change other fields (the Character's reconcile-and-flag
    * path): `snapshot` captures everything an AI write may touch just before it, `restore` puts
@@ -64,7 +70,7 @@ const MESSAGES: Record<string, string> = {
 /** Failures Retry cannot fix. */
 const NOT_RETRYABLE = new Set(['no-options', 'context-invalid'])
 
-export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
+export function createFieldAi<F extends string, V = string>(options: FieldAiOptions<F, V>) {
   // The map is plain (entries are created while rendering); each entry is its own reactive object.
   const states: Partial<Record<F, FieldState>> = {}
 
@@ -88,7 +94,7 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
     s.last = call
     s.status = 'loading'
     s.error = ''
-    const current = options.values()[field]
+    const current = options.current?.(field) ?? options.values()[field]
     // A superseded, stopped or abandoned call must not touch the field.
     const stale = () => s.controller !== controller
 
@@ -107,7 +113,7 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
         })
       })
       const result = (await response.json().catch(() => null)) as
-        | { ok: true; value: string }
+        | { ok: true; value: V }
         | { ok: false; failure: Failure; status?: AiStatus }
         | { error: string }
         | null
@@ -199,7 +205,7 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
         onUndo: () => {
           if (!s.undo) return
           if (s.undo.snapshot !== undefined) options.restore?.(s.undo.snapshot)
-          else options.set(field, s.undo.previous)
+          else options.set(field, s.undo.previous as V)
           s.undo = undefined
         }
       }
@@ -207,7 +213,7 @@ export function createFieldAi<F extends string>(options: FieldAiOptions<F>) {
   }
 }
 
-export type FieldAi<F extends string> = ReturnType<typeof createFieldAi<F>>
+export type FieldAi<F extends string, V = string> = ReturnType<typeof createFieldAi<F, V>>
 
 /** Props for a control with no AI behind it (a form rendered without a controller): disabled. */
 export function inertFieldAi(reason: string) {
