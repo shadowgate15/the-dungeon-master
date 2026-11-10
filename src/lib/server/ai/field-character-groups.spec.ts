@@ -34,6 +34,8 @@ const blank = {
   ideal: '',
   bond: '',
   flaw: '',
+  abilityMethod: '',
+  abilityScores: '',
   backstory: '',
   customBackgroundName: '',
   customBackgroundFeature: ''

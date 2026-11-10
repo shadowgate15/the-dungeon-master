@@ -7,6 +7,7 @@ import {
   type CharacterDraft,
   type WizardRules
 } from './draft.ts'
+import { rollAbilityScores } from './ability-scores.ts'
 import { ownedEquipment } from './equipment.ts'
 import type { CharacterInput } from '#lib/server/character/service.ts'
 import { tryDraftToCharacterInput } from './save.ts'
@@ -92,6 +93,14 @@ export class CharacterWizard {
     this.notices.push(...notices)
     this.dirty = true
     this.revision++
+  }
+
+  /** Rolls a new ability set in code; a reroll replaces the whole set, so assignments reset. */
+  rollAbilities() {
+    this.update({
+      abilityRolls: rollAbilityScores(),
+      baseScores: { str: null, dex: null, con: null, int: null, wis: null, cha: null }
+    })
   }
 
   /** The props for one field's `FieldAi`; inert and disabled when no controller is attached. */

@@ -13,6 +13,7 @@ import {
 } from '#lib/character/ai-groups.ts'
 import { emptyDraft } from '#lib/character/draft.ts'
 import { resolveFeatures } from '#lib/rules/resolver.ts'
+import { ABILITY_LABELS, type DraftAbilityMethod } from '#lib/character/ability-scores.ts'
 import { LENGTHS, TONES } from '#lib/campaign/enums.ts'
 import { CAMPAIGN_FIELD_LABELS, CAMPAIGN_SEED_FIELDS } from '#lib/campaign/seed.ts'
 import {
@@ -79,7 +80,16 @@ export interface EquipmentFieldSpec extends BaseSpec {
   group: EquipmentGroupDefinition
 }
 
-export type FieldSpec = TextFieldSpec | EnumFieldSpec | PicksFieldSpec | EquipmentFieldSpec
+/**
+ * An ability arrangement: `{ scores }` of six base scores, validated in code against the chosen
+ * method (`arrangementProblem`). Its value is the scores as JSON in ability order.
+ */
+export interface AbilitiesFieldSpec extends BaseSpec {
+  kind: 'abilities'
+}
+
+export type FieldSpec =
+  TextFieldSpec | EnumFieldSpec | PicksFieldSpec | EquipmentFieldSpec | AbilitiesFieldSpec
 
 /** `flow -> field -> spec`. Key order is the order of the "other fields" context block. */
 export type FieldRegistry = Record<string, Record<string, FieldSpec>>
@@ -197,6 +207,12 @@ const slugDraft = (v: Record<string, string>) => ({
   subclass: v.subclass || null,
   background: v.background || null
 })
+const METHOD_NAMES: Record<DraftAbilityMethod, string> = {
+  'standard-array': 'Standard array',
+  'point-buy': 'Point buy',
+  rolling: 'Rolling'
+}
+const METHODS = Object.keys(METHOD_NAMES) as DraftAbilityMethod[]
 
 const isCustom = (values: Record<string, string>) => values.background === 'custom'
 
@@ -288,7 +304,19 @@ const CHARACTER: Record<CharacterAiField, FieldSpec> = {
     'customBackgroundFeature',
     "Write the feature of the character's custom background, given its name: exactly 2 sentences, about 250 characters, describing a social or practical advantage it gives. It has no game mechanics.",
     isCustom
-  )
+  ),
+  abilityMethod: characterSlug(
+    'abilityMethod',
+    'Choose how the character sets their ability scores: standard-array (assign 15, 14, 13, 12, 10, 8), point-buy (spend 27 points on scores from 8 to 15) or rolling (assign six rolled totals). Choose the method only; scores are set separately.',
+    () => METHODS,
+    (method) => METHOD_NAMES[method as DraftAbilityMethod] ?? method
+  ),
+  abilityScores: {
+    kind: 'abilities',
+    label: CHARACTER_AI_LABELS.abilityScores,
+    instruction: `Assign the base scores to the six abilities (${Object.values(ABILITY_LABELS).join(', ')}) so they suit the character, putting the highest scores on the abilities its class relies on. Racial bonuses are added later; do not include them.`,
+    relevant: (v) => !!v.abilityMethod
+  }
 }
 
 export const FIELD_REGISTRY: FieldRegistry = {

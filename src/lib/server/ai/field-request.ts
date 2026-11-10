@@ -101,6 +101,8 @@ const character = z.object({
       z.ZodString
     >
   ),
+  /** Ability arrangement only: the rolled set's totals (the model never sees dice). */
+  rolledTotals: z.array(z.number().int().min(3).max(18)).max(6).optional(),
   ...common
 })
 

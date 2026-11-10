@@ -54,7 +54,9 @@ async function createFighter(page: Page, name: string) {
   await steps(page)
     .getByRole('button', { name: /Ability scores/ })
     .click()
-  await page.getByRole('radio', { name: /Standard array/ }).check()
+  await page
+    .getByRole('combobox', { name: 'Ability score method', exact: true })
+    .selectOption('standard-array')
   const scores = {
     Strength: '15',
     Dexterity: '14',

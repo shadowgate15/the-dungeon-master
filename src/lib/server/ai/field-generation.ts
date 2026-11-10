@@ -1,4 +1,12 @@
 import { z } from 'zod'
+import {
+  ABILITY_KEYS,
+  ABILITY_LABELS,
+  POINT_BUY,
+  STANDARD_ARRAY,
+  arrangementProblem,
+  type DraftAbilityMethod
+} from '#lib/character/ability-scores.ts'
 import { callModel, type ChatPort, type ChatRequest } from './port.ts'
 import type { EquipmentValue } from '#lib/character/ai-groups.ts'
 import {
@@ -77,10 +85,64 @@ function otherFields(
     .map(([key, spec]) => {
       const value = values[key]?.trim()
       const legal = spec.kind === 'enum' ? spec.options(values).includes(value ?? '') : true
-      const shown = value && spec.kind === 'enum' && spec.display ? spec.display(value) : value
+      const shown =
+        value && spec.kind === 'enum' && spec.display
+          ? spec.display(value)
+          : value && spec.kind === 'abilities'
+            ? showScores(value)
+            : value
       return `- ${spec.label}: ${value && legal ? shown : '(unset)'}`
     })
   return `Other fields (the player may have edited them):\n${lines.join('\n')}`
+}
+
+const ABILITY_SCORES = z.object(
+  Object.fromEntries(ABILITY_KEYS.map((k) => [k, z.number().int()])) as Record<
+    (typeof ABILITY_KEYS)[number],
+    z.ZodNumber
+  >
+)
+
+/** Parses an ability-scores value (JSON); null when it is not six whole numbers. */
+function parseScores(text: string | undefined) {
+  if (!text) return null
+  try {
+    const parsed = ABILITY_SCORES.safeParse(JSON.parse(text))
+    return parsed.success ? parsed.data : null
+  } catch {
+    return null
+  }
+}
+
+/** The scores as they read in the prompt: `Strength 15, Dexterity 14, ...` (totals only). */
+const showScores = (text: string) => {
+  const scores = parseScores(text)
+  return scores ? ABILITY_KEYS.map((k) => `${ABILITY_LABELS[k]} ${scores[k]}`).join(', ') : text
+}
+
+/** The canonical JSON of scores, in ability order, so equal arrangements compare equal. */
+const scoresJson = (scores: Record<(typeof ABILITY_KEYS)[number], number>) =>
+  JSON.stringify(Object.fromEntries(ABILITY_KEYS.map((k) => [k, scores[k]])))
+
+/** What the model may assign for the chosen method; null when none can be built yet. */
+function abilityRule(method: string | undefined, pool: readonly number[]): string | null {
+  const m = method as DraftAbilityMethod | undefined
+  if (m === 'standard-array') {
+    return `Method: standard array. Assign each of ${STANDARD_ARRAY.join(', ')} to exactly one ability.`
+  }
+  if (m === 'rolling') {
+    return pool.length === 6
+      ? `Method: rolling. Assign each of the rolled totals ${pool.join(', ')} to exactly one ability.`
+      : null
+  }
+  if (m === 'point-buy') {
+    return `Method: point buy. Give each ability a score from ${POINT_BUY.min} to ${POINT_BUY.max}, spending at most ${POINT_BUY.budget} points in total. A score costs: ${Object.entries(
+      POINT_BUY.costs
+    )
+      .map(([score, cost]) => `${score}=${cost}`)
+      .join(', ')}.`
+  }
+  return null
 }
 
 /** The one-key (or, for equipment, two-key) output schema of a field. */
@@ -109,6 +171,7 @@ function outputSchema(spec: FieldSpec, options: readonly string[]): z.ZodObject 
       ).max(slots)
     })
   }
+  if (spec.kind === 'abilities') return z.object({ scores: ABILITY_SCORES })
   return z.object({
     value: spec.kind === 'enum' ? z.enum(options as [string, ...string[]]) : z.string()
   })
@@ -121,7 +184,8 @@ function buildRequest(
   options: readonly string[],
   correction: string | null,
   signal: AbortSignal,
-  extraSystemPrompts: string[] = []
+  extraSystemPrompts: string[] = [],
+  abilityPool: readonly number[] = []
 ): ChatRequest {
   const values: Record<string, string> = request.values
   const system = [
@@ -129,13 +193,18 @@ function buildRequest(
     ...extraSystemPrompts,
     otherFields(flowSpecs, request, values)
   ]
+  if (spec.kind === 'abilities') {
+    system.splice(1, 0, abilityRule(values.abilityMethod, abilityPool) ?? '')
+  }
   if (request.mode === 'feedback') {
     const current =
       spec.kind === 'picks' || spec.kind === 'equipment'
         ? describeCurrent(spec)
         : spec.kind === 'enum' && spec.display
           ? spec.display(request.current ?? '')
-          : request.current
+          : spec.kind === 'abilities'
+            ? showScores(request.current ?? '')
+            : request.current
     system.push(
       `Current value of ${spec.label}: ${current}\nThe player's note: ${request.note}\nRewrite it to follow the note; do not return the same text.`
     )
@@ -246,7 +315,33 @@ function checkEquipment(spec: EquipmentFieldSpec, raw: unknown): Checked {
   return { ok: true, value: { option, wild } }
 }
 
-function check(spec: FieldSpec, raw: unknown, options: readonly string[], same: string): Checked {
+function checkScores(
+  raw: unknown,
+  method: string | undefined,
+  pool: readonly number[],
+  same: string
+): Checked {
+  const parsed = z.object({ scores: ABILITY_SCORES }).safeParse(raw)
+  if (!parsed.success) return { ok: false, problem: 'the answer was not the requested JSON object' }
+  const problem = arrangementProblem(method as DraftAbilityMethod, parsed.data.scores, pool)
+  if (problem) return { ok: false, problem }
+  const value = scoresJson(parsed.data.scores)
+  const current = parseScores(same)
+  if (current && scoresJson(current) === value) {
+    return {
+      ok: false,
+      problem: 'it was identical to the current scores; arrange them differently'
+    }
+  }
+  return { ok: true, value }
+}
+
+function check(
+  spec: Exclude<FieldSpec, { kind: 'abilities' }>,
+  raw: unknown,
+  options: readonly string[],
+  same: string
+): Checked {
   const checked =
     spec.kind === 'picks'
       ? checkPicks(spec, raw)
@@ -275,7 +370,7 @@ function checkValue(
         problem: `"${value}" is not allowed; choose one of: ${options.join(', ')}`
       }
     }
-  } else if (value.length > spec.maxChars) {
+  } else if (spec.kind === 'text' && value.length > spec.maxChars) {
     const trimmed = trimToSentence(value, spec.maxChars)
     if (!trimmed) {
       return {
@@ -322,6 +417,15 @@ export async function runField(
   if (spec.kind === 'enum' && legal.length === 0) {
     return fail('no-options', `There are no options for ${spec.label} yet`)
   }
+  const pool = request.flow === 'character' ? (request.rolledTotals ?? []) : []
+  if (spec.kind === 'abilities' && !abilityRule(values.abilityMethod, pool)) {
+    return fail(
+      'no-options',
+      values.abilityMethod === 'rolling'
+        ? 'Roll your ability scores first'
+        : 'Choose an ability score method first'
+    )
+  }
   // The value a result must differ from: the feedback's current value, else what is in the form.
   const same = group
     ? currentGroup
@@ -357,7 +461,8 @@ export async function runField(
         legal,
         correction,
         controller.signal,
-        options.extraSystemPrompts
+        options.extraSystemPrompts,
+        pool
       )
     )
     if (!call.ok) {
@@ -365,7 +470,9 @@ export async function runField(
         ? { ok: false, problem: 'the answer was not usable' }
         : fail(call.failure.kind, call.failure.message)
     }
-    return check(spec, call.object, legal, same)
+    return spec.kind === 'abilities'
+      ? checkScores(call.object, values.abilityMethod, pool, same)
+      : check(spec, call.object, legal, same)
   }
   const isCheck = (r: Checked | FieldResult): r is Checked => !('failure' in r)
 
