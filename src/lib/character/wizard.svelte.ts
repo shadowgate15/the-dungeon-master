@@ -18,7 +18,7 @@ import { computeSteps, STEPS, type StepDefinition, type StepId, type StepState }
 
 /**
  * The wizard's reactive state: the browser-only Character draft, the derived resolved features and
- * stats, and the step rail. One instance per open wizard. Steps and the conversation panel read it
+ * stats, and the step rail. One instance per open wizard. Steps read it
  * and call `update`; they never write `draft` directly, so change rules always run.
  */
 export class CharacterWizard {

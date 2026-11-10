@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_LM_STUDIO_BASE_URL, resolveAiConfig, withContextFallback } from './config.ts'
-import { DEFAULT_CONTEXT_LIMIT } from '#lib/world/context.ts'
+import {
+  DEFAULT_CONTEXT_LIMIT,
+  DEFAULT_LM_STUDIO_BASE_URL,
+  resolveAiConfig,
+  withContextFallback
+} from './config.ts'
 
 describe('AI config', () => {
   it('defaults the base URL to the local LM Studio endpoint', () => {

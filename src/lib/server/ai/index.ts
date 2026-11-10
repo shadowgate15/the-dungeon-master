@@ -35,7 +35,7 @@ export function isReasoningModelLocked() {
   return reasoningLock.locked
 }
 
-/** The configured chat port for conversation modules, or null when no model is set. */
+/** The configured chat port for per-field generation, or null when no model is set. */
 export function getChatPort() {
   const adapter = getChatAdapter()
   return adapter ? createChatPort(adapter) : null
