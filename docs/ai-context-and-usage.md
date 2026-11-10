@@ -23,4 +23,4 @@ How the code degrades when the field is missing:
 
 `chat()` with `stream: true` emits a `RUN_FINISHED` event whose `usage` is either AG-UI's `usage[]` (`inputTokens`, `outputTokens`, `totalTokens`) or TanStack's `TokenUsage` (`promptTokens`, `completionTokens`, `totalTokens`). Both shapes are read by `readUsage` in `src/lib/server/ai/port.ts`.
 
-Per-field AI calls are stateless: each one sends the form's current values and nothing from earlier calls, so there is no transcript to measure or compact and no context meter. The usage count is read by the port but not shown; the probed (or fallback) context length stays on the AI status for the per-field prompt budget.
+Per-field AI calls are stateless: each one sends the form's current values and nothing from earlier calls, so there is no transcript to measure or compact and no context meter. The usage count is read by the port but not shown; the probed (or fallback) context length is reported on the AI status only. Nothing uses it as a per-field prompt budget, and prompts are not trimmed to it.

@@ -23,9 +23,9 @@ class FieldState {
   status = $state<'idle' | 'loading' | 'error'>('idle')
   error = $state('')
   retryable = $state(true)
-  /** The value an AI write replaced and the value it wrote; Undo expires when they diverge. */
   /** A snapshot taken by `prepare` before it changed the form; kept until a write succeeds. */
-  pre?: unknown
+  preparedSnapshot?: unknown
+  /** The value an AI write replaced and the value it wrote; Undo expires when they diverge. */
   undo = $state<{ previous: unknown; written: unknown; snapshot?: unknown; version?: unknown }>()
   controller?: AbortController
   last?: Call
@@ -104,7 +104,7 @@ export function createFieldAi<F extends string, V = string>(options: FieldAiOpti
     s.status = 'loading'
     s.error = ''
     const prepared = options.prepare?.(field)
-    if (prepared) s.pre = prepared.snapshot
+    if (prepared) s.preparedSnapshot = prepared.snapshot
     const current = options.current?.(field) ?? options.values()[field]
     // A superseded, stopped or abandoned call must not touch the field.
     const stale = () => s.controller !== controller
@@ -133,8 +133,8 @@ export function createFieldAi<F extends string, V = string>(options: FieldAiOpti
 
       if (result && 'ok' in result && result.ok) {
         s.status = 'idle'
-        const snapshot = s.pre ?? options.snapshot?.()
-        s.pre = undefined
+        const snapshot = s.preparedSnapshot ?? options.snapshot?.()
+        s.preparedSnapshot = undefined
         options.set(field, result.value)
         s.undo = {
           previous: current,
@@ -211,7 +211,7 @@ export function createFieldAi<F extends string, V = string>(options: FieldAiOpti
           if (s.last) void run(field, s.last)
         },
         onDismiss: () => {
-          s.pre = undefined
+          s.preparedSnapshot = undefined
           s.status = 'idle'
           s.error = ''
         },

@@ -1,6 +1,6 @@
 # Stateless per-field AI replaces the creation chat
 
-Status: accepted. Applies to Worlds first; Campaigns and Characters follow in the same effort (#142).
+Status: accepted and implemented for Worlds, Campaigns and Characters (#142).
 
 ## Context
 
@@ -16,4 +16,4 @@ Remove the chat. Every field where the AI writes prose or makes a judgment call 
 - Small-model reliability improves: short, single-field prompts with a one-key schema, no growing context, no summaries.
 - Behaviour is predictable. A click does one thing to one field, and Undo reverses it.
 - The form stays the single source of truth. There are no pending proposals that differ from what will be saved.
-- Proposal cards, the context meter and compaction become dead code and are removed flow by flow.
+- Proposal cards, the context meter and compaction were dead code and have been removed from all three flows.

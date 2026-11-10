@@ -3,9 +3,8 @@ import { LIMITS } from './draft.ts'
 /**
  * The Character fields with a Field AI control that this module covers: the Concept text fields,
  * the Rules Data slug fields, and the custom background's name and feature. Client-safe: shared by
- * the wizard's controls, the request schema and the server registry. Pick groups and abilities
- * are separate buttons (#148, #149) and extend this list. `abilityMethod` is a method id and
- * `abilityScores` a JSON `{ str, dex, ... }` of base scores (empty when unassigned).
+ * the wizard's controls, the request schema and the server registry. This includes the ability
+ * fields: `abilityMethod` is a method id and `abilityScores` a JSON `{ str, dex, ... }` of base scores (empty when unassigned).
  */
 export const CHARACTER_AI_FIELDS = [
   'name',

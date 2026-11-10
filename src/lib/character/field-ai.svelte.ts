@@ -22,9 +22,9 @@ import type { CharacterWizard } from './wizard.svelte.ts'
  * rules of a manual edit, with no cascade and no confirmation. Undo restores the field and
  * everything the write cleared (a whole-draft snapshot) and expires on the next edit.
  *
- * To add a field (#148, #149): add it to `CHARACTER_AI_FIELDS` and the server registry, then
- * render `<FieldAi {...wizard.aiField('x')} ... />` for it; groups that are not a plain string
- * value extend `values`/`set` here.
+ * Covers the plain text fields, the pick groups and the ability scores. To add a field: add it to
+ * `CHARACTER_AI_FIELDS` and the server registry, then render `<FieldAi {...wizard.aiField('x')} ... />`
+ * for it; groups that are not a plain string value extend `values`/`set` here.
  */
 export type CharacterFieldAi = FieldAi<string, string | GroupValue>
 
