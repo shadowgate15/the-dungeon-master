@@ -10,6 +10,8 @@
     /** Where the close link goes when JavaScript is unavailable. */
     closeHref: string
     onclose?: () => void
+    /** Sits beside the Close link, e.g. a status chip. */
+    headerExtra?: Snippet
     children?: Snippet
   } & Omit<HTMLDialogAttributes, 'children' | 'open' | 'onclose' | 'title'>
 
@@ -18,6 +20,7 @@
     title,
     closeHref,
     onclose,
+    headerExtra,
     class: className,
     children,
     ...rest
@@ -60,16 +63,19 @@
 >
   <div class="mb-4 flex items-center justify-between">
     <h2 class="font-display text-xl">{title}</h2>
-    <Button
-      variant="ghost"
-      size="sm"
-      href={closeHref}
-      class="underline"
-      onclick={(e: MouseEvent) => {
-        e.preventDefault()
-        dialog?.close()
-      }}>Close</Button
-    >
+    <div class="flex items-center gap-3">
+      {@render headerExtra?.()}
+      <Button
+        variant="ghost"
+        size="sm"
+        href={closeHref}
+        class="underline"
+        onclick={(e: MouseEvent) => {
+          e.preventDefault()
+          dialog?.close()
+        }}>Close</Button
+      >
+    </div>
   </div>
   {@render children?.()}
 </dialog>

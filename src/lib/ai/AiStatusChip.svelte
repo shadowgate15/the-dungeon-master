@@ -55,7 +55,7 @@
 
 <svelte:window onclick={(e) => details && !details.contains(e.target as Node) && close()} />
 
-<div role="region" aria-label="AI" class="flex justify-end">
+<div role="region" aria-label="AI">
   <details bind:this={details} class="relative">
     <summary
       class="flex cursor-pointer list-none items-center gap-2 rounded-full border border-border bg-raised px-3 py-1 text-sm"

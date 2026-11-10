@@ -73,7 +73,9 @@
   </div>
 
   <section class="min-w-0 space-y-4">
-    <AiStatusChip ai={aiStatus} />
+    <div class="flex justify-end">
+      <AiStatusChip ai={aiStatus} />
+    </div>
 
     {#each wizard.notices as notice, i (i + notice)}
       <Alert variant="info" class="flex items-center justify-between gap-2">

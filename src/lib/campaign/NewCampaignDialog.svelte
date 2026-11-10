@@ -56,7 +56,13 @@
   }
 </script>
 
-<Dialog bind:open={isOpen} title="New Campaign" closeHref={resolve('/campaigns')} {onclose}>
+<Dialog
+  bind:open={isOpen}
+  title="New Campaign"
+  closeHref={resolve('/campaigns')}
+  {onclose}
+  headerExtra={worlds.length > 0 ? headerExtra : undefined}
+>
   {#if worlds.length === 0}
     <p class="py-6">
       A Campaign is set in a World, and you have no active Worlds. <Link href={resolve('/')}
@@ -65,7 +71,6 @@
     </p>
   {:else}
     <div class="space-y-3">
-      <AiStatusChip ai={aiStatus} />
       <form
         method="POST"
         action="?/createCampaign"
@@ -85,3 +90,7 @@
     </div>
   {/if}
 </Dialog>
+
+{#snippet headerExtra()}
+  <AiStatusChip ai={aiStatus} />
+{/snippet}

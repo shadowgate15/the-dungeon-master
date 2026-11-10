@@ -87,12 +87,12 @@
   bind:open
   title="New World"
   closeHref={resolve('/')}
+  {headerExtra}
   onclose={() => {
     if (page.url.searchParams.has('new')) replaceState(resolve('/'), {})
   }}
 >
-  <div class="space-y-2">
-    <AiStatusChip ai={aiStatus} />
+  <div>
     <div class="lg:max-h-[70vh] lg:overflow-y-auto">
       <form
         method="POST"
@@ -146,3 +146,7 @@
     </div>
   </div>
 </Dialog>
+
+{#snippet headerExtra()}
+  <AiStatusChip ai={aiStatus} />
+{/snippet}
