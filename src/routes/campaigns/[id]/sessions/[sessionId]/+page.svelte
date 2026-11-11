@@ -29,6 +29,13 @@
     await stream.start(text)
   }
 
+  // Another window (or a Stop the server has not yet released) is mid-answer: poll until it is done.
+  $effect(() => {
+    if (!data.generating || stream.streaming) return
+    const timer = setInterval(() => void invalidateAll(), 1000)
+    return () => clearInterval(timer)
+  })
+
   // Starting a Session lands here with ?opening: the DM speaks first. Reloading never re-asks.
   onMount(() => {
     if (page.url.searchParams.has('opening')) {
@@ -56,8 +63,11 @@
     </div>
     {#if !ended}
       <form method="POST" action="?/end" use:enhance>
-        <Button type="submit" variant="secondary" size="sm" disabled={stream.streaming}
-          >End Session</Button
+        <Button
+          type="submit"
+          variant="secondary"
+          size="sm"
+          disabled={stream.streaming || data.generating}>End Session</Button
         >
       </form>
     {/if}
@@ -105,6 +115,12 @@
         <div class="flex items-center justify-between gap-2 px-2 py-1">
           <p class="text-sm text-muted">The Dungeon Master is answering...</p>
           <Button variant="secondary" size="sm" onclick={() => stream.stop()}>Stop</Button>
+        </div>
+      {:else if data.generating}
+        <div class="flex items-center justify-between gap-2 px-2 py-1">
+          <p class="text-sm text-muted">
+            The Dungeon Master is answering in another window. This updates when it finishes.
+          </p>
         </div>
       {:else if turnState === 'awaiting-action'}
         <form class="space-y-2" onsubmit={send}>
