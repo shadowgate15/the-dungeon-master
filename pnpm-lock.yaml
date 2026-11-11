@@ -17,6 +17,9 @@ importers:
       '@tanstack/ai':
         specifier: ^1.0.1
         version: 1.0.1(zod@4.6.7)
+      '@tanstack/ai-client':
+        specifier: 1.0.1
+        version: 1.0.1(zod@4.6.7)
       '@tanstack/ai-openai':
         specifier: ^1.0.1
         version: 1.0.1(@tanstack/ai@1.0.1(zod@4.6.7))(ws@8.22.1)(zod@4.6.7)
@@ -1564,6 +1567,9 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
+  '@tanstack/ai-client@1.0.1':
+    resolution: {integrity: sha512-G/557Gzxwp159EYTSLIQvwn1lVgMeznu8S9OAukB+U/ZTXMwridnsC2hOoYV1OCT6FQsz6TPqz6WHsoilM1P3A==, tarball: https://registry.npmjs.org/@tanstack/ai-client/-/ai-client-1.0.1.tgz}
+
   '@tanstack/ai-event-client@1.0.0':
     resolution: {integrity: sha512-RXlk6XkIYU4n25QYoCmETKiFjPnEpwvQv5Ve62pdtHaEVP//VZUdwGSRGCf/PATgwYdib8FT49tPmqnKtXPDhw==, tarball: https://registry.npmjs.org/@tanstack/ai-event-client/-/ai-event-client-1.0.0.tgz}
 
@@ -1603,6 +1609,9 @@ packages:
 
   '@tanstack/query-devtools@5.105.1':
     resolution: {integrity: sha512-3iHdlC/S1e1W+7bemP5WN/feZapc0WW6XHXtmfY3AmWVlA20tEK4WxVXcKhh7IngjPGHlY6eXi1MVkrHuaxDzQ==, tarball: https://registry.npmjs.org/@tanstack/query-devtools/-/query-devtools-5.105.1.tgz}
+
+  '@tanstack/store@0.11.2':
+    resolution: {integrity: sha512-sJ4mjol8uQsHV0gOJzzjwXfh2Fwm+Sz0+8deqiTm4jGbMdjzNSW+xZCFm0kUa870uhd8yi+DpKnZb5Kc4apa0Q==, tarball: https://registry.npmjs.org/@tanstack/store/-/store-0.11.2.tgz}
 
   '@tanstack/svelte-query-devtools@6.3.7':
     resolution: {integrity: sha512-c21tYWSla7mIDSu0XzhPG0T/KIYIzxsEj8rhQfOPAyfIO0qDT4Ha3IS1X9NsEZbD4ckvPqoisIbPAPCL1gqgdw==, tarball: https://registry.npmjs.org/@tanstack/svelte-query-devtools/-/svelte-query-devtools-6.3.7.tgz}
@@ -4486,6 +4495,16 @@ snapshots:
       tailwindcss: 4.3.3
       vite: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
 
+  '@tanstack/ai-client@1.0.1(zod@4.6.7)':
+    dependencies:
+      '@tanstack/ai': 1.0.1(zod@4.6.7)
+      '@tanstack/ai-event-client': 1.0.0
+      '@tanstack/ai-utils': 1.0.0
+      '@tanstack/store': 0.11.2
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+      - zod
+
   '@tanstack/ai-event-client@1.0.0':
     dependencies:
       '@tanstack/devtools-event-client': 0.4.4
@@ -4556,6 +4575,8 @@ snapshots:
       superjson: 2.2.6
     transitivePeerDependencies:
       - csstype
+
+  '@tanstack/store@0.11.2': {}
 
   '@tanstack/svelte-query-devtools@6.3.7(@tanstack/svelte-query@6.3.7(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(csstype@3.2.3)(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
     dependencies:

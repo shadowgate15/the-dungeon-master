@@ -1,15 +1,14 @@
-import { error } from '@sveltejs/kit'
+import { error, fail } from '@sveltejs/kit'
 import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
 import { createCampaignService } from '#lib/server/campaign/service.ts'
 import { createCharacterService } from '#lib/server/character/service.ts'
 import { loadWizardRules } from '#lib/server/character/wizard-rules.ts'
 import { db } from '#lib/server/db/index.ts'
-import { createSessionService } from '#lib/server/session/service.ts'
+import { sessions, turnRunner } from '#lib/server/session/index.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 const campaigns = createCampaignService(db)
 const characters = createCharacterService(db)
-const sessions = createSessionService(db)
 
 export const load: PageServerLoad = ({ params }) => {
   const found = sessions.get(params.sessionId)
@@ -45,10 +44,13 @@ export const load: PageServerLoad = ({ params }) => {
 }
 
 export const actions: Actions = {
-  /** Always available except while the DM is generating, which a later ticket guards. */
+  /** Available in any state except while the DM is generating. */
   end: ({ params }) => {
     const found = sessions.get(params.sessionId)
     if (!found || found.campaignId !== params.id) error(404, 'Session not found')
+    if (turnRunner.isGenerating(found.id)) {
+      return fail(409, { error: 'The DM is still answering. Stop it first.' })
+    }
     sessions.end(found.id)
     return { ended: true }
   }

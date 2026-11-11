@@ -177,3 +177,32 @@ describe('the transcript', () => {
     expect(sessions.turns(s.id).map((t) => t.seq)).toEqual([1, 2])
   })
 })
+
+describe('appending Turns', () => {
+  const open = () => {
+    sessions.linkCharacter(campaignId, characterId)
+    return sessions.start(campaignId)
+  }
+
+  it('appends Turns in a monotonic sequence', () => {
+    const s = open()
+    sessions.appendTurn(s.id, { author: 'dm', kind: 'narration', text: 'A door.' })
+    sessions.appendTurn(s.id, { author: 'player', kind: 'action', text: 'I open it.' })
+    expect(sessions.turns(s.id).map((t) => [t.seq, t.author, t.text])).toEqual([
+      [1, 'dm', 'A door.'],
+      [2, 'player', 'I open it.']
+    ])
+  })
+
+  it('rejects a Turn on an ended or unknown Session', () => {
+    const s = open()
+    sessions.end(s.id)
+    expect(() =>
+      sessions.appendTurn(s.id, { author: 'player', kind: 'action', text: 'Hello?' })
+    ).toThrow(SessionValidationError)
+    expect(() =>
+      sessions.appendTurn('nope', { author: 'player', kind: 'action', text: 'Hello?' })
+    ).toThrow(SessionNotFoundError)
+    expect(sessions.turns(s.id)).toEqual([])
+  })
+})

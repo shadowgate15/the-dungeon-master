@@ -6,6 +6,10 @@ import { createWorldService } from '../world/service'
 export type Session = typeof session.$inferSelect
 export type Turn = typeof turn.$inferSelect
 
+/** What a new Turn carries; the service assigns the sequence number and time. */
+export type NewTurn = Pick<Turn, 'author' | 'kind'> &
+  Partial<Pick<Turn, 'text' | 'rollRequest' | 'rollResult'>>
+
 /** The input breaks a Session rule (no Character, archived or read-only Campaign, ...). */
 export class SessionValidationError extends Error {}
 
@@ -110,6 +114,38 @@ export function createSessionService(db: Database, now: () => number = Date.now)
         .where(eq(session.campaignId, campaignId))
         .orderBy(desc(session.startedAt), sql`rowid desc`)
         .all()
+    },
+
+    /**
+     * Appends a Turn to an open Session. Turns are append-only: there is no edit or delete.
+     * Rejects on an ended Session.
+     */
+    appendTurn(sessionId: string, input: NewTurn): Turn {
+      return db.transaction((tx) => {
+        const current = tx.select().from(session).where(eq(session.id, sessionId)).get()
+        if (!current) throw new SessionNotFoundError('Session not found')
+        if (current.endedAt !== null) throw new SessionValidationError('This Session has ended')
+        const last = tx
+          .select({ seq: turn.seq })
+          .from(turn)
+          .where(eq(turn.sessionId, sessionId))
+          .orderBy(desc(turn.seq))
+          .get()
+        return tx
+          .insert(turn)
+          .values({
+            sessionId,
+            seq: (last?.seq ?? 0) + 1,
+            author: input.author,
+            kind: input.kind,
+            text: input.text ?? null,
+            rollRequest: input.rollRequest ?? null,
+            rollResult: input.rollResult ?? null,
+            createdAt: now()
+          })
+          .returning()
+          .get()
+      })
     },
 
     /** A Session's transcript in sequence order. */
