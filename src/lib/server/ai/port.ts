@@ -4,9 +4,10 @@ import { REASONING_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import type { createChatAdapter } from './adapter.ts'
 
 /**
- * The neutral chat port: provider-neutral request and event types, the usage reader, one
- * classified model call, and the production port over TanStack AI. Used by
- * per-field generation.
+ * The neutral chat port: provider-neutral request and event types, the usage reader, a
+ * classified structured call (`callModel`) and free-text calls (`streamText`, `collectText`),
+ * and the production port over TanStack AI. Used by per-field generation and the Session
+ * runner (turns, summary, recap).
  */
 
 /** The failures a single model call can report; callers add their own kinds around these. */
@@ -27,7 +28,15 @@ export interface ChatMessage {
 export interface ChatTool {
   name: string
   description: string
-  execute: () => unknown
+  /** JSON Schema of the arguments the model passes; absent for a tool that takes none. */
+  inputSchema?: Record<string, unknown>
+  execute: (input: unknown) => unknown
+  /**
+   * The run pauses when the model calls this tool, after its input is validated against
+   * `inputSchema`, and `execute` never runs: the caller sees an `approval-requested` event and
+   * decides what the approval means. Invalid input is rejected to the model instead.
+   */
+  needsApproval?: boolean
 }
 
 /** What the port receives; independent of any provider. */
@@ -36,7 +45,8 @@ export interface ChatRequest {
   messages: ChatMessage[]
   maxTokens: number
   threadId: string
-  outputSchema: z.ZodObject
+  /** Present for structured output (per-field AI); absent to stream free text. */
+  outputSchema?: z.ZodObject
   /** Tools the model may call before answering; absent when none are offered. */
   tools?: ChatTool[]
   /** Aborted on timeout or cancel; the port must stop the provider call when it fires. */
@@ -122,6 +132,110 @@ export async function callModel(port: ChatPort, request: ChatRequest): Promise<M
   return { ok: true, object, usage }
 }
 
+/** The TanStack AG-UI fields streamText reads off tool-call and interrupt events. */
+type ToolEvent = {
+  delta?: string
+  toolCallId?: string
+  input?: unknown
+  content?: string
+  metadata?: { tanstack?: { toolCallName?: string; state?: string } }
+  outcome?: { type?: string; interrupts?: { toolCallId?: string }[] }
+}
+
+function toolErrorMessage(content: string | undefined): string {
+  try {
+    const parsed = JSON.parse(content ?? '') as { error?: unknown }
+    if (typeof parsed.error === 'string') return parsed.error
+  } catch {
+    // not JSON: fall through to the raw content
+  }
+  return content ?? 'The tool call was rejected'
+}
+
+/** One step of a free-text model call, as the caller sees it. */
+export type TextEvent =
+  | { type: 'delta'; text: string }
+  /** A `needsApproval` tool was called with valid input and the run paused on it. */
+  | { type: 'approval-requested'; toolName: string; input: unknown }
+  /** A tool call failed validation (or parsing); the error went back to the model. */
+  | { type: 'tool-rejected'; toolName: string; message: string }
+  | { type: 'done'; usage?: TokenUsage }
+  | { type: 'error'; failure: ModelFailure }
+
+/**
+ * One free-text model call (no output schema): the narration as text deltas, then `done`, or a
+ * final `error`. Tool calls run inside the port; only the text reaches the caller. Aborting the
+ * request signal stops the provider call and ends the stream without a `done` or `error`.
+ */
+export async function* streamText(port: ChatPort, request: ChatRequest): AsyncGenerator<TextEvent> {
+  let usage: TokenUsage | undefined
+  const calls = new Map<string, { name: string; input: unknown }>()
+  try {
+    for await (const raw of port(request)) {
+      const event = raw as Event & ToolEvent
+      if (event.type === 'TEXT_MESSAGE_CONTENT' && event.delta) {
+        yield { type: 'delta', text: event.delta }
+      } else if (event.type === 'TOOL_CALL_END' && event.toolCallId) {
+        calls.set(event.toolCallId, {
+          name: event.metadata?.tanstack?.toolCallName ?? '',
+          input: event.input
+        })
+      } else if (
+        event.type === 'TOOL_CALL_RESULT' &&
+        event.metadata?.tanstack?.state === 'output-error'
+      ) {
+        yield {
+          type: 'tool-rejected',
+          toolName: calls.get(event.toolCallId ?? '')?.name ?? '',
+          message: toolErrorMessage(event.content)
+        }
+      } else if (event.type === 'RUN_FINISHED' && event.outcome?.type === 'interrupt') {
+        usage = readUsage(event.usage) ?? usage
+        for (const interrupt of event.outcome.interrupts ?? []) {
+          const call = calls.get(interrupt.toolCallId ?? '')
+          if (call) yield { type: 'approval-requested', toolName: call.name, input: call.input }
+        }
+      } else if (event.type === 'RUN_ERROR') {
+        if (request.signal.aborted) return
+        yield { type: 'error', failure: runErrorFailure(event) }
+        return
+      } else if (event.type === 'RUN_FINISHED') {
+        usage = readUsage(event.usage) ?? usage
+      }
+    }
+  } catch (error) {
+    if (request.signal.aborted) return
+    yield {
+      type: 'error',
+      failure: {
+        kind: 'provider-error',
+        message: error instanceof Error ? error.message : 'The model request failed'
+      }
+    }
+    return
+  }
+  if (!request.signal.aborted) yield { type: 'done', usage }
+}
+
+/**
+ * A free-text call collected into one trimmed string, for side calls that need no streaming.
+ * `undefined` on any failure: a model error, an abort, no `done`, or an empty answer.
+ */
+export async function collectText(
+  port: ChatPort,
+  request: ChatRequest
+): Promise<string | undefined> {
+  let text = ''
+  let done = false
+  for await (const event of streamText(port, request)) {
+    if (event.type === 'delta') text += event.text
+    else if (event.type === 'error') return undefined
+    else if (event.type === 'done') done = true
+  }
+  const trimmed = text.trim()
+  return done && trimmed ? trimmed : undefined
+}
+
 /** The production port: TanStack AI `chat()` over the configured adapter. */
 export function createChatPort(adapter: ReturnType<typeof createChatAdapter>): ChatPort {
   return (request) => {
@@ -134,14 +248,15 @@ export function createChatPort(adapter: ReturnType<typeof createChatAdapter>): C
       systemPrompts: request.systemPrompts,
       messages: request.messages,
       threadId: request.threadId,
-      outputSchema: request.outputSchema,
+      ...(request.outputSchema && { outputSchema: request.outputSchema }),
       ...(request.tools?.length && {
         tools: request.tools.map((t) =>
           toolDefinition({
             name: t.name,
             description: t.description,
-            inputSchema: z.object({})
-          }).server(async () => t.execute())
+            inputSchema: t.inputSchema ?? z.object({}),
+            ...(t.needsApproval && { needsApproval: true })
+          }).server(async (input) => t.execute(input))
         )
       }),
       // The cap goes through the adapter's model options, not the top-level option.

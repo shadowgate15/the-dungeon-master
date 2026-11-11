@@ -34,7 +34,7 @@ _Avoid_: History, revert
 
 **Campaign**:
 A story played out in one or more Worlds. A Campaign is always linked to at least one World, and Worlds can be added or removed over its life as long as one remains. A Campaign is either active or archived.
-_Avoid_: Adventure, game, session
+_Avoid_: Adventure, game
 
 **Archived Campaign**:
 A Campaign set aside by its author. It is hidden from the main Campaign list and is read-only until restored. Archiving is reversible; deleting a Campaign is not. A Campaign is also read-only, without being archived, while any World it uses is archived.
@@ -49,15 +49,15 @@ The mood of play a Campaign aims for, one of: heroic, lighthearted, tense, dark,
 _Avoid_: Genre, theme, style
 
 **Length**:
-How much story a Campaign is meant to hold, one of: one-shot, short, medium, long. Ordered shortest to longest. one-shot is a single sitting; short is a few sessions; medium is a season of play; long is an open-ended saga. It measures story scope, not hours or session counts. The AI uses it to pace how much story to plan.
-_Avoid_: Duration, session count, size
+How much story a Campaign is meant to hold, one of: one-shot, short, medium, long. Ordered shortest to longest. one-shot is a single sitting; short is a few Sessions; medium is a season of play; long is an open-ended saga. It measures story scope, not hours or session counts. The AI uses it to pace how much story to plan.
+_Avoid_: Duration, Session count, size
 
 **Character**:
 A player's hero, created at level 1 from the D&D 5e SRD 5.1 and stored as the player's choices only: race, class, background, ability scores, picked skills, spells and equipment, and narrative details. Everything computed from those choices (modifiers, hit points, armor class, saves, spell slots) is derived and never stored. A Character stands alone, owned by the player, and is linked to Campaigns separately. A Character is either active or archived.
 _Avoid_: Player character sheet, PC, hero, avatar
 
 **Archived Character**:
-A Character set aside by its author. It is hidden from the main Character list, shown under the Archived view, and is read-only until restored: it can be viewed but not edited. Archiving is reversible; deleting a Character is not. Unlike a Campaign, a Character depends on nothing, so nothing else, including anything about its Campaigns, can make it read-only.
+A Character set aside by its author. It is hidden from the main Character list, shown under the Archived view, and is read-only until restored: it can be viewed but not edited. Archiving is reversible; deleting a Character is not, and a Character that has played any Session cannot be deleted (archive it instead), so Session transcripts are never lost. Unlike a Campaign, a Character depends on nothing, so nothing else, including anything about its Campaigns, can make it read-only.
 _Avoid_: Disabled Character, hidden Character, retired Character
 
 **Character creation wizard**:
@@ -99,3 +99,19 @@ _Avoid_: Bonus spell, free spell
 **Rules Data**:
 The D&D 5e SRD 5.1 reference content (races, classes, backgrounds, spells, equipment and so on) held in the database. It is read-only to the app and seeded from a pinned dataset. Characters refer to it rather than copy it.
 _Avoid_: Reference data, compendium
+
+**Session**:
+One sitting of play within a Campaign, played by one Character. It has a start and an end and owns a transcript of Turns. A Campaign has many Sessions but at most one open at a time. An open Session can be resumed; an ended one is read-only.
+_Avoid_: Game, run, playthrough
+
+**Turn**:
+One side's contribution to a Session's transcript. A **player turn** is what the player does: a free-text action, or the result of a roll they made. A **DM turn** is what the DM does in response: narration and any roll request. Turns alternate and are append-only; a Turn is never edited or regenerated after it completes. A DM turn cut short by Stop or a model failure is discarded, never kept as partial narration.
+_Avoid_: Message, exchange, round
+
+**Roll request**:
+A DM turn's call for the player to make an ability or skill check, naming the check, the DC and the reason. The DM proposes them; code validates them. The DC is shown to the player. A Roll request ends the DM's turn and stays pending, across a closed browser, until the player rolls.
+_Avoid_: Check prompt, dice call
+
+**Roll result**:
+The player turn that answers a Roll request. The player clicks Roll; code rolls the d20, adds the Character's derived modifier and records the total against the DC. The AI never rolls and players do not type in results. The result is passed to the DM, which narrates the outcome in its next turn.
+_Avoid_: Dice result, outcome
