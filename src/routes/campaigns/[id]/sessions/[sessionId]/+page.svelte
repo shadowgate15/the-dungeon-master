@@ -9,6 +9,8 @@
   import Link from '#lib/ui/Link.svelte'
   import CharacterSheetPanel from '#lib/session/CharacterSheetPanel.svelte'
   import PlayLayout from '#lib/session/PlayLayout.svelte'
+  import RollPrompt from '#lib/session/RollPrompt.svelte'
+  import { checkLabel, resultLabel } from '#lib/session/roll.ts'
   import Textarea from '#lib/ui/Textarea.svelte'
   import { deriveTurnState } from '#lib/session/lifecycle.ts'
   import { TurnStream } from '#lib/session/turn-stream.svelte.ts'
@@ -17,6 +19,7 @@
 
   const ended = $derived(data.session.endedAt !== null)
   const turnState = $derived(deriveTurnState(data.turns))
+  const pendingRoll = $derived(data.turns.at(-1)?.rollRequest ?? null)
 
   const stream = new TurnStream(`/api/sessions/${page.params.sessionId}/turn`, invalidateAll)
   let action = $state('')
@@ -108,7 +111,7 @@
         <Alert variant="info">Session ended. This transcript is read-only.</Alert>
       {/if}
       <ol aria-label="Transcript" class="space-y-3">
-        {#each data.turns as t (t.id)}
+        {#each data.turns as t, i (t.id)}
           <li
             class={t.author === 'dm'
               ? 'max-w-prose'
@@ -117,7 +120,21 @@
             <div class="text-xs text-muted uppercase">
               {t.author === 'dm' ? 'Dungeon Master' : 'You'}
             </div>
-            <p>{t.text}</p>
+            {#if t.kind === 'roll_result' && t.rollResult}
+              {@const asked = data.turns[i - 1]?.rollRequest}
+              <p>
+                {asked ? checkLabel(asked) : 'Check'}: {resultLabel(t.rollResult)}{asked
+                  ? ` against DC ${asked.dc}`
+                  : ''}
+              </p>
+            {:else if t.text}
+              <p>{t.text}</p>
+            {/if}
+            {#if t.rollRequest}
+              <p class="text-sm text-muted">
+                The Dungeon Master asks for a {checkLabel(t.rollRequest)}, DC {t.rollRequest.dc}.
+              </p>
+            {/if}
           </li>
         {/each}
       </ol>
@@ -178,8 +195,8 @@
             <Button type="submit" size="sm" disabled={action.trim() === ''}>Send</Button>
           </div>
         </form>
-      {:else if turnState === 'pending-roll'}
-        <p class="px-2 py-1 text-sm text-muted">The DM is waiting for your roll.</p>
+      {:else if turnState === 'pending-roll' && pendingRoll}
+        <RollPrompt request={pendingRoll} onroll={() => stream.start(undefined, { roll: true })} />
       {:else}
         <div class="space-y-2">
           <Alert variant="danger">

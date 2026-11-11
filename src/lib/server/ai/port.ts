@@ -30,6 +30,12 @@ export interface ChatTool {
   /** JSON Schema of the arguments the model passes; absent for a tool that takes none. */
   inputSchema?: Record<string, unknown>
   execute: (input: unknown) => unknown
+  /**
+   * The run pauses when the model calls this tool, after its input is validated against
+   * `inputSchema`, and `execute` never runs: the caller sees an `approval-requested` event and
+   * decides what the approval means. Invalid input is rejected to the model instead.
+   */
+  needsApproval?: boolean
 }
 
 /** What the port receives; independent of any provider. */
@@ -125,9 +131,33 @@ export async function callModel(port: ChatPort, request: ChatRequest): Promise<M
   return { ok: true, object, usage }
 }
 
+/** The TanStack AG-UI fields streamText reads off tool-call and interrupt events. */
+type ToolEvent = {
+  delta?: string
+  toolCallId?: string
+  input?: unknown
+  content?: string
+  metadata?: { tanstack?: { toolCallName?: string; state?: string } }
+  outcome?: { type?: string; interrupts?: { toolCallId?: string }[] }
+}
+
+function toolErrorMessage(content: string | undefined): string {
+  try {
+    const parsed = JSON.parse(content ?? '') as { error?: unknown }
+    if (typeof parsed.error === 'string') return parsed.error
+  } catch {
+    // not JSON: fall through to the raw content
+  }
+  return content ?? 'The tool call was rejected'
+}
+
 /** One step of a free-text model call, as the caller sees it. */
 export type TextEvent =
   | { type: 'delta'; text: string }
+  /** A `needsApproval` tool was called with valid input and the run paused on it. */
+  | { type: 'approval-requested'; toolName: string; input: unknown }
+  /** A tool call failed validation (or parsing); the error went back to the model. */
+  | { type: 'tool-rejected'; toolName: string; message: string }
   | { type: 'done'; usage?: TokenUsage }
   | { type: 'error'; failure: ModelFailure }
 
@@ -138,11 +168,32 @@ export type TextEvent =
  */
 export async function* streamText(port: ChatPort, request: ChatRequest): AsyncGenerator<TextEvent> {
   let usage: TokenUsage | undefined
+  const calls = new Map<string, { name: string; input: unknown }>()
   try {
     for await (const raw of port(request)) {
-      const event = raw as Event & { delta?: string }
+      const event = raw as Event & ToolEvent
       if (event.type === 'TEXT_MESSAGE_CONTENT' && event.delta) {
         yield { type: 'delta', text: event.delta }
+      } else if (event.type === 'TOOL_CALL_END' && event.toolCallId) {
+        calls.set(event.toolCallId, {
+          name: event.metadata?.tanstack?.toolCallName ?? '',
+          input: event.input
+        })
+      } else if (
+        event.type === 'TOOL_CALL_RESULT' &&
+        event.metadata?.tanstack?.state === 'output-error'
+      ) {
+        yield {
+          type: 'tool-rejected',
+          toolName: calls.get(event.toolCallId ?? '')?.name ?? '',
+          message: toolErrorMessage(event.content)
+        }
+      } else if (event.type === 'RUN_FINISHED' && event.outcome?.type === 'interrupt') {
+        usage = readUsage(event.usage) ?? usage
+        for (const interrupt of event.outcome.interrupts ?? []) {
+          const call = calls.get(interrupt.toolCallId ?? '')
+          if (call) yield { type: 'approval-requested', toolName: call.name, input: call.input }
+        }
       } else if (event.type === 'RUN_ERROR') {
         if (request.signal.aborted) return
         yield { type: 'error', failure: runErrorFailure(event) }
@@ -183,7 +234,8 @@ export function createChatPort(adapter: ReturnType<typeof createChatAdapter>): C
           toolDefinition({
             name: t.name,
             description: t.description,
-            inputSchema: t.inputSchema ?? z.object({})
+            inputSchema: t.inputSchema ?? z.object({}),
+            ...(t.needsApproval && { needsApproval: true })
           }).server(async (input) => t.execute(input))
         )
       }),

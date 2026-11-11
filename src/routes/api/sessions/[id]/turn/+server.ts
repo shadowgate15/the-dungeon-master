@@ -20,8 +20,15 @@ function readAction(body: unknown): string | undefined {
   return typeof props?.action === 'string' ? props.action : undefined
 }
 
+/** Whether the player clicked Roll: `forwardedProps.roll` is true. */
+function readRoll(body: unknown): boolean {
+  const props = (body as { forwardedProps?: { roll?: unknown } } | null)?.forwardedProps
+  return props?.roll === true
+}
+
 /**
- * One streamed DM turn. With `forwardedProps.action` it saves the player's action first; with
+ * One streamed DM turn. With `forwardedProps.roll` the player answers a pending Roll request:
+ * code rolls and saves the Roll result, then the DM narrates the outcome. With `forwardedProps.action` it saves the player's action first; with
  * none the DM opens the Session or answers an unanswered action (Retry). Answers SSE, or a JSON
  * `{ error }` with 400/404/409 when refused (not found, ended, a call already in flight, wrong
  * state, bad action). One abort controller is shared by the model call and the response, so
@@ -36,7 +43,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
   const begun = turnRunner.begin(
     params.id,
-    { action: readAction(body), contextLimit: await getContextLimit() },
+    { action: readAction(body), roll: readRoll(body), contextLimit: await getContextLimit() },
     abortController.signal
   )
   if (!begun.ok) {
