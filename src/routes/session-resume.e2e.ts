@@ -58,7 +58,7 @@ async function startSession(page: Page, request: APIRequestContext, opening: str
   return { campaignUrl: page.url().replace(/\/sessions\/.*/, '') }
 }
 
-test('closing the browser and resuming restores the transcript with no model call', async ({
+test('closing the browser and resuming restores the transcript, with one stateless recap call', async ({
   page,
   request,
   browser
@@ -71,6 +71,7 @@ test('closing the browser and resuming restores the transcript with no model cal
   await page.close()
 
   const calls = await modelCalls(request)
+  await script(request, [{ content: 'You pushed the gate and it screamed.' }])
   const fresh = await (await browser.newContext()).newPage()
   await fresh.goto(campaignUrl)
   await fresh.getByRole('link', { name: 'Resume Session' }).click()
@@ -81,7 +82,15 @@ test('closing the browser and resuming restores the transcript with no model cal
   await expect(items.nth(2)).toContainText('The hinges scream.')
   await expect(fresh.getByLabel('Your action')).toBeVisible()
   await fresh.waitForLoadState('networkidle')
-  expect(await modelCalls(request)).toBe(calls)
+  // The recap is a side call: it shows, is not a Turn, and is the only model call on resume.
+  await expect(fresh.getByLabel('Recap')).toContainText('You pushed the gate and it screamed.')
+  await expect(items).toHaveCount(3)
+  expect(await modelCalls(request)).toBe(calls + 1)
+
+  // Reopening with no new Turns reuses the cached recap: no repeat call.
+  await fresh.reload()
+  await expect(fresh.getByLabel('Recap')).toContainText('You pushed the gate and it screamed.')
+  expect(await modelCalls(request)).toBe(calls + 1)
 
   // Play carries on from where it was left.
   await script(request, [{ content: 'Beyond lies a dune sea.' }])
@@ -151,4 +160,34 @@ test('reopening while another window is mid-answer shows no Retry', async ({
 
   await page.getByRole('button', { name: 'Stop' }).click()
   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
+})
+
+test('submitting an action aborts a recap in flight', async ({ page, request, browser }) => {
+  const { campaignUrl } = await startSession(page, request, 'A gate looms.')
+  await page.close()
+
+  await script(request, [{ content: 'Slow recap.', delayMs: 10_000 }, { content: 'You step in.' }])
+  const fresh = await (await browser.newContext()).newPage()
+  await fresh.goto(campaignUrl)
+  await fresh.getByRole('link', { name: 'Resume Session' }).click()
+  // The recap never blocks: the input is usable while it is in flight.
+  await expect(fresh.getByLabel('Your action')).toBeVisible()
+  await fresh.getByLabel('Your action').fill('I enter.')
+  await fresh.getByRole('button', { name: 'Send' }).click()
+  await expect(transcript(fresh)).toContainText('You step in.')
+  await expect(fresh.getByLabel('Recap')).toHaveCount(0)
+})
+
+test('a failed recap is silent', async ({ page, request, browser }) => {
+  const { campaignUrl } = await startSession(page, request, 'A gate looms.')
+  await page.close()
+
+  await script(request, [{ status: 500, times: 3 }])
+  const fresh = await (await browser.newContext()).newPage()
+  await fresh.goto(campaignUrl)
+  await fresh.getByRole('link', { name: 'Resume Session' }).click()
+  await fresh.waitForLoadState('networkidle')
+  await expect(fresh.getByLabel('Your action')).toBeVisible()
+  await expect(fresh.getByLabel('Recap')).toHaveCount(0)
+  await expect(fresh.getByRole('alert')).toHaveCount(0)
 })

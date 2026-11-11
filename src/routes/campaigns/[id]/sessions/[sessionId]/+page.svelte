@@ -21,11 +21,37 @@
   const stream = new TurnStream(`/api/sessions/${page.params.sessionId}/turn`, invalidateAll)
   let action = $state('')
 
+  // The resume recap: a stateless side call, not a Turn and not the generating state. Silent on
+  // failure, and any submit aborts it.
+  let recap = $state<string | null>(null)
+  let recapController: AbortController | undefined
+
+  function abortRecap() {
+    recapController?.abort()
+    recapController = undefined
+    recap = null
+  }
+
+  async function loadRecap() {
+    const controller = new AbortController()
+    recapController = controller
+    try {
+      const response = await fetch(`/api/sessions/${page.params.sessionId}/recap`, {
+        signal: controller.signal
+      })
+      const body = (await response.json()) as { recap: string | null }
+      if (!controller.signal.aborted) recap = body.recap
+    } catch {
+      // Silent: a recap is a courtesy.
+    }
+  }
+
   async function send(event: SubmitEvent) {
     event.preventDefault()
     const text = action.trim()
     if (!text || stream.streaming) return
     action = ''
+    abortRecap()
     await stream.start(text)
   }
 
@@ -47,7 +73,10 @@
         {}
       )
       if (!ended && turnState === 'unopened') void stream.start()
+    } else if (!ended && !data.generating && turnState === 'awaiting-action') {
+      void loadRecap()
     }
+    return () => recapController?.abort()
   })
 </script>
 
@@ -103,6 +132,12 @@
           <div class="text-xs text-muted uppercase">Dungeon Master</div>
           <p>{stream.text || 'The Dungeon Master is thinking...'}</p>
         </div>
+      {/if}
+      {#if recap}
+        <aside aria-label="Recap" class="max-w-prose rounded-control bg-raised p-2 text-sm">
+          <div class="text-xs text-muted uppercase">Previously</div>
+          <p>{recap}</p>
+        </aside>
       {/if}
       {#if data.turns.length === 0 && !stream.streaming}
         <p class="text-muted">Nothing has happened yet.</p>

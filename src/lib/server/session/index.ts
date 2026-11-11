@@ -7,6 +7,7 @@ import { createCharacterService } from '../character/service.ts'
 import { loadWizardRules } from '../character/wizard-rules.ts'
 import { db } from '../db/index.ts'
 import { sheetText } from './sheet-text.ts'
+import { createRecap } from './recap.ts'
 import { createSessionService } from './service.ts'
 import { createTurnRunner } from './turn-runner.ts'
 
@@ -24,13 +25,18 @@ export const sessions = createSessionService(db)
  * so every caller (the turn route, ending a Session) must use this instance. The port is
  * resolved per call so an unconfigured model reads as a failure, not a startup error.
  */
+const modelPort: ChatPort = (request) => {
+  const port = getChatPort()
+  if (!port) throw new Error('AI is not configured')
+  return port(request)
+}
+
+/** The resume recap: a stateless side call, cached in memory, never a Turn. */
+export const recap = createRecap({ sessions, port: modelPort })
+
 export const turnRunner = createTurnRunner({
   sessions,
-  port: ((request) => {
-    const port = getChatPort()
-    if (!port) throw new Error('AI is not configured')
-    return port(request)
-  }) satisfies ChatPort,
+  port: modelPort,
   contextLimit: DEFAULT_CONTEXT_LIMIT,
   replyReserve: DM_REPLY_TOKENS,
   loadContext: ({ campaignId, characterId }) => {
