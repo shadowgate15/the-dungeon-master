@@ -1,6 +1,8 @@
+import type { RollRequest } from '#lib/session/enums.ts'
 import { deriveTurnState } from '#lib/session/lifecycle.ts'
 import { streamText, type ChatPort, type TextEvent } from '../ai/port.ts'
 import { assembleContext, type ContextInput } from './context.ts'
+import { MAX_ROLL_REJECTIONS, parseRollRequest, ROLL_TOOL_NAME, rollTool } from './roll-request.ts'
 import type { SessionService } from './service.ts'
 
 /**
@@ -23,6 +25,10 @@ export interface TurnRunnerDeps {
   /** Tokens reserved for (and capped on) the DM's reply. */
   replyReserve: number
   /** The Campaign Seed, Worlds and derived sheet text for the Session's Campaign and Character. */
+  /** Code's d20; the DM never rolls. */
+  rollD20: () => number
+  /** The modifier for a check, from the Character's derived stats. 0 when it cannot be derived. */
+  rollModifier: (session: { characterId: string }, request: RollRequest) => number
   loadContext: (session: {
     campaignId: string
     characterId: string
@@ -37,13 +43,14 @@ export type BeginResult =
 export interface TurnRunner {
   /**
    * Starts a DM turn. With `action`, saves the player's action first (the Session must be
-   * awaiting one); without, the DM opens an empty Session or answers an unanswered action
-   * (Retry). Refusals are decided synchronously, before anything is saved. The returned events
+   * awaiting one); with `roll`, code rolls the d20 and saves the Roll result first (the Session
+   * must have a pending Roll request); without either, the DM opens an empty Session or answers an
+   * unanswered action or Roll result (Retry, which never rolls again). Refusals are decided synchronously, before anything is saved. The returned events
    * are the narration deltas, then `done` or `error`; aborting `signal` ends them with neither.
    */
   begin(
     sessionId: string,
-    input: { action?: string; contextLimit?: number },
+    input: { action?: string; roll?: boolean; contextLimit?: number },
     signal: AbortSignal
   ): BeginResult
   /** Whether a model call is in flight for the Session. */
@@ -67,8 +74,14 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
         return { ok: false, reason: 'empty-action' }
       }
       const state = deriveTurnState(deps.sessions.turns(sessionId))
-      const allowed = action === undefined ? ['unopened', 'unanswered'] : ['awaiting-action']
+      if (input.roll && action !== undefined) return { ok: false, reason: 'invalid-state' }
+      const allowed = input.roll
+        ? ['pending-roll']
+        : action === undefined
+          ? ['unopened', 'unanswered']
+          : ['awaiting-action']
       if (!allowed.includes(state)) return { ok: false, reason: 'invalid-state' }
+      const pending = input.roll ? deps.sessions.turns(sessionId).at(-1)?.rollRequest : undefined
 
       // Claim the Session now (before anything async); the abort listener frees it even if the
       // events are never iterated, e.g. the response was cancelled before it started.
@@ -83,6 +96,15 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
       try {
         if (action !== undefined) {
           deps.sessions.appendTurn(sessionId, { author: 'player', kind: 'action', text: action })
+        } else if (pending) {
+          // Code rolls, and the result is saved before the model call: a failed answer keeps it.
+          const d20 = deps.rollD20()
+          const modifier = deps.rollModifier(current, pending)
+          deps.sessions.appendTurn(sessionId, {
+            author: 'player',
+            kind: 'roll_result',
+            rollResult: { d20, modifier, total: d20 + modifier }
+          })
         }
       } catch (error) {
         release()
@@ -98,34 +120,62 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
             replyReserve: deps.replyReserve
           })
           let narration = ''
-          for await (const event of streamText(deps.port, {
-            systemPrompts: context.systemPrompts,
-            messages: context.messages,
-            maxTokens: deps.replyReserve,
-            threadId: sessionId,
-            signal
-          })) {
-            if (signal.aborted) return
-            if (event.type === 'delta') {
-              narration += event.text
-              yield event
-            } else if (event.type === 'done') {
-              if (!narration.trim()) {
-                yield {
-                  type: 'error',
-                  failure: { kind: 'invalid-output', message: 'The DM said nothing' }
+          let rollRequest: RollRequest | undefined
+          let rejections = 0
+          // Aborts the model call on the rejection cap; the caller's signal feeds it too.
+          const call = new AbortController()
+          const relay = () => call.abort()
+          signal.addEventListener('abort', relay, { once: true })
+          try {
+            for await (const event of streamText(deps.port, {
+              systemPrompts: context.systemPrompts,
+              messages: context.messages,
+              maxTokens: deps.replyReserve,
+              threadId: sessionId,
+              tools: [rollTool],
+              signal: call.signal
+            })) {
+              if (signal.aborted) return
+              if (event.type === 'delta') {
+                narration += event.text
+                yield event
+              } else if (event.type === 'tool-rejected') {
+                yield event
+                if (++rejections > MAX_ROLL_REJECTIONS) {
+                  call.abort()
+                  yield {
+                    type: 'error',
+                    failure: {
+                      kind: 'invalid-output',
+                      message: 'The Dungeon Master could not make a valid roll request. Try again.'
+                    }
+                  }
+                  return
                 }
-                return
+              } else if (event.type === 'approval-requested') {
+                if (event.toolName === ROLL_TOOL_NAME) rollRequest ??= parseRollRequest(event.input)
+              } else if (event.type === 'done') {
+                if (!narration.trim() && !rollRequest) {
+                  yield {
+                    type: 'error',
+                    failure: { kind: 'invalid-output', message: 'The DM said nothing' }
+                  }
+                  return
+                }
+                // A Roll request ends the DM's turn and stays pending: this row is the interrupt.
+                deps.sessions.appendTurn(sessionId, {
+                  author: 'dm',
+                  kind: 'narration',
+                  text: narration.trim() ? narration : null,
+                  ...(rollRequest && { rollRequest })
+                })
+                yield event
+              } else {
+                yield event
               }
-              deps.sessions.appendTurn(sessionId, {
-                author: 'dm',
-                kind: 'narration',
-                text: narration
-              })
-              yield event
-            } else {
-              yield event
             }
+          } finally {
+            signal.removeEventListener('abort', relay)
           }
         } catch (error) {
           if (signal.aborted) return

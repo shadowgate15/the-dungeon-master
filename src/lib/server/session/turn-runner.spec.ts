@@ -5,6 +5,7 @@ import { seedRulesData } from '../rules/seed'
 import { createCampaignService } from '../campaign/service'
 import { createCharacterService } from '../character/service'
 import { createWorldService } from '../world/service'
+import { deriveTurnState } from '#lib/session/lifecycle.ts'
 import { createSessionService, type SessionService } from './service'
 import { createTurnRunner, type BeginResult, type TurnRunner } from './turn-runner.ts'
 
@@ -79,7 +80,12 @@ async function drain(result: BeginResult) {
 const texts = () => sessions.turns(sessionId).map((t) => `${t.author}:${t.text}`)
 const controller = () => new AbortController()
 
+let d20s: number[]
+let rolled: number
+
 beforeEach(() => {
+  d20s = []
+  rolled = 0
   scripts = []
   requests = []
   const db = openDatabase(':memory:')
@@ -100,6 +106,11 @@ beforeEach(() => {
     port,
     contextLimit: 4096,
     replyReserve: 512,
+    rollD20: () => {
+      rolled++
+      return d20s.shift() ?? 10
+    },
+    rollModifier: (_session, request) => (request.key === 'stealth' ? 4 : -1),
     loadContext: () => ({
       campaign: { name: 'Crown', premise: 'Find it.', tone: 'dark', length: 'short' },
       worlds: [],
@@ -230,5 +241,199 @@ describe('refusals', () => {
       ok: false,
       reason: 'invalid-state'
     })
+  })
+})
+
+const STEALTH = { check: 'skill', key: 'stealth', dc: 12, reason: 'Slip past the guard.' }
+
+/** The raw TanStack events for a tool call that was rejected back to the model. */
+const rejectedCall = (id: string): unknown[] => [
+  {
+    type: 'TOOL_CALL_END',
+    toolCallId: id,
+    metadata: { tanstack: { toolCallName: 'request_roll' } }
+  },
+  {
+    type: 'TOOL_CALL_RESULT',
+    toolCallId: id,
+    content: JSON.stringify({ error: 'Input validation failed: dc too big' }),
+    metadata: { tanstack: { state: 'output-error' } }
+  }
+]
+
+/** The raw TanStack events for a valid request_roll call that pauses the run. */
+const rollCall = (input: unknown): unknown[] => [
+  {
+    type: 'TOOL_CALL_END',
+    toolCallId: 'c1',
+    input,
+    metadata: { tanstack: { toolCallName: 'request_roll' } }
+  },
+  {
+    type: 'RUN_FINISHED',
+    outcome: { type: 'interrupt', interrupts: [{ toolCallId: 'c1' }] }
+  }
+]
+
+const asksForRoll = (narration: string, input: unknown = STEALTH): Script =>
+  async function* () {
+    if (narration) yield delta(narration)
+    yield* rollCall(input)
+  }
+
+/** Rejected calls, then (optionally) a valid one, in a single model run. */
+const rejectsThen = (rejections: number, input?: unknown): Script =>
+  async function* () {
+    for (let i = 0; i < rejections; i++) yield* rejectedCall(`r${i}`)
+    if (input) yield* rollCall(input)
+    else yield finished
+  }
+
+describe('a Roll request', () => {
+  beforeEach(async () => {
+    scripts.push(says('A gate.'))
+    await drain(runner.begin(sessionId, {}, controller().signal))
+    scripts.push(asksForRoll('A guard turns your way.'))
+    await drain(runner.begin(sessionId, { action: 'I sneak past.' }, controller().signal))
+  })
+
+  it('offers the model request_roll, which pauses for approval with bounded input', () => {
+    const tool = requests.at(-1)!.tools!.find((t) => t.name === 'request_roll')!
+    expect(tool.needsApproval).toBe(true)
+    const schema = tool.inputSchema as {
+      properties: { dc: { minimum: number; maximum: number }; key: { enum: string[] } }
+    }
+    expect(schema.properties.dc).toMatchObject({ minimum: 5, maximum: 30 })
+    expect(schema.properties.key.enum).toEqual(expect.arrayContaining(['str', 'stealth']))
+  })
+
+  it('ends the DM turn with the request saved on it, pending across a restart', () => {
+    const last = sessions.turns(sessionId).at(-1)!
+    expect(last).toMatchObject({
+      author: 'dm',
+      kind: 'narration',
+      text: 'A guard turns your way.',
+      rollRequest: STEALTH
+    })
+    expect(deriveTurnState(sessions.turns(sessionId))).toBe('pending-roll')
+    expect(runner.begin(sessionId, { action: 'Never mind.' }, controller().signal)).toEqual({
+      ok: false,
+      reason: 'invalid-state'
+    })
+    expect(runner.begin(sessionId, {}, controller().signal)).toEqual({
+      ok: false,
+      reason: 'invalid-state'
+    })
+  })
+
+  it('rolls the d20 plus the modifier in code, saves it as a player turn, and the DM narrates', async () => {
+    d20s.push(15)
+    let seenByModel = ''
+    scripts.push(async function* (request) {
+      seenByModel = request.messages.at(-1)!.content
+      yield delta('You melt into the shadows.')
+      yield finished
+    })
+
+    const events = await drain(runner.begin(sessionId, { roll: true }, controller().signal))
+
+    expect(sessions.turns(sessionId).slice(-2)).toMatchObject([
+      { author: 'player', kind: 'roll_result', rollResult: { d20: 15, modifier: 4, total: 19 } },
+      { author: 'dm', text: 'You melt into the shadows.' }
+    ])
+    expect(seenByModel).toBe('I rolled 15 + 4 = 19.')
+    expect(events.at(-1)).toMatchObject({ type: 'done' })
+  })
+
+  it('cannot be rolled when none is pending', async () => {
+    d20s.push(15)
+    scripts.push(says('You are seen.'))
+    await drain(runner.begin(sessionId, { roll: true }, controller().signal))
+
+    expect(runner.begin(sessionId, { roll: true }, controller().signal)).toEqual({
+      ok: false,
+      reason: 'invalid-state'
+    })
+    expect(rolled).toBe(1)
+  })
+
+  it('keeps the roll when the model is down, and Retry never re-rolls it', async () => {
+    d20s.push(7, 20)
+    scripts.push(fails)
+    const events = await drain(runner.begin(sessionId, { roll: true }, controller().signal))
+    expect(events.at(-1)).toMatchObject({ type: 'error' })
+    expect(sessions.turns(sessionId).at(-1)).toMatchObject({
+      kind: 'roll_result',
+      rollResult: { d20: 7, modifier: 4, total: 11 }
+    })
+    expect(deriveTurnState(sessions.turns(sessionId))).toBe('unanswered')
+
+    scripts.push(says('You stumble.'))
+    await drain(runner.begin(sessionId, {}, controller().signal))
+
+    expect(rolled).toBe(1)
+    expect(sessions.turns(sessionId).filter((t) => t.kind === 'roll_result')).toHaveLength(1)
+    expect(sessions.turns(sessionId).at(-1)).toMatchObject({ text: 'You stumble.' })
+  })
+
+  it('may chain: the DM answers a roll with another Roll request', async () => {
+    d20s.push(3)
+    scripts.push(asksForRoll('', { ...STEALTH, key: 'dex', dc: 10 }))
+    await drain(runner.begin(sessionId, { roll: true }, controller().signal))
+
+    expect(deriveTurnState(sessions.turns(sessionId))).toBe('pending-roll')
+    expect(sessions.turns(sessionId).at(-1)).toMatchObject({
+      text: null,
+      rollRequest: { key: 'dex', dc: 10, check: 'ability' }
+    })
+  })
+})
+
+describe('invalid Roll requests', () => {
+  beforeEach(async () => {
+    scripts.push(says('A gate.'))
+    await drain(runner.begin(sessionId, {}, controller().signal))
+  })
+
+  it('are rejected to the model; two rejections are tolerated and the model may correct itself', async () => {
+    scripts.push(rejectsThen(2, STEALTH))
+
+    const events = await drain(runner.begin(sessionId, { action: 'I sneak.' }, controller().signal))
+
+    expect(events.filter((e) => e.type === 'tool-rejected')).toHaveLength(2)
+    expect(events.at(-1)).toMatchObject({ type: 'done' })
+    expect(deriveTurnState(sessions.turns(sessionId))).toBe('pending-roll')
+  })
+
+  it('end as a generic failure on the third rejection, stopping the model call', async () => {
+    let signal: AbortSignal | undefined
+    scripts.push(async function* (request) {
+      signal = request.signal
+      yield* rejectsThen(3)(request)
+      yield delta('Should never be reached.')
+    })
+
+    const events = await drain(runner.begin(sessionId, { action: 'I sneak.' }, controller().signal))
+
+    expect(events.at(-1)).toEqual({
+      type: 'error',
+      failure: {
+        kind: 'invalid-output',
+        message: 'The Dungeon Master could not make a valid roll request. Try again.'
+      }
+    })
+    expect(signal?.aborted).toBe(true)
+    expect(texts()).toEqual(['dm:A gate.', 'player:I sneak.'])
+    expect(deriveTurnState(sessions.turns(sessionId))).toBe('unanswered')
+  })
+
+  it('the cap resets on Retry', async () => {
+    scripts.push(rejectsThen(3))
+    await drain(runner.begin(sessionId, { action: 'I sneak.' }, controller().signal))
+    scripts.push(rejectsThen(2, STEALTH))
+
+    const events = await drain(runner.begin(sessionId, {}, controller().signal))
+
+    expect(events.at(-1)).toMatchObject({ type: 'done' })
   })
 })

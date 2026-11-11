@@ -3,7 +3,8 @@ import { fetchServerSentEvents } from '@tanstack/ai-client'
 /**
  * Client state for one streamed DM turn, over TanStack AI's `fetchServerSentEvents` (a fetch
  * POST, not `EventSource`). `start` posts the player's action (or nothing, for the DM's opening
- * or a Retry); `text` fills as narration streams; `stop` aborts the request, which the server
+ * or a Retry); `start(undefined, { roll: true })` is the Roll click, answering a pending Roll
+ * request; `text` fills as narration streams; `stop` aborts the request, which the server
  * treats like a closed tab: the partial DM turn is discarded and the action stays unanswered.
  * Call `start` only from the browser. The caller refreshes the transcript when `start` settles.
  */
@@ -23,7 +24,7 @@ export class TurnStream {
   ) {}
 
   /** Resolves when the turn has finished, failed or been stopped. */
-  async start(action?: string): Promise<void> {
+  async start(action?: string, options: { roll?: boolean } = {}): Promise<void> {
     if (this.streaming) return
     this.streaming = true
     this.text = ''
@@ -35,7 +36,7 @@ export class TurnStream {
       const connection = fetchServerSentEvents(this.url)
       const chunks = connection.connect(
         [],
-        action === undefined ? {} : { action },
+        { ...(action !== undefined && { action }), ...(options.roll && { roll: true }) },
         controller.signal,
         {
           threadId: crypto.randomUUID(),

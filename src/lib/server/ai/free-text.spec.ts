@@ -118,4 +118,72 @@ describe('free-text streaming through the port', () => {
     expect(calls).toEqual([])
     expect(events.at(-1)).toMatchObject({ type: 'done' })
   })
+
+  describe('a tool that needs approval', () => {
+    const approvalTool = (calls: unknown[]) => ({
+      name: 'request_roll',
+      description: 'Ask for a roll',
+      needsApproval: true,
+      inputSchema: {
+        type: 'object',
+        properties: { dc: { type: 'integer', minimum: 5, maximum: 30 } },
+        required: ['dc'],
+        additionalProperties: false
+      },
+      execute: (input: unknown) => calls.push(input)
+    })
+
+    it('pauses with the validated input instead of running the tool', async () => {
+      const calls: unknown[] = []
+      fake.queueAnswers({
+        content: 'A guard turns.',
+        toolCalls: [{ name: 'request_roll', arguments: { dc: 12 } }]
+      })
+
+      const events = await collect(streamText(port(), request({ tools: [approvalTool(calls)] })))
+
+      expect(calls).toEqual([])
+      expect(events).toContainEqual({
+        type: 'approval-requested',
+        toolName: 'request_roll',
+        input: { dc: 12 }
+      })
+      expect(events.at(-1)).toMatchObject({ type: 'done' })
+      expect(fake.requests.filter((r) => r.path === '/v1/chat/completions')).toHaveLength(1)
+    })
+
+    it('rejects invalid input to the model before any pause, and the model may retry', async () => {
+      const calls: unknown[] = []
+      fake.queueAnswers(
+        { toolCalls: [{ name: 'request_roll', arguments: { dc: 99 } }] },
+        { toolCalls: [{ name: 'request_roll', arguments: { dc: 14 } }] }
+      )
+
+      const events = await collect(streamText(port(), request({ tools: [approvalTool(calls)] })))
+
+      const types = events.map((e) => e.type)
+      expect(types.indexOf('tool-rejected')).toBeGreaterThanOrEqual(0)
+      expect(types.indexOf('tool-rejected')).toBeLessThan(types.indexOf('approval-requested'))
+      expect(events.find((e) => e.type === 'tool-rejected')).toMatchObject({
+        toolName: 'request_roll'
+      })
+      expect(events).toContainEqual({
+        type: 'approval-requested',
+        toolName: 'request_roll',
+        input: { dc: 14 }
+      })
+    })
+
+    it('reports unparseable arguments as a rejection too', async () => {
+      fake.queueAnswers(
+        { toolCalls: [{ name: 'request_roll', arguments: '{not json' }] },
+        { content: 'Carry on.' }
+      )
+
+      const events = await collect(streamText(port(), request({ tools: [approvalTool([])] })))
+
+      expect(events.filter((e) => e.type === 'tool-rejected')).toHaveLength(1)
+      expect(events.some((e) => e.type === 'approval-requested')).toBe(false)
+    })
+  })
 })

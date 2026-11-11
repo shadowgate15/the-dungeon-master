@@ -38,7 +38,7 @@ async function* toChunks(events: AsyncIterable<TextEvent>, threadId: string) {
         finishReason: 'stop',
         ...base()
       } as StreamChunk
-    } else {
+    } else if (event.type === 'error') {
       yield {
         type: EventType.RUN_ERROR,
         message: event.failure.message,
