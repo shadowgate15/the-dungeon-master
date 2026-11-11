@@ -80,7 +80,7 @@ describe('pick group requests', () => {
     expect(text).toMatch(/exactly 2/)
     expect(text).toContain('skill-athletics')
     // The output schema pins the count and unique items; it holds only legal slugs.
-    const schema = z.toJSONSchema(requests[0].outputSchema) as unknown as {
+    const schema = z.toJSONSchema(requests[0].outputSchema!) as unknown as {
       properties: { values: { minItems: number; maxItems: number; uniqueItems?: boolean } }
     }
     expect(schema.properties.values).toMatchObject({ minItems: 2, maxItems: 2, uniqueItems: true })
@@ -194,7 +194,7 @@ describe('equipment group requests', () => {
 
     expect(result).toEqual({ ok: true, value: { option: 0, wild: ['longsword'] } })
     expect(system(requests[0])).toContain('longsword')
-    const schema = z.toJSONSchema(requests[0].outputSchema) as unknown as {
+    const schema = z.toJSONSchema(requests[0].outputSchema!) as unknown as {
       properties: { option: unknown; wild: { items: { enum: string[] } } }
     }
     expect(schema.properties.wild.items.enum).toContain('longsword')
