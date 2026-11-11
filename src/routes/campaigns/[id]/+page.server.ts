@@ -65,7 +65,7 @@ export const actions: Actions = {
       resolve('/campaigns/[id]/sessions/[sessionId]', {
         id: params.id,
         sessionId: started.id
-      })
+      }) + '?opening'
     )
   }
 }

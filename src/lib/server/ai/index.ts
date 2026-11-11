@@ -41,6 +41,13 @@ export function getChatPort() {
   return adapter ? createChatPort(adapter) : null
 }
 
+/** The context window to budget a prompt for: the loaded model's, else the configured limit. */
+export async function getContextLimit(): Promise<number> {
+  const status = await getAiStatus()
+  if (status.state === 'ready') return status.contextLength ?? config.contextLimit
+  return config.contextLimit
+}
+
 /** The configured chat adapter, or null when no model is set. */
 export function getChatAdapter() {
   return config.model ? createChatAdapter({ baseUrl: config.baseUrl, model: config.model }) : null
