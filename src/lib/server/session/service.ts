@@ -29,6 +29,14 @@ export function createSessionService(db: Database, now: () => number = Date.now)
       .where(and(eq(session.campaignId, campaignId), isNull(session.endedAt)))
       .get()
 
+  const listNewestFirst = (campaignId: string) =>
+    db
+      .select()
+      .from(session)
+      .where(eq(session.campaignId, campaignId))
+      .orderBy(desc(session.startedAt), sql`rowid desc`)
+      .all()
+
   return {
     /** The Campaign's linked Character, if any. The app links one per Campaign. */
     linkedCharacterId(campaignId: string): string | undefined {
@@ -106,8 +114,9 @@ export function createSessionService(db: Database, now: () => number = Date.now)
     },
 
     /**
-     * Saves the rolling summary and the last Turn it covers. Allowed on an ended Session too: a
-     * summary still finishing when the player ends the Session is what the next one inherits.
+     * Saves the rolling summary and the last Turn it covers. Deliberately allowed on an ended
+     * Session, unlike `appendTurn`: the summary is derived housekeeping, not the transcript. One
+     * still being written when the player ends the Session is what the next Session inherits.
      */
     saveSummary(id: string, summary: string, throughSeq: number): void {
       db.update(session)
@@ -124,14 +133,14 @@ export function createSessionService(db: Database, now: () => number = Date.now)
       return openSession(campaignId)
     },
 
+    /** A Campaign's Sessions, oldest first, each with its number: it never changes once shown. */
+    listNumbered(campaignId: string): (Session & { number: number })[] {
+      return [...listNewestFirst(campaignId)].reverse().map((s, i) => ({ ...s, number: i + 1 }))
+    },
+
     /** A Campaign's Sessions, newest first. */
     list(campaignId: string): Session[] {
-      return db
-        .select()
-        .from(session)
-        .where(eq(session.campaignId, campaignId))
-        .orderBy(desc(session.startedAt), sql`rowid desc`)
-        .all()
+      return listNewestFirst(campaignId)
     },
 
     /**

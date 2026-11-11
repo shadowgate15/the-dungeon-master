@@ -129,4 +129,10 @@ describe('the resume recap', () => {
     expect(await recap.get(sessionId, new AbortController().signal)).toBeUndefined()
     expect(requests).toHaveLength(0)
   })
+
+  it('gives nothing for an ended Session', async () => {
+    sessions.end(sessionId)
+    expect(await recap.get(sessionId, new AbortController().signal)).toBeUndefined()
+    expect(requests).toHaveLength(0)
+  })
 })

@@ -7,6 +7,7 @@ import { createCharacterService } from '../character/service'
 import { createWorldService } from '../world/service'
 import { deriveTurnState } from '#lib/session/lifecycle.ts'
 import { createSessionService, type SessionService } from './service'
+import { SUMMARY_MAX_FAILURES } from './summary.ts'
 import { createTurnRunner, type BeginResult, type TurnRunner } from './turn-runner.ts'
 
 const HERO = {
@@ -405,6 +406,17 @@ describe('invalid Roll requests', () => {
     expect(deriveTurnState(sessions.turns(sessionId))).toBe('pending-roll')
   })
 
+  it('end as a generic failure when a paused call has unparseable input, saving no DM turn', async () => {
+    scripts.push(asksForRoll('A guard turns.', { check: 'skill', key: 'nonsense', dc: 99 }))
+    const before = sessions.turns(sessionId).length
+
+    const events = await drain(runner.begin(sessionId, { action: 'I sneak.' }, controller().signal))
+
+    expect(events.at(-1)).toMatchObject({ type: 'error', failure: { kind: 'invalid-output' } })
+    // Only the player's action was added; the DM turn was not silently saved without its request.
+    expect(sessions.turns(sessionId)).toHaveLength(before + 1)
+  })
+
   it('end as a generic failure on the third rejection, stopping the model call', async () => {
     let signal: AbortSignal | undefined
     scripts.push(async function* (request) {
@@ -535,6 +547,30 @@ describe('the rolling summary', () => {
     // The next turn still plays, and tries the summary again.
     await act('I go in.', says('Inside.'), says('Summary after failure.'))
     expect(sessions.get(sessionId)?.summary).toBe('Summary after failure.')
+  })
+
+  it('stops being attempted after repeated failures within a Session', async () => {
+    await open()
+    const bad = says('You have 12 gold pieces.')
+    for (let i = 0; i < SUMMARY_MAX_FAILURES; i++) await act(`Step ${i}.`, says(LONG), bad)
+    const calls = requests.length
+
+    // Due again, but the runner has backed off: only the DM call is made.
+    const events = await act('One more.', says(LONG), says('A summary.'))
+
+    expect(events.at(-1)).toMatchObject({ type: 'done' })
+    expect(requests).toHaveLength(calls + 1)
+    expect(sessions.get(sessionId)?.summary).toBeNull()
+  })
+
+  it('counts only consecutive failures: a success resets the back-off', async () => {
+    await open()
+    const bad = says('You have 12 gold pieces.')
+    for (let i = 0; i < SUMMARY_MAX_FAILURES - 1; i++) await act(`Step ${i}.`, says(LONG), bad)
+    await act('Good.', says(LONG), says('A summary.'))
+    for (let i = 0; i < SUMMARY_MAX_FAILURES - 1; i++) await act(`Again ${i}.`, says(LONG), bad)
+    await act('Last.', says(LONG), says('Final summary.'))
+    expect(sessions.get(sessionId)?.summary).toBe('Final summary.')
   })
 
   it('is not attempted after a failed DM turn', async () => {

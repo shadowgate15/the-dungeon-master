@@ -57,7 +57,7 @@ A player's hero, created at level 1 from the D&D 5e SRD 5.1 and stored as the pl
 _Avoid_: Player character sheet, PC, hero, avatar
 
 **Archived Character**:
-A Character set aside by its author. It is hidden from the main Character list, shown under the Archived view, and is read-only until restored: it can be viewed but not edited. Archiving is reversible; deleting a Character is not. Unlike a Campaign, a Character depends on nothing, so nothing else, including anything about its Campaigns, can make it read-only.
+A Character set aside by its author. It is hidden from the main Character list, shown under the Archived view, and is read-only until restored: it can be viewed but not edited. Archiving is reversible; deleting a Character is not, and a Character that has played any Session cannot be deleted (archive it instead), so Session transcripts are never lost. Unlike a Campaign, a Character depends on nothing, so nothing else, including anything about its Campaigns, can make it read-only.
 _Avoid_: Disabled Character, hidden Character, retired Character
 
 **Character creation wizard**:

@@ -4,9 +4,10 @@ import { REASONING_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import type { createChatAdapter } from './adapter.ts'
 
 /**
- * The neutral chat port: provider-neutral request and event types, the usage reader, one
- * classified model call, and the production port over TanStack AI. Used by
- * per-field generation.
+ * The neutral chat port: provider-neutral request and event types, the usage reader, a
+ * classified structured call (`callModel`) and free-text calls (`streamText`, `collectText`),
+ * and the production port over TanStack AI. Used by per-field generation and the Session
+ * runner (turns, summary, recap).
  */
 
 /** The failures a single model call can report; callers add their own kinds around these. */
@@ -214,6 +215,25 @@ export async function* streamText(port: ChatPort, request: ChatRequest): AsyncGe
     return
   }
   if (!request.signal.aborted) yield { type: 'done', usage }
+}
+
+/**
+ * A free-text call collected into one trimmed string, for side calls that need no streaming.
+ * `undefined` on any failure: a model error, an abort, no `done`, or an empty answer.
+ */
+export async function collectText(
+  port: ChatPort,
+  request: ChatRequest
+): Promise<string | undefined> {
+  let text = ''
+  let done = false
+  for await (const event of streamText(port, request)) {
+    if (event.type === 'delta') text += event.text
+    else if (event.type === 'error') return undefined
+    else if (event.type === 'done') done = true
+  }
+  const trimmed = text.trim()
+  return done && trimmed ? trimmed : undefined
 }
 
 /** The production port: TanStack AI `chat()` over the configured adapter. */

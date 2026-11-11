@@ -22,12 +22,7 @@ export const load: PageServerLoad = ({ params }) => {
       id: found.id,
       startedAt: found.startedAt,
       endedAt: found.endedAt,
-      // Oldest first, so the number shown for a Session never changes.
-      number:
-        sessions
-          .list(campaign.id)
-          .reverse()
-          .findIndex((s) => s.id === found.id) + 1
+      number: sessions.listNumbered(campaign.id).find((s) => s.id === found.id)?.number ?? 0
     },
     turns: sessions.turns(found.id).map((t) => ({
       id: t.id,

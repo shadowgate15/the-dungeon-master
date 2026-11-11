@@ -1,3 +1,4 @@
+import { signed } from '../signed.ts'
 import type { RollRequest, RollResult } from './enums.ts'
 
 const ABILITY_NAMES: Record<string, string> = {
@@ -23,6 +24,5 @@ export function checkLabel(request: Pick<RollRequest, 'check' | 'key'>): string 
 
 /** "15 + 4 = 19", with the modifier's sign shown. */
 export function resultLabel(result: RollResult): string {
-  const sign = result.modifier < 0 ? '-' : '+'
-  return `${result.d20} ${sign} ${Math.abs(result.modifier)} = ${result.total}`
+  return `${result.d20} ${signed(result.modifier, true)} = ${result.total}`
 }

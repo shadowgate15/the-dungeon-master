@@ -218,7 +218,8 @@ export const characterChoice = sqliteTable(
 /**
  * A Campaign's linked Character. The app allows one Character per Campaign (enforced in the
  * session service); the schema does not, so a later multiplayer Campaign needs no migration.
- * Deleting a Character is never blocked (see the Character service), so its links and Sessions cascade.
+ * Deleting a Character with any Session is refused (see the Character service), so only the
+ * link of a Character that never played cascades.
  */
 export const campaignCharacter = sqliteTable(
   'campaign_character',
@@ -246,9 +247,10 @@ export const session = sqliteTable(
     campaignId: text('campaign_id')
       .notNull()
       .references(() => campaign.id, { onDelete: 'cascade' }),
+    // Restrict: a Character that played is never deleted, since that would erase the transcripts.
     characterId: text('character_id')
       .notNull()
-      .references(() => character.id, { onDelete: 'cascade' }),
+      .references(() => character.id, { onDelete: 'restrict' }),
     startedAt: integer('started_at').notNull(),
     endedAt: integer('ended_at'),
     /**

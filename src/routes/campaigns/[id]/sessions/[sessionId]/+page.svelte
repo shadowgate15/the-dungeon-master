@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createQuery, useQueryClient } from '@tanstack/svelte-query'
   import { onMount } from 'svelte'
   import { enhance } from '$app/forms'
   import { invalidateAll, replaceState } from '$app/navigation'
@@ -37,28 +38,24 @@
   let action = $state('')
 
   // The resume recap: a stateless side call, not a Turn and not the generating state. Silent on
-  // failure, and any submit aborts it.
-  let recap = $state<string | null>(null)
-  let recapController: AbortController | undefined
+  // failure (the endpoint answers null), and any model-calling action aborts it.
+  const queryClient = useQueryClient()
+  let recapWanted = $state(false)
+  const recapKey = $derived(['session-recap', page.params.sessionId, data.turns.at(-1)?.seq])
+  const recapQuery = createQuery(() => ({
+    queryKey: recapKey,
+    enabled: recapWanted,
+    queryFn: async ({ signal }): Promise<string | null> => {
+      const response = await fetch(`/api/sessions/${page.params.sessionId}/recap`, { signal })
+      if (!response.ok) return null
+      return ((await response.json()) as { recap: string | null }).recap
+    }
+  }))
+  const recap = $derived(recapWanted ? (recapQuery.data ?? null) : null)
 
   function abortRecap() {
-    recapController?.abort()
-    recapController = undefined
-    recap = null
-  }
-
-  async function loadRecap() {
-    const controller = new AbortController()
-    recapController = controller
-    try {
-      const response = await fetch(`/api/sessions/${page.params.sessionId}/recap`, {
-        signal: controller.signal
-      })
-      const body = (await response.json()) as { recap: string | null }
-      if (!controller.signal.aborted) recap = body.recap
-    } catch {
-      // Silent: a recap is a courtesy.
-    }
+    recapWanted = false
+    void queryClient.cancelQueries({ queryKey: ['session-recap', page.params.sessionId] })
   }
 
   async function send(event: SubmitEvent) {
@@ -70,7 +67,9 @@
     await stream.start(text)
   }
 
-  // Another window (or a Stop the server has not yet released) is mid-answer: poll until it is done.
+  // Another window (or a Stop the server has not yet released) is mid-answer: poll until it is
+  // done. This stays a poll over SvelteKit's `load` data, not a query: the transcript comes from
+  // `load` and invalidating it is the only way to refresh it, so a query would add nothing.
   $effect(() => {
     if (!data.generating || stream.streaming) return
     const timer = setInterval(() => void invalidateAll(), 1000)
@@ -89,9 +88,9 @@
       )
       if (!ended && turnState === 'unopened') void stream.start()
     } else if (!ended && !data.generating && turnState === 'awaiting-action') {
-      void loadRecap()
+      recapWanted = true
     }
-    return () => recapController?.abort()
+    return abortRecap
   })
 </script>
 
@@ -214,7 +213,13 @@
           </div>
         </form>
       {:else if turnState === 'pending-roll' && pendingRoll}
-        <RollPrompt request={pendingRoll} onroll={() => stream.start(undefined, { roll: true })} />
+        <RollPrompt
+          request={pendingRoll}
+          onroll={() => {
+            abortRecap()
+            void stream.start(undefined, { roll: true })
+          }}
+        />
       {:else}
         <div class="space-y-2">
           <Alert variant="danger">
@@ -225,7 +230,14 @@
           </Alert>
           <div class="flex items-center justify-end gap-2">
             {#if downReason}<p class="text-sm text-muted">{downReason}</p>{/if}
-            <Button size="sm" disabled={!!downReason} onclick={() => stream.start()}>Retry</Button>
+            <Button
+              size="sm"
+              disabled={!!downReason}
+              onclick={() => {
+                abortRecap()
+                void stream.start()
+              }}>Retry</Button
+            >
           </div>
         </div>
       {/if}

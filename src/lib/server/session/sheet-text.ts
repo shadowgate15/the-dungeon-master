@@ -1,7 +1,8 @@
 import type { SummaryModel } from '#lib/character/summary.ts'
-import { ABILITY_KEYS, type Stat } from '#lib/rules/derive-stats.ts'
+import { ABILITY_KEYS } from '#lib/rules/registry.ts'
+import type { Stat } from '#lib/rules/derive-stats.ts'
+import { signed } from '#lib/signed.ts'
 
-const signed = (n: number) => (n >= 0 ? `+${n}` : `${n}`)
 const ok = <T>(stat: Stat<T>): T | undefined => (stat.status === 'ok' ? stat.value : undefined)
 
 /**

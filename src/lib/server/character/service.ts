@@ -12,6 +12,7 @@ import {
   classTable,
   equipment,
   race,
+  session,
   skill,
   spell,
   subclass,
@@ -557,8 +558,21 @@ export function createCharacterService(
       return setArchived(id, null)
     },
 
-    /** Hard delete; child rows cascade. Nothing blocks it. */
+    /**
+     * Hard delete; child rows cascade. Refused while the Character has any Session, because
+     * deleting it would erase the Session transcripts, which are append-only.
+     */
     delete(id: string): void {
+      const played = db
+        .select({ id: session.id })
+        .from(session)
+        .where(eq(session.characterId, id))
+        .get()
+      if (played) {
+        throw new CharacterValidationError(
+          'This Character has played Sessions and cannot be deleted. Archive it instead.'
+        )
+      }
       const deleted = db.delete(character).where(eq(character.id, id)).returning().get()
       if (!deleted) throw new CharacterNotFoundError('Character not found')
     },
