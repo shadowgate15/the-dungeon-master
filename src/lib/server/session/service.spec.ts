@@ -206,3 +206,39 @@ describe('appending Turns', () => {
     expect(sessions.turns(s.id)).toEqual([])
   })
 })
+
+describe('the rolling summary', () => {
+  beforeEach(() => sessions.linkCharacter(campaignId, characterId))
+
+  it('starts empty and is saved with the Turn it covers through', () => {
+    const s = sessions.start(campaignId)
+    expect(sessions.get(s.id)).toMatchObject({ summary: null, summarizedThroughSeq: 0 })
+    sessions.saveSummary(s.id, 'The party reached the gate.', 4)
+    expect(sessions.get(s.id)).toMatchObject({
+      summary: 'The party reached the gate.',
+      summarizedThroughSeq: 4
+    })
+  })
+
+  it('carries the last Session final summary into a new Session', () => {
+    const first = sessions.start(campaignId)
+    sessions.saveSummary(first.id, 'Old news.', 2)
+    sessions.end(first.id)
+    const second = sessions.start(campaignId)
+    sessions.saveSummary(second.id, 'Newer news.', 3)
+    sessions.end(second.id)
+
+    const third = sessions.start(campaignId)
+    expect(third.summary).toBe('Newer news.')
+    expect(third.summarizedThroughSeq).toBe(0)
+  })
+
+  it('carries an earlier summary past a Session that never wrote one', () => {
+    const first = sessions.start(campaignId)
+    sessions.saveSummary(first.id, 'Old news.', 2)
+    sessions.end(first.id)
+    sessions.end(sessions.start(campaignId).id)
+
+    expect(sessions.start(campaignId).summary).toBe('Old news.')
+  })
+})
