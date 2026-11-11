@@ -8,6 +8,7 @@
   import { enhance } from '$app/forms'
   import ActionToast from '#lib/world/ActionToast.svelte'
   import Button from '#lib/ui/Button.svelte'
+  import Link from '#lib/ui/Link.svelte'
 
   let { data, form } = $props()
 
@@ -56,6 +57,9 @@
       >
     </form>
   {:else}
+    {#if data.view === 'active'}
+      <Link href={resolve('/campaigns/[id]', { id: campaign.id })} class="mr-2 text-sm">Play</Link>
+    {/if}
     <form
       method="POST"
       action={actionUrl(data.view === 'active' ? 'archive' : 'restore')}
