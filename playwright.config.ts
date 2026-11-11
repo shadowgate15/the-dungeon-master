@@ -20,7 +20,9 @@ export default defineConfig({
       env: {
         DATABASE_URL,
         LM_STUDIO_BASE_URL: `http://127.0.0.1:${FAKE_LM_STUDIO_PORT}/v1`,
-        LM_STUDIO_MODEL: 'fake-model'
+        LM_STUDIO_MODEL: 'fake-model',
+        // Seeded dice, so e2e rolls are deterministic.
+        DICE_SEED: '1'
       }
     }
   ],

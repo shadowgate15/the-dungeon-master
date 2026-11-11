@@ -27,7 +27,9 @@ export interface ChatMessage {
 export interface ChatTool {
   name: string
   description: string
-  execute: () => unknown
+  /** JSON Schema of the arguments the model passes; absent for a tool that takes none. */
+  inputSchema?: Record<string, unknown>
+  execute: (input: unknown) => unknown
 }
 
 /** What the port receives; independent of any provider. */
@@ -36,7 +38,8 @@ export interface ChatRequest {
   messages: ChatMessage[]
   maxTokens: number
   threadId: string
-  outputSchema: z.ZodObject
+  /** Present for structured output (per-field AI); absent to stream free text. */
+  outputSchema?: z.ZodObject
   /** Tools the model may call before answering; absent when none are offered. */
   tools?: ChatTool[]
   /** Aborted on timeout or cancel; the port must stop the provider call when it fires. */
@@ -122,6 +125,46 @@ export async function callModel(port: ChatPort, request: ChatRequest): Promise<M
   return { ok: true, object, usage }
 }
 
+/** One step of a free-text model call, as the caller sees it. */
+export type TextEvent =
+  | { type: 'delta'; text: string }
+  | { type: 'done'; usage?: TokenUsage }
+  | { type: 'error'; failure: ModelFailure }
+
+/**
+ * One free-text model call (no output schema): the narration as text deltas, then `done`, or a
+ * final `error`. Tool calls run inside the port; only the text reaches the caller. Aborting the
+ * request signal stops the provider call and ends the stream without a `done` or `error`.
+ */
+export async function* streamText(port: ChatPort, request: ChatRequest): AsyncGenerator<TextEvent> {
+  let usage: TokenUsage | undefined
+  try {
+    for await (const raw of port(request)) {
+      const event = raw as Event & { delta?: string }
+      if (event.type === 'TEXT_MESSAGE_CONTENT' && event.delta) {
+        yield { type: 'delta', text: event.delta }
+      } else if (event.type === 'RUN_ERROR') {
+        if (request.signal.aborted) return
+        yield { type: 'error', failure: runErrorFailure(event) }
+        return
+      } else if (event.type === 'RUN_FINISHED') {
+        usage = readUsage(event.usage) ?? usage
+      }
+    }
+  } catch (error) {
+    if (request.signal.aborted) return
+    yield {
+      type: 'error',
+      failure: {
+        kind: 'provider-error',
+        message: error instanceof Error ? error.message : 'The model request failed'
+      }
+    }
+    return
+  }
+  if (!request.signal.aborted) yield { type: 'done', usage }
+}
+
 /** The production port: TanStack AI `chat()` over the configured adapter. */
 export function createChatPort(adapter: ReturnType<typeof createChatAdapter>): ChatPort {
   return (request) => {
@@ -134,14 +177,14 @@ export function createChatPort(adapter: ReturnType<typeof createChatAdapter>): C
       systemPrompts: request.systemPrompts,
       messages: request.messages,
       threadId: request.threadId,
-      outputSchema: request.outputSchema,
+      ...(request.outputSchema && { outputSchema: request.outputSchema }),
       ...(request.tools?.length && {
         tools: request.tools.map((t) =>
           toolDefinition({
             name: t.name,
             description: t.description,
-            inputSchema: z.object({})
-          }).server(async () => t.execute())
+            inputSchema: t.inputSchema ?? z.object({})
+          }).server(async (input) => t.execute(input))
         )
       }),
       // The cap goes through the adapter's model options, not the top-level option.

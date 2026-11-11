@@ -13,7 +13,9 @@ import type { AddressInfo } from 'node:net'
  * `/__control/answers`, `"replace": true` clears it first), then a canned object set by POSTing
  * JSON to `/__control/chat-content` (the old chat's control), then a schema-aware default derived
  * from the request's `response_format` (first enum slug, a short string for text, minimum-length
- * arrays). POSTing `{ "ms": n }` to `/__control/delay` delays every response that has no delay of
+ * arrays). An answer can also script `toolCalls` (a `request_roll`, or an invalid call with raw
+ * `arguments`), `status` (an HTTP failure) or `abortAfterChunks` (the connection drops mid-stream).
+ * POSTing `{ "ms": n }` to `/__control/delay` delays every response that has no delay of
  * its own. GET `/__control/requests` returns the chat requests received so far.
  */
 
@@ -44,8 +46,22 @@ export interface ScenarioContext {
 
 /** One answer to a chat completion: a JSON value (or a raw string) and an optional delay. */
 export interface Answer {
-  content: unknown
+  content?: unknown
   delayMs?: number
+  /** Answer with this HTTP error status and no stream (a failure). */
+  status?: number
+  /**
+   * Queue this answer this many times (default 1). The OpenAI client retries a 5xx or a dropped
+   * connection twice, so a scripted failure or abort needs `times: 3` to reach the caller.
+   */
+  times?: number
+  /** Stream this many content chunks, then drop the connection (a mid-stream abort). */
+  abortAfterChunks?: number
+  /**
+   * Tool calls the model makes instead of (or before) content. `arguments` is an object, sent
+   * as its JSON, or a raw string sent as is (an invalid tool call, e.g. malformed JSON).
+   */
+  toolCalls?: { name: string; arguments: unknown }[]
 }
 
 type Schema = {
@@ -131,10 +147,19 @@ function modelList(ctx: ScenarioContext, ids: string[]): boolean {
  * Streams `content` as Chat Completions SSE chunks, in a few pieces like a real model.
  * A `reasoning` text is streamed first as `reasoning_content`, as a reasoning model does.
  */
-function streamChatCompletion(ctx: ScenarioContext, content: string, reasoning = '', delayMs = 0) {
+function streamChatCompletion(
+  ctx: ScenarioContext,
+  content: string,
+  reasoning = '',
+  delayMs = 0,
+  script: Pick<Answer, 'abortAfterChunks' | 'toolCalls'> = {}
+) {
   if (delayMs > 0) {
     // A client that gives up (Stop, timeout) before the delay ends gets nothing written.
-    const timer = setTimeout(() => streamChatCompletion(ctx, content, reasoning), delayMs)
+    const timer = setTimeout(
+      () => streamChatCompletion(ctx, content, reasoning, 0, script),
+      delayMs
+    )
     ctx.res.on('close', () => clearTimeout(timer))
     return
   }
@@ -157,8 +182,38 @@ function streamChatCompletion(ctx: ScenarioContext, content: string, reasoning =
   delta({ role: 'assistant', content: '' })
   if (reasoning) delta({ reasoning_content: reasoning })
   const size = Math.max(1, Math.ceil(content.length / 3))
-  for (let i = 0; i < content.length; i += size) delta({ content: content.slice(i, i + size) })
-  delta({}, 'stop')
+  let chunks = 0
+  for (let i = 0; i < content.length; i += size) {
+    if (script.abortAfterChunks !== undefined && chunks >= script.abortAfterChunks) {
+      ctx.req.socket.destroy()
+      return
+    }
+    delta({ content: content.slice(i, i + size) })
+    chunks++
+  }
+  if (script.abortAfterChunks !== undefined && chunks >= script.abortAfterChunks) {
+    ctx.req.socket.destroy()
+    return
+  }
+  if (script.toolCalls?.length) {
+    script.toolCalls.forEach((call, index) => {
+      const args =
+        typeof call.arguments === 'string' ? call.arguments : JSON.stringify(call.arguments)
+      delta({
+        tool_calls: [
+          {
+            index,
+            id: `call_fake_${index}`,
+            type: 'function',
+            function: { name: call.name, arguments: args }
+          }
+        ]
+      })
+    })
+    delta({}, 'tool_calls')
+  } else {
+    delta({}, 'stop')
+  }
   const promptTokens = 10
   const completionTokens = 20
   write([], {
@@ -175,9 +230,11 @@ export const scenarios: Record<string, Scenario> = {
   ready: (ctx) => {
     if (modelList(ctx, [ctx.options.model])) return
     if (ctx.path === '/v1/chat/completions') {
-      const { content, delayMs } = ctx.nextAnswer()
-      const text = typeof content === 'string' ? content : JSON.stringify(content)
-      return streamChatCompletion(ctx, text, '', delayMs)
+      const { content, delayMs, status, abortAfterChunks, toolCalls } = ctx.nextAnswer()
+      if (status) return json(ctx.res, status, { error: { message: 'Scripted failure' } })
+      const text =
+        content === undefined ? '' : typeof content === 'string' ? content : JSON.stringify(content)
+      return streamChatCompletion(ctx, text, '', delayMs, { abortAfterChunks, toolCalls })
     }
     json(ctx.res, 404, { error: 'not found' })
   },
@@ -231,6 +288,9 @@ export interface FakeLmStudio {
   close(): Promise<void>
 }
 
+const expand = ({ times = 1, ...answer }: Answer): Answer[] =>
+  Array.from({ length: times }, () => answer)
+
 async function readBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
@@ -277,7 +337,7 @@ export async function startFakeLmStudio(
     if (path === '/__control/answers' && req.method === 'POST') {
       const data = body as { answers?: Answer[]; replace?: boolean } | undefined
       if (data?.replace) queue.length = 0
-      queue.push(...(data?.answers ?? []))
+      queue.push(...(data?.answers ?? []).flatMap(expand))
       return json(res, 200, { queued: queue.length })
     }
     if (path === '/__control/delay' && req.method === 'POST') {
@@ -299,7 +359,13 @@ export async function startFakeLmStudio(
       nextAnswer: () => {
         const queued = queue.shift()
         if (queued) return { delayMs, ...queued }
-        const content = chatContent !== undefined ? chatContent : defaultFor(requestSchema(body))
+        const schema = requestSchema(body)
+        const content =
+          chatContent !== undefined
+            ? chatContent
+            : schema
+              ? defaultFor(schema)
+              : 'The Dungeon Master narrates.'
         return { content, delayMs }
       }
     })
@@ -319,7 +385,7 @@ export async function startFakeLmStudio(
       chatContent = content
     },
     queueAnswers(...answers) {
-      queue.push(...answers)
+      queue.push(...answers.flatMap(expand))
     },
     setDelay(ms) {
       delayMs = ms
