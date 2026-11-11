@@ -4,6 +4,8 @@
   import { invalidateAll, replaceState } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
+  import AiStatusChip from '#lib/ai/AiStatusChip.svelte'
+  import { createAiStatus, unavailableReason } from '#lib/ai/ai-status.svelte.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
@@ -21,7 +23,17 @@
   const turnState = $derived(deriveTurnState(data.turns))
   const pendingRoll = $derived(data.turns.at(-1)?.rollRequest ?? null)
 
-  const stream = new TurnStream(`/api/sessions/${page.params.sessionId}/turn`, invalidateAll)
+  const ai = createAiStatus()
+  // Only model-calling actions (Send, Retry) are disabled while the model is down. The Roll click
+  // and End are not: a roll is made and saved before any model call. An unanswered probe does not
+  // disable anything, so a slow check never blocks play.
+  const downReason = $derived(ai.status ? unavailableReason(ai.status) : undefined)
+
+  const stream = new TurnStream(`/api/sessions/${page.params.sessionId}/turn`, async () => {
+    await invalidateAll()
+    // A failure may mean the model just went down: re-probe so the chip and reason are current.
+    if (stream.error) void ai.check()
+  })
   let action = $state('')
 
   // The resume recap: a stateless side call, not a Turn and not the generating state. Silent on
@@ -52,7 +64,7 @@
   async function send(event: SubmitEvent) {
     event.preventDefault()
     const text = action.trim()
-    if (!text || stream.streaming) return
+    if (!text || stream.streaming || downReason) return
     action = ''
     abortRecap()
     await stream.start(text)
@@ -93,16 +105,19 @@
       >
       <h1 class="font-display text-xl">Session {data.session.number}</h1>
     </div>
-    {#if !ended}
-      <form method="POST" action="?/end" use:enhance>
-        <Button
-          type="submit"
-          variant="secondary"
-          size="sm"
-          disabled={stream.streaming || data.generating}>End Session</Button
-        >
-      </form>
-    {/if}
+    <div class="flex items-center gap-2">
+      <AiStatusChip {ai} />
+      {#if !ended}
+        <form method="POST" action="?/end" use:enhance>
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            disabled={stream.streaming || data.generating}>End Session</Button
+          >
+        </form>
+      {/if}
+    </div>
   </div>
 
   <PlayLayout>
@@ -191,8 +206,11 @@
               }
             }}
           />
-          <div class="flex justify-end">
-            <Button type="submit" size="sm" disabled={action.trim() === ''}>Send</Button>
+          <div class="flex items-center justify-end gap-2">
+            {#if downReason}<p class="text-sm text-muted">{downReason}</p>{/if}
+            <Button type="submit" size="sm" disabled={action.trim() === '' || !!downReason}
+              >Send</Button
+            >
           </div>
         </form>
       {:else if turnState === 'pending-roll' && pendingRoll}
@@ -205,8 +223,9 @@
                 ? 'The Dungeon Master has not opened the scene yet.'
                 : 'The Dungeon Master did not answer your action.')}
           </Alert>
-          <div class="flex justify-end">
-            <Button size="sm" onclick={() => stream.start()}>Retry</Button>
+          <div class="flex items-center justify-end gap-2">
+            {#if downReason}<p class="text-sm text-muted">{downReason}</p>{/if}
+            <Button size="sm" disabled={!!downReason} onclick={() => stream.start()}>Retry</Button>
           </div>
         </div>
       {/if}
