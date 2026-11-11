@@ -1,6 +1,6 @@
 import { deriveTurnState } from '#lib/session/lifecycle.ts'
-import { streamText, type ChatPort } from '../ai/port.ts'
-import { estimateTokens, turnMessage } from './context.ts'
+import { collectText, type ChatPort } from '../ai/port.ts'
+import { newestFitting, transcriptLine } from './context.ts'
 import type { SessionService } from './service.ts'
 
 /**
@@ -28,25 +28,17 @@ export function createRecap(deps: RecapDeps) {
   const cache = new Map<string, { seq: number; text: string }>()
 
   return {
-    /** The recap text, or `undefined` when there is none (wrong state, failure or abort). */
+    /** The recap text, or `undefined` when there is none (wrong state, an ended Session, failure or abort). */
     async get(sessionId: string, signal: AbortSignal): Promise<string | undefined> {
       const found = deps.sessions.get(sessionId)
       const turns = deps.sessions.turns(sessionId)
       const last = turns.at(-1)
-      if (!found || !last || deriveTurnState(turns) !== 'awaiting-action') return undefined
+      if (!found || found.endedAt !== null || !last || deriveTurnState(turns) !== 'awaiting-action')
+        return undefined
       const cached = cache.get(sessionId)
       if (cached?.seq === last.seq) return cached.text
 
-      // The newest Turns that fit the budget.
-      const kept: string[] = []
-      let used = 0
-      for (const t of [...turns].reverse()) {
-        const m = turnMessage(t)
-        const cost = estimateTokens(m.content)
-        if (kept.length > 0 && used + cost > RECAP_TURN_BUDGET) break
-        kept.unshift(`${t.author === 'dm' ? 'DM' : 'Player'}: ${m.content}`)
-        used += cost
-      }
+      const kept = newestFitting(turns, RECAP_TURN_BUDGET).map(transcriptLine)
       const notes = found.summary?.trim()
         ? `Notes so far:\n${found.summary.trim()}`
         : 'Notes so far: none.'
@@ -58,9 +50,7 @@ export function createRecap(deps: RecapDeps) {
       else signal.addEventListener('abort', abort, { once: true })
       const timer = setTimeout(abort, RECAP_TIMEOUT_MS)
       try {
-        let text = ''
-        let done = false
-        for await (const event of streamText(deps.port, {
+        const recap = await collectText(deps.port, {
           systemPrompts: [RECAP_INSTRUCTIONS],
           messages: [
             { role: 'user', content: `${notes}\n\nLatest transcript:\n${kept.join('\n\n')}` }
@@ -68,13 +58,8 @@ export function createRecap(deps: RecapDeps) {
           maxTokens: RECAP_MAX_TOKENS,
           threadId: `${sessionId}:recap`,
           signal: controller.signal
-        })) {
-          if (event.type === 'delta') text += event.text
-          else if (event.type === 'error') return undefined
-          else done = true
-        }
-        const recap = text.trim()
-        if (!done || !recap || controller.signal.aborted) return undefined
+        })
+        if (!recap || controller.signal.aborted) return undefined
         cache.set(sessionId, { seq: last.seq, text: recap })
         return recap
       } catch {

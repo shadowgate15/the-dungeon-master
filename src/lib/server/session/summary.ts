@@ -1,5 +1,5 @@
-import { streamText, type ChatMessage, type ChatPort } from '../ai/port.ts'
-import { estimateTokens, turnMessage, type ContextInput } from './context.ts'
+import { collectText, type ChatMessage, type ChatPort } from '../ai/port.ts'
+import { estimateTokens, transcriptLine, turnMessage, type ContextInput } from './context.ts'
 
 /**
  * The rolling summary: a separate, stateless model call that folds the previous summary and the
@@ -12,6 +12,13 @@ export const SUMMARY_THRESHOLD = 0.5
 
 /** The most tokens a summary may take. */
 export const SUMMARY_MAX_TOKENS = 512
+
+/**
+ * After this many failed summary calls in a row within one Session, the runner stops trying
+ * until one succeeds (it never does once stopped, so for the rest of the process). A model that
+ * keeps breaking the "no numbers" rule would otherwise cost an extra call on every DM turn.
+ */
+export const SUMMARY_MAX_FAILURES = 3
 
 /** A summary call that outlives this is abandoned. */
 export const SUMMARY_TIMEOUT_MS = 60_000
@@ -28,14 +35,16 @@ type SummaryTurn = ContextInput['turns'][number]
 export const turnsTokens = (turns: readonly SummaryTurn[]) =>
   turns.reduce((n, t) => n + estimateTokens(turnMessage(t).content), 0)
 
-/** Whether the Turns not yet summarized are enough to warrant a new summary. */
+/**
+ * Whether the Turns not yet summarized are enough to warrant a new summary. All of them count,
+ * including any older than the Turn budget: those no longer fit the DM's prompt, so the summary
+ * is the only place they survive, which is exactly when one is needed.
+ */
 export const summaryDue = (unsummarized: readonly SummaryTurn[], turnBudget: number) =>
   unsummarized.length > 0 && turnsTokens(unsummarized) > turnBudget * SUMMARY_THRESHOLD
 
 function summaryMessages(previous: string | null, turns: readonly SummaryTurn[]): ChatMessage[] {
-  const transcript = turns
-    .map((t) => `${t.author === 'dm' ? 'DM' : 'Player'}: ${turnMessage(t).content}`)
-    .join('\n\n')
+  const transcript = turns.map(transcriptLine).join('\n\n')
   const notes = previous?.trim() ? `Earlier notes:\n${previous.trim()}` : 'Earlier notes: none.'
   return [{ role: 'user', content: `${notes}\n\nNew transcript:\n${transcript}` }]
 }
@@ -51,22 +60,14 @@ export async function writeSummary(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), SUMMARY_TIMEOUT_MS)
   try {
-    let text = ''
-    let done = false
-    for await (const event of streamText(port, {
+    const summary = await collectText(port, {
       systemPrompts: [SUMMARY_INSTRUCTIONS],
       messages: summaryMessages(input.previous, input.turns),
       maxTokens: SUMMARY_MAX_TOKENS,
       threadId: input.threadId,
       signal: controller.signal
-    })) {
-      if (event.type === 'delta') text += event.text
-      else if (event.type === 'error') return undefined
-      else done = true
-    }
-    const summary = text.trim()
-    if (!done || !summary || /\d/.test(summary)) return undefined
-    return summary
+    })
+    return summary && !/\d/.test(summary) ? summary : undefined
   } catch {
     return undefined
   } finally {

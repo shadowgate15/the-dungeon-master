@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ABILITY_KEYS } from '#lib/rules/derive-stats.ts'
+  import { ABILITY_KEYS } from '#lib/rules/registry.ts'
   import type { SummaryModel } from '#lib/character/summary.ts'
   import StatsStrip from '#lib/character/StatsStrip.svelte'
 

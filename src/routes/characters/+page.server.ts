@@ -1,6 +1,10 @@
 import { fail } from '@sveltejs/kit'
 import { db } from '#lib/server/db/index.ts'
-import { createCharacterService, CharacterNotFoundError } from '#lib/server/character/service.ts'
+import {
+  createCharacterService,
+  CharacterNotFoundError,
+  CharacterValidationError
+} from '#lib/server/character/service.ts'
 import type { ActionNotice } from '#lib/world/ActionToast.svelte'
 import type { Actions, PageServerLoad } from './$types'
 
@@ -65,6 +69,8 @@ export const actions: Actions = {
     } catch (e) {
       if (e instanceof CharacterNotFoundError)
         return fail(404, { notice: { message: e.message } satisfies ActionNotice })
+      if (e instanceof CharacterValidationError)
+        return fail(409, { notice: { message: e.message } satisfies ActionNotice })
       throw e
     }
     const notice: ActionNotice = { message: `Deleted ${name}` }

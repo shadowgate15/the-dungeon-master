@@ -1,3 +1,4 @@
+import { resultLabel } from '#lib/session/roll.ts'
 import type { ChatMessage } from '../ai/port.ts'
 import type { Turn } from './service.ts'
 
@@ -66,13 +67,32 @@ export function turnMessage(t: ContextInput['turns'][number]): ChatMessage {
     return { role: 'assistant', content: `${t.text ?? ''}${ask}` }
   }
   if (t.kind === 'roll_result' && t.rollResult) {
-    const { d20, modifier, total } = t.rollResult
-    return {
-      role: 'user',
-      content: `I rolled ${d20} ${modifier < 0 ? '-' : '+'} ${Math.abs(modifier)} = ${total}.`
-    }
+    return { role: 'user', content: `I rolled ${resultLabel(t.rollResult)}.` }
   }
   return { role: 'user', content: t.text ?? '' }
+}
+
+/** A Turn as one transcript line for a side call ("DM: ..." or "Player: ..."). */
+export const transcriptLine = (t: ContextInput['turns'][number]) =>
+  `${t.author === 'dm' ? 'DM' : 'Player'}: ${turnMessage(t).content}`
+
+/**
+ * The newest Turns that fit the token budget, oldest first. The newest is always kept so the
+ * model has something to answer.
+ */
+export function newestFitting<T extends ContextInput['turns'][number]>(
+  turns: readonly T[],
+  budget: number
+): T[] {
+  const kept: T[] = []
+  let used = 0
+  for (const t of [...turns].reverse()) {
+    const cost = estimateTokens(turnMessage(t).content)
+    if (kept.length > 0 && used + cost > budget) break
+    kept.unshift(t)
+    used += cost
+  }
+  return kept
 }
 
 export function assembleContext(input: ContextInput): AssembledContext {
@@ -97,16 +117,7 @@ export function assembleContext(input: ContextInput): AssembledContext {
     }
   }
 
-  // Walk from the newest Turn back; the newest is always kept so the model has something to answer.
-  const kept: ChatMessage[] = []
-  let used = 0
-  for (const t of [...input.turns].reverse()) {
-    const message = turnMessage(t)
-    const cost = estimateTokens(message.content)
-    if (kept.length > 0 && used + cost > turnBudget) break
-    kept.unshift(message)
-    used += cost
-  }
+  const kept = newestFitting(input.turns, turnBudget).map(turnMessage)
   return {
     systemPrompts,
     messages: kept,

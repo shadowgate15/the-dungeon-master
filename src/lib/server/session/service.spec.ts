@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import { seedRulesData } from '../rules/seed'
 import { createCampaignService, type CampaignService } from '../campaign/service'
-import { createCharacterService, type CharacterService } from '../character/service'
+import {
+  CharacterValidationError,
+  createCharacterService,
+  type CharacterService
+} from '../character/service'
 import { createWorldService } from '../world/service'
 import {
   createSessionService,
@@ -93,6 +97,18 @@ describe('linking a Character to a Campaign', () => {
     sessions.linkCharacter(campaignId, characterId)
     characters.delete(characterId)
     expect(sessions.linkedCharacterId(campaignId)).toBeUndefined()
+  })
+
+  it('keeps the Character, its Sessions and transcripts when a delete is refused', () => {
+    sessions.linkCharacter(campaignId, characterId)
+    const s = sessions.start(campaignId)
+    sessions.appendTurn(s.id, { author: 'dm', kind: 'narration', text: 'Hello' })
+    sessions.end(s.id)
+    expect(() => characters.delete(characterId)).toThrow(CharacterValidationError)
+    expect(characters.get(characterId)).toBeDefined()
+    expect(sessions.get(s.id)).toBeDefined()
+    expect(sessions.turns(s.id)).toHaveLength(1)
+    expect(sessions.linkedCharacterId(campaignId)).toBe(characterId)
   })
 })
 

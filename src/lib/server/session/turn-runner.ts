@@ -4,7 +4,7 @@ import { streamText, type ChatPort, type TextEvent } from '../ai/port.ts'
 import { assembleContext, type ContextInput } from './context.ts'
 import { MAX_ROLL_REJECTIONS, parseRollRequest, ROLL_TOOL_NAME, rollTool } from './roll-request.ts'
 import type { SessionService } from './service.ts'
-import { summaryDue, writeSummary } from './summary.ts'
+import { SUMMARY_MAX_FAILURES, summaryDue, writeSummary } from './summary.ts'
 
 /**
  * The server turn-runner: plays one streamed DM turn for a Session.
@@ -16,10 +16,16 @@ import { summaryDue, writeSummary } from './summary.ts'
  *   answers it. A DM turn is saved only when the model finishes.
  * - After a saved DM turn, once unsummarized Turns pass about half the Turn budget, a separate
  *   stateless call refreshes the Session's rolling summary in the background. It never blocks
- *   or fails a turn; on any failure the summary is simply left as it was.
+ *   or fails a turn; on any failure the summary is simply left as it was, and after
+ *   `SUMMARY_MAX_FAILURES` failures in a row the Session stops trying.
  */
 
 export const ACTION_MAX = 2000
+
+const INVALID_ROLL_FAILURE = {
+  kind: 'invalid-output',
+  message: 'The Dungeon Master could not make a valid roll request. Try again.'
+} as const
 
 export interface TurnRunnerDeps {
   sessions: SessionService
@@ -28,11 +34,11 @@ export interface TurnRunnerDeps {
   contextLimit: number
   /** Tokens reserved for (and capped on) the DM's reply. */
   replyReserve: number
-  /** The Campaign Seed, Worlds and derived sheet text for the Session's Campaign and Character. */
   /** Code's d20; the DM never rolls. */
   rollD20: () => number
   /** The modifier for a check, from the Character's derived stats. 0 when it cannot be derived. */
   rollModifier: (session: { characterId: string }, request: RollRequest) => number
+  /** The Campaign Seed, Worlds and derived sheet text for the Session's Campaign and Character. */
   loadContext: (session: {
     campaignId: string
     characterId: string
@@ -66,10 +72,13 @@ export interface TurnRunner {
 export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
   const inFlight = new Set<string>()
   const summarizing = new Map<string, Promise<void>>()
+  /** Consecutive failed summary calls per Session; at the cap the runner stops trying. */
+  const summaryFailures = new Map<string, number>()
 
   /** Starts a background summary for the Session if one is due and none is already running. */
   function summarizeIfDue(sessionId: string, turnBudget: number) {
     if (summarizing.has(sessionId)) return
+    if ((summaryFailures.get(sessionId) ?? 0) >= SUMMARY_MAX_FAILURES) return
     const current = deps.sessions.get(sessionId)
     if (!current) return
     const turns = deps.sessions.turns(sessionId)
@@ -81,7 +90,12 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
       turns: unsummarized
     })
       .then((summary) => {
-        if (summary) deps.sessions.saveSummary(sessionId, summary, unsummarized.at(-1)!.seq)
+        if (!summary) {
+          summaryFailures.set(sessionId, (summaryFailures.get(sessionId) ?? 0) + 1)
+          return
+        }
+        summaryFailures.delete(sessionId)
+        deps.sessions.saveSummary(sessionId, summary, unsummarized.at(-1)!.seq)
       })
       .catch(() => {}) // housekeeping: never surfaces
       .finally(() => summarizing.delete(sessionId))
@@ -175,17 +189,20 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
                 yield event
                 if (++rejections > MAX_ROLL_REJECTIONS) {
                   call.abort()
-                  yield {
-                    type: 'error',
-                    failure: {
-                      kind: 'invalid-output',
-                      message: 'The Dungeon Master could not make a valid roll request. Try again.'
-                    }
-                  }
+                  yield { type: 'error', failure: INVALID_ROLL_FAILURE }
                   return
                 }
               } else if (event.type === 'approval-requested') {
-                if (event.toolName === ROLL_TOOL_NAME) rollRequest ??= parseRollRequest(event.input)
+                if (event.toolName === ROLL_TOOL_NAME && !rollRequest) {
+                  // The tool validated this already; if it still does not parse, fail rather
+                  // than save the DM turn without its Roll request.
+                  rollRequest = parseRollRequest(event.input)
+                  if (!rollRequest) {
+                    call.abort()
+                    yield { type: 'error', failure: INVALID_ROLL_FAILURE }
+                    return
+                  }
+                }
               } else if (event.type === 'done') {
                 if (!narration.trim() && !rollRequest) {
                   yield {
