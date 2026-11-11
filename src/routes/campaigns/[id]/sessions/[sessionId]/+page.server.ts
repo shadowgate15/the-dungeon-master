@@ -38,6 +38,8 @@ export const load: PageServerLoad = ({ params }) => {
       rollRequest: t.rollRequest,
       rollResult: t.rollResult
     })),
+    // The in-memory lock: a reply still being written by another window. Resume never starts one.
+    generating: turnRunner.isGenerating(found.id),
     // Derived here from the Character, with the Rules Data on the server.
     sheet: buildSummary(loadWizardRules(), detailToSummaryData(played))
   }
