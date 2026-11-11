@@ -6,8 +6,10 @@ import {
   integer,
   primaryKey,
   sqliteTable,
-  text
+  text,
+  uniqueIndex
 } from 'drizzle-orm/sqlite-core'
+import { TURN_AUTHORS, TURN_KINDS, type RollRequest, type RollResult } from '../../session/enums'
 import { LENGTHS, TONES } from '../../campaign/enums'
 import { ABILITY_KEYS } from '../../rules/registry'
 import { ABILITY_METHODS, ALIGNMENTS, PICK_SOURCES } from '../../character/enums'
@@ -210,6 +212,82 @@ export const characterChoice = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.characterId, t.choiceKey, t.optionSlug] }),
     index('character_choice_character_idx').on(t.characterId)
+  ]
+)
+
+/**
+ * A Campaign's linked Character. The app allows one Character per Campaign (enforced in the
+ * session service); the schema does not, so a later multiplayer Campaign needs no migration.
+ * Deleting a Character is never blocked (see the Character service), so its links and Sessions cascade.
+ */
+export const campaignCharacter = sqliteTable(
+  'campaign_character',
+  {
+    campaignId: text('campaign_id')
+      .notNull()
+      .references(() => campaign.id, { onDelete: 'cascade' }),
+    characterId: text('character_id')
+      .notNull()
+      .references(() => character.id, { onDelete: 'cascade' })
+  },
+  (t) => [primaryKey({ columns: [t.campaignId, t.characterId] })]
+)
+
+/**
+ * One sitting of play, by one Character. Open while `ended_at` is null; the partial unique index
+ * allows at most one open Session per Campaign.
+ */
+export const session = sqliteTable(
+  'session',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    campaignId: text('campaign_id')
+      .notNull()
+      .references(() => campaign.id, { onDelete: 'cascade' }),
+    characterId: text('character_id')
+      .notNull()
+      .references(() => character.id, { onDelete: 'cascade' }),
+    startedAt: integer('started_at').notNull(),
+    endedAt: integer('ended_at')
+  },
+  (t) => [
+    uniqueIndex('session_one_open_per_campaign')
+      .on(t.campaignId)
+      .where(sql`ended_at IS NULL`)
+  ]
+)
+
+/**
+ * A Session's transcript, append-only. `seq` is monotonic per Session. A DM turn carries
+ * narration and optionally an inline Roll request; a player turn is a free-text action or a Roll
+ * result. Whether a roll is pending is derived from the last Turn, never stored.
+ */
+export const turn = sqliteTable(
+  'turn',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => session.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    author: text('author', { enum: TURN_AUTHORS }).notNull(),
+    kind: text('kind', { enum: TURN_KINDS }).notNull(),
+    /** Narration (DM) or the typed action (player). Null for a Roll result. */
+    text: text('text'),
+    /** DM turn only: the inline Roll request. */
+    rollRequest: text('roll_request', { mode: 'json' }).$type<RollRequest>(),
+    /** Roll result only: the d20, the modifier and the total. */
+    rollResult: text('roll_result', { mode: 'json' }).$type<RollResult>(),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [
+    uniqueIndex('turn_session_seq').on(t.sessionId, t.seq),
+    check('turn_author_check', oneOf('author', TURN_AUTHORS)),
+    check('turn_kind_check', oneOf('kind', TURN_KINDS))
   ]
 )
 
