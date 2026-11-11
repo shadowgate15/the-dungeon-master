@@ -4,8 +4,8 @@ import type { Turn } from './service.ts'
 /**
  * DM context assembly: the prompt for one DM call, rebuilt from the database every time. Pure;
  * the caller loads the rows. Order: the static DM instruction block, the Campaign Seed, every
- * linked World, the derived Character sheet, then the newest Turns that fit the Turn budget.
- * History is plain text. (The rolling summary joins in a later ticket.)
+ * linked World, the derived Character sheet, the rolling summary (when there is one), then the
+ * newest Turns that fit the Turn budget. History is plain text.
  */
 
 export const DM_INSTRUCTIONS = `You are the Dungeon Master of a solo Dungeons & Dragons 5th edition game (SRD 5.1 rules only).
@@ -20,6 +20,8 @@ export const OPENING_PROMPT =
 export interface ContextInput {
   campaign: { name: string; premise: string; tone: string; length: string }
   worlds: { name: string; premise: string | null; genreFlavor: string | null }[]
+  /** The rolling summary of earlier play; absent or null before one is written. */
+  summary?: string | null
   /** The derived Character sheet as text. */
   sheet: string
   turns: readonly Pick<Turn, 'seq' | 'author' | 'kind' | 'text' | 'rollRequest' | 'rollResult'>[]
@@ -55,7 +57,7 @@ function worldsBlock(worlds: ContextInput['worlds']) {
 }
 
 /** A Turn as plain text for the model. */
-function turnMessage(t: ContextInput['turns'][number]): ChatMessage {
+export function turnMessage(t: ContextInput['turns'][number]): ChatMessage {
   if (t.author === 'dm') {
     const ask = t.rollRequest
       ? `\n[The DM asked for a ${t.rollRequest.key} ${t.rollRequest.check} check, DC ${t.rollRequest.dc}: ${t.rollRequest.reason}]`
@@ -79,6 +81,9 @@ export function assembleContext(input: ContextInput): AssembledContext {
     worldsBlock(input.worlds),
     `The player's Character (derived from the game's rules; do not change these numbers):\n${input.sheet}`
   ]
+  if (input.summary?.trim()) {
+    systemPrompts.push(`The story so far (a summary of earlier play):\n${input.summary.trim()}`)
+  }
   const fixed = systemPrompts.reduce((n, p) => n + estimateTokens(p), 0)
   const turnBudget = Math.max(0, input.contextLimit - input.replyReserve - fixed)
 

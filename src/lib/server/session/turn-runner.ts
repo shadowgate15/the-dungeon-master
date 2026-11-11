@@ -2,6 +2,7 @@ import { deriveTurnState } from '#lib/session/lifecycle.ts'
 import { streamText, type ChatPort, type TextEvent } from '../ai/port.ts'
 import { assembleContext, type ContextInput } from './context.ts'
 import type { SessionService } from './service.ts'
+import { summaryDue, writeSummary } from './summary.ts'
 
 /**
  * The server turn-runner: plays one streamed DM turn for a Session.
@@ -11,6 +12,9 @@ import type { SessionService } from './service.ts'
  * - Stop (the signal aborting), a model failure and a closed tab share one path: the partial
  *   DM turn is discarded, the player turn stays unanswered, and `begin` with no action (Retry)
  *   answers it. A DM turn is saved only when the model finishes.
+ * - After a saved DM turn, once unsummarized Turns pass about half the Turn budget, a separate
+ *   stateless call refreshes the Session's rolling summary in the background. It never blocks
+ *   or fails a turn; on any failure the summary is simply left as it was.
  */
 
 export const ACTION_MAX = 2000
@@ -48,13 +52,40 @@ export interface TurnRunner {
   ): BeginResult
   /** Whether a model call is in flight for the Session. */
   isGenerating(sessionId: string): boolean
+  /** Resolves when no background summary call is running; never rejects. For tests and shutdown. */
+  summaryIdle(): Promise<void>
 }
 
 export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
   const inFlight = new Set<string>()
+  const summarizing = new Map<string, Promise<void>>()
+
+  /** Starts a background summary for the Session if one is due and none is already running. */
+  function summarizeIfDue(sessionId: string, turnBudget: number) {
+    if (summarizing.has(sessionId)) return
+    const current = deps.sessions.get(sessionId)
+    if (!current) return
+    const turns = deps.sessions.turns(sessionId)
+    const unsummarized = turns.filter((t) => t.seq > current.summarizedThroughSeq)
+    if (!summaryDue(unsummarized, turnBudget)) return
+    const job = writeSummary(deps.port, {
+      threadId: `${sessionId}:summary`,
+      previous: current.summary,
+      turns: unsummarized
+    })
+      .then((summary) => {
+        if (summary) deps.sessions.saveSummary(sessionId, summary, unsummarized.at(-1)!.seq)
+      })
+      .catch(() => {}) // housekeeping: never surfaces
+      .finally(() => summarizing.delete(sessionId))
+    summarizing.set(sessionId, job)
+  }
 
   return {
     isGenerating: (sessionId) => inFlight.has(sessionId),
+    summaryIdle: async () => {
+      await Promise.all(summarizing.values())
+    },
 
     begin(sessionId, input, signal) {
       const current = deps.sessions.get(sessionId)
@@ -93,6 +124,7 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
         try {
           const context = assembleContext({
             ...deps.loadContext(current!),
+            summary: deps.sessions.get(sessionId)?.summary ?? null,
             turns: deps.sessions.turns(sessionId),
             contextLimit: input.contextLimit ?? deps.contextLimit,
             replyReserve: deps.replyReserve
@@ -122,6 +154,7 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
                 kind: 'narration',
                 text: narration
               })
+              summarizeIfDue(sessionId, context.turnBudget)
               yield event
             } else {
               yield event
