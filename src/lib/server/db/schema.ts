@@ -250,7 +250,14 @@ export const session = sqliteTable(
       .notNull()
       .references(() => character.id, { onDelete: 'cascade' }),
     startedAt: integer('started_at').notNull(),
-    endedAt: integer('ended_at')
+    endedAt: integer('ended_at'),
+    /**
+     * The rolling summary of the story so far, written by a separate stateless call. A new
+     * Session starts from the previous Session's final summary. Contains no numbers.
+     */
+    summary: text('summary'),
+    /** The last Turn `seq` in this Session the summary already covers; 0 when none. */
+    summarizedThroughSeq: integer('summarized_through_seq').notNull().default(0)
   },
   (t) => [
     uniqueIndex('session_one_open_per_campaign')

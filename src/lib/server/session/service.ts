@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { Database } from '../db/connect'
 import { campaign, campaignCharacter, character, session, turn } from '../db/schema'
 import { createWorldService } from '../world/service'
@@ -77,9 +77,16 @@ export function createSessionService(db: Database, now: () => number = Date.now)
         if (openSession(campaignId)) {
           throw new SessionAlreadyOpenError('This Campaign already has an open Session')
         }
+        // The story so far carries over: the newest Session that wrote a summary.
+        const previous = tx
+          .select({ summary: session.summary })
+          .from(session)
+          .where(and(eq(session.campaignId, campaignId), isNotNull(session.summary)))
+          .orderBy(desc(session.startedAt), sql`rowid desc`)
+          .get()
         return tx
           .insert(session)
-          .values({ campaignId, characterId, startedAt: now() })
+          .values({ campaignId, characterId, startedAt: now(), summary: previous?.summary ?? null })
           .returning()
           .get()
       })
@@ -96,6 +103,17 @@ export function createSessionService(db: Database, now: () => number = Date.now)
         .where(eq(session.id, id))
         .returning()
         .get()
+    },
+
+    /**
+     * Saves the rolling summary and the last Turn it covers. Allowed on an ended Session too: a
+     * summary still finishing when the player ends the Session is what the next one inherits.
+     */
+    saveSummary(id: string, summary: string, throughSeq: number): void {
+      db.update(session)
+        .set({ summary, summarizedThroughSeq: throughSeq })
+        .where(eq(session.id, id))
+        .run()
     },
 
     get(id: string): Session | undefined {

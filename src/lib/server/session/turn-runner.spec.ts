@@ -437,3 +437,109 @@ describe('invalid Roll requests', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done' })
   })
 })
+
+describe('the rolling summary', () => {
+  // A small window so a few long turns cross 50% of the Turn budget.
+  const SMALL = 1000
+  const LONG = 'The torchlight wavers along the wet stone walls. '.repeat(8)
+
+  const open = async () => {
+    scripts.push(says('A gate.'))
+    await drain(runner.begin(sessionId, { contextLimit: SMALL }, controller().signal))
+  }
+  /** One player action; the DM reply script, then (if a summary is due) the summary script. */
+  const act = async (action: string, reply: Script, summary?: Script) => {
+    scripts.push(reply)
+    if (summary) scripts.push(summary)
+    const events = await drain(
+      runner.begin(sessionId, { action, contextLimit: SMALL }, controller().signal)
+    )
+    await runner.summaryIdle()
+    return events
+  }
+
+  it('is not written while unsummarized Turns stay under half the Turn budget', async () => {
+    await open()
+    await act('I knock.', says('A voice answers.'))
+
+    expect(requests).toHaveLength(2)
+    expect(sessions.get(sessionId)?.summary).toBeNull()
+  })
+
+  it('is written by a separate stateless call once unsummarized Turns pass half the budget', async () => {
+    await open()
+    await act(
+      'I push the gate.',
+      says(LONG),
+      says('The party opened the gate and entered a torchlit hall.')
+    )
+
+    expect(requests).toHaveLength(3)
+    const call = requests[2]
+    expect(call.threadId).not.toBe(sessionId)
+    expect(call.tools).toBeUndefined()
+    expect(call.outputSchema).toBeUndefined()
+    expect(call.messages.map((m) => m.content).join('\n')).toContain('I push the gate.')
+    expect(sessions.get(sessionId)).toMatchObject({
+      summary: 'The party opened the gate and entered a torchlit hall.',
+      summarizedThroughSeq: 3
+    })
+  })
+
+  it('is used in later prompts, between the sheet and the Turns', async () => {
+    await open()
+    await act('I push the gate.', says(LONG), says('The party entered a torchlit hall.'))
+
+    await act('I look around.', says('Dust.'))
+
+    const prompts = requests.at(-1)!.systemPrompts
+    const summary = prompts.findIndex((p) => p.includes('The party entered a torchlit hall.'))
+    expect(summary).toBe(prompts.findIndex((p) => p.includes('Brenna, a fighter.')) + 1)
+  })
+
+  it('folds the previous summary into the next one and waits for new Turns', async () => {
+    await open()
+    await act('I push the gate.', says(LONG), says('Summary one.'))
+    // Nothing new has crossed the threshold since: no further summary call.
+    await act('I wait.', says('Quiet.'))
+    expect(requests).toHaveLength(4)
+
+    await act('I shout.', says(LONG), says('Summary two.'))
+    expect(requests).toHaveLength(6)
+    const input = requests[5].messages.map((m) => m.content).join('\n')
+    expect(input).toContain('Summary one.')
+    expect(input).not.toContain('I push the gate.')
+    expect(sessions.get(sessionId)?.summary).toBe('Summary two.')
+  })
+
+  const errors: Script = async function* () {
+    yield { type: 'RUN_ERROR', message: 'down' }
+  }
+  const throws: Script = (() => {
+    throw new Error('boom')
+  }) as unknown as Script
+
+  it.each([
+    ['a model error', errors],
+    ['a thrown call', throws],
+    ['an empty answer', says('   ')],
+    ['numbers in the answer', says('You have 12 gold pieces.')]
+  ])('fails silently on %s and play continues', async (_name, bad) => {
+    await open()
+    const events = await act('I push the gate.', says(LONG), bad)
+
+    expect(events.at(-1)).toMatchObject({ type: 'done' })
+    expect(sessions.get(sessionId)?.summary).toBeNull()
+    expect(texts().at(-1)).toBe(`dm:${LONG}`)
+
+    // The next turn still plays, and tries the summary again.
+    await act('I go in.', says('Inside.'), says('Summary after failure.'))
+    expect(sessions.get(sessionId)?.summary).toBe('Summary after failure.')
+  })
+
+  it('is not attempted after a failed DM turn', async () => {
+    await open()
+    await act('I push the gate.', fails)
+    expect(requests).toHaveLength(2)
+  })
+})
