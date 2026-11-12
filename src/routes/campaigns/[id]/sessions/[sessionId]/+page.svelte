@@ -11,7 +11,11 @@
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
   import CharacterSheetPanel from '#lib/session/CharacterSheetPanel.svelte'
-  import PlayLayout from '#lib/session/PlayLayout.svelte'
+  import VariantA from '#lib/session/prototype-journal/VariantA.svelte'
+  import VariantB from '#lib/session/prototype-journal/VariantB.svelte'
+  import VariantC from '#lib/session/prototype-journal/VariantC.svelte'
+  import Switcher from '#lib/session/prototype-journal/Switcher.svelte'
+  import { journalFor, type JournalState } from '#lib/session/prototype-journal/fixtures.ts'
   import RollPrompt from '#lib/session/RollPrompt.svelte'
   import { checkLabel, resultLabel } from '#lib/session/roll.ts'
   import Textarea from '#lib/ui/Textarea.svelte'
@@ -19,6 +23,14 @@
   import { TurnStream } from '#lib/session/turn-stream.svelte.ts'
 
   let { data } = $props()
+  // PROTOTYPE (Journal panel): variant + fixture state from the URL.
+  const Layout = $derived(
+    { A: VariantA, B: VariantB, C: VariantC }[page.url.searchParams.get('variant') ?? 'A'] ??
+      VariantA
+  )
+  const journal = $derived(
+    journalFor((page.url.searchParams.get('state') ?? 'resumed') as JournalState)
+  )
 
   const ended = $derived(data.session.endedAt !== null)
   const turnState = $derived(deriveTurnState(data.turns))
@@ -119,7 +131,7 @@
     </div>
   </div>
 
-  <PlayLayout>
+  <Layout entries={journal}>
     {#snippet narrative()}
       {#if ended}
         <Alert variant="info">Session ended. This transcript is read-only.</Alert>
@@ -245,5 +257,6 @@
     {#snippet sheet()}
       <CharacterSheetPanel model={data.sheet} />
     {/snippet}
-  </PlayLayout>
+  </Layout>
+  <Switcher />
 </main>
