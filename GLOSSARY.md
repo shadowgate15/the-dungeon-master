@@ -115,3 +115,15 @@ _Avoid_: Check prompt, dice call
 **Roll result**:
 The player turn that answers a Roll request. The player clicks Roll; code rolls the d20, adds the Character's derived modifier and records the total against the DC. The AI never rolls and players do not type in results. The result is passed to the DM, which narrates the outcome in its next turn.
 _Avoid_: Dice result, outcome
+
+**Arc**:
+The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It steers the DM and is not a script: the DM may deviate. The player can review, edit and regenerate it on the Campaign page before play. Once the first Session starts its text stays editable but its structure is fixed.
+_Avoid_: Plot, storyline, script, outline
+
+**Act**:
+A named phase of an Arc, such as setup, escalation or climax, with a one-line purpose. It groups the Beats that belong to that phase. A one-shot's Arc has a single Act.
+_Avoid_: Chapter, part
+
+**Beat**:
+A turning point or outcome the story should reach, with a title and a sentence or two of description, such as "the Characters learn the vizier is the cult's patron". It says what should become true, never how to get there. A Beat is not tied to one Session: a Session may reach several Beats or none.
+_Avoid_: Scene, quest, objective, milestone
