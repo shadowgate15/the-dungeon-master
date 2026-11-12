@@ -5,6 +5,7 @@
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
   import Select from '#lib/ui/Select.svelte'
+  import ArcProto from '#lib/prototype/ArcProto.svelte'
   import SectionNav from '#lib/SectionNav.svelte'
 
   let { data, form } = $props()
@@ -58,6 +59,8 @@
       </form>
     {/if}
   </section>
+
+  <ArcProto />
 
   <section aria-label="Sessions" class="space-y-2">
     <h2 class="font-display text-lg">Sessions</h2>
