@@ -418,6 +418,28 @@ export const npcFact = sqliteTable(
   (t) => [primaryKey({ columns: [t.npcId, t.factId] })]
 )
 
+/**
+ * Where the player last looked at the Journal, per (Campaign, Character): a Session and a Turn
+ * seq position. Records created or changed after it carry chips. Advances when the overlay closes.
+ */
+export const journalMarker = sqliteTable(
+  'journal_marker',
+  {
+    campaignId: text('campaign_id')
+      .notNull()
+      .references(() => campaign.id, { onDelete: 'cascade' }),
+    characterId: text('character_id')
+      .notNull()
+      .references(() => character.id, { onDelete: 'cascade' }),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => session.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [primaryKey({ columns: [t.campaignId, t.characterId] })]
+)
+
 export const ARC_STATUSES = ['draft', 'accepted'] as const
 export const BEAT_STATES = ['pending', 'reached', 'abandoned'] as const
 

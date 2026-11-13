@@ -8,6 +8,7 @@ import { createCharacterService } from '../character/service.ts'
 import { loadWizardRules } from '../character/wizard-rules.ts'
 import { db } from '../db/index.ts'
 import { dice } from '../dice.ts'
+import { createJournal } from '../memory/journal.ts'
 import { createMemoryRepository } from '../memory/repository.ts'
 import type { AbilityKey } from '#lib/rules/registry.ts'
 import { sheetText } from './sheet-text.ts'
@@ -41,6 +42,9 @@ export const recap = createRecap({ sessions, port: modelPort })
 
 /** World memory over the real database. */
 export const memory = createMemoryRepository(db)
+
+/** The read-only Journal and its last-looked marker over the real database. */
+export const journal = createJournal(db)
 
 export const turnRunner = createTurnRunner({
   sessions,
