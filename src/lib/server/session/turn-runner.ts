@@ -2,9 +2,19 @@ import type { RollRequest } from '#lib/session/enums.ts'
 import { deriveTurnState } from '#lib/session/lifecycle.ts'
 import { streamText, type ChatPort, type TextEvent } from '../ai/port.ts'
 import { assembleContext, type ContextInput } from './context.ts'
+import { countQuietTurns, type ArcContextArc } from '../arc/context.ts'
+import type { MemoryInput } from '../memory/context.ts'
+import { memoryInputFor } from './memory-input.ts'
 import { MAX_ROLL_REJECTIONS, parseRollRequest, ROLL_TOOL_NAME, rollTool } from './roll-request.ts'
-import type { SessionService } from './service.ts'
+import type { Session, SessionService, Turn } from './service.ts'
 import { SUMMARY_MAX_FAILURES, summaryDue, writeSummary } from './summary.ts'
+import {
+  MEMORY_MAX_FAILURES,
+  runExtraction,
+  type BeatProgress,
+  type RejectionLog
+} from '../memory/extraction.ts'
+import type { MemoryRepository } from '../memory/repository.ts'
 
 /**
  * The server turn-runner: plays one streamed DM turn for a Session.
@@ -21,6 +31,9 @@ import { SUMMARY_MAX_FAILURES, summaryDue, writeSummary } from './summary.ts'
  */
 
 export const ACTION_MAX = 2000
+
+/** How long starting a Session waits for pending memory extraction before going on without it. */
+export const MEMORY_DRAIN_TIMEOUT_MS = 30_000
 
 const INVALID_ROLL_FAILURE = {
   kind: 'invalid-output',
@@ -39,10 +52,19 @@ export interface TurnRunnerDeps {
   /** The modifier for a check, from the Character's derived stats. 0 when it cannot be derived. */
   rollModifier: (session: { characterId: string }, request: RollRequest) => number
   /** The Campaign Seed, Worlds and derived sheet text for the Session's Campaign and Character. */
-  loadContext: (session: {
-    campaignId: string
-    characterId: string
-  }) => Omit<ContextInput, 'turns' | 'contextLimit' | 'replyReserve'>
+  loadContext: (session: { campaignId: string; characterId: string }) => Omit<
+    ContextInput,
+    'turns' | 'contextLimit' | 'replyReserve' | 'arc'
+  > & {
+    /** The Campaign's Arc, if any; only an accepted one steers the DM. */
+    arc?: ArcContextArc | null
+  }
+  /** World memory. Absent, the runner does no post-turn extraction. */
+  memory?: MemoryRepository
+  /** The Arc's Beats: extraction offers the open ones and moves the ones the story settled. */
+  beats?: BeatProgress
+  /** Where rejected extraction items are logged; defaults to the server log. */
+  log?: RejectionLog
 }
 
 export type BeginRefusal = 'not-found' | 'ended' | 'in-flight' | 'invalid-state' | 'empty-action'
@@ -67,6 +89,14 @@ export interface TurnRunner {
   isGenerating(sessionId: string): boolean
   /** Resolves when no background summary call is running; never rejects. For tests and shutdown. */
   summaryIdle(): Promise<void>
+  /** Resolves when no background memory extraction is running; never rejects. For tests, shutdown and starting a Session. */
+  memoryIdle(): Promise<void>
+  /**
+   * Waits for pending memory extraction, but no longer than `timeoutMs`; then resolves either
+   * way and never rejects. Called when a new Session starts so it opens with what the last
+   * one established. The extraction keeps running after a timeout.
+   */
+  drainMemory(timeoutMs?: number): Promise<void>
 }
 
 export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
@@ -102,10 +132,92 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
     summarizing.set(sessionId, job)
   }
 
+  /** DM turns across the Campaign's Sessions since the Arc last made Beat progress. */
+  function quietTurns(arc: ArcContextArc, current: Session) {
+    return countQuietTurns(
+      arc,
+      deps.sessions
+        .listNumbered(current.campaignId)
+        .map((s) => ({ id: s.id, turns: deps.sessions.turns(s.id) }))
+    )
+  }
+
+  function memoryInput(current: Session, turns: readonly Turn[]): MemoryInput | undefined {
+    return deps.memory ? memoryInputFor(deps.sessions, deps.memory, current, turns) : undefined
+  }
+
+  const extracting = new Map<string, Promise<void>>()
+  /** Consecutive failed extraction calls per Session; at the cap the runner stops trying. */
+  const memoryFailures = new Map<string, number>()
+
+  /**
+   * Starts a background extraction over every Turn since the Session's watermark, unless one is
+   * already running (it re-checks when it finishes, so nothing saved meanwhile is missed). Only
+   * called after a DM turn was saved, so discarded, stopped and failed turns never reach it.
+   */
+  function extractIfDue(sessionId: string) {
+    const memory = deps.memory
+    if (!memory || extracting.has(sessionId)) return
+    if ((memoryFailures.get(sessionId) ?? 0) >= MEMORY_MAX_FAILURES) return
+    const current = deps.sessions.get(sessionId)
+    if (!current) return
+    const turns = deps.sessions.turns(sessionId).filter((t) => t.seq > current.memoryThroughSeq)
+    // Covers up to the last DM turn: a trailing unanswered player action waits for its answer.
+    const lastDm = turns.findLast((t) => t.author === 'dm')
+    if (!lastDm) return
+    const covered = turns.filter((t) => t.seq <= lastDm.seq)
+    const job = runExtraction(
+      deps.port,
+      memory,
+      {
+        threadId: `${sessionId}:memory`,
+        campaignId: current.campaignId,
+        characterId: current.characterId,
+        sessionId,
+        contextLimit: deps.contextLimit,
+        turns: covered,
+        beats: deps.beats
+      },
+      deps.log
+    )
+      .then((ok) => {
+        if (!ok) {
+          memoryFailures.set(sessionId, (memoryFailures.get(sessionId) ?? 0) + 1)
+          return false
+        }
+        memoryFailures.delete(sessionId)
+        deps.sessions.saveMemoryThrough(sessionId, lastDm.seq)
+        return true
+      })
+      .catch(() => false) // housekeeping: never surfaces
+      .finally(() => extracting.delete(sessionId))
+      .then((ok) => {
+        if (ok) extractIfDue(sessionId)
+      })
+    extracting.set(sessionId, job)
+  }
+
+  async function drainAll() {
+    // A finished job may start a follow-up, so wait until none is left.
+    while (extracting.size > 0) await Promise.all(extracting.values())
+  }
+
   return {
     isGenerating: (sessionId) => inFlight.has(sessionId),
     summaryIdle: async () => {
       await Promise.all(summarizing.values())
+    },
+    memoryIdle: drainAll,
+
+    drainMemory: async (timeoutMs = MEMORY_DRAIN_TIMEOUT_MS) => {
+      if (extracting.size === 0) return
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeout = new Promise<void>((resolve) => (timer = setTimeout(resolve, timeoutMs)))
+      try {
+        await Promise.race([drainAll(), timeout])
+      } finally {
+        clearTimeout(timer)
+      }
     },
 
     begin(sessionId, input, signal) {
@@ -158,10 +270,14 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
 
       async function* events(): AsyncGenerator<TextEvent> {
         try {
+          const turns = deps.sessions.turns(sessionId)
+          const { arc, ...loaded } = deps.loadContext(current!)
           const context = assembleContext({
-            ...deps.loadContext(current!),
+            ...loaded,
+            arc: arc?.status === 'accepted' ? { arc, quietTurns: quietTurns(arc, current!) } : null,
             summary: deps.sessions.get(sessionId)?.summary ?? null,
-            turns: deps.sessions.turns(sessionId),
+            turns,
+            memory: memoryInput(current!, turns),
             contextLimit: input.contextLimit ?? deps.contextLimit,
             replyReserve: deps.replyReserve
           })
@@ -219,6 +335,7 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
                   ...(rollRequest && { rollRequest })
                 })
                 summarizeIfDue(sessionId, context.turnBudget)
+                extractIfDue(sessionId)
                 yield event
               } else {
                 yield event

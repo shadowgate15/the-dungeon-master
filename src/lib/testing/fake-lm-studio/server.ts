@@ -15,6 +15,10 @@ import type { AddressInfo } from 'node:net'
  * from the request's `response_format` (first enum slug, a short string for text, minimum-length
  * arrays). An answer can also script `toolCalls` (a `request_roll`, or an invalid call with raw
  * `arguments`), `status` (an HTTP failure) or `abortAfterChunks` (the connection drops mid-stream).
+ * Memory extraction calls (recognised by their system prompt marker) never touch that queue, so a
+ * scripted DM scenario is not disturbed by the silent call after each turn. They take the next
+ * entry of their own queue (POST the same answer shape to `/__control/extractions`, `"replace":
+ * true` clears it first), or else the schema default: no changes.
  * POSTing `{ "ms": n }` to `/__control/delay` delays every response that has no delay of
  * its own. GET `/__control/requests` returns the chat requests received so far.
  */
@@ -109,6 +113,14 @@ function requestSchema(body: unknown): Schema | undefined {
     ?.response_format
   return format?.json_schema?.schema
 }
+
+/** Marks the memory extraction call's system prompt (mirrors `EXTRACTION_MARKER` on the server). */
+const EXTRACTION_MARKER = 'MEMORY EXTRACTION'
+
+const isExtraction = (body: unknown) =>
+  JSON.stringify((body as { messages?: unknown } | undefined)?.messages ?? '').includes(
+    EXTRACTION_MARKER
+  )
 
 export type Scenario = (ctx: ScenarioContext) => void | Promise<void>
 
@@ -281,6 +293,8 @@ export interface FakeLmStudio {
   setChatContent(content: unknown): void
   /** Append answers to the FIFO queue, consumed one per chat completion in the `ready` scenario. */
   queueAnswers(...answers: Answer[]): void
+  /** Append answers to the queue memory extraction calls consume (valid, rejected, unparseable, failing). */
+  queueExtractions(...answers: Answer[]): void
   /** Delay every response that has no delay of its own. */
   setDelay(ms: number): void
   /** Chat completion requests still open (not finished or dropped by the client). */
@@ -314,6 +328,7 @@ export async function startFakeLmStudio(
   let chatContent: unknown
   const requests: FakeRequest[] = []
   const queue: Answer[] = []
+  const extractionQueue: Answer[] = []
   let delayMs = 0
   let openChat = 0
 
@@ -340,6 +355,12 @@ export async function startFakeLmStudio(
       queue.push(...(data?.answers ?? []).flatMap(expand))
       return json(res, 200, { queued: queue.length })
     }
+    if (path === '/__control/extractions' && req.method === 'POST') {
+      const data = body as { answers?: Answer[]; replace?: boolean } | undefined
+      if (data?.replace) extractionQueue.length = 0
+      extractionQueue.push(...(data?.answers ?? []).flatMap(expand))
+      return json(res, 200, { queued: extractionQueue.length })
+    }
     if (path === '/__control/delay' && req.method === 'POST') {
       delayMs = (body as { ms?: number } | undefined)?.ms ?? 0
       return json(res, 200, { ok: true })
@@ -357,6 +378,11 @@ export async function startFakeLmStudio(
       body,
       options: resolved,
       nextAnswer: () => {
+        if (isExtraction(body)) {
+          const scripted = extractionQueue.shift()
+          if (scripted) return { delayMs, ...scripted }
+          return { content: defaultFor(requestSchema(body)), delayMs }
+        }
         const queued = queue.shift()
         if (queued) return { delayMs, ...queued }
         const schema = requestSchema(body)
@@ -386,6 +412,9 @@ export async function startFakeLmStudio(
     },
     queueAnswers(...answers) {
       queue.push(...answers.flatMap(expand))
+    },
+    queueExtractions(...answers) {
+      extractionQueue.push(...answers.flatMap(expand))
     },
     setDelay(ms) {
       delayMs = ms

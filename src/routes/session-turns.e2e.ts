@@ -20,7 +20,11 @@ async function lastModelRequest(request: APIRequestContext) {
     path: string
     body: { messages: { role: string; content: string }[] }
   }[]
-  return all.filter((r) => r.path === '/v1/chat/completions').at(-1)!.body.messages
+  // The silent memory extraction call after each DM turn is not a DM call.
+  return all
+    .filter((r) => r.path === '/v1/chat/completions')
+    .filter((r) => !JSON.stringify(r.body.messages).includes('MEMORY EXTRACTION'))
+    .at(-1)!.body.messages
 }
 
 /** Creates a World, a Character and a Campaign, links them and starts a Session. */
@@ -206,4 +210,103 @@ test('a closed tab discards the reply like Stop, and a second call is refused me
   await script(request, [{ content: 'The dust settles.' }])
   await fresh.getByRole('button', { name: 'Retry' }).click()
   await expect(transcript(fresh)).toContainText('The dust settles.')
+})
+
+test('an NPC introduced in one DM turn is in the next turn model request', async ({
+  page,
+  request
+}) => {
+  const extractions = async () =>
+    (
+      (await (await request.get(`${FAKE_LM_STUDIO}/__control/requests`)).json()) as {
+        body?: { messages: { content: string }[] }
+      }[]
+    ).filter((r) => JSON.stringify(r.body?.messages ?? []).includes('MEMORY EXTRACTION')).length
+
+  await request.post(`${FAKE_LM_STUDIO}/__control/extractions`, {
+    data: {
+      replace: true,
+      answers: [
+        {
+          content: {
+            npcs: [
+              {
+                name: 'Vessa Thorn',
+                description: 'A one-eyed relic broker.',
+                role: 'broker',
+                status: 'alive',
+                stance: 'friendly'
+              }
+            ],
+            facts: []
+          }
+        }
+      ]
+    }
+  })
+  const before = await extractions()
+  await startSession(page, request, 'Vessa Thorn, a relic broker, beckons you.')
+  // Extraction runs after the saved turn and never blocks play; let it land.
+  await expect.poll(extractions).toBeGreaterThan(before)
+  await page.waitForTimeout(500)
+
+  await script(request, [{ content: 'Vessa smiles.' }])
+  await act(page, 'I greet her.')
+  await expect(transcript(page)).toContainText('Vessa smiles.')
+  const messages = await lastModelRequest(request)
+  const system = messages
+    .filter((m) => m.role === 'system')
+    .map((m) => m.content)
+    .join('\n')
+  expect(system).toContain('Vessa Thorn (alive, friendly toward you), broker')
+})
+
+test('an NPC and a world change from Session one are in the model request for Session two opening', async ({
+  page,
+  request
+}) => {
+  await request.post(`${FAKE_LM_STUDIO}/__control/extractions`, {
+    data: {
+      replace: true,
+      answers: [
+        {
+          content: {
+            npcs: [
+              {
+                name: 'Orsik Vane',
+                description: 'A nervous ferryman.',
+                role: 'ferryman',
+                status: 'alive',
+                stance: 'friendly'
+              }
+            ],
+            facts: [
+              {
+                title: 'The ferry is burned',
+                detail: 'You set the ferry alight.',
+                worldChanging: true
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })
+  await startSession(page, request, 'Orsik Vane, a ferryman, hails you.')
+  // End the Session at once: starting the next one waits for the extraction to land.
+  await page.getByRole('button', { name: 'End Session' }).click()
+  await expect(page.getByText('Session ended. This transcript is read-only.')).toBeVisible()
+
+  await page.goto(page.url().replace(/\/sessions\/.*/, ''))
+  await script(request, [{ content: 'Welcome back to the shore.' }])
+  await page.getByRole('button', { name: 'Start Session' }).click()
+  await expect(page.getByRole('heading', { name: 'Session 2' })).toBeVisible()
+  await expect(transcript(page)).toContainText('Welcome back to the shore.')
+
+  const system = (await lastModelRequest(request))
+    .filter((m) => m.role === 'system')
+    .map((m) => m.content)
+    .join('\n')
+  expect(system).toContain('Orsik Vane (alive, friendly toward you), ferryman')
+  expect(system).toContain('The ferry is burned')
 })

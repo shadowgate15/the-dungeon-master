@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/sqlite-core'
 import { TURN_AUTHORS, TURN_KINDS, type RollRequest, type RollResult } from '../../session/enums'
 import { LENGTHS, TONES } from '../../campaign/enums'
+import { NPC_STATUSES, STANCES } from '../../memory/enums'
 import { ABILITY_KEYS } from '../../rules/registry'
 import { ABILITY_METHODS, ALIGNMENTS, PICK_SOURCES } from '../../character/enums'
 import {
@@ -259,7 +260,9 @@ export const session = sqliteTable(
      */
     summary: text('summary'),
     /** The last Turn `seq` in this Session the summary already covers; 0 when none. */
-    summarizedThroughSeq: integer('summarized_through_seq').notNull().default(0)
+    summarizedThroughSeq: integer('summarized_through_seq').notNull().default(0),
+    /** The last Turn `seq` in this Session that memory extraction already covers; 0 when none. */
+    memoryThroughSeq: integer('memory_through_seq').notNull().default(0)
   },
   (t) => [
     uniqueIndex('session_one_open_per_campaign')
@@ -297,6 +300,216 @@ export const turn = sqliteTable(
     uniqueIndex('turn_session_seq').on(t.sessionId, t.seq),
     check('turn_author_check', oneOf('author', TURN_AUTHORS)),
     check('turn_kind_check', oneOf('kind', TURN_KINDS))
+  ]
+)
+
+/**
+ * World memory: structured, Campaign-scoped records the DM established. Every record carries
+ * its provenance (created and last-changed Session and Turn seq) and is retired by flag, never
+ * deleted. Records cascade with their Campaign.
+ */
+const memoryColumns = () => ({
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  campaignId: text('campaign_id')
+    .notNull()
+    .references(() => campaign.id, { onDelete: 'cascade' }),
+  createdSessionId: text('created_session_id')
+    .notNull()
+    .references(() => session.id, { onDelete: 'cascade' }),
+  createdSeq: integer('created_seq').notNull(),
+  changedSessionId: text('changed_session_id')
+    .notNull()
+    .references(() => session.id, { onDelete: 'cascade' }),
+  changedSeq: integer('changed_seq').notNull(),
+  /** Set when the record was retired, with a short reason. */
+  retiredAt: integer('retired_at'),
+  retiredReason: text('retired_reason'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull()
+})
+
+export const place = sqliteTable(
+  'place',
+  { ...memoryColumns(), name: text('name').notNull(), description: text('description') },
+  (t) => [index('place_campaign_idx').on(t.campaignId)]
+)
+
+export const faction = sqliteTable(
+  'faction',
+  { ...memoryColumns(), name: text('name').notNull(), description: text('description') },
+  (t) => [index('faction_campaign_idx').on(t.campaignId)]
+)
+
+export const event = sqliteTable(
+  'event',
+  { ...memoryColumns(), name: text('name').notNull(), description: text('description') },
+  (t) => [index('event_campaign_idx').on(t.campaignId)]
+)
+
+export const npc = sqliteTable(
+  'npc',
+  {
+    ...memoryColumns(),
+    name: text('name').notNull(),
+    description: text('description'),
+    role: text('role'),
+    status: text('status', { enum: NPC_STATUSES }).notNull().default('alive'),
+    placeId: text('place_id').references(() => place.id, { onDelete: 'set null' })
+  },
+  (t) => [
+    index('npc_campaign_idx').on(t.campaignId),
+    check('npc_status_check', oneOf('status', NPC_STATUSES))
+  ]
+)
+
+/** A fact is immutable; it changes only by being superseded or retired. */
+export const fact = sqliteTable(
+  'fact',
+  {
+    ...memoryColumns(),
+    title: text('title').notNull(),
+    detail: text('detail'),
+    /** A change to the world itself, always kept in the DM's context. */
+    worldChanging: integer('world_changing', { mode: 'boolean' }).notNull().default(false),
+    supersededById: text('superseded_by_id').references((): AnySQLiteColumn => fact.id, {
+      onDelete: 'set null'
+    })
+  },
+  (t) => [index('fact_campaign_idx').on(t.campaignId)]
+)
+
+/** An NPC's stance toward one Character; keyed by Character so multi-Character Campaigns need no migration. */
+export const disposition = sqliteTable(
+  'disposition',
+  {
+    npcId: text('npc_id')
+      .notNull()
+      .references(() => npc.id, { onDelete: 'cascade' }),
+    characterId: text('character_id')
+      .notNull()
+      .references(() => character.id, { onDelete: 'cascade' }),
+    stance: text('stance', { enum: STANCES }).notNull(),
+    note: text('note'),
+    changedSessionId: text('changed_session_id')
+      .notNull()
+      .references(() => session.id, { onDelete: 'cascade' }),
+    changedSeq: integer('changed_seq').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    primaryKey({ columns: [t.npcId, t.characterId] }),
+    check('disposition_stance_check', oneOf('stance', STANCES))
+  ]
+)
+
+/** What an NPC knows. World facts are never copied per Character. */
+export const npcFact = sqliteTable(
+  'npc_fact',
+  {
+    npcId: text('npc_id')
+      .notNull()
+      .references(() => npc.id, { onDelete: 'cascade' }),
+    factId: text('fact_id')
+      .notNull()
+      .references(() => fact.id, { onDelete: 'cascade' })
+  },
+  (t) => [primaryKey({ columns: [t.npcId, t.factId] })]
+)
+
+/**
+ * Where the player last looked at the Journal, per (Campaign, Character): a Session and a Turn
+ * seq position. Records created or changed after it carry chips. Advances when the overlay closes.
+ */
+export const journalMarker = sqliteTable(
+  'journal_marker',
+  {
+    campaignId: text('campaign_id')
+      .notNull()
+      .references(() => campaign.id, { onDelete: 'cascade' }),
+    characterId: text('character_id')
+      .notNull()
+      .references(() => character.id, { onDelete: 'cascade' }),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => session.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [primaryKey({ columns: [t.campaignId, t.characterId] })]
+)
+
+export const ARC_STATUSES = ['draft', 'accepted'] as const
+export const BEAT_STATES = ['pending', 'reached', 'abandoned'] as const
+
+/**
+ * A Campaign's Arc: at most one (unique `campaign_id`), no versions; regenerating replaces it.
+ * Only an `accepted` Arc steers the DM.
+ */
+export const arc = sqliteTable(
+  'arc',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    campaignId: text('campaign_id')
+      .notNull()
+      .unique()
+      .references(() => campaign.id, { onDelete: 'cascade' }),
+    status: text('status', { enum: ARC_STATUSES }).notNull().default('draft'),
+    title: text('title').notNull(),
+    premise: text('premise').notNull(),
+    stakes: text('stakes').notNull(),
+    resolution: text('resolution').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  () => [check('arc_status_check', oneOf('status', ARC_STATUSES))]
+)
+
+/** An ordered phase of an Arc. `position` is 0-based and dense. */
+export const arcAct = sqliteTable(
+  'arc_act',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    arcId: text('arc_id')
+      .notNull()
+      .references(() => arc.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    name: text('name').notNull(),
+    purpose: text('purpose').notNull()
+  },
+  (t) => [index('arc_act_arc').on(t.arcId, t.position)]
+)
+
+/**
+ * A turning point. The id is stable across edits so progress survives them. `state` leaves
+ * `pending` once, and then the source Session and Turn seq are stamped.
+ */
+export const arcBeat = sqliteTable(
+  'arc_beat',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    actId: text('act_id')
+      .notNull()
+      .references(() => arcAct.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    title: text('title').notNull(),
+    description: text('description').notNull(),
+    state: text('state', { enum: BEAT_STATES }).notNull().default('pending'),
+    sourceSessionId: text('source_session_id').references(() => session.id, {
+      onDelete: 'set null'
+    }),
+    sourceTurnSeq: integer('source_turn_seq')
+  },
+  (t) => [
+    index('arc_beat_act').on(t.actId, t.position),
+    check('arc_beat_state_check', oneOf('state', BEAT_STATES))
   ]
 )
 

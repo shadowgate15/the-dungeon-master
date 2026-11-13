@@ -58,3 +58,27 @@ test('scripts a failure', async ({ request }) => {
 
   expect(status).toBe(503)
 })
+
+test('scripts memory extraction on its own queue, apart from DM narration', async ({ request }) => {
+  await script(request, [{ content: 'The DM narrates.' }])
+  await request.post(`${FAKE_LM_STUDIO}/__control/extractions`, {
+    data: {
+      replace: true,
+      answers: [{ content: { npcs: [{ name: 'Grom' }], facts: [] } }, { status: 500 }]
+    }
+  })
+  const extraction = () =>
+    request.post(`${FAKE_LM_STUDIO}/v1/chat/completions`, {
+      data: {
+        model: 'fake-model',
+        stream: true,
+        messages: [{ role: 'system', content: 'MEMORY EXTRACTION: keep notes.' }]
+      }
+    })
+
+  const first = await extraction()
+  expect(contentOf(await first.text())).toBe('{"npcs":[{"name":"Grom"}],"facts":[]}')
+  expect((await extraction()).status()).toBe(500)
+  // The DM's scripted answer was not consumed by the extraction calls.
+  expect(contentOf((await chat(request)).text)).toBe('The DM narrates.')
+})

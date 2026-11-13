@@ -3,10 +3,13 @@ import { getChatPort } from '../ai/index.ts'
 import { DEFAULT_CONTEXT_LIMIT } from '../ai/config.ts'
 import type { ChatPort } from '../ai/port.ts'
 import { createCampaignService } from '../campaign/service.ts'
+import { createArcService } from '../arc/service.ts'
 import { createCharacterService } from '../character/service.ts'
 import { loadWizardRules } from '../character/wizard-rules.ts'
 import { db } from '../db/index.ts'
 import { dice } from '../dice.ts'
+import { createJournal } from '../memory/journal.ts'
+import { createMemoryRepository } from '../memory/repository.ts'
 import type { AbilityKey } from '#lib/rules/registry.ts'
 import { sheetText } from './sheet-text.ts'
 import { createRecap } from './recap.ts'
@@ -18,6 +21,7 @@ export const DM_REPLY_TOKENS = 1024
 
 const campaigns = createCampaignService(db)
 const characters = createCharacterService(db)
+const arcs = createArcService(db)
 
 /** Server-only singletons: the Session service and the process-wide turn-runner. */
 export const sessions = createSessionService(db)
@@ -33,11 +37,19 @@ const modelPort: ChatPort = (request) => {
   return port(request)
 }
 
+/** World memory over the real database. */
+export const memory = createMemoryRepository(db)
+
 /** The resume recap: a stateless side call, cached in memory, never a Turn. */
-export const recap = createRecap({ sessions, port: modelPort })
+export const recap = createRecap({ sessions, port: modelPort, memory })
+
+/** The read-only Journal and its last-looked marker over the real database. */
+export const journal = createJournal(db)
 
 export const turnRunner = createTurnRunner({
   sessions,
+  memory,
+  beats: arcs,
   port: modelPort,
   contextLimit: DEFAULT_CONTEXT_LIMIT,
   replyReserve: DM_REPLY_TOKENS,
@@ -60,6 +72,7 @@ export const turnRunner = createTurnRunner({
     return {
       campaign,
       worlds: campaign.worlds,
+      arc: arcs.get(campaignId),
       sheet: sheetText(buildSummary(loadWizardRules(), detailToSummaryData(hero)))
     }
   }

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
+  import { invalidateAll } from '$app/navigation'
   import { resolve } from '$app/paths'
+  import ArcSection from '#lib/arc/ArcSection.svelte'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
@@ -58,6 +60,16 @@
       </form>
     {/if}
   </section>
+
+  <ArcSection
+    campaignId={data.campaign.id}
+    length={data.campaign.length}
+    arc={data.arc}
+    canGenerate={data.arcAvailability.canGenerate}
+    structureLocked={data.arcAvailability.structureLocked}
+    readOnly={locked}
+    onchange={() => invalidateAll()}
+  />
 
   <section aria-label="Sessions" class="space-y-2">
     <h2 class="font-display text-lg">Sessions</h2>
