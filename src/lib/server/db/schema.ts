@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/sqlite-core'
 import { TURN_AUTHORS, TURN_KINDS, type RollRequest, type RollResult } from '../../session/enums'
 import { LENGTHS, TONES } from '../../campaign/enums'
+import { NPC_STATUSES, STANCES } from '../../memory/enums'
 import { ABILITY_KEYS } from '../../rules/registry'
 import { ABILITY_METHODS, ALIGNMENTS, PICK_SOURCES } from '../../character/enums'
 import {
@@ -259,7 +260,9 @@ export const session = sqliteTable(
      */
     summary: text('summary'),
     /** The last Turn `seq` in this Session the summary already covers; 0 when none. */
-    summarizedThroughSeq: integer('summarized_through_seq').notNull().default(0)
+    summarizedThroughSeq: integer('summarized_through_seq').notNull().default(0),
+    /** The last Turn `seq` in this Session that memory extraction already covers; 0 when none. */
+    memoryThroughSeq: integer('memory_through_seq').notNull().default(0)
   },
   (t) => [
     uniqueIndex('session_one_open_per_campaign')
@@ -298,6 +301,121 @@ export const turn = sqliteTable(
     check('turn_author_check', oneOf('author', TURN_AUTHORS)),
     check('turn_kind_check', oneOf('kind', TURN_KINDS))
   ]
+)
+
+/**
+ * World memory: structured, Campaign-scoped records the DM established. Every record carries
+ * its provenance (created and last-changed Session and Turn seq) and is retired by flag, never
+ * deleted. Records cascade with their Campaign.
+ */
+const memoryColumns = () => ({
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  campaignId: text('campaign_id')
+    .notNull()
+    .references(() => campaign.id, { onDelete: 'cascade' }),
+  createdSessionId: text('created_session_id')
+    .notNull()
+    .references(() => session.id, { onDelete: 'cascade' }),
+  createdSeq: integer('created_seq').notNull(),
+  changedSessionId: text('changed_session_id')
+    .notNull()
+    .references(() => session.id, { onDelete: 'cascade' }),
+  changedSeq: integer('changed_seq').notNull(),
+  /** Set when the record was retired, with a short reason. */
+  retiredAt: integer('retired_at'),
+  retiredReason: text('retired_reason'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull()
+})
+
+export const place = sqliteTable(
+  'place',
+  { ...memoryColumns(), name: text('name').notNull(), description: text('description') },
+  (t) => [index('place_campaign_idx').on(t.campaignId)]
+)
+
+export const faction = sqliteTable(
+  'faction',
+  { ...memoryColumns(), name: text('name').notNull(), description: text('description') },
+  (t) => [index('faction_campaign_idx').on(t.campaignId)]
+)
+
+export const event = sqliteTable(
+  'event',
+  { ...memoryColumns(), name: text('name').notNull(), description: text('description') },
+  (t) => [index('event_campaign_idx').on(t.campaignId)]
+)
+
+export const npc = sqliteTable(
+  'npc',
+  {
+    ...memoryColumns(),
+    name: text('name').notNull(),
+    description: text('description'),
+    role: text('role'),
+    status: text('status', { enum: NPC_STATUSES }).notNull().default('alive'),
+    placeId: text('place_id').references(() => place.id, { onDelete: 'set null' })
+  },
+  (t) => [
+    index('npc_campaign_idx').on(t.campaignId),
+    check('npc_status_check', oneOf('status', NPC_STATUSES))
+  ]
+)
+
+/** A fact is immutable; it changes only by being superseded or retired. */
+export const fact = sqliteTable(
+  'fact',
+  {
+    ...memoryColumns(),
+    title: text('title').notNull(),
+    detail: text('detail'),
+    /** A change to the world itself, always kept in the DM's context. */
+    worldChanging: integer('world_changing', { mode: 'boolean' }).notNull().default(false),
+    supersededById: text('superseded_by_id').references((): AnySQLiteColumn => fact.id, {
+      onDelete: 'set null'
+    })
+  },
+  (t) => [index('fact_campaign_idx').on(t.campaignId)]
+)
+
+/** An NPC's stance toward one Character; keyed by Character so multi-Character Campaigns need no migration. */
+export const disposition = sqliteTable(
+  'disposition',
+  {
+    npcId: text('npc_id')
+      .notNull()
+      .references(() => npc.id, { onDelete: 'cascade' }),
+    characterId: text('character_id')
+      .notNull()
+      .references(() => character.id, { onDelete: 'cascade' }),
+    stance: text('stance', { enum: STANCES }).notNull(),
+    note: text('note'),
+    changedSessionId: text('changed_session_id')
+      .notNull()
+      .references(() => session.id, { onDelete: 'cascade' }),
+    changedSeq: integer('changed_seq').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    primaryKey({ columns: [t.npcId, t.characterId] }),
+    check('disposition_stance_check', oneOf('stance', STANCES))
+  ]
+)
+
+/** What an NPC knows. World facts are never copied per Character. */
+export const npcFact = sqliteTable(
+  'npc_fact',
+  {
+    npcId: text('npc_id')
+      .notNull()
+      .references(() => npc.id, { onDelete: 'cascade' }),
+    factId: text('fact_id')
+      .notNull()
+      .references(() => fact.id, { onDelete: 'cascade' })
+  },
+  (t) => [primaryKey({ columns: [t.npcId, t.factId] })]
 )
 
 export * from './rules-schema'

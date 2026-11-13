@@ -20,7 +20,11 @@ async function lastModelRequest(request: APIRequestContext) {
     path: string
     body: { messages: { role: string; content: string }[] }
   }[]
-  return all.filter((r) => r.path === '/v1/chat/completions').at(-1)!.body.messages
+  // The silent memory extraction call after each DM turn is not a DM call.
+  return all
+    .filter((r) => r.path === '/v1/chat/completions')
+    .filter((r) => !JSON.stringify(r.body.messages).includes('MEMORY EXTRACTION'))
+    .at(-1)!.body.messages
 }
 
 /** Creates a World, a Character and a Campaign, links them and starts a Session. */
