@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit'
 import { resolve } from '$app/paths'
 import { createCampaignService } from '#lib/server/campaign/service.ts'
 import { createCharacterService } from '#lib/server/character/service.ts'
+import { arcs } from '#lib/server/arc/index.ts'
 import { db } from '#lib/server/db/index.ts'
 import { SessionAlreadyOpenError, SessionValidationError } from '#lib/server/session/service.ts'
 import { sessions } from '#lib/server/session/index.ts'
@@ -20,11 +21,14 @@ export const load: PageServerLoad = ({ params }) => {
       id: found.id,
       name: found.name,
       premise: found.premise,
+      length: found.length,
       archived: found.archivedAt !== null,
       readOnly: campaigns.isReadOnly(found.id)
     },
     linkedCharacter: linkedId ? { id: linkedId, name: characters.get(linkedId)?.name ?? '' } : null,
     characters: characters.list().map((c) => ({ id: c.id, name: c.name })),
+    arc: arcs.get(found.id),
+    arcAvailability: arcs.availability(found.id),
     openSessionId: open?.id ?? null,
     sessions: sessions
       .listNumbered(found.id)
