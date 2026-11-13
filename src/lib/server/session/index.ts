@@ -3,6 +3,7 @@ import { getChatPort } from '../ai/index.ts'
 import { DEFAULT_CONTEXT_LIMIT } from '../ai/config.ts'
 import type { ChatPort } from '../ai/port.ts'
 import { createCampaignService } from '../campaign/service.ts'
+import { createArcService } from '../arc/service.ts'
 import { createCharacterService } from '../character/service.ts'
 import { loadWizardRules } from '../character/wizard-rules.ts'
 import { db } from '../db/index.ts'
@@ -20,6 +21,7 @@ export const DM_REPLY_TOKENS = 1024
 
 const campaigns = createCampaignService(db)
 const characters = createCharacterService(db)
+const arcs = createArcService(db)
 
 /** Server-only singletons: the Session service and the process-wide turn-runner. */
 export const sessions = createSessionService(db)
@@ -69,6 +71,7 @@ export const turnRunner = createTurnRunner({
     return {
       campaign,
       worlds: campaign.worlds,
+      arc: arcs.get(campaignId),
       sheet: sheetText(buildSummary(loadWizardRules(), detailToSummaryData(hero)))
     }
   }

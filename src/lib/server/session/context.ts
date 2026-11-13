@@ -1,13 +1,14 @@
 import { resultLabel } from '#lib/session/roll.ts'
 import type { ChatMessage } from '../ai/port.ts'
 import { estimateTokens } from '../ai/tokens.ts'
+import { buildArcBlock, type ArcContextArc } from '../arc/context.ts'
 import { buildMemoryBlock, memoryBudget, type MemoryInput } from '../memory/context.ts'
 import type { Turn } from './service.ts'
 
 /**
  * DM context assembly: the prompt for one DM call, rebuilt from the database every time. Pure;
  * the caller loads the rows. Order: the static DM instruction block, the Campaign Seed, every
- * linked World, the derived Character sheet, the rolling summary (when there is one), then the
+ * linked World, the accepted Arc block (when there is one), the derived Character sheet, the rolling summary (when there is one), then the
  * newest Turns that fit the Turn budget. History is plain text.
  */
 
@@ -29,6 +30,8 @@ export interface ContextInput {
   /** The derived Character sheet as text. */
   sheet: string
   turns: readonly Pick<Turn, 'seq' | 'author' | 'kind' | 'text' | 'rollRequest' | 'rollResult'>[]
+  /** The Campaign's Arc and the DM turns since its last Beat progress; only an accepted Arc steers. */
+  arc?: { arc: ArcContextArc; quietTurns: number } | null
   /** World memory records and the mention window; absent or empty leaves the prompt unchanged. */
   memory?: MemoryInput
   /** The model's context window, in tokens. */
@@ -99,10 +102,12 @@ export function newestFitting<T extends ContextInput['turns'][number]>(
 }
 
 export function assembleContext(input: ContextInput): AssembledContext {
+  const arcBlock = input.arc ? buildArcBlock(input.arc.arc, input.arc.quietTurns) : null
   const fixedPrompts = [
     DM_INSTRUCTIONS,
     campaignBlock(input.campaign),
     worldsBlock(input.worlds),
+    ...(arcBlock ? [arcBlock] : []),
     `The player's Character (derived from the game's rules; do not change these numbers):\n${input.sheet}`
   ]
   const summaryPrompt = input.summary?.trim()

@@ -139,6 +139,66 @@ describe('assembleContext with World memory', () => {
     expect(systemPrompts[at]).toMatch(/memory wins/i)
   })
 
+  describe('Arc block', () => {
+    const arc = {
+      status: 'accepted' as const,
+      title: 'The Drowned Crown',
+      premise: 'A crown lies under the lake.',
+      stakes: 'The village floods.',
+      resolution: 'The crown is returned.',
+      acts: [
+        {
+          name: 'Setup',
+          purpose: 'Arrive.',
+          beats: [
+            {
+              title: 'Meet the warden',
+              description: 'Grom is met.',
+              state: 'pending' as const,
+              sourceSessionId: null,
+              sourceTurnSeq: null
+            }
+          ]
+        }
+      ]
+    }
+
+    it('sits between the Worlds and the sheet', () => {
+      const { systemPrompts } = assembleContext(input({ arc: { arc, quietTurns: 0 } }))
+      expect(systemPrompts[2]).toContain('Eldoria')
+      expect(systemPrompts[3]).toContain('The Drowned Crown')
+      expect(systemPrompts[4]).toContain('Brenna')
+    })
+
+    it('leaves the prompts byte-for-byte unchanged with no accepted Arc', () => {
+      const base = assembleContext(input())
+      expect(assembleContext(input({ arc: null }))).toEqual(base)
+      expect(
+        assembleContext(input({ arc: { arc: { ...arc, status: 'draft' }, quietTurns: 0 } }))
+      ).toEqual(base)
+    })
+
+    it('is charged before memory and never dropped, however small the budget', () => {
+      const tight = assembleContext(
+        input({
+          arc: { arc, quietTurns: 0 },
+          memory: memory(),
+          contextLimit: 300,
+          replyReserve: 100
+        })
+      )
+      expect(tight.systemPrompts.join('\n')).toContain('The Drowned Crown')
+      const base = assembleContext(input())
+      const withArc = assembleContext(input({ arc: { arc, quietTurns: 0 } }))
+      expect(withArc.turnBudget).toBe(base.turnBudget - estimateTokens(withArc.systemPrompts[3]))
+    })
+
+    it('adds the drift hint once enough quiet turns have passed', () => {
+      const quiet = assembleContext(input({ arc: { arc, quietTurns: 15 } })).systemPrompts[3]
+      expect(quiet).toMatch(/drift/i)
+    })
+  })
+
   it('caps memory at a quarter of the remaining budget and gives Turns the rest', () => {
     const big = memory({
       facts: Array.from({ length: 60 }, (_, i) => ({
