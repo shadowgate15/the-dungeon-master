@@ -137,7 +137,7 @@ A non-player character the DM has introduced: a name, a short description, a rol
 _Avoid_: Character, monster, contact
 
 **NPC memory**:
-What is remembered about one NPC beyond who they are: their **disposition** toward a Character (hostile, wary, neutral, friendly or allied, plus a short note) and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character.
+What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the DM context and Journal show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character.
 _Avoid_: Relationship score, reputation
 
 **Journal**:
