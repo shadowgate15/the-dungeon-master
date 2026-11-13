@@ -131,11 +131,6 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
     summarizing.set(sessionId, job)
   }
 
-  /**
-   * The World memory records and mention window for a DM call. The window is the last few Turns;
-   * with none yet (the opening of a new Session) it is the previous Session's last Turns, and
-   * "now" is that Session's end, so what it just established reads as recent.
-   */
   /** DM turns across the Campaign's Sessions since the Arc last made Beat progress. */
   function quietTurns(arc: ArcContextArc, current: Session) {
     return countQuietTurns(
@@ -146,6 +141,11 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
     )
   }
 
+  /**
+   * The World memory records and mention window for a DM call. The window is the last few Turns;
+   * with none yet (the opening of a new Session) it is the previous Session's last Turns, and
+   * "now" is that Session's end, so what it just established reads as recent.
+   */
   function memoryInput(current: Session, turns: readonly Turn[]): MemoryInput | undefined {
     const memory = deps.memory
     if (!memory) return undefined
@@ -194,6 +194,7 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
         campaignId: current.campaignId,
         characterId: current.characterId,
         sessionId,
+        contextLimit: deps.contextLimit,
         turns: covered,
         beats: deps.beats
       },

@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import type { NpcStatus, Stance } from '#lib/memory/enums.ts'
 import type { Database } from '../db/connect'
 import { disposition, event, faction, fact, npc, npcFact, place } from '../db/schema'
+import type { JournalPosition } from '#lib/memory/journal.ts'
 import type { MemoryInput } from './context'
 
 export type Npc = typeof npc.$inferSelect
@@ -9,10 +10,7 @@ export type Fact = typeof fact.$inferSelect
 export type Disposition = typeof disposition.$inferSelect
 
 /** Where a write came from: the Session and the Turn seq the extraction covered up to. */
-export interface Provenance {
-  sessionId: string
-  seq: number
-}
+export type Provenance = JournalPosition
 
 /** The "gone" line shows at most this many non-alive NPCs, the most recently changed. */
 export const MAX_GONE_NPCS = 10

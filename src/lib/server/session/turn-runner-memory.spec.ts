@@ -8,6 +8,7 @@ import { createWorldService } from '../world/service'
 import { createMemoryRepository, type MemoryRepository } from '../memory/repository'
 import {
   EXTRACTION_MARKER,
+  EXTRACTION_MEMORY_SHARE,
   MAX_CORRECTION_ITEMS,
   MAX_FACT_CREATES,
   MAX_NPC_ITEMS,
@@ -189,6 +190,28 @@ describe('post-turn memory extraction', () => {
     expect(second).toContain('I greet him.')
     expect(second).not.toContain('Grom the warden eyes you.')
     expect(sessions.get(sessionId)?.memoryThroughSeq).toBe(3)
+  })
+
+  it('sends the core and selected records, not just the newest, within its own budget', async () => {
+    const at = { sessionId, seq: 0 }
+    const old = memory.createNpc(
+      campaignId,
+      { name: 'Vorn', description: 'A sworn enemy.', role: 'rival', status: 'alive' },
+      at
+    )
+    memory.setDisposition(old.id, characterId, { stance: 'hostile' }, at)
+    for (let i = 0; i < 50; i++) {
+      memory.createNpc(
+        campaignId,
+        { name: `Filler${i}`, description: 'x', role: 'y', status: 'alive' },
+        at
+      )
+    }
+    await play(undefined, says('The road is quiet.'), extracts({ npcs: [], facts: [] }))
+    const sent = prompt(requests[1])
+    expect(sent).toContain(old.id)
+    expect(sent).toContain('hostile toward you')
+    expect(EXTRACTION_MEMORY_SHARE).toBe(0.5)
   })
 
   it('updates an NPC by id and moves its disposition', async () => {
