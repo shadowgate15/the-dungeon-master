@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import { arcProblems, type ArcDraft } from '#lib/arc/arc.ts'
 import type { Length } from '#lib/campaign/enums.ts'
 import type { Database } from '../db/connect'
@@ -10,6 +10,14 @@ export class ArcValidationError extends Error {}
 
 /** The Campaign cannot change its Arc right now: read-only, or a Session has started. */
 export class ArcLockedError extends Error {}
+
+/** A pending Beat extraction may move, with the name of its Act. */
+export interface OpenBeat {
+  id: string
+  title: string
+  description: string
+  act: string
+}
 
 export type ArcBeatView = typeof arcBeat.$inferSelect
 export interface ArcActView {
@@ -125,6 +133,41 @@ export function createArcService(db: Database, now: () => number = Date.now) {
     availability(campaignId: string) {
       const { readOnly, started } = context(campaignId)
       return { canGenerate: !readOnly && !started, structureLocked: started }
+    },
+
+    /**
+     * The Beats extraction may move now: the pending Beats of the current Act (the Act of the
+     * first pending Beat) and of the next Act. Empty without an accepted Arc, or once complete.
+     */
+    openBeats(campaignId: string): OpenBeat[] {
+      const found = load(campaignId)
+      if (!found || found.status !== 'accepted') return []
+      const current = found.acts.findIndex((a) => a.beats.some((b) => b.state === 'pending'))
+      if (current === -1) return []
+      return found.acts
+        .slice(current, current + 2)
+        .flatMap((a) =>
+          a.beats
+            .filter((b) => b.state === 'pending')
+            .map((b) => ({ id: b.id, title: b.title, description: b.description, act: a.name }))
+        )
+    },
+
+    /**
+     * Moves a pending Beat to `reached` or `abandoned` for good, stamping the source Session and
+     * Turn. False (and no change) when the Beat is not pending.
+     */
+    transitionBeat(
+      beatId: string,
+      state: 'reached' | 'abandoned',
+      at: { sessionId: string; seq: number }
+    ): boolean {
+      const changed = db
+        .update(arcBeat)
+        .set({ state, sourceSessionId: at.sessionId, sourceTurnSeq: at.seq })
+        .where(and(eq(arcBeat.id, beatId), eq(arcBeat.state, 'pending')))
+        .run().changes
+      return changed > 0
     },
 
     /** Replaces the whole Arc (if any) with a freshly generated draft. */

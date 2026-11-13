@@ -7,7 +7,12 @@ import { MENTION_WINDOW_TURNS, type MemoryInput } from '../memory/context.ts'
 import { MAX_ROLL_REJECTIONS, parseRollRequest, ROLL_TOOL_NAME, rollTool } from './roll-request.ts'
 import type { Session, SessionService, Turn } from './service.ts'
 import { SUMMARY_MAX_FAILURES, summaryDue, writeSummary } from './summary.ts'
-import { MEMORY_MAX_FAILURES, runExtraction, type RejectionLog } from '../memory/extraction.ts'
+import {
+  MEMORY_MAX_FAILURES,
+  runExtraction,
+  type BeatProgress,
+  type RejectionLog
+} from '../memory/extraction.ts'
 import type { MemoryRepository } from '../memory/repository.ts'
 
 /**
@@ -55,6 +60,8 @@ export interface TurnRunnerDeps {
   }
   /** World memory. Absent, the runner does no post-turn extraction. */
   memory?: MemoryRepository
+  /** The Arc's Beats: extraction offers the open ones and moves the ones the story settled. */
+  beats?: BeatProgress
   /** Where rejected extraction items are logged; defaults to the server log. */
   log?: RejectionLog
 }
@@ -187,7 +194,8 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
         campaignId: current.campaignId,
         characterId: current.characterId,
         sessionId,
-        turns: covered
+        turns: covered,
+        beats: deps.beats
       },
       deps.log
     )

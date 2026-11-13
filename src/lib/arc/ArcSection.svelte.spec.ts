@@ -211,4 +211,39 @@ describe('ArcSection', () => {
     await expect.element(page.getByRole('button', { name: 'Regenerate' })).not.toBeInTheDocument()
     await expect.element(page.getByRole('button', { name: 'Accept Arc' })).not.toBeInTheDocument()
   })
+
+  describe('Beat progress after play starts', () => {
+    const progressed = (): ArcViewData => {
+      const a = arc('accepted')
+      a.acts[0].beats[0] = { ...a.acts[0].beats[0], state: 'reached', sessionNumber: 2 }
+      a.acts[0].beats[1] = { ...a.acts[0].beats[1], state: 'abandoned', sessionNumber: 3 }
+      return a
+    }
+    const locked = { canGenerate: false, structureLocked: true }
+
+    it('shows each Beat as pending, reached in a Session or abandoned', async () => {
+      render(ArcSection, props({ ...locked, arc: progressed() }))
+
+      await expect.element(page.getByText('Reached in Session 2')).toBeVisible()
+      await expect.element(page.getByText('Abandoned', { exact: true })).toBeVisible()
+      await expect.element(page.getByText('Pending', { exact: true }).first()).toBeVisible()
+      await expect.element(page.getByText(/Arc complete/)).not.toBeInTheDocument()
+    })
+
+    it('shows the Arc as complete when no Beat is pending', async () => {
+      const done = arc('accepted')
+      done.acts.forEach((act) =>
+        act.beats.forEach((b) => Object.assign(b, { state: 'reached', sessionNumber: 1 }))
+      )
+      render(ArcSection, props({ ...locked, arc: done }))
+
+      await expect.element(page.getByText(/Arc complete/)).toBeVisible()
+    })
+
+    it('shows no Beat state before play starts', async () => {
+      render(ArcSection, props({ arc: arc('accepted') }))
+
+      await expect.element(page.getByText('Pending', { exact: true })).not.toBeInTheDocument()
+    })
+  })
 })
