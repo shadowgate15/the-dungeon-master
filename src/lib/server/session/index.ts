@@ -49,6 +49,7 @@ export const journal = createJournal(db)
 export const turnRunner = createTurnRunner({
   sessions,
   memory,
+  beats: arcs,
   port: modelPort,
   contextLimit: DEFAULT_CONTEXT_LIMIT,
   replyReserve: DM_REPLY_TOKENS,

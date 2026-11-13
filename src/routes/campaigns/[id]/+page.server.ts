@@ -16,6 +16,9 @@ export const load: PageServerLoad = ({ params }) => {
   if (!found) error(404, 'Campaign not found')
   const linkedId = sessions.linkedCharacterId(found.id)
   const open = sessions.openFor(found.id)
+  const numbered = sessions.listNumbered(found.id)
+  const numberOf = new Map(numbered.map((s) => [s.id, s.number]))
+  const arc = arcs.get(found.id)
   return {
     campaign: {
       id: found.id,
@@ -27,12 +30,24 @@ export const load: PageServerLoad = ({ params }) => {
     },
     linkedCharacter: linkedId ? { id: linkedId, name: characters.get(linkedId)?.name ?? '' } : null,
     characters: characters.list().map((c) => ({ id: c.id, name: c.name })),
-    arc: arcs.get(found.id),
+    arc: arc && {
+      ...arc,
+      acts: arc.acts.map((a) => ({
+        ...a,
+        beats: a.beats.map((b) => ({
+          ...b,
+          sessionNumber: b.sourceSessionId ? (numberOf.get(b.sourceSessionId) ?? null) : null
+        }))
+      }))
+    },
     arcAvailability: arcs.availability(found.id),
     openSessionId: open?.id ?? null,
-    sessions: sessions
-      .listNumbered(found.id)
-      .map((s) => ({ id: s.id, number: s.number, startedAt: s.startedAt, endedAt: s.endedAt }))
+    sessions: numbered.map((s) => ({
+      id: s.id,
+      number: s.number,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt
+    }))
   }
 }
 

@@ -97,6 +97,18 @@
         )
       : []
   )
+  const complete = $derived(
+    !!arc &&
+      arc.status === 'accepted' &&
+      arc.acts.every((a) => a.beats.every((b) => b.state !== 'pending'))
+  )
+  /** Beat state, read-only, once play has started. */
+  const stateText = (b: { id?: string }) => {
+    const beat = arc?.acts.flatMap((a) => a.beats).find((x) => x.id === b.id)
+    if (!beat || beat.state === 'pending') return 'Pending'
+    if (beat.state === 'abandoned') return 'Abandoned'
+    return beat.sessionNumber ? `Reached in Session ${beat.sessionNumber}` : 'Reached'
+  }
   const size = $derived(ARC_SIZES[length])
   const totalBeats = $derived(edit ? edit.acts.reduce((n, a) => n + a.beats.length, 0) : 0)
 
@@ -221,6 +233,10 @@
     </Alert>
   {/if}
 
+  {#if complete && structureLocked}
+    <Alert variant="success">Arc complete. Every Beat has been reached or abandoned.</Alert>
+  {/if}
+
   {#if !canGenerate}
     <p class="text-sm text-muted">{unavailable}</p>
   {/if}
@@ -302,6 +318,18 @@
                 disabled={frozen}
                 aria-label={`Act ${i + 1} Beat ${j + 1} description`}
               />
+              {#if structureLocked && beat.id}
+                <p class="text-xs text-muted">
+                  <Badge
+                    variant={stateText(beat) === 'Pending'
+                      ? 'neutral'
+                      : stateText(beat) === 'Abandoned'
+                        ? 'warning'
+                        : 'success'}
+                    size="sm">{stateText(beat)}</Badge
+                  >
+                </p>
+              {/if}
               {#if !structureLocked && !readOnly}
                 <div class="flex gap-1">
                   <Button

@@ -9,7 +9,18 @@ import {
 import { callModel, type ChatPort } from '../ai/port.ts'
 import { transcriptLine } from '../session/context.ts'
 import type { Turn } from '../session/service.ts'
+import type { OpenBeat } from '../arc/service.ts'
 import type { MemoryRepository, Provenance } from './repository.ts'
+
+/** The Arc's side of extraction: which Beats may move, and moving one for good. */
+export interface BeatProgress {
+  openBeats(campaignId: string): OpenBeat[]
+  transitionBeat(
+    beatId: string,
+    state: 'reached' | 'abandoned',
+    at: { sessionId: string; seq: number }
+  ): boolean
+}
 
 /**
  * Post-turn memory extraction. After a saved DM turn, one silent, stateless model call proposes
@@ -24,6 +35,8 @@ export const MAX_NPC_ITEMS = 8
 export const MAX_FACT_CREATES = 8
 /** Shared by supersede, retire and revive items in one call. */
 export const MAX_CORRECTION_ITEMS = 4
+/** Beat transitions accepted in one call. */
+export const MAX_BEAT_TRANSITIONS = 3
 
 /** After this many failed calls in a row within one Session, extraction stops for that Session. */
 export const MEMORY_MAX_FAILURES = 3
@@ -45,7 +58,8 @@ Read the new transcript and propose changes to the notes, as JSON with lists "np
 "supersedes": a lasting fact that changed: {"id", "reason", "title", "detail", "worldChanging"} where "id" is the existing fact it replaces and the rest describes the new fact.
 "retires": a fact that turned out false or irrelevant: {"id", "reason"}. Facts are never edited; only supersede or retire them.
 "facts": a new lasting fact about the world, {"title", "detail", "worldChanging"}. "worldChanging" is true only when the player's Character changed the world itself. Never repeat an existing fact.
-Keep every text short. Never invent numbers, dice results, hit points or items; the game's code owns those. Never reuse the name of an existing character: update it by id instead.`
+Keep every text short. Never invent numbers, dice results, hit points or items; the game's code owns those. Never reuse the name of an existing character: update it by id instead.
+"beats": only when open story Beats are listed below, a change in one: {"id", "state"} where "id" is from the open Beats and "state" is "reached" or "abandoned". Use "reached" only when the transcript clearly establishes the Beat's outcome as having happened, never when it is only foreshadowed or attempted. Use "abandoned" only when the story made the Beat impossible or irrelevant. Propose at most ${MAX_BEAT_TRANSITIONS}, and never for a Beat not listed.`
 
 const itemList = z.array(z.record(z.string(), z.unknown()))
 /** Loose on purpose: each item is validated one by one, so one bad item never fails the call. */
@@ -54,10 +68,15 @@ export const extractionSchema = z.object({
   facts: itemList,
   revives: itemList.default([]),
   supersedes: itemList.default([]),
-  retires: itemList.default([])
+  retires: itemList.default([]),
+  beats: itemList.default([])
 })
 
-export type RejectionLog = (entry: { kind: 'npc' | 'fact'; reason: string; seq: number }) => void
+export type RejectionLog = (entry: {
+  kind: 'npc' | 'fact' | 'beat'
+  reason: string
+  seq: number
+}) => void
 
 export const logRejection: RejectionLog = ({ kind, reason, seq }) =>
   console.warn(`[memory] dropped ${kind} proposed in turn ${seq}: ${reason}`)
@@ -93,6 +112,8 @@ export interface ApplyContext {
   characterId: string
   at: Provenance
   log: RejectionLog
+  /** The Arc, when the Campaign has one; without it Beat proposals are all rejected. */
+  beats?: BeatProgress
 }
 
 /** Validates and persists one call's deltas. Facts go first so NPCs can know them by title. */
@@ -101,7 +122,7 @@ export function applyDeltas(
   ctx: ApplyContext,
   deltas: z.infer<typeof extractionSchema>
 ): void {
-  const reject = (kind: 'npc' | 'fact', reason: string) =>
+  const reject = (kind: 'npc' | 'fact' | 'beat', reason: string) =>
     ctx.log({ kind, reason, seq: ctx.at.seq })
 
   const facts = repo.facts(ctx.campaignId)
@@ -319,9 +340,31 @@ export function applyDeltas(
     }
     repo.updateNpc(target.id, { status: (status as NpcStatus | undefined) ?? 'alive' }, ctx.at)
   }
+
+  // Beats last, judged against what was open before this call: a Beat opened by another
+  // transition in the same call stays out of reach until the next one.
+  const open = new Set((ctx.beats?.openBeats(ctx.campaignId) ?? []).map((b) => b.id))
+  deltas.beats.slice(MAX_BEAT_TRANSITIONS).forEach(() => reject('beat', 'over the per-call cap'))
+  for (const item of deltas.beats.slice(0, MAX_BEAT_TRANSITIONS)) {
+    const beatId = typeof item.id === 'string' ? item.id : undefined
+    if (item.state !== 'reached' && item.state !== 'abandoned') {
+      reject('beat', 'state is not reached or abandoned')
+    } else if (!beatId || !open.has(beatId)) {
+      reject('beat', 'unknown beat id, or a Beat that is not open')
+    } else if (!ctx.beats!.transitionBeat(beatId, item.state, ctx.at)) {
+      reject('beat', 'beat is not pending')
+    } else {
+      open.delete(beatId)
+    }
+  }
 }
 
-function compactRecords(repo: MemoryRepository, campaignId: string, characterId: string) {
+function compactRecords(
+  repo: MemoryRepository,
+  campaignId: string,
+  characterId: string,
+  beats: readonly OpenBeat[]
+) {
   const npcs = repo
     .npcs(campaignId)
     .filter((n) => n.retiredAt === null)
@@ -337,7 +380,10 @@ function compactRecords(repo: MemoryRepository, campaignId: string, characterId:
     .map((f) => `- [${f.id}] ${f.title}`)
   return (
     `Existing characters:\n${npcs.join('\n') || 'none'}\n\n` +
-    `Existing facts:\n${facts.join('\n') || 'none'}`
+    `Existing facts:\n${facts.join('\n') || 'none'}` +
+    (beats.length
+      ? `\n\nOpen story Beats:\n${beats.map((b) => `- [${b.id}] ${b.title}: ${b.description}`).join('\n')}`
+      : '')
   )
 }
 
@@ -348,6 +394,8 @@ export interface ExtractionInput {
   sessionId: string
   /** The unextracted Turns, oldest first; never empty. */
   turns: readonly Turn[]
+  /** The Arc, when the Campaign has an accepted one: its open Beats go in, transitions come out. */
+  beats?: BeatProgress
 }
 
 /**
@@ -364,13 +412,14 @@ export async function runExtraction(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), MEMORY_TIMEOUT_MS)
   try {
+    const openBeats = input.beats?.openBeats(input.campaignId) ?? []
     const transcript = input.turns.map(transcriptLine).join('\n\n')
     const result = await callModel(port, {
       systemPrompts: [EXTRACTION_INSTRUCTIONS],
       messages: [
         {
           role: 'user',
-          content: `${compactRecords(repo, input.campaignId, input.characterId)}\n\nNew transcript:\n${transcript}`
+          content: `${compactRecords(repo, input.campaignId, input.characterId, openBeats)}\n\nNew transcript:\n${transcript}`
         }
       ],
       maxTokens: MEMORY_MAX_TOKENS,
@@ -387,7 +436,8 @@ export async function runExtraction(
         campaignId: input.campaignId,
         characterId: input.characterId,
         at: { sessionId: input.sessionId, seq: input.turns.at(-1)!.seq },
-        log
+        log,
+        beats: input.beats
       },
       parsed.data
     )
