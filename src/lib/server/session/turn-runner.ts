@@ -25,6 +25,9 @@ import type { MemoryRepository } from '../memory/repository.ts'
 
 export const ACTION_MAX = 2000
 
+/** How long starting a Session waits for pending memory extraction before going on without it. */
+export const MEMORY_DRAIN_TIMEOUT_MS = 30_000
+
 const INVALID_ROLL_FAILURE = {
   kind: 'invalid-output',
   message: 'The Dungeon Master could not make a valid roll request. Try again.'
@@ -76,6 +79,12 @@ export interface TurnRunner {
   summaryIdle(): Promise<void>
   /** Resolves when no background memory extraction is running; never rejects. For tests, shutdown and starting a Session. */
   memoryIdle(): Promise<void>
+  /**
+   * Waits for pending memory extraction, but no longer than `timeoutMs`; then resolves either
+   * way and never rejects. Called when a new Session starts so it opens with what the last
+   * one established. The extraction keeps running after a timeout.
+   */
+  drainMemory(timeoutMs?: number): Promise<void>
 }
 
 export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
@@ -185,14 +194,27 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
     extracting.set(sessionId, job)
   }
 
+  async function drainAll() {
+    // A finished job may start a follow-up, so wait until none is left.
+    while (extracting.size > 0) await Promise.all(extracting.values())
+  }
+
   return {
     isGenerating: (sessionId) => inFlight.has(sessionId),
     summaryIdle: async () => {
       await Promise.all(summarizing.values())
     },
-    memoryIdle: async () => {
-      // A finished job may start a follow-up, so wait until none is left.
-      while (extracting.size > 0) await Promise.all(extracting.values())
+    memoryIdle: drainAll,
+
+    drainMemory: async (timeoutMs = MEMORY_DRAIN_TIMEOUT_MS) => {
+      if (extracting.size === 0) return
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeout = new Promise<void>((resolve) => (timer = setTimeout(resolve, timeoutMs)))
+      try {
+        await Promise.race([drainAll(), timeout])
+      } finally {
+        clearTimeout(timer)
+      }
     },
 
     begin(sessionId, input, signal) {

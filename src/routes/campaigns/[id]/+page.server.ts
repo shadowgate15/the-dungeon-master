@@ -5,7 +5,7 @@ import { createCharacterService } from '#lib/server/character/service.ts'
 import { arcs } from '#lib/server/arc/index.ts'
 import { db } from '#lib/server/db/index.ts'
 import { SessionAlreadyOpenError, SessionValidationError } from '#lib/server/session/service.ts'
-import { sessions } from '#lib/server/session/index.ts'
+import { sessions, turnRunner } from '#lib/server/session/index.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 const campaigns = createCampaignService(db)
@@ -48,8 +48,13 @@ export const actions: Actions = {
     return { linked: true }
   },
 
-  /** Starting never calls the model, so it works while the model is down. */
-  startSession: ({ params }) => {
+  /**
+   * Starting never calls the model, so it works while the model is down. It first lets pending
+   * extraction finish (bounded by a timeout) so the new Session opens with what the last one
+   * established.
+   */
+  startSession: async ({ params }) => {
+    await turnRunner.drainMemory()
     let started
     try {
       started = sessions.start(params.id)

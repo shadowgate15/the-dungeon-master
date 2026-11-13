@@ -260,3 +260,53 @@ test('an NPC introduced in one DM turn is in the next turn model request', async
     .join('\n')
   expect(system).toContain('Vessa Thorn (alive, friendly toward you), broker')
 })
+
+test('an NPC and a world change from Session one are in the model request for Session two opening', async ({
+  page,
+  request
+}) => {
+  await request.post(`${FAKE_LM_STUDIO}/__control/extractions`, {
+    data: {
+      replace: true,
+      answers: [
+        {
+          content: {
+            npcs: [
+              {
+                name: 'Orsik Vane',
+                description: 'A nervous ferryman.',
+                role: 'ferryman',
+                status: 'alive',
+                stance: 'friendly'
+              }
+            ],
+            facts: [
+              {
+                title: 'The ferry is burned',
+                detail: 'You set the ferry alight.',
+                worldChanging: true
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })
+  await startSession(page, request, 'Orsik Vane, a ferryman, hails you.')
+  // End the Session at once: starting the next one waits for the extraction to land.
+  await page.getByRole('button', { name: 'End Session' }).click()
+  await expect(page.getByText('Session ended. This transcript is read-only.')).toBeVisible()
+
+  await page.goto(page.url().replace(/\/sessions\/.*/, ''))
+  await script(request, [{ content: 'Welcome back to the shore.' }])
+  await page.getByRole('button', { name: 'Start Session' }).click()
+  await expect(page.getByRole('heading', { name: 'Session 2' })).toBeVisible()
+  await expect(transcript(page)).toContainText('Welcome back to the shore.')
+
+  const system = (await lastModelRequest(request))
+    .filter((m) => m.role === 'system')
+    .map((m) => m.content)
+    .join('\n')
+  expect(system).toContain('Orsik Vane (alive, friendly toward you), ferryman')
+  expect(system).toContain('The ferry is burned')
+})

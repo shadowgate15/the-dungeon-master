@@ -403,6 +403,51 @@ describe('post-turn memory extraction', () => {
   })
 })
 
+describe('draining extraction when a Session starts', () => {
+  const hanging = () => {
+    let release!: () => void
+    const script: Script = async function* () {
+      await new Promise<void>((r) => (release = r))
+      yield {
+        type: 'CUSTOM',
+        name: 'structured-output.complete',
+        value: { object: { npcs: [grom()], facts: [] } }
+      }
+      yield finished
+    }
+    return { script, release: () => release() }
+  }
+
+  it('waits for pending extraction, so what the last Session established is saved', async () => {
+    scripts.push(says('You meet Grom.'))
+    const slow = hanging()
+    scripts.push(slow.script)
+    await drain(runner.begin(sessionId, {}, controller().signal))
+    let done = false
+    const drained = runner.drainMemory().then(() => (done = true))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(done).toBe(false)
+    slow.release()
+    await drained
+    expect(memory.npcs(campaignId)).toHaveLength(1)
+  })
+
+  it('proceeds regardless once the timeout passes', async () => {
+    scripts.push(says('You meet Grom.'))
+    const slow = hanging()
+    scripts.push(slow.script)
+    await drain(runner.begin(sessionId, {}, controller().signal))
+    await runner.drainMemory(10)
+    expect(memory.npcs(campaignId)).toHaveLength(0)
+    slow.release()
+    await runner.memoryIdle()
+  })
+
+  it('returns at once when nothing is pending', async () => {
+    await expect(runner.drainMemory()).resolves.toBeUndefined()
+  })
+})
+
 describe('World memory in the DM context', () => {
   const dmRequests = () =>
     requests.filter((r) => !r.systemPrompts.join().includes(EXTRACTION_MARKER))
