@@ -219,9 +219,9 @@ test('an NPC introduced in one DM turn is in the next turn model request', async
   const extractions = async () =>
     (
       (await (await request.get(`${FAKE_LM_STUDIO}/__control/requests`)).json()) as {
-        body: { messages: { content: string }[] }
+        body?: { messages: { content: string }[] }
       }[]
-    ).filter((r) => JSON.stringify(r.body.messages).includes('MEMORY EXTRACTION')).length
+    ).filter((r) => JSON.stringify(r.body?.messages ?? []).includes('MEMORY EXTRACTION')).length
 
   await request.post(`${FAKE_LM_STUDIO}/__control/extractions`, {
     data: {
