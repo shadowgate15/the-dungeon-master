@@ -1,5 +1,7 @@
 import { resultLabel } from '#lib/session/roll.ts'
 import type { ChatMessage } from '../ai/port.ts'
+import { estimateTokens } from '../ai/tokens.ts'
+import { buildMemoryBlock, memoryBudget, type MemoryInput } from '../memory/context.ts'
 import type { Turn } from './service.ts'
 
 /**
@@ -27,6 +29,8 @@ export interface ContextInput {
   /** The derived Character sheet as text. */
   sheet: string
   turns: readonly Pick<Turn, 'seq' | 'author' | 'kind' | 'text' | 'rollRequest' | 'rollResult'>[]
+  /** World memory records and the mention window; absent or empty leaves the prompt unchanged. */
+  memory?: MemoryInput
   /** The model's context window, in tokens. */
   contextLimit: number
   /** Tokens kept free for the model's reply. */
@@ -42,8 +46,7 @@ export interface AssembledContext {
   droppedTurns: number
 }
 
-/** A deliberately pessimistic estimate (three characters a token), so a prompt never overruns. */
-export const estimateTokens = (text: string) => Math.ceil(text.length / 3)
+export { estimateTokens }
 
 function campaignBlock(c: ContextInput['campaign']) {
   return `Campaign Seed:\n- Name: ${c.name}\n- Premise: ${c.premise}\n- Tone: ${c.tone}\n- Length: ${c.length}`
@@ -96,17 +99,28 @@ export function newestFitting<T extends ContextInput['turns'][number]>(
 }
 
 export function assembleContext(input: ContextInput): AssembledContext {
-  const systemPrompts = [
+  const fixedPrompts = [
     DM_INSTRUCTIONS,
     campaignBlock(input.campaign),
     worldsBlock(input.worlds),
     `The player's Character (derived from the game's rules; do not change these numbers):\n${input.sheet}`
   ]
-  if (input.summary?.trim()) {
-    systemPrompts.push(`The story so far (a summary of earlier play):\n${input.summary.trim()}`)
-  }
-  const fixed = systemPrompts.reduce((n, p) => n + estimateTokens(p), 0)
-  const turnBudget = Math.max(0, input.contextLimit - input.replyReserve - fixed)
+  const summaryPrompt = input.summary?.trim()
+    ? `The story so far (a summary of earlier play):\n${input.summary.trim()}`
+    : null
+  const tokens = (prompts: (string | null)[]) =>
+    prompts.reduce((n, p) => n + (p ? estimateTokens(p) : 0), 0)
+  // Memory gets a share of what is left after the fixed prompts and the reply reserve; the
+  // Turns get the rest, including any memory budget left unused.
+  const remaining =
+    input.contextLimit - input.replyReserve - tokens([...fixedPrompts, summaryPrompt])
+  const memoryBlock = input.memory ? buildMemoryBlock(input.memory, memoryBudget(remaining)) : null
+  const systemPrompts = [
+    ...fixedPrompts,
+    ...(memoryBlock ? [memoryBlock] : []),
+    ...(summaryPrompt ? [summaryPrompt] : [])
+  ]
+  const turnBudget = Math.max(0, remaining - tokens([memoryBlock]))
 
   if (input.turns.length === 0) {
     return {

@@ -85,3 +85,78 @@ describe('assembleContext', () => {
     expect(messages).toHaveLength(1)
   })
 })
+
+describe('assembleContext with World memory', () => {
+  const stamp = {
+    createdSessionId: 's1',
+    changedSessionId: 's1',
+    changedSeq: 1,
+    updatedAt: 1,
+    retiredAt: null
+  }
+  const memory = (over: Partial<NonNullable<ContextInput['memory']>> = {}) => ({
+    npcs: [
+      {
+        id: 'n1',
+        name: 'Mira',
+        description: 'An innkeeper.',
+        role: null,
+        status: 'alive' as const,
+        placeId: null,
+        stance: 'friendly' as const,
+        note: null,
+        knowsFactIds: [],
+        ...stamp
+      }
+    ],
+    places: [],
+    factions: [],
+    events: [],
+    facts: [],
+    window: [],
+    focus: { sessionId: 's1', seq: 5 },
+    ...over
+  })
+
+  it('leaves the prompts byte-for-byte unchanged with no memory', () => {
+    const base = assembleContext(input({ summary: 'Earlier.', turns: [turn(1, 'dm', 'Hi.')] }))
+    const empty = assembleContext(
+      input({
+        summary: 'Earlier.',
+        turns: [turn(1, 'dm', 'Hi.')],
+        memory: memory({ npcs: [] })
+      })
+    )
+    expect(empty).toEqual(base)
+  })
+
+  it('puts the memory block after the sheet and before the summary, and says memory wins', () => {
+    const { systemPrompts } = assembleContext(input({ summary: 'Earlier.', memory: memory() }))
+    const at = systemPrompts.findIndex((p) => p.includes('Mira'))
+    expect(at).toBe(4)
+    expect(systemPrompts[3]).toContain('Brenna')
+    expect(systemPrompts[5]).toContain('Earlier.')
+    expect(systemPrompts[at]).toMatch(/memory wins/i)
+  })
+
+  it('caps memory at a quarter of the remaining budget and gives Turns the rest', () => {
+    const big = memory({
+      facts: Array.from({ length: 60 }, (_, i) => ({
+        id: `f${i}`,
+        title: `Fact ${i}`,
+        detail: 'd'.repeat(300),
+        worldChanging: true,
+        supersededById: null,
+        ...stamp
+      }))
+    })
+    const base = assembleContext(input({ contextLimit: 8000, replyReserve: 500 }))
+    const withMemory = assembleContext(
+      input({ contextLimit: 8000, replyReserve: 500, memory: big })
+    )
+    const block = withMemory.systemPrompts[4]
+    const used = estimateTokens(block)
+    expect(used).toBeLessThanOrEqual(Math.floor(base.turnBudget * 0.25))
+    expect(withMemory.turnBudget).toBe(base.turnBudget - used)
+  })
+})

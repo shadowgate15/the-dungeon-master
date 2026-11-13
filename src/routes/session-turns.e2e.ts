@@ -211,3 +211,52 @@ test('a closed tab discards the reply like Stop, and a second call is refused me
   await fresh.getByRole('button', { name: 'Retry' }).click()
   await expect(transcript(fresh)).toContainText('The dust settles.')
 })
+
+test('an NPC introduced in one DM turn is in the next turn model request', async ({
+  page,
+  request
+}) => {
+  const extractions = async () =>
+    (
+      (await (await request.get(`${FAKE_LM_STUDIO}/__control/requests`)).json()) as {
+        body: { messages: { content: string }[] }
+      }[]
+    ).filter((r) => JSON.stringify(r.body.messages).includes('MEMORY EXTRACTION')).length
+
+  await request.post(`${FAKE_LM_STUDIO}/__control/extractions`, {
+    data: {
+      replace: true,
+      answers: [
+        {
+          content: {
+            npcs: [
+              {
+                name: 'Vessa Thorn',
+                description: 'A one-eyed relic broker.',
+                role: 'broker',
+                status: 'alive',
+                stance: 'friendly'
+              }
+            ],
+            facts: []
+          }
+        }
+      ]
+    }
+  })
+  const before = await extractions()
+  await startSession(page, request, 'Vessa Thorn, a relic broker, beckons you.')
+  // Extraction runs after the saved turn and never blocks play; let it land.
+  await expect.poll(extractions).toBeGreaterThan(before)
+  await page.waitForTimeout(500)
+
+  await script(request, [{ content: 'Vessa smiles.' }])
+  await act(page, 'I greet her.')
+  await expect(transcript(page)).toContainText('Vessa smiles.')
+  const messages = await lastModelRequest(request)
+  const system = messages
+    .filter((m) => m.role === 'system')
+    .map((m) => m.content)
+    .join('\n')
+  expect(system).toContain('Vessa Thorn (alive, friendly toward you), broker')
+})

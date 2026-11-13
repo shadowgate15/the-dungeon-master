@@ -6,7 +6,12 @@ import { createCampaignService } from '../campaign/service'
 import { createCharacterService } from '../character/service'
 import { createWorldService } from '../world/service'
 import { createMemoryRepository, type MemoryRepository } from '../memory/repository'
-import { MAX_FACT_CREATES, MAX_NPC_ITEMS, MEMORY_MAX_FAILURES } from '../memory/extraction'
+import {
+  EXTRACTION_MARKER,
+  MAX_FACT_CREATES,
+  MAX_NPC_ITEMS,
+  MEMORY_MAX_FAILURES
+} from '../memory/extraction'
 import { createSessionService, type SessionService } from './service'
 import { createTurnRunner, type BeginResult, type TurnRunner } from './turn-runner.ts'
 
@@ -393,5 +398,38 @@ describe('post-turn memory extraction', () => {
     // The turn saved meanwhile is covered by a follow-up extraction.
     expect(memory.npcs(campaignId)).toHaveLength(1)
     expect(sessions.get(sessionId)?.memoryThroughSeq).toBe(3)
+  })
+})
+
+describe('World memory in the DM context', () => {
+  const dmRequests = () =>
+    requests.filter((r) => !r.systemPrompts.join().includes(EXTRACTION_MARKER))
+  const system = (call: ChatRequest) => call.systemPrompts.join('\n')
+
+  it('sends an NPC introduced in one DM turn in the next DM turn, and nothing before any memory', async () => {
+    await play(
+      undefined,
+      says('Grom the warden eyes you.'),
+      extracts({ npcs: [grom({ stance: 'friendly' })], facts: [] })
+    )
+    await play('I wave.', says('Grom nods.'), extracts({ npcs: [], facts: [] }))
+
+    const [first, second] = dmRequests()
+    expect(system(first)).not.toContain('World memory')
+    expect(system(second)).toContain('Grom (alive, friendly toward you), warden')
+  })
+
+  it('opens a new Session with memory matched against the previous Session last Turns', async () => {
+    await play(
+      undefined,
+      says('You meet Grom the warden.'),
+      extracts({ npcs: [grom({ stance: 'neutral' })], facts: [] })
+    )
+    sessions.end(sessionId)
+    sessionId = sessions.start(campaignId).id
+    scripts.push(says('Welcome back.'), extracts({ npcs: [], facts: [] }))
+    await drain(runner.begin(sessionId, {}, controller().signal))
+    await runner.memoryIdle()
+    expect(system(dmRequests().at(-1)!)).toContain('Grom (alive, neutral toward you), warden')
   })
 })
