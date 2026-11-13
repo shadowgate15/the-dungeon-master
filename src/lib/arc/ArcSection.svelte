@@ -214,9 +214,6 @@
       No Arc yet. An Arc is the planned shape of the story: Acts of Beats the DM steers toward. The
       DM may deviate from it, and you can play without one.
     </p>
-    {#if !canGenerate}
-      <p class="text-sm text-muted">{unavailable}</p>
-    {/if}
   {:else if arc.status === 'draft' && !readOnly}
     <Alert variant="info">
       Draft Arc. The DM ignores it until you accept it. Edit any text, then accept. Regenerate
@@ -224,17 +221,23 @@
     </Alert>
   {/if}
 
-  {#if canGenerate && !readOnly}
+  {#if !canGenerate}
+    <p class="text-sm text-muted">{unavailable}</p>
+  {/if}
+
+  {#if !readOnly}
     <div class="flex flex-wrap items-center gap-2">
       {#if phase === 'generating'}
         <Button variant="secondary" onclick={stop}>Stop</Button>
         <span class="text-sm text-muted" role="status">Generating the Arc…</span>
       {:else if arc}
-        <Button variant="secondary" onclick={regenerate} disabled={busy}>Regenerate</Button>
+        <Button variant="secondary" onclick={regenerate} disabled={busy || !canGenerate}
+          >Regenerate</Button
+        >
       {:else}
-        <Button onclick={generate}>Generate Arc</Button>
+        <Button onclick={generate} disabled={!canGenerate}>Generate Arc</Button>
       {/if}
-      {#if !arc}
+      {#if !arc && canGenerate}
         <span class="text-xs text-muted">{sizeText(length)} for a {length} Campaign.</span>
       {/if}
     </div>

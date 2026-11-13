@@ -52,8 +52,8 @@ async function openCampaign(page: Page, name: string, world: string) {
 
 async function setup(page: Page, label: string) {
   const stamp = Date.now()
-  const world = `Arcworld ${label} ${stamp}`
-  const campaign = `Arc ${label} ${stamp}`
+  const world = `Planworld ${label} ${stamp}`
+  const campaign = `Plan ${label} ${stamp}`
   await createWorld(page, world)
   await openCampaign(page, campaign, world)
   return { world, campaign, stamp }
@@ -133,11 +133,11 @@ test('Stop cancels generation and keeps things as they were', async ({ page, req
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
-test('Generate Arc disappears and structure locks once a Session has started', async ({
+test('Generate and Regenerate are disabled with a reason, and structure locks, once a Session has started', async ({
   page,
   request
 }) => {
-  const hero = `Arcus ${Date.now()}`
+  const hero = `Hero ${Date.now()}`
   await seedCharacter(page, hero)
   await setup(page, 'locked')
   await queue(request, { content: arcAnswer(3, 2) })
@@ -153,7 +153,69 @@ test('Generate Arc disappears and structure locks once a Session has started', a
   await page.reload()
   await page.waitForLoadState('networkidle')
 
-  await expect(page.getByRole('button', { name: 'Regenerate' })).toHaveCount(0)
+  const arcSection = page.getByRole('region', { name: 'Arc' })
+  await expect(arcSection.getByRole('button', { name: 'Regenerate' })).toBeDisabled()
+  await expect(arcSection.getByText(/already started play/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add Act' })).toHaveCount(0)
-  await expect(page.getByLabel('Title', { exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: /Delete Act/ })).toHaveCount(0)
+
+  // Text stays editable and saves.
+  await page.getByLabel('Title', { exact: true }).fill('Typo fixed')
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Typo fixed')
+})
+
+test('a Campaign whose Session started without an Arc stays Arc-less and keeps playing', async ({
+  page,
+  request
+}) => {
+  const hero = `Hero ${Date.now()}`
+  await seedCharacter(page, hero)
+  await setup(page, 'plain')
+  await page.locator('select[name=characterId]').selectOption({ label: hero })
+  await page.getByRole('button', { name: 'Link Character' }).click()
+  await expect(page.getByText(`Playing as ${hero}.`)).toBeVisible()
+  await queue(request, { content: 'A gate looms in the ash.' })
+  await page.getByRole('button', { name: 'Start Session' }).click()
+  await expect(page.getByRole('heading', { name: 'Session 1' })).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Transcript' })).toContainText(
+    'A gate looms in the ash.'
+  )
+  // The Session plays on with no Arc.
+  await control(request, 'answers', {
+    answers: [{ content: 'The hinges scream.' }],
+    replace: true
+  })
+  await page.getByLabel('Your action').fill('I push the gate.')
+  await page.getByRole('button', { name: 'Send' }).click()
+  await expect(page.getByRole('list', { name: 'Transcript' })).toContainText('The hinges scream.')
+  const campaignUrl = page.url().replace(/\/sessions\/.*$/, '')
+  await page.goto(campaignUrl)
+  await page.waitForLoadState('networkidle')
+
+  const arcSection = page.getByRole('region', { name: 'Arc' })
+  await expect(arcSection.getByText(/No Arc yet/)).toBeVisible()
+  await expect(arcSection.getByRole('button', { name: 'Generate Arc' })).toBeDisabled()
+  await expect(arcSection.getByText(/already started play/)).toBeVisible()
+
+  // The server refuses too, without touching the model.
+  const refused = await page.request.post(
+    `${campaignUrl.replace(/\/campaigns\//, '/api/campaigns/')}/arc`,
+    {
+      data: { action: 'generate' }
+    }
+  )
+  expect(refused.status()).toBe(409)
+
+  const all = (await (await request.get(`${FAKE_LM_STUDIO}/__control/requests`)).json()) as {
+    path: string
+    body: { messages: { role: string; content: string }[] }
+  }[]
+  const dm = all
+    .filter((r) => r.path === '/v1/chat/completions')
+    .filter((r) => !JSON.stringify(r.body.messages).includes('MEMORY EXTRACTION'))
+    .at(-1)!.body.messages
+  expect(dm.map((m) => m.content).join('\n')).not.toMatch(/\bArc\b/)
 })

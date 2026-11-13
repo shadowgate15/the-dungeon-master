@@ -55,7 +55,7 @@ describe('ArcSection', () => {
     render(ArcSection, props({ canGenerate: false, structureLocked: true }))
 
     await expect.element(page.getByText(/already started/)).toBeVisible()
-    await expect.element(page.getByRole('button', { name: 'Generate Arc' })).not.toBeInTheDocument()
+    await expect.element(page.getByRole('button', { name: 'Generate Arc' })).toBeDisabled()
   })
 
   it('shows a status line and Stop while generating; Stop leaves things as they were', async () => {
@@ -191,7 +191,8 @@ describe('ArcSection', () => {
       })
     )
 
-    await expect.element(page.getByRole('button', { name: 'Regenerate' })).not.toBeInTheDocument()
+    await expect.element(page.getByRole('button', { name: 'Regenerate' })).toBeDisabled()
+    await expect.element(page.getByText(/already started/)).toBeVisible()
     await expect.element(page.getByRole('button', { name: 'Add Act' })).not.toBeInTheDocument()
     await expect
       .element(page.getByRole('button', { name: /Delete Beat/ }).first())
