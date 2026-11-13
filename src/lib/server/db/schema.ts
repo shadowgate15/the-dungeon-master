@@ -300,4 +300,77 @@ export const turn = sqliteTable(
   ]
 )
 
+export const ARC_STATUSES = ['draft', 'accepted'] as const
+export const BEAT_STATES = ['pending', 'reached', 'abandoned'] as const
+
+/**
+ * A Campaign's Arc: at most one (unique `campaign_id`), no versions; regenerating replaces it.
+ * Only an `accepted` Arc steers the DM.
+ */
+export const arc = sqliteTable(
+  'arc',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    campaignId: text('campaign_id')
+      .notNull()
+      .unique()
+      .references(() => campaign.id, { onDelete: 'cascade' }),
+    status: text('status', { enum: ARC_STATUSES }).notNull().default('draft'),
+    title: text('title').notNull(),
+    premise: text('premise').notNull(),
+    stakes: text('stakes').notNull(),
+    resolution: text('resolution').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  () => [check('arc_status_check', oneOf('status', ARC_STATUSES))]
+)
+
+/** An ordered phase of an Arc. `position` is 0-based and dense. */
+export const arcAct = sqliteTable(
+  'arc_act',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    arcId: text('arc_id')
+      .notNull()
+      .references(() => arc.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    name: text('name').notNull(),
+    purpose: text('purpose').notNull()
+  },
+  (t) => [index('arc_act_arc').on(t.arcId, t.position)]
+)
+
+/**
+ * A turning point. The id is stable across edits so progress survives them. `state` leaves
+ * `pending` once, and then the source Session and Turn seq are stamped.
+ */
+export const arcBeat = sqliteTable(
+  'arc_beat',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    actId: text('act_id')
+      .notNull()
+      .references(() => arcAct.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    title: text('title').notNull(),
+    description: text('description').notNull(),
+    state: text('state', { enum: BEAT_STATES }).notNull().default('pending'),
+    sourceSessionId: text('source_session_id').references(() => session.id, {
+      onDelete: 'set null'
+    }),
+    sourceTurnSeq: integer('source_turn_seq')
+  },
+  (t) => [
+    index('arc_beat_act').on(t.actId, t.position),
+    check('arc_beat_state_check', oneOf('state', BEAT_STATES))
+  ]
+)
+
 export * from './rules-schema'
