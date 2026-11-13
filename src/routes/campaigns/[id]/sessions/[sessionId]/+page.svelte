@@ -10,6 +10,8 @@
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
+  import JournalButton from '#lib/session/JournalButton.svelte'
+  import JournalOverlay from '#lib/session/JournalOverlay.svelte'
   import CharacterSheetPanel from '#lib/session/CharacterSheetPanel.svelte'
   import PlayLayout from '#lib/session/PlayLayout.svelte'
   import RollPrompt from '#lib/session/RollPrompt.svelte'
@@ -67,6 +69,33 @@
     await stream.start(text)
   }
 
+  // The Journal: reload on open so memory extracted since the last load shows. The last-looked
+  // marker advances on close, to the position that was shown, so chips stay while it is open.
+  let journalOpen = $state(false)
+  async function openJournal() {
+    await invalidateAll()
+    journalOpen = true
+  }
+  async function closeJournal() {
+    journalOpen = false
+    const through = data.journal.through
+    const body = new FormData()
+    if (through) {
+      body.set('sessionId', through.sessionId)
+      body.set('seq', String(through.seq))
+    }
+    try {
+      await fetch('?/journalSeen', {
+        method: 'POST',
+        body,
+        headers: { 'x-sveltekit-action': 'true' }
+      })
+    } catch {
+      // The marker is a convenience: losing it only keeps chips showing.
+    }
+    await invalidateAll()
+  }
+
   // Another window (or a Stop the server has not yet released) is mid-answer: poll until it is
   // done. This stays a poll over SvelteKit's `load` data, not a query: the transcript comes from
   // `load` and invalidating it is the only way to refresh it, so a query would add nothing.
@@ -106,6 +135,7 @@
     </div>
     <div class="flex items-center gap-2">
       <AiStatusChip {ai} />
+      <JournalButton unseen={data.journal.unseen} onclick={openJournal} />
       {#if !ended}
         <form method="POST" action="?/end" use:enhance>
           <Button
@@ -247,3 +277,7 @@
     {/snippet}
   </PlayLayout>
 </main>
+
+{#if journalOpen}
+  <JournalOverlay entries={data.journal.entries} onclose={closeJournal} />
+{/if}
