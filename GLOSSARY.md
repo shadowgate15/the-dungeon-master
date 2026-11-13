@@ -127,3 +127,19 @@ _Avoid_: Chapter, part
 **Beat**:
 A turning point or outcome the story should reach, with a title and a sentence or two of description, such as "the Characters learn the vizier is the cult's patron". It says what should become true, never how to get there. A Beat is not tied to one Session: a Session may reach several Beats or none.
 _Avoid_: Scene, quest, objective, milestone
+
+**World memory**:
+The structured, Campaign-scoped record of what the DM has established: NPCs, places, factions, events and facts. Code validates and stores it, and the DM only proposes changes to it, in a silent extraction call after each saved DM turn. It is separate from the rolling summary, which is a lossy prose recap; where they disagree, memory wins. Records are never deleted, only retired, and each carries the Session and Turn it came from. Nothing carries over between Campaigns, even in a shared World.
+_Avoid_: Lore, state, notes
+
+**NPC**:
+A non-player character the DM has introduced: a name, a short description, a role and a status (alive, dead, missing or departed). A dead NPC stays dead unless the story explicitly revives them for a stated reason. An NPC is World memory, not a Character.
+_Avoid_: Character, monster, contact
+
+**NPC memory**:
+What is remembered about one NPC beyond who they are: their **disposition** toward a Character (hostile, wary, neutral, friendly or allied, plus a short note) and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character.
+_Avoid_: Relationship score, reputation
+
+**Journal**:
+The player's read-only view of World memory: the NPCs, places, factions, events and facts the DM has established, grouped by the Session they first appeared in, with chips marking what is new or changed since the player last looked. It cannot be edited.
+_Avoid_: Codex, log, notes

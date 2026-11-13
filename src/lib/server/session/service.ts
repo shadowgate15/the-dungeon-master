@@ -125,6 +125,11 @@ export function createSessionService(db: Database, now: () => number = Date.now)
         .run()
     },
 
+    /** Saves the last Turn memory extraction covers. Allowed on an ended Session, like the summary. */
+    saveMemoryThrough(id: string, throughSeq: number): void {
+      db.update(session).set({ memoryThroughSeq: throughSeq }).where(eq(session.id, id)).run()
+    },
+
     get(id: string): Session | undefined {
       return db.select().from(session).where(eq(session.id, id)).get()
     },

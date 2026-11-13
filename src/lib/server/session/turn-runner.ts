@@ -5,6 +5,8 @@ import { assembleContext, type ContextInput } from './context.ts'
 import { MAX_ROLL_REJECTIONS, parseRollRequest, ROLL_TOOL_NAME, rollTool } from './roll-request.ts'
 import type { SessionService } from './service.ts'
 import { SUMMARY_MAX_FAILURES, summaryDue, writeSummary } from './summary.ts'
+import { MEMORY_MAX_FAILURES, runExtraction, type RejectionLog } from '../memory/extraction.ts'
+import type { MemoryRepository } from '../memory/repository.ts'
 
 /**
  * The server turn-runner: plays one streamed DM turn for a Session.
@@ -43,6 +45,10 @@ export interface TurnRunnerDeps {
     campaignId: string
     characterId: string
   }) => Omit<ContextInput, 'turns' | 'contextLimit' | 'replyReserve'>
+  /** World memory. Absent, the runner does no post-turn extraction. */
+  memory?: MemoryRepository
+  /** Where rejected extraction items are logged; defaults to the server log. */
+  log?: RejectionLog
 }
 
 export type BeginRefusal = 'not-found' | 'ended' | 'in-flight' | 'invalid-state' | 'empty-action'
@@ -67,6 +73,8 @@ export interface TurnRunner {
   isGenerating(sessionId: string): boolean
   /** Resolves when no background summary call is running; never rejects. For tests and shutdown. */
   summaryIdle(): Promise<void>
+  /** Resolves when no background memory extraction is running; never rejects. For tests, shutdown and starting a Session. */
+  memoryIdle(): Promise<void>
 }
 
 export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
@@ -102,10 +110,63 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
     summarizing.set(sessionId, job)
   }
 
+  const extracting = new Map<string, Promise<void>>()
+  /** Consecutive failed extraction calls per Session; at the cap the runner stops trying. */
+  const memoryFailures = new Map<string, number>()
+
+  /**
+   * Starts a background extraction over every Turn since the Session's watermark, unless one is
+   * already running (it re-checks when it finishes, so nothing saved meanwhile is missed). Only
+   * called after a DM turn was saved, so discarded, stopped and failed turns never reach it.
+   */
+  function extractIfDue(sessionId: string) {
+    const memory = deps.memory
+    if (!memory || extracting.has(sessionId)) return
+    if ((memoryFailures.get(sessionId) ?? 0) >= MEMORY_MAX_FAILURES) return
+    const current = deps.sessions.get(sessionId)
+    if (!current) return
+    const turns = deps.sessions.turns(sessionId).filter((t) => t.seq > current.memoryThroughSeq)
+    // Covers up to the last DM turn: a trailing unanswered player action waits for its answer.
+    const lastDm = turns.findLast((t) => t.author === 'dm')
+    if (!lastDm) return
+    const covered = turns.filter((t) => t.seq <= lastDm.seq)
+    const job = runExtraction(
+      deps.port,
+      memory,
+      {
+        threadId: `${sessionId}:memory`,
+        campaignId: current.campaignId,
+        characterId: current.characterId,
+        sessionId,
+        turns: covered
+      },
+      deps.log
+    )
+      .then((ok) => {
+        if (!ok) {
+          memoryFailures.set(sessionId, (memoryFailures.get(sessionId) ?? 0) + 1)
+          return false
+        }
+        memoryFailures.delete(sessionId)
+        deps.sessions.saveMemoryThrough(sessionId, lastDm.seq)
+        return true
+      })
+      .catch(() => false) // housekeeping: never surfaces
+      .finally(() => extracting.delete(sessionId))
+      .then((ok) => {
+        if (ok) extractIfDue(sessionId)
+      })
+    extracting.set(sessionId, job)
+  }
+
   return {
     isGenerating: (sessionId) => inFlight.has(sessionId),
     summaryIdle: async () => {
       await Promise.all(summarizing.values())
+    },
+    memoryIdle: async () => {
+      // A finished job may start a follow-up, so wait until none is left.
+      while (extracting.size > 0) await Promise.all(extracting.values())
     },
 
     begin(sessionId, input, signal) {
@@ -219,6 +280,7 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
                   ...(rollRequest && { rollRequest })
                 })
                 summarizeIfDue(sessionId, context.turnBudget)
+                extractIfDue(sessionId)
                 yield event
               } else {
                 yield event

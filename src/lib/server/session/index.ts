@@ -7,6 +7,7 @@ import { createCharacterService } from '../character/service.ts'
 import { loadWizardRules } from '../character/wizard-rules.ts'
 import { db } from '../db/index.ts'
 import { dice } from '../dice.ts'
+import { createMemoryRepository } from '../memory/repository.ts'
 import type { AbilityKey } from '#lib/rules/registry.ts'
 import { sheetText } from './sheet-text.ts'
 import { createRecap } from './recap.ts'
@@ -36,8 +37,12 @@ const modelPort: ChatPort = (request) => {
 /** The resume recap: a stateless side call, cached in memory, never a Turn. */
 export const recap = createRecap({ sessions, port: modelPort })
 
+/** World memory over the real database. */
+export const memory = createMemoryRepository(db)
+
 export const turnRunner = createTurnRunner({
   sessions,
+  memory,
   port: modelPort,
   contextLimit: DEFAULT_CONTEXT_LIMIT,
   replyReserve: DM_REPLY_TOKENS,
