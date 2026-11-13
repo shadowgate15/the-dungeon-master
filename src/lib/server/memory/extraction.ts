@@ -32,8 +32,10 @@ export interface BeatProgress {
 /** Per-call caps; excess items are dropped. */
 export const MAX_NPC_ITEMS = 8
 export const MAX_FACT_CREATES = 8
-/** Shared by supersede, retire and revive items in one call. */
+/** Shared by supersede and retire items in one call; overflow is taken alternately from each. */
 export const MAX_CORRECTION_ITEMS = 4
+/** Revives have their own cap and never spend the correction one. */
+export const MAX_REVIVE_ITEMS = 4
 /** Beat transitions accepted in one call. */
 export const MAX_BEAT_TRANSITIONS = 3
 
@@ -160,16 +162,6 @@ export function applyDeltas(
     liveFactIds.add(created.id)
   }
 
-  const corrections = { left: MAX_CORRECTION_ITEMS }
-  /** Spends one slot of the shared correction cap; false (and a log) when it is used up. */
-  const withinCap = (kind: 'npc' | 'fact') => {
-    if (corrections.left <= 0) {
-      reject(kind, 'over the per-call cap')
-      return false
-    }
-    corrections.left -= 1
-    return true
-  }
   /** A live fact the item names by id, with a valid reason; otherwise a rejection is logged. */
   const correctable = (item: Record<string, unknown>) => {
     const target = typeof item.id === 'string' ? facts.find((f) => f.id === item.id) : undefined
@@ -185,30 +177,28 @@ export function applyDeltas(
     return { target, reason }
   }
 
-  for (const item of deltas.retires) {
-    if (!withinCap('fact')) continue
+  const retire = (item: Record<string, unknown>) => {
     const found = correctable(item)
     if (found) repo.retireFact(found.target.id, found.reason, ctx.at)
   }
 
-  for (const item of deltas.supersedes) {
-    if (!withinCap('fact')) continue
+  const supersede = (item: Record<string, unknown>) => {
     const found = correctable(item)
-    if (!found) continue
+    if (!found) return
     const title = text(item.title, 'title', MEMORY_LIMITS.factTitle)
     const detail = optional(item, 'detail', (v) => text(v, 'detail', MEMORY_LIMITS.factDetail))
     const problem = [title, detail].find(isReject)
     if (isReject(problem)) {
       reject('fact', problem.reject)
-      continue
+      return
     }
     if (item.worldChanging !== undefined && typeof item.worldChanging !== 'boolean') {
       reject('fact', 'worldChanging is not a boolean')
-      continue
+      return
     }
     if (factIdByTitle.has(norm(title as string))) {
       reject('fact', 'a fact with this title already exists')
-      continue
+      return
     }
     const created = repo.createFact(
       ctx.campaignId,
@@ -224,6 +214,15 @@ export function applyDeltas(
     liveFactIds.delete(found.target.id)
     liveFactIds.add(created.id)
   }
+
+  // Retires and supersedes share one cap, taken alternately so neither starves the other.
+  const corrections: (() => void)[] = []
+  for (let i = 0; i < Math.max(deltas.retires.length, deltas.supersedes.length); i++) {
+    if (i < deltas.retires.length) corrections.push(() => retire(deltas.retires[i]))
+    if (i < deltas.supersedes.length) corrections.push(() => supersede(deltas.supersedes[i]))
+  }
+  corrections.slice(MAX_CORRECTION_ITEMS).forEach(() => reject('fact', 'over the per-call cap'))
+  for (const apply of corrections.slice(0, MAX_CORRECTION_ITEMS)) apply()
 
   const npcNames = new Set(repo.npcs(ctx.campaignId).map((n) => norm(n.name)))
 
@@ -318,8 +317,8 @@ export function applyDeltas(
     }
   }
 
-  for (const item of deltas.revives) {
-    if (!withinCap('npc')) continue
+  deltas.revives.slice(MAX_REVIVE_ITEMS).forEach(() => reject('npc', 'over the per-call cap'))
+  for (const item of deltas.revives.slice(0, MAX_REVIVE_ITEMS)) {
     const target = typeof item.id === 'string' ? repo.getNpc(item.id) : undefined
     if (!target || target.campaignId !== ctx.campaignId) {
       reject('npc', 'unknown npc id')
