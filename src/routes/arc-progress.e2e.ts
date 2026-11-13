@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { expandArc } from './arc-helpers'
 import { seedCharacter } from './character-helpers'
 import { createWorld } from './world-helpers'
 
@@ -66,6 +67,7 @@ async function createCampaignPage(page: Page, stamp: string) {
     .click()
   await expect(page.getByRole('heading', { name: campaign })).toBeVisible()
   await page.waitForLoadState('networkidle')
+  await expandArc(page)
 }
 
 test('Beat progress from a scripted extraction shows on the Campaign page, not on the play screen', async ({
@@ -129,6 +131,7 @@ test('Beat progress from a scripted extraction shows on the Campaign page, not o
   await page.goto(campaignUrl)
   await expect(async () => {
     await page.reload()
+    await expandArc(page)
     await expect(page.getByText('Reached in Session 1')).toBeVisible({ timeout: 1000 })
   }).toPass({ timeout: 15_000 })
   const arcSection = page.getByRole('region', { name: 'Arc' })

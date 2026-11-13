@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { expandArc } from './arc-helpers'
 import { seedCharacter } from './character-helpers'
 import { createWorld } from './world-helpers'
 
@@ -63,6 +64,7 @@ async function openCampaign(page: Page, name: string, world: string) {
   await page.getByRole('row').filter({ hasText: name }).getByRole('link', { name: 'Play' }).click()
   await expect(page.getByRole('heading', { name })).toBeVisible()
   await page.waitForLoadState('networkidle')
+  await expandArc(page)
 }
 
 async function setup(page: Page, label: string) {
@@ -92,6 +94,7 @@ test('generates a draft Arc, edits it, accepts it, and Start Session was never g
 
   await page.reload()
   await page.waitForLoadState('networkidle')
+  await expandArc(page)
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('A Better Title')
 })
 
@@ -167,6 +170,7 @@ test('Generate and Regenerate are disabled with a reason, and structure locks, o
   await page.goBack()
   await page.reload()
   await page.waitForLoadState('networkidle')
+  await expandArc(page)
 
   const arcSection = page.getByRole('region', { name: 'Arc' })
   await expect(arcSection.getByRole('button', { name: 'Regenerate' })).toBeDisabled()
@@ -179,6 +183,7 @@ test('Generate and Regenerate are disabled with a reason, and structure locks, o
   await page.getByRole('button', { name: 'Save changes' }).click()
   await page.reload()
   await page.waitForLoadState('networkidle')
+  await expandArc(page)
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Typo fixed')
 })
 
@@ -211,6 +216,7 @@ test('a Campaign whose Session started without an Arc stays Arc-less and keeps p
   const campaignUrl = page.url().replace(/\/sessions\/.*$/, '')
   await page.goto(campaignUrl)
   await page.waitForLoadState('networkidle')
+  await expandArc(page)
 
   const arcSection = page.getByRole('region', { name: 'Arc' })
   await expect(arcSection.getByText(/No Arc yet/)).toBeVisible()

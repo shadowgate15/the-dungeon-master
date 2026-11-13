@@ -48,7 +48,7 @@
   }
 
   /** Collapsing only hides the body, so an edit in progress or a running generation survives. */
-  let open = $state(true)
+  let open = $state(false)
 
   const newKey = () => crypto.randomUUID()
   const toEdit = (a: ArcViewData): Edit => ({

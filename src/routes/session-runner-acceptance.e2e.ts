@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
+import { expandArc } from './arc-helpers'
 import { seedCharacter } from './character-helpers'
 import { createWorld } from './world-helpers'
 
@@ -70,6 +71,7 @@ test('acceptance: an NPC and a world change from one Session shape the next, alo
   await expect(page.getByRole('heading', { name: campaign })).toBeVisible()
   await page.waitForLoadState('networkidle')
   const campaignUrl = page.url()
+  await expandArc(page)
 
   // Generate and accept the Arc.
   await control(request, 'answers', { answers: [{ content: arcAnswer }], replace: true })
@@ -165,5 +167,6 @@ test('acceptance: an NPC and a world change from one Session shape the next, alo
 
   // The Campaign page reflects the Beat.
   await page.goto(campaignUrl)
+  await expandArc(page)
   await expect(page.getByText('Reached in Session 1')).toBeVisible()
 })

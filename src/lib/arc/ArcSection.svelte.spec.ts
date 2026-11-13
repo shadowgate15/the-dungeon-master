@@ -42,32 +42,37 @@ const props = (over: Record<string, unknown> = {}) => ({
 const bodyOf = (fetcher: ReturnType<typeof vi.fn>, call = 0) =>
   JSON.parse((fetcher.mock.calls[call][1] as RequestInit).body as string)
 
+const renderOpen = async (p: ReturnType<typeof props>) => {
+  render(ArcSection, p)
+  await page.getByRole('button', { name: 'Arc', exact: true }).click()
+}
+
 describe('ArcSection', () => {
   it('shows the empty state and a Generate Arc button', async () => {
-    render(ArcSection, props())
+    await renderOpen(props())
 
     await expect.element(page.getByText(/No Arc yet/)).toBeVisible()
     await expect.element(page.getByText(/may deviate/)).toBeVisible()
     await expect.element(page.getByRole('button', { name: 'Generate Arc' })).toBeEnabled()
   })
 
-  it('collapses and expands from the Arc heading', async () => {
+  it('starts collapsed and expands from the Arc heading', async () => {
     render(ArcSection, props({ arc: arc() }))
     const toggle = page.getByRole('button', { name: 'Arc', exact: true })
 
-    await expect.element(toggle).toHaveAttribute('aria-expanded', 'true')
-    await expect.element(page.getByText('Draft Arc.', { exact: false })).toBeVisible()
-
-    await toggle.click()
     await expect.element(toggle).toHaveAttribute('aria-expanded', 'false')
     await expect.element(page.getByText('Draft Arc.', { exact: false })).not.toBeVisible()
 
     await toggle.click()
+    await expect.element(toggle).toHaveAttribute('aria-expanded', 'true')
     await expect.element(page.getByText('Draft Arc.', { exact: false })).toBeVisible()
+
+    await toggle.click()
+    await expect.element(page.getByText('Draft Arc.', { exact: false })).not.toBeVisible()
   })
 
   it('explains why there is no Generate Arc once play has started', async () => {
-    render(ArcSection, props({ canGenerate: false, structureLocked: true }))
+    await renderOpen(props({ canGenerate: false, structureLocked: true }))
 
     await expect.element(page.getByText(/already started/)).toBeVisible()
     await expect.element(page.getByRole('button', { name: 'Generate Arc' })).toBeDisabled()
@@ -83,7 +88,7 @@ describe('ArcSection', () => {
       )
     })
     const onchange = vi.fn()
-    render(ArcSection, props({ fetcher, onchange }))
+    await renderOpen(props({ fetcher, onchange }))
 
     await page.getByRole('button', { name: 'Generate Arc' }).click()
     await expect.element(page.getByText('Generating the Arc…')).toBeVisible()
@@ -103,7 +108,7 @@ describe('ArcSection', () => {
       )
       .mockImplementationOnce(() => response({ ok: true }))
     const onchange = vi.fn()
-    render(ArcSection, props({ fetcher, onchange, arc: arc() }))
+    await renderOpen(props({ fetcher, onchange, arc: arc() }))
 
     await page.getByRole('button', { name: 'Regenerate' }).click()
     await expect.element(page.getByRole('alert')).toHaveTextContent(/Your current Arc is unchanged/)
@@ -117,7 +122,7 @@ describe('ArcSection', () => {
   it('shows a generated draft, edits inline, and accepts with the edits', async () => {
     const fetcher = vi.fn(() => response({ ok: true }))
     const onchange = vi.fn()
-    render(ArcSection, props({ fetcher, onchange, arc: arc() }))
+    await renderOpen(props({ fetcher, onchange, arc: arc() }))
 
     await expect.element(page.getByText(/Draft/).first()).toBeVisible()
     await page.getByLabelText('Title', { exact: true }).fill('A Better Title')
@@ -132,7 +137,7 @@ describe('ArcSection', () => {
 
   it('regenerates a draft without asking', async () => {
     const fetcher = vi.fn(() => response({ ok: true }))
-    render(ArcSection, props({ fetcher, arc: arc() }))
+    await renderOpen(props({ fetcher, arc: arc() }))
 
     await page.getByRole('button', { name: 'Regenerate' }).click()
 
@@ -142,7 +147,7 @@ describe('ArcSection', () => {
 
   it('asks before regenerating an accepted Arc', async () => {
     const fetcher = vi.fn(() => response({ ok: true }))
-    render(ArcSection, props({ fetcher, arc: arc('accepted') }))
+    await renderOpen(props({ fetcher, arc: arc('accepted') }))
 
     await page.getByRole('button', { name: 'Regenerate' }).click()
     await expect
@@ -159,7 +164,7 @@ describe('ArcSection', () => {
 
   it('keeps structure edits inside the Length ranges', async () => {
     // short: exactly 3 Acts and 5 to 8 Beats in total; this Arc has 6.
-    render(ArcSection, props({ arc: arc() }))
+    await renderOpen(props({ arc: arc() }))
 
     await expect.element(page.getByRole('button', { name: 'Add Act' })).toBeDisabled()
     await expect.element(page.getByRole('button', { name: 'Delete Act 1' })).toBeDisabled()
@@ -173,7 +178,7 @@ describe('ArcSection', () => {
   it('keeps every Act at one Beat or more', async () => {
     const one = arc()
     one.acts[0].beats.pop()
-    render(ArcSection, props({ arc: one }))
+    await renderOpen(props({ arc: one }))
 
     await expect
       .element(page.getByRole('button', { name: 'Delete Beat 1 of Act 1' }))
@@ -182,7 +187,7 @@ describe('ArcSection', () => {
 
   it('reorders Acts and Beats', async () => {
     const fetcher = vi.fn(() => response({ ok: true }))
-    render(ArcSection, props({ fetcher, arc: arc() }))
+    await renderOpen(props({ fetcher, arc: arc() }))
 
     await page.getByRole('button', { name: 'Move Act 1 down' }).click()
     await page.getByRole('button', { name: 'Move Beat 2 of Act 3 up' }).click()
@@ -196,8 +201,7 @@ describe('ArcSection', () => {
 
   it('locks structure and Regenerate after play starts, but text stays editable', async () => {
     const fetcher = vi.fn(() => response({ ok: true }))
-    render(
-      ArcSection,
+    await renderOpen(
       props({
         fetcher,
         arc: arc('accepted'),
@@ -220,7 +224,7 @@ describe('ArcSection', () => {
   })
 
   it('is read-only on an archived Campaign: no editing, generating or accepting', async () => {
-    render(ArcSection, props({ arc: arc(), canGenerate: false, readOnly: true }))
+    await renderOpen(props({ arc: arc(), canGenerate: false, readOnly: true }))
 
     await expect.element(page.getByLabelText('Title', { exact: true })).toBeDisabled()
     await expect.element(page.getByRole('button', { name: 'Regenerate' })).not.toBeInTheDocument()
@@ -237,7 +241,7 @@ describe('ArcSection', () => {
     const locked = { canGenerate: false, structureLocked: true }
 
     it('shows each Beat as pending, reached in a Session or abandoned', async () => {
-      render(ArcSection, props({ ...locked, arc: progressed() }))
+      await renderOpen(props({ ...locked, arc: progressed() }))
 
       await expect.element(page.getByText('Reached in Session 2')).toBeVisible()
       await expect.element(page.getByText('Abandoned', { exact: true })).toBeVisible()
@@ -250,13 +254,13 @@ describe('ArcSection', () => {
       done.acts.forEach((act) =>
         act.beats.forEach((b) => Object.assign(b, { state: 'reached', sessionNumber: 1 }))
       )
-      render(ArcSection, props({ ...locked, arc: done }))
+      await renderOpen(props({ ...locked, arc: done }))
 
       await expect.element(page.getByText(/Arc complete/)).toBeVisible()
     })
 
     it('shows no Beat state before play starts', async () => {
-      render(ArcSection, props({ arc: arc('accepted') }))
+      await renderOpen(props({ arc: arc('accepted') }))
 
       await expect.element(page.getByText('Pending', { exact: true })).not.toBeInTheDocument()
     })
