@@ -25,6 +25,21 @@ const arcAnswer = (acts: number, beats: number, title = 'The Ember Crown') => ({
 const queue = (request: APIRequestContext, ...answers: object[]) =>
   control(request, 'answers', { answers })
 
+/** The system prompts of the latest DM call (not the silent memory extraction). */
+async function lastSystemText(request: APIRequestContext) {
+  const all = (await (await request.get(`${FAKE_LM_STUDIO}/__control/requests`)).json()) as {
+    path: string
+    body: { messages: { role: string; content: string }[] }
+  }[]
+  return all
+    .filter((r) => r.path === '/v1/chat/completions')
+    .filter((r) => !JSON.stringify(r.body.messages).includes('MEMORY EXTRACTION'))
+    .at(-1)!
+    .body.messages.filter((m) => m.role === 'system')
+    .map((m) => m.content)
+    .join('\n')
+}
+
 // The fake's answer queue is process-wide state.
 test.describe.configure({ mode: 'serial' })
 test.afterEach(async ({ request }) => {
@@ -191,6 +206,8 @@ test('a Campaign whose Session started without an Arc stays Arc-less and keeps p
   await page.getByLabel('Your action').fill('I push the gate.')
   await page.getByRole('button', { name: 'Send' }).click()
   await expect(page.getByRole('list', { name: 'Transcript' })).toContainText('The hinges scream.')
+  // No accepted Arc: nothing about one reaches the model.
+  expect(await lastSystemText(request)).not.toMatch(/\bArc\b|story plan/)
   const campaignUrl = page.url().replace(/\/sessions\/.*$/, '')
   await page.goto(campaignUrl)
   await page.waitForLoadState('networkidle')
@@ -218,4 +235,36 @@ test('a Campaign whose Session started without an Arc stays Arc-less and keeps p
     .filter((r) => !JSON.stringify(r.body.messages).includes('MEMORY EXTRACTION'))
     .at(-1)!.body.messages
   expect(dm.map((m) => m.content).join('\n')).not.toMatch(/\bArc\b/)
+})
+
+test('the accepted Arc steers the DM: the current Act is in the model request', async ({
+  page,
+  request
+}) => {
+  const hero = `Hero ${Date.now()}`
+  await seedCharacter(page, hero)
+  await setup(page, 'steer')
+  await queue(request, { content: arcAnswer(3, 2, 'The Ember Crown') })
+  await page.getByRole('button', { name: 'Generate Arc' }).click()
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('The Ember Crown')
+  await page.getByRole('button', { name: 'Accept Arc' }).click()
+  await expect(page.getByRole('button', { name: 'Accept Arc' })).toHaveCount(0)
+
+  await page.locator('select[name=characterId]').selectOption({ label: hero })
+  await page.getByRole('button', { name: 'Link Character' }).click()
+  await expect(page.getByText(`Playing as ${hero}.`)).toBeVisible()
+  await queue(request, { content: 'A gate looms in the ash.' })
+  await page.getByRole('button', { name: 'Start Session' }).click()
+  await expect(page.getByRole('heading', { name: 'Session 1' })).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Transcript' })).toContainText(
+    'A gate looms in the ash.'
+  )
+
+  const system = await lastSystemText(request)
+  expect(system).toContain('The Ember Crown')
+  expect(system).toContain('Act 1 name')
+  expect(system).toContain('Beat 1.1')
+  expect(system).toContain('Beat 2.1') // the next Act's first Beat title only
+  expect(system).not.toContain('Act 2 name')
+  expect(system).not.toContain('The relic is destroyed.')
 })

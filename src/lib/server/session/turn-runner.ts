@@ -2,6 +2,7 @@ import type { RollRequest } from '#lib/session/enums.ts'
 import { deriveTurnState } from '#lib/session/lifecycle.ts'
 import { streamText, type ChatPort, type TextEvent } from '../ai/port.ts'
 import { assembleContext, turnMessage, type ContextInput } from './context.ts'
+import { countQuietTurns, type ArcContextArc } from '../arc/context.ts'
 import { MENTION_WINDOW_TURNS, type MemoryInput } from '../memory/context.ts'
 import { MAX_ROLL_REJECTIONS, parseRollRequest, ROLL_TOOL_NAME, rollTool } from './roll-request.ts'
 import type { Session, SessionService, Turn } from './service.ts'
@@ -42,10 +43,13 @@ export interface TurnRunnerDeps {
   /** The modifier for a check, from the Character's derived stats. 0 when it cannot be derived. */
   rollModifier: (session: { characterId: string }, request: RollRequest) => number
   /** The Campaign Seed, Worlds and derived sheet text for the Session's Campaign and Character. */
-  loadContext: (session: {
-    campaignId: string
-    characterId: string
-  }) => Omit<ContextInput, 'turns' | 'contextLimit' | 'replyReserve'>
+  loadContext: (session: { campaignId: string; characterId: string }) => Omit<
+    ContextInput,
+    'turns' | 'contextLimit' | 'replyReserve' | 'arc'
+  > & {
+    /** The Campaign's Arc, if any; only an accepted one steers the DM. */
+    arc?: ArcContextArc | null
+  }
   /** World memory. Absent, the runner does no post-turn extraction. */
   memory?: MemoryRepository
   /** Where rejected extraction items are logged; defaults to the server log. */
@@ -116,6 +120,16 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
    * with none yet (the opening of a new Session) it is the previous Session's last Turns, and
    * "now" is that Session's end, so what it just established reads as recent.
    */
+  /** DM turns across the Campaign's Sessions since the Arc last made Beat progress. */
+  function quietTurns(arc: ArcContextArc, current: Session) {
+    return countQuietTurns(
+      arc,
+      deps.sessions
+        .listNumbered(current.campaignId)
+        .map((s) => ({ id: s.id, turns: deps.sessions.turns(s.id) }))
+    )
+  }
+
   function memoryInput(current: Session, turns: readonly Turn[]): MemoryInput | undefined {
     const memory = deps.memory
     if (!memory) return undefined
@@ -246,8 +260,10 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
       async function* events(): AsyncGenerator<TextEvent> {
         try {
           const turns = deps.sessions.turns(sessionId)
+          const { arc, ...loaded } = deps.loadContext(current!)
           const context = assembleContext({
-            ...deps.loadContext(current!),
+            ...loaded,
+            arc: arc?.status === 'accepted' ? { arc, quietTurns: quietTurns(arc, current!) } : null,
             summary: deps.sessions.get(sessionId)?.summary ?? null,
             turns,
             memory: memoryInput(current!, turns),
