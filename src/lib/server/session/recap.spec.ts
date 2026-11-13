@@ -6,7 +6,8 @@ import { createCampaignService } from '../campaign/service'
 import { createCharacterService } from '../character/service'
 import { createWorldService } from '../world/service'
 import { createSessionService, type SessionService } from './service'
-import { createRecap, type Recap } from './recap.ts'
+import { createMemoryRepository, type MemoryRepository } from '../memory/repository'
+import { createRecap, RECAP_INSTRUCTIONS, type Recap } from './recap.ts'
 
 type Script = (request: ChatRequest) => AsyncGenerator<unknown>
 let scripts: Script[]
@@ -14,6 +15,9 @@ let requests: ChatRequest[]
 let sessions: SessionService
 let recap: Recap
 let sessionId: string
+let memory: MemoryRepository
+let characterId: string
+let campaignId: string
 
 const says = (...parts: string[]): Script =>
   async function* () {
@@ -35,7 +39,7 @@ beforeEach(() => {
   migrateDatabase(db)
   seedRulesData(db)
   const w = createWorldService(db).create({ name: 'Eldoria' })
-  const campaignId = createCampaignService(db).create(
+  campaignId = createCampaignService(db).create(
     { name: 'Crown', premise: 'Find it.', tone: 'dark', length: 'short' },
     [w.id]
   ).id
@@ -62,13 +66,15 @@ beforeEach(() => {
       { choiceKey: 'background/acolyte/equipment-0', item: 'amulet' }
     ]
   } as Parameters<ReturnType<typeof createCharacterService>['create']>[0])
+  characterId = hero.id
+  memory = createMemoryRepository(db)
   sessions = createSessionService(db)
   sessions.linkCharacter(campaignId, hero.id)
   sessionId = sessions.start(campaignId).id
   sessions.appendTurn(sessionId, { author: 'dm', kind: 'narration', text: 'A gate looms.' })
   sessions.appendTurn(sessionId, { author: 'player', kind: 'action', text: 'I push it.' })
   sessions.appendTurn(sessionId, { author: 'dm', kind: 'narration', text: 'It swings open.' })
-  recap = createRecap({ sessions, port })
+  recap = createRecap({ sessions, port, memory })
 })
 
 describe('the resume recap', () => {
@@ -83,6 +89,36 @@ describe('the resume recap', () => {
     expect(prompt).toContain('The hero reached the gate.')
     expect(prompt).toContain('It swings open.')
     expect(sessions.turns(sessionId)).toHaveLength(3)
+  })
+
+  it('leaves the prompt as it was when there is no memory', async () => {
+    scripts.push(says('Back.'))
+    await recap.get(sessionId, new AbortController().signal)
+    expect(requests[0].systemPrompts).toEqual([RECAP_INSTRUCTIONS])
+  })
+
+  it('carries World memory matched against the last Turns', async () => {
+    const at = { sessionId, seq: 3 }
+    const npc = memory.createNpc(
+      campaignId,
+      { name: 'Grom', description: 'A scarred warden.', role: 'warden', status: 'alive' },
+      at
+    )
+    memory.setDisposition(npc.id, characterId, { stance: 'wary' }, at)
+    memory.createNpc(
+      campaignId,
+      { name: 'Zed', description: 'Unrelated.', role: 'x', status: 'alive' },
+      { sessionId, seq: 0 }
+    )
+    sessions.appendTurn(sessionId, { author: 'player', kind: 'action', text: 'I hail Grom.' })
+    sessions.appendTurn(sessionId, { author: 'dm', kind: 'narration', text: 'Grom nods.' })
+    scripts.push(says('Back.'))
+
+    await recap.get(sessionId, new AbortController().signal)
+
+    const system = requests[0].systemPrompts.join('\n')
+    expect(system).toContain('Grom')
+    expect(system).toContain('A scarred warden.')
   })
 
   it('is cached per last Turn: no second call until a new Turn exists', async () => {
