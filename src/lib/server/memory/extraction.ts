@@ -22,6 +22,8 @@ import type { MemoryRepository, Provenance } from './repository.ts'
 /** Per-call caps; excess items are dropped. */
 export const MAX_NPC_ITEMS = 8
 export const MAX_FACT_CREATES = 8
+/** Shared by supersede, retire and revive items in one call. */
+export const MAX_CORRECTION_ITEMS = 4
 
 /** After this many failed calls in a row within one Session, extraction stops for that Session. */
 export const MEMORY_MAX_FAILURES = 3
@@ -37,14 +39,23 @@ export const MAX_EXISTING_FACTS = 60
 export const EXTRACTION_MARKER = 'MEMORY EXTRACTION'
 
 export const EXTRACTION_INSTRUCTIONS = `${EXTRACTION_MARKER}: you keep the notes of a solo Dungeons & Dragons game.
-Read the new transcript and propose changes to the notes, as JSON with two lists, "npcs" and "facts". Propose only what the story clearly established. Reply with empty lists when nothing changed.
+Read the new transcript and propose changes to the notes, as JSON with lists "npcs", "facts" and, rarely, "revives", "supersedes" and "retires". Propose only what the story clearly established. Reply with empty lists when nothing changed.
 "npcs": a new named character is {"name", "description", "role", "status", "stance", "note", "knows"} with no "id". To change an existing character, give its "id" from the existing notes and only the fields that changed. "status" is one of ${NPC_STATUSES.join(', ')}. "stance" is how that character feels about the player's Character, one of ${STANCES.join(', ')}; "note" is a short reason. "knows" lists facts the character knows, by fact id or by the exact title of a fact you propose below. A dead character stays dead.
+"revives": only when the story explicitly brings a dead character back (resurrection, undeath, a faked death): {"id", "reason", "status"}, with a short "reason" and optional "status" (default alive). Never use "npcs" to change a dead character's status.
+"supersedes": a lasting fact that changed: {"id", "reason", "title", "detail", "worldChanging"} where "id" is the existing fact it replaces and the rest describes the new fact.
+"retires": a fact that turned out false or irrelevant: {"id", "reason"}. Facts are never edited; only supersede or retire them.
 "facts": a new lasting fact about the world, {"title", "detail", "worldChanging"}. "worldChanging" is true only when the player's Character changed the world itself. Never repeat an existing fact.
 Keep every text short. Never invent numbers, dice results, hit points or items; the game's code owns those. Never reuse the name of an existing character: update it by id instead.`
 
 const itemList = z.array(z.record(z.string(), z.unknown()))
 /** Loose on purpose: each item is validated one by one, so one bad item never fails the call. */
-export const extractionSchema = z.object({ npcs: itemList, facts: itemList })
+export const extractionSchema = z.object({
+  npcs: itemList,
+  facts: itemList,
+  revives: itemList.default([]),
+  supersedes: itemList.default([]),
+  retires: itemList.default([])
+})
 
 export type RejectionLog = (entry: { kind: 'npc' | 'fact'; reason: string; seq: number }) => void
 
@@ -123,6 +134,71 @@ export function applyDeltas(
       ctx.at
     )
     factIdByTitle.set(norm(title), created.id)
+    liveFactIds.add(created.id)
+  }
+
+  const corrections = { left: MAX_CORRECTION_ITEMS }
+  /** Spends one slot of the shared correction cap; false (and a log) when it is used up. */
+  const withinCap = (kind: 'npc' | 'fact') => {
+    if (corrections.left <= 0) {
+      reject(kind, 'over the per-call cap')
+      return false
+    }
+    corrections.left -= 1
+    return true
+  }
+  /** A live fact the item names by id, with a valid reason; otherwise a rejection is logged. */
+  const correctable = (item: Record<string, unknown>) => {
+    const target = typeof item.id === 'string' ? facts.find((f) => f.id === item.id) : undefined
+    if (!target || target.retiredAt !== null) {
+      reject('fact', target ? 'fact is already retired' : 'unknown fact id')
+      return undefined
+    }
+    const reason = text(item.reason, 'reason', MEMORY_LIMITS.reason)
+    if (isReject(reason)) {
+      reject('fact', reason.reject)
+      return undefined
+    }
+    return { target, reason }
+  }
+
+  for (const item of deltas.retires) {
+    if (!withinCap('fact')) continue
+    const found = correctable(item)
+    if (found) repo.retireFact(found.target.id, found.reason, ctx.at)
+  }
+
+  for (const item of deltas.supersedes) {
+    if (!withinCap('fact')) continue
+    const found = correctable(item)
+    if (!found) continue
+    const title = text(item.title, 'title', MEMORY_LIMITS.factTitle)
+    const detail = optional(item, 'detail', (v) => text(v, 'detail', MEMORY_LIMITS.factDetail))
+    const problem = [title, detail].find(isReject)
+    if (isReject(problem)) {
+      reject('fact', problem.reject)
+      continue
+    }
+    if (item.worldChanging !== undefined && typeof item.worldChanging !== 'boolean') {
+      reject('fact', 'worldChanging is not a boolean')
+      continue
+    }
+    if (factIdByTitle.has(norm(title as string))) {
+      reject('fact', 'a fact with this title already exists')
+      continue
+    }
+    const created = repo.createFact(
+      ctx.campaignId,
+      {
+        title: title as string,
+        detail: (detail as string | undefined) ?? null,
+        worldChanging: item.worldChanging === true
+      },
+      ctx.at
+    )
+    repo.supersedeFact(found.target.id, created.id, found.reason, ctx.at)
+    factIdByTitle.set(norm(title as string), created.id)
+    liveFactIds.delete(found.target.id)
     liveFactIds.add(created.id)
   }
 
@@ -217,6 +293,31 @@ export function applyDeltas(
       if (id && liveFactIds.has(id)) repo.link(target.id, id)
       else reject('npc', 'knows names a fact that does not exist')
     }
+  }
+
+  for (const item of deltas.revives) {
+    if (!withinCap('npc')) continue
+    const target = typeof item.id === 'string' ? repo.getNpc(item.id) : undefined
+    if (!target || target.campaignId !== ctx.campaignId) {
+      reject('npc', 'unknown npc id')
+      continue
+    }
+    if (target.status !== 'dead') {
+      reject('npc', 'only a dead npc can be revived')
+      continue
+    }
+    const reason = text(item.reason, 'reason', MEMORY_LIMITS.reason)
+    const status = optional(item, 'status', (v) => oneOf<NpcStatus>(v, 'status', NPC_STATUSES))
+    const problem = [reason, status].find(isReject)
+    if (isReject(problem)) {
+      reject('npc', problem.reject)
+      continue
+    }
+    if (status === 'dead') {
+      reject('npc', 'a revive must leave the npc not dead')
+      continue
+    }
+    repo.updateNpc(target.id, { status: (status as NpcStatus | undefined) ?? 'alive' }, ctx.at)
   }
 }
 

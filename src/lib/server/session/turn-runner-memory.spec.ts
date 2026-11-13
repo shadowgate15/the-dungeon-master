@@ -8,10 +8,12 @@ import { createWorldService } from '../world/service'
 import { createMemoryRepository, type MemoryRepository } from '../memory/repository'
 import {
   EXTRACTION_MARKER,
+  MAX_CORRECTION_ITEMS,
   MAX_FACT_CREATES,
   MAX_NPC_ITEMS,
   MEMORY_MAX_FAILURES
 } from '../memory/extraction'
+import { MAX_GONE_NPCS } from '../memory/repository'
 import { createSessionService, type SessionService } from './service'
 import { createTurnRunner, type BeginResult, type TurnRunner } from './turn-runner.ts'
 
@@ -431,5 +433,186 @@ describe('World memory in the DM context', () => {
     await drain(runner.begin(sessionId, {}, controller().signal))
     await runner.memoryIdle()
     expect(system(dmRequests().at(-1)!)).toContain('Grom (alive, neutral toward you), warden')
+  })
+})
+
+describe('memory corrections', () => {
+  const noDeltas = { npcs: [], facts: [] }
+
+  async function deadGrom() {
+    await play(undefined, says('Scene.'), extracts({ npcs: [grom({ status: 'dead' })], facts: [] }))
+    return memory.npcs(campaignId)[0].id
+  }
+
+  it('drops a bare status change on a dead NPC, silently, without counting a failure', async () => {
+    const id = await deadGrom()
+    await play('I act.', says('More.'), extracts({ npcs: [{ id, status: 'alive' }], facts: [] }))
+    expect(memory.npcs(campaignId)[0].status).toBe('dead')
+    expect(logs).toHaveLength(1)
+    expect(sessions.get(sessionId)?.memoryThroughSeq).toBe(3)
+  })
+
+  it('accepts a revive with a reason and stamps its source Turn', async () => {
+    const id = await deadGrom()
+    await play(
+      'I cast revivify.',
+      says('He gasps.'),
+      extracts({ ...noDeltas, revives: [{ id, reason: 'Resurrected by the priest' }] })
+    )
+    expect(memory.npcs(campaignId)[0]).toMatchObject({ status: 'alive', changedSeq: 3 })
+    expect(logs).toHaveLength(0)
+
+    await play('I wait.', says('Hm.'), extracts({ npcs: [{ id, status: 'dead' }], facts: [] }))
+    await play(
+      'I ask.',
+      says('Hm.'),
+      extracts({ ...noDeltas, revives: [{ id, reason: 'Undeath', status: 'missing' }] })
+    )
+    expect(memory.npcs(campaignId)[0].status).toBe('missing')
+  })
+
+  it('rejects a revive without a reason, of a living NPC, or of an unknown id', async () => {
+    const id = await deadGrom()
+    await play('I act.', says('A.'), extracts({ npcs: [grom({ name: 'Alive' })], facts: [] }))
+    const aliveId = memory.npcs(campaignId)[1].id
+    await play(
+      'I act.',
+      says('B.'),
+      extracts({
+        ...noDeltas,
+        revives: [
+          { id },
+          { id, reason: 'x'.repeat(500) },
+          { id: aliveId, reason: 'Already fine' },
+          { id: 'nope', reason: 'Who?' },
+          { id, reason: 'Bad status', status: 'dead' }
+        ]
+      })
+    )
+    expect(memory.npcs(campaignId)[0].status).toBe('dead')
+    expect(logs).toHaveLength(5)
+  })
+
+  it('supersedes a fact: the old one is flagged, the NPC knowledge moves, nothing is deleted', async () => {
+    await play(
+      undefined,
+      says('Scene.'),
+      extracts({
+        npcs: [grom({ knows: ['The gate is cursed'] })],
+        facts: [{ title: 'The gate is cursed' }]
+      })
+    )
+    const old = memory.facts(campaignId)[0]
+    await play(
+      'I pray.',
+      says('Light.'),
+      extracts({
+        ...noDeltas,
+        supersedes: [
+          { id: old.id, reason: 'Curse lifted', title: 'The gate is blessed', worldChanging: true }
+        ]
+      })
+    )
+    const facts = memory.facts(campaignId)
+    expect(facts).toHaveLength(2)
+    const replacement = facts.find((f) => f.title === 'The gate is blessed')!
+    expect(replacement).toMatchObject({ worldChanging: true, createdSeq: 3, retiredAt: null })
+    expect(facts.find((f) => f.id === old.id)).toMatchObject({
+      supersededById: replacement.id,
+      retiredReason: 'Curse lifted',
+      createdSeq: 1
+    })
+    expect(facts.find((f) => f.id === old.id)!.retiredAt).not.toBeNull()
+    expect(memory.knownFacts(memory.npcs(campaignId)[0].id).map((f) => f.title)).toEqual([
+      'The gate is blessed'
+    ])
+  })
+
+  it('retires a fact by id with a reason and drops its links', async () => {
+    await play(
+      undefined,
+      says('Scene.'),
+      extracts({ npcs: [grom({ knows: ['Rumor'] })], facts: [{ title: 'Rumor' }] })
+    )
+    const id = memory.facts(campaignId)[0].id
+    await play(
+      'I check.',
+      says('False.'),
+      extracts({ ...noDeltas, retires: [{ id, reason: 'It was a lie' }] })
+    )
+    expect(memory.facts(campaignId)[0]).toMatchObject({
+      retiredReason: 'It was a lie',
+      supersededById: null
+    })
+    expect(memory.facts(campaignId)[0].retiredAt).not.toBeNull()
+    expect(memory.knownFacts(memory.npcs(campaignId)[0].id)).toEqual([])
+  })
+
+  it('rejects supersede and retire with unknown ids, missing reasons or retired targets', async () => {
+    await play(undefined, says('Scene.'), extracts({ npcs: [], facts: [{ title: 'Rumor' }] }))
+    const id = memory.facts(campaignId)[0].id
+    await play('A.', says('A.'), extracts({ ...noDeltas, retires: [{ id, reason: 'Lie' }] }))
+    expect(logs).toHaveLength(0)
+
+    await play(
+      'B.',
+      says('B.'),
+      extracts({
+        ...noDeltas,
+        retires: [{ id, reason: 'Again' }, { id: 'nope', reason: 'Who' }, { id: 'x' }],
+        supersedes: [
+          { id, reason: 'Retired already', title: 'New' },
+          { id: 'nope', reason: 'Who', title: 'New' },
+          { id, title: 'No reason' }
+        ]
+      })
+    )
+    expect(logs).toHaveLength(6)
+    expect(memory.facts(campaignId)).toHaveLength(1)
+    expect(sessions.get(sessionId)?.memoryThroughSeq).toBe(5)
+  })
+
+  it('caps supersede, retire and revive items per call', async () => {
+    await play(
+      undefined,
+      says('Scene.'),
+      extracts({
+        npcs: [],
+        facts: Array.from({ length: MAX_FACT_CREATES }, (_, i) => ({ title: `F${i}` }))
+      })
+    )
+    const ids = memory.facts(campaignId).map((f) => f.id)
+    await play(
+      'A.',
+      says('A.'),
+      extracts({
+        ...noDeltas,
+        retires: ids.slice(0, MAX_CORRECTION_ITEMS + 2).map((id) => ({ id, reason: 'Gone' }))
+      })
+    )
+    expect(memory.facts(campaignId).filter((f) => f.retiredAt !== null)).toHaveLength(
+      MAX_CORRECTION_ITEMS
+    )
+    expect(logs).toHaveLength(2)
+  })
+
+  it('shows only the most recently changed non-alive NPCs on the gone line', async () => {
+    const make = (from: number, count: number) =>
+      Array.from({ length: count }, (_, i) =>
+        grom({ name: `N${from + i}`, description: 'd', role: 'r', status: 'dead' })
+      )
+    await play(undefined, says('A.'), extracts({ npcs: make(0, MAX_NPC_ITEMS), facts: [] }))
+    await play('B.', says('B.'), extracts({ npcs: make(MAX_NPC_ITEMS, 4), facts: [] }))
+    const gone = memory.goneNpcs(campaignId)
+    expect(MAX_GONE_NPCS).toBe(10)
+    expect(gone).toHaveLength(MAX_GONE_NPCS)
+    expect(
+      gone
+        .slice(0, 4)
+        .map((n) => n.name)
+        .sort()
+    ).toEqual(['N10', 'N11', 'N8', 'N9'])
+    // Older NPCs are still in memory, just not on the line.
+    expect(memory.npcs(campaignId)).toHaveLength(12)
   })
 })

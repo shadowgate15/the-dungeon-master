@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import type { NpcStatus, Stance } from '#lib/memory/enums.ts'
 import type { Database } from '../db/connect'
 import { disposition, event, faction, fact, npc, npcFact, place } from '../db/schema'
@@ -13,6 +13,9 @@ export interface Provenance {
   sessionId: string
   seq: number
 }
+
+/** The "gone" line shows at most this many non-alive NPCs, the most recently changed. */
+export const MAX_GONE_NPCS = 10
 
 /**
  * The World memory store: Campaign-scoped NPCs, facts, per-Character dispositions and
@@ -89,6 +92,20 @@ export function createMemoryRepository(db: Database, now: () => number = Date.no
       }
     },
 
+    /**
+     * The non-alive (dead, missing, departed), non-retired NPCs for the compact "gone" line:
+     * the `limit` most recently changed. Older ones appear in context only when selected.
+     */
+    goneNpcs(campaignId: string, limit: number = MAX_GONE_NPCS): Npc[] {
+      return db
+        .select()
+        .from(npc)
+        .where(and(eq(npc.campaignId, campaignId), ne(npc.status, 'alive'), isNull(npc.retiredAt)))
+        .orderBy(desc(npc.updatedAt), desc(sql`rowid`))
+        .limit(limit)
+        .all()
+    },
+
     getNpc(id: string): Npc | undefined {
       return db.select().from(npc).where(eq(npc.id, id)).get()
     },
@@ -162,6 +179,37 @@ export function createMemoryRepository(db: Database, now: () => number = Date.no
         })
         .returning()
         .get()
+    },
+
+    /** Flags a fact retired with a reason and drops every NPC's knowledge of it. */
+    retireFact(id: string, reason: string, at: Provenance): void {
+      db.update(fact)
+        .set({ retiredAt: now(), retiredReason: reason, ...stamp(at) })
+        .where(eq(fact.id, id))
+        .run()
+      db.delete(npcFact).where(eq(npcFact.factId, id)).run()
+    },
+
+    /** Flags a fact superseded by another and moves every NPC's knowledge to the replacement. */
+    supersedeFact(id: string, replacementId: string, reason: string, at: Provenance): void {
+      db.update(fact)
+        .set({
+          retiredAt: now(),
+          retiredReason: reason,
+          supersededById: replacementId,
+          ...stamp(at)
+        })
+        .where(eq(fact.id, id))
+        .run()
+      const holders = db
+        .select({ npcId: npcFact.npcId })
+        .from(npcFact)
+        .where(eq(npcFact.factId, id))
+        .all()
+      for (const { npcId } of holders) {
+        db.insert(npcFact).values({ npcId, factId: replacementId }).onConflictDoNothing().run()
+      }
+      db.delete(npcFact).where(eq(npcFact.factId, id)).run()
     },
 
     /** Sets the NPC's stance toward the Character, keeping a note unless a new one is given. */
