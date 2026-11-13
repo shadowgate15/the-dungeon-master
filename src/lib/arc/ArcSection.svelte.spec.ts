@@ -51,6 +51,21 @@ describe('ArcSection', () => {
     await expect.element(page.getByRole('button', { name: 'Generate Arc' })).toBeEnabled()
   })
 
+  it('collapses and expands from the Arc heading', async () => {
+    render(ArcSection, props({ arc: arc() }))
+    const toggle = page.getByRole('button', { name: 'Arc', exact: true })
+
+    await expect.element(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect.element(page.getByText('Draft Arc.', { exact: false })).toBeVisible()
+
+    await toggle.click()
+    await expect.element(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect.element(page.getByText('Draft Arc.', { exact: false })).not.toBeVisible()
+
+    await toggle.click()
+    await expect.element(page.getByText('Draft Arc.', { exact: false })).toBeVisible()
+  })
+
   it('explains why there is no Generate Arc once play has started', async () => {
     render(ArcSection, props({ canGenerate: false, structureLocked: true }))
 
