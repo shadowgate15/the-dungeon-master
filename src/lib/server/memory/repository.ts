@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import type { NpcStatus, Stance } from '#lib/memory/enums.ts'
 import type { Database } from '../db/connect'
-import { disposition, fact, npc, npcFact } from '../db/schema'
+import { disposition, event, faction, fact, npc, npcFact, place } from '../db/schema'
+import type { MemoryInput } from './context'
 
 export type Npc = typeof npc.$inferSelect
 export type Fact = typeof fact.$inferSelect
@@ -47,6 +48,48 @@ export function createMemoryRepository(db: Database, now: () => number = Date.no
         .where(eq(fact.campaignId, campaignId))
         .orderBy(sql`rowid`)
         .all()
+    },
+
+    /**
+     * Every record of the Campaign (retired and superseded included; the renderer drops them),
+     * with each NPC's stance toward the Character and the facts it knows. The mention window and
+     * focus are the caller's to add.
+     */
+    snapshot(campaignId: string, characterId: string): Omit<MemoryInput, 'window' | 'focus'> {
+      const npcs = this.npcs(campaignId)
+      const ids = npcs.map((n) => n.id)
+      const dispositions = ids.length
+        ? db
+            .select()
+            .from(disposition)
+            .where(and(inArray(disposition.npcId, ids), eq(disposition.characterId, characterId)))
+            .all()
+        : []
+      const links = ids.length
+        ? db.select().from(npcFact).where(inArray(npcFact.npcId, ids)).all()
+        : []
+      const named = (table: typeof place | typeof faction | typeof event) =>
+        db
+          .select()
+          .from(table)
+          .where(eq(table.campaignId, campaignId))
+          .orderBy(sql`rowid`)
+          .all()
+      return {
+        npcs: npcs.map((n) => {
+          const d = dispositions.find((x) => x.npcId === n.id)
+          return {
+            ...n,
+            stance: d?.stance ?? null,
+            note: d?.note ?? null,
+            knowsFactIds: links.filter((l) => l.npcId === n.id).map((l) => l.factId)
+          }
+        }),
+        places: named(place),
+        factions: named(faction),
+        events: named(event),
+        facts: this.facts(campaignId)
+      }
     },
 
     /**
