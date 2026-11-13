@@ -37,11 +37,11 @@ const modelPort: ChatPort = (request) => {
   return port(request)
 }
 
-/** The resume recap: a stateless side call, cached in memory, never a Turn. */
-export const recap = createRecap({ sessions, port: modelPort })
-
 /** World memory over the real database. */
 export const memory = createMemoryRepository(db)
+
+/** The resume recap: a stateless side call, cached in memory, never a Turn. */
+export const recap = createRecap({ sessions, port: modelPort, memory })
 
 /** The read-only Journal and its last-looked marker over the real database. */
 export const journal = createJournal(db)

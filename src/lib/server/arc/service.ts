@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { arcProblems, type ArcDraft } from '#lib/arc/arc.ts'
 import type { Length } from '#lib/campaign/enums.ts'
+import type { JournalPosition } from '#lib/memory/journal.ts'
 import type { Database } from '../db/connect'
 import { arc, arcAct, arcBeat, campaign, session } from '../db/schema'
 import { createWorldService } from '../world/service'
@@ -157,11 +158,7 @@ export function createArcService(db: Database, now: () => number = Date.now) {
      * Moves a pending Beat to `reached` or `abandoned` for good, stamping the source Session and
      * Turn. False (and no change) when the Beat is not pending.
      */
-    transitionBeat(
-      beatId: string,
-      state: 'reached' | 'abandoned',
-      at: { sessionId: string; seq: number }
-    ): boolean {
+    transitionBeat(beatId: string, state: 'reached' | 'abandoned', at: JournalPosition): boolean {
       const changed = db
         .update(arcBeat)
         .set({ state, sourceSessionId: at.sessionId, sourceTurnSeq: at.seq })

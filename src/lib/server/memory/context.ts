@@ -1,4 +1,5 @@
 import type { NpcStatus, Stance } from '#lib/memory/enums.ts'
+import type { JournalPosition } from '#lib/memory/journal.ts'
 import { estimateTokens } from '../ai/tokens.ts'
 
 /**
@@ -61,7 +62,7 @@ export interface MemoryInput {
   /** Text of the newest Turns, for name matching. */
   window: readonly string[]
   /** The Session and Turn seq "now" is measured from, for recency and "created this Session". */
-  focus: { sessionId: string; seq: number }
+  focus: JournalPosition
 }
 
 export const MEMORY_HEADER =
@@ -110,7 +111,19 @@ const ranked = (a: Entry, b: Entry) => a.rank - b.rank || byRecency(a, b)
 
 const withText = (head: string, text: string | null) => (text ? `${head}: ${text}` : head)
 
-export function buildMemoryBlock(input: MemoryInput, budgetTokens: number): string | null {
+export interface MemoryBlockOptions {
+  /** Prefix every record with its id in brackets, for callers that must refer to records. */
+  ids?: boolean
+  /** Replaces the DM-facing header. */
+  header?: string
+}
+
+export function buildMemoryBlock(
+  input: MemoryInput,
+  budgetTokens: number,
+  options: MemoryBlockOptions = {}
+): string | null {
+  const tag = (id: string) => (options.ids ? `[${id}] ` : '')
   const live = <T extends Stamped>(rows: readonly T[]) => rows.filter((r) => r.retiredAt === null)
   const npcs = live(input.npcs)
   const places = live(input.places)
@@ -141,11 +154,11 @@ export function buildMemoryBlock(input: MemoryInput, budgetTokens: number): stri
     for (const f of n.knowsFactIds) if (factById.has(f)) link(key('npc', n.id), key('fact', f))
   }
 
-  const factLine = (f: MemoryFact) => withText(`- ${f.title}`, f.detail)
-  const namedLine = (r: MemoryNamed) => withText(`- ${r.name}`, r.description)
+  const factLine = (f: MemoryFact) => withText(`- ${tag(f.id)}${f.title}`, f.detail)
+  const namedLine = (r: MemoryNamed) => withText(`- ${tag(r.id)}${r.name}`, r.description)
   const npcLine = (n: MemoryNpc, withKnows: boolean) => {
     const bits = [n.status, ...(n.stance ? [`${n.stance} toward you`] : [])].join(', ')
-    const head = `- ${n.name} (${bits})${n.role ? `, ${n.role}` : ''}`
+    const head = `- ${tag(n.id)}${n.name} (${bits})${n.role ? `, ${n.role}` : ''}`
     const body = [n.description, n.note ? `Note: ${n.note}` : null].filter(Boolean).join(' ')
     const knows = n.knowsFactIds
       .map((id) => factById.get(id)?.title)
@@ -161,7 +174,7 @@ export function buildMemoryBlock(input: MemoryInput, budgetTokens: number): stri
     updatedAt: r.updatedAt,
     rank,
     full,
-    nameOnly: `- ${label}`
+    nameOnly: `- ${tag(r.id)}${label}`
   })
 
   // Core: stance-bearing live NPCs, NPCs in the window, world-changing facts.
@@ -225,20 +238,22 @@ export function buildMemoryBlock(input: MemoryInput, budgetTokens: number): stri
   const render = (): string | null => {
     const entries = [...coreList, ...selectedList]
     if (entries.length === 0 && goneList.length === 0) return null
-    const lines = [MEMORY_HEADER]
+    const lines = [options.header ?? MEMORY_HEADER]
     for (const kind of KIND_ORDER) {
       const rows = entries.filter((e) => e.kind === kind)
       if (rows.length === 0) continue
       lines.push(`${SECTION[kind]}:`)
       for (const e of rows) lines.push(degraded.has(key(e.kind, e.id)) ? e.nameOnly : e.full)
     }
-    if (goneList.length > 0) lines.push(`Gone: ${goneList.map((g) => g.label).join(', ')}`)
+    if (goneList.length > 0)
+      lines.push(`Gone: ${goneList.map((g) => `${tag(g.id)}${g.label}`).join(', ')}`)
     return lines.join('\n')
   }
 
-  // Overflow: drop selected records (lowest score first), then degrade the core to name-only
-  // (lowest rank first), then drop core entries, then the gone line. Records never shrink
-  // mid-record.
+  // Overflow order, chosen deliberately (the spec's two statements about it disagree, and the
+  // tests pin this one): drop selected records first (lowest score first), then degrade the
+  // core to name-only (lowest rank first), then drop core entries, then the gone line. Records
+  // never shrink mid-record. Keeping the core longest is the safer reading of "always on".
   let block = render()
   while (block !== null && estimateTokens(block) > budgetTokens) {
     if (selectedList.length > 0) selectedList.pop()

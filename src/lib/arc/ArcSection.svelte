@@ -126,16 +126,21 @@
     list.splice(to, 0, item)
   }
 
+  const newBeat = (): EditBeat => ({
+    key: newKey(),
+    title: 'New Beat',
+    description: 'What should become true.'
+  })
+
   function addAct() {
     edit?.acts.push({
       key: newKey(),
       name: 'New Act',
       purpose: 'What this phase is for.',
-      beats: [{ key: newKey(), title: 'New Beat', description: 'What should become true.' }]
+      beats: [newBeat()]
     })
   }
-  const addBeat = (act: EditAct) =>
-    act.beats.push({ key: newKey(), title: 'New Beat', description: 'What should become true.' })
+  const addBeat = (act: EditAct) => act.beats.push(newBeat())
 
   async function generate() {
     confirming = false

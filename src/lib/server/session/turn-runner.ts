@@ -1,9 +1,10 @@
 import type { RollRequest } from '#lib/session/enums.ts'
 import { deriveTurnState } from '#lib/session/lifecycle.ts'
 import { streamText, type ChatPort, type TextEvent } from '../ai/port.ts'
-import { assembleContext, turnMessage, type ContextInput } from './context.ts'
+import { assembleContext, type ContextInput } from './context.ts'
 import { countQuietTurns, type ArcContextArc } from '../arc/context.ts'
-import { MENTION_WINDOW_TURNS, type MemoryInput } from '../memory/context.ts'
+import type { MemoryInput } from '../memory/context.ts'
+import { memoryInputFor } from './memory-input.ts'
 import { MAX_ROLL_REJECTIONS, parseRollRequest, ROLL_TOOL_NAME, rollTool } from './roll-request.ts'
 import type { Session, SessionService, Turn } from './service.ts'
 import { SUMMARY_MAX_FAILURES, summaryDue, writeSummary } from './summary.ts'
@@ -131,11 +132,6 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
     summarizing.set(sessionId, job)
   }
 
-  /**
-   * The World memory records and mention window for a DM call. The window is the last few Turns;
-   * with none yet (the opening of a new Session) it is the previous Session's last Turns, and
-   * "now" is that Session's end, so what it just established reads as recent.
-   */
   /** DM turns across the Campaign's Sessions since the Arc last made Beat progress. */
   function quietTurns(arc: ArcContextArc, current: Session) {
     return countQuietTurns(
@@ -147,23 +143,7 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
   }
 
   function memoryInput(current: Session, turns: readonly Turn[]): MemoryInput | undefined {
-    const memory = deps.memory
-    if (!memory) return undefined
-    let windowTurns = turns
-    let focus = { sessionId: current.id, seq: turns.at(-1)?.seq ?? 0 }
-    if (turns.length === 0) {
-      const all = deps.sessions.listNumbered(current.campaignId)
-      const earlier = all[all.findIndex((s) => s.id === current.id) - 1]
-      if (earlier) {
-        windowTurns = deps.sessions.turns(earlier.id)
-        focus = { sessionId: earlier.id, seq: windowTurns.at(-1)?.seq ?? 0 }
-      }
-    }
-    return {
-      ...memory.snapshot(current.campaignId, current.characterId),
-      window: windowTurns.slice(-MENTION_WINDOW_TURNS).map((t) => turnMessage(t).content),
-      focus
-    }
+    return deps.memory ? memoryInputFor(deps.sessions, deps.memory, current, turns) : undefined
   }
 
   const extracting = new Map<string, Promise<void>>()
@@ -194,6 +174,7 @@ export function createTurnRunner(deps: TurnRunnerDeps): TurnRunner {
         campaignId: current.campaignId,
         characterId: current.characterId,
         sessionId,
+        contextLimit: deps.contextLimit,
         turns: covered,
         beats: deps.beats
       },

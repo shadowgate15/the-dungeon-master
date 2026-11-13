@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { JournalPosition } from '#lib/memory/journal.ts'
 import {
   MEMORY_LIMITS,
   NPC_STATUSES,
@@ -7,19 +8,17 @@ import {
   type Stance
 } from '#lib/memory/enums.ts'
 import { callModel, type ChatPort } from '../ai/port.ts'
-import { transcriptLine } from '../session/context.ts'
+import { estimateTokens } from '../ai/tokens.ts'
+import { transcriptLine, turnMessage } from '../session/context.ts'
 import type { Turn } from '../session/service.ts'
 import type { OpenBeat } from '../arc/service.ts'
+import { buildMemoryBlock } from './context.ts'
 import type { MemoryRepository, Provenance } from './repository.ts'
 
 /** The Arc's side of extraction: which Beats may move, and moving one for good. */
 export interface BeatProgress {
   openBeats(campaignId: string): OpenBeat[]
-  transitionBeat(
-    beatId: string,
-    state: 'reached' | 'abandoned',
-    at: { sessionId: string; seq: number }
-  ): boolean
+  transitionBeat(beatId: string, state: 'reached' | 'abandoned', at: JournalPosition): boolean
 }
 
 /**
@@ -33,8 +32,10 @@ export interface BeatProgress {
 /** Per-call caps; excess items are dropped. */
 export const MAX_NPC_ITEMS = 8
 export const MAX_FACT_CREATES = 8
-/** Shared by supersede, retire and revive items in one call. */
+/** Shared by supersede and retire items in one call; overflow is taken alternately from each. */
 export const MAX_CORRECTION_ITEMS = 4
+/** Revives have their own cap and never spend the correction one. */
+export const MAX_REVIVE_ITEMS = 4
 /** Beat transitions accepted in one call. */
 export const MAX_BEAT_TRANSITIONS = 3
 
@@ -44,9 +45,12 @@ export const MEMORY_MAX_FAILURES = 3
 export const MEMORY_TIMEOUT_MS = 60_000
 export const MEMORY_MAX_TOKENS = 1024
 
-/** The most existing records sent to the call, newest kept (selection arrives with context work). */
-export const MAX_EXISTING_NPCS = 40
-export const MAX_EXISTING_FACTS = 60
+/**
+ * The share of the extraction call's remaining budget (context limit minus the reply cap, the
+ * instructions, the transcript and the open Beats) that existing records may use. Its own
+ * constant, separate from the DM context's share.
+ */
+export const EXTRACTION_MEMORY_SHARE = 0.5
 
 /** Marks the extraction call's system prompt, so test doubles can tell it from a DM turn. */
 export const EXTRACTION_MARKER = 'MEMORY EXTRACTION'
@@ -158,16 +162,6 @@ export function applyDeltas(
     liveFactIds.add(created.id)
   }
 
-  const corrections = { left: MAX_CORRECTION_ITEMS }
-  /** Spends one slot of the shared correction cap; false (and a log) when it is used up. */
-  const withinCap = (kind: 'npc' | 'fact') => {
-    if (corrections.left <= 0) {
-      reject(kind, 'over the per-call cap')
-      return false
-    }
-    corrections.left -= 1
-    return true
-  }
   /** A live fact the item names by id, with a valid reason; otherwise a rejection is logged. */
   const correctable = (item: Record<string, unknown>) => {
     const target = typeof item.id === 'string' ? facts.find((f) => f.id === item.id) : undefined
@@ -183,30 +177,28 @@ export function applyDeltas(
     return { target, reason }
   }
 
-  for (const item of deltas.retires) {
-    if (!withinCap('fact')) continue
+  const retire = (item: Record<string, unknown>) => {
     const found = correctable(item)
     if (found) repo.retireFact(found.target.id, found.reason, ctx.at)
   }
 
-  for (const item of deltas.supersedes) {
-    if (!withinCap('fact')) continue
+  const supersede = (item: Record<string, unknown>) => {
     const found = correctable(item)
-    if (!found) continue
+    if (!found) return
     const title = text(item.title, 'title', MEMORY_LIMITS.factTitle)
     const detail = optional(item, 'detail', (v) => text(v, 'detail', MEMORY_LIMITS.factDetail))
     const problem = [title, detail].find(isReject)
     if (isReject(problem)) {
       reject('fact', problem.reject)
-      continue
+      return
     }
     if (item.worldChanging !== undefined && typeof item.worldChanging !== 'boolean') {
       reject('fact', 'worldChanging is not a boolean')
-      continue
+      return
     }
     if (factIdByTitle.has(norm(title as string))) {
       reject('fact', 'a fact with this title already exists')
-      continue
+      return
     }
     const created = repo.createFact(
       ctx.campaignId,
@@ -222,6 +214,15 @@ export function applyDeltas(
     liveFactIds.delete(found.target.id)
     liveFactIds.add(created.id)
   }
+
+  // Retires and supersedes share one cap, taken alternately so neither starves the other.
+  const corrections: (() => void)[] = []
+  for (let i = 0; i < Math.max(deltas.retires.length, deltas.supersedes.length); i++) {
+    if (i < deltas.retires.length) corrections.push(() => retire(deltas.retires[i]))
+    if (i < deltas.supersedes.length) corrections.push(() => supersede(deltas.supersedes[i]))
+  }
+  corrections.slice(MAX_CORRECTION_ITEMS).forEach(() => reject('fact', 'over the per-call cap'))
+  for (const apply of corrections.slice(0, MAX_CORRECTION_ITEMS)) apply()
 
   const npcNames = new Set(repo.npcs(ctx.campaignId).map((n) => norm(n.name)))
 
@@ -316,8 +317,8 @@ export function applyDeltas(
     }
   }
 
-  for (const item of deltas.revives) {
-    if (!withinCap('npc')) continue
+  deltas.revives.slice(MAX_REVIVE_ITEMS).forEach(() => reject('npc', 'over the per-call cap'))
+  for (const item of deltas.revives.slice(0, MAX_REVIVE_ITEMS)) {
     const target = typeof item.id === 'string' ? repo.getNpc(item.id) : undefined
     if (!target || target.campaignId !== ctx.campaignId) {
       reject('npc', 'unknown npc id')
@@ -359,28 +360,32 @@ export function applyDeltas(
   }
 }
 
-function compactRecords(
+const EXTRACTION_HEADER = 'Existing notes, each record with its [id]:'
+
+/** The existing records the call sees: the DM context's selection, with ids, over this window. */
+function existingRecords(
   repo: MemoryRepository,
-  campaignId: string,
-  characterId: string,
+  input: ExtractionInput,
+  transcript: string,
   beats: readonly OpenBeat[]
 ) {
-  const npcs = repo
-    .npcs(campaignId)
-    .filter((n) => n.retiredAt === null)
-    .slice(-MAX_EXISTING_NPCS)
-    .map((n) => {
-      const stance = repo.dispositions(n.id).find((d) => d.characterId === characterId)?.stance
-      return `- [${n.id}] ${n.name} (${n.status}${n.role ? `, ${n.role}` : ''}${stance ? `, ${stance} toward the Character` : ''}): ${n.description ?? ''}`
-    })
-  const facts = repo
-    .facts(campaignId)
-    .filter((f) => f.retiredAt === null)
-    .slice(-MAX_EXISTING_FACTS)
-    .map((f) => `- [${f.id}] ${f.title}`)
+  const remaining =
+    input.contextLimit -
+    MEMORY_MAX_TOKENS -
+    estimateTokens(EXTRACTION_INSTRUCTIONS) -
+    estimateTokens(transcript) -
+    estimateTokens(beats.map((b) => b.description + b.title).join(' '))
+  const block = buildMemoryBlock(
+    {
+      ...repo.snapshot(input.campaignId, input.characterId),
+      window: input.turns.map((t) => turnMessage(t).content),
+      focus: { sessionId: input.sessionId, seq: input.turns.at(-1)!.seq }
+    },
+    Math.floor(Math.max(0, remaining) * EXTRACTION_MEMORY_SHARE),
+    { ids: true, header: EXTRACTION_HEADER }
+  )
   return (
-    `Existing characters:\n${npcs.join('\n') || 'none'}\n\n` +
-    `Existing facts:\n${facts.join('\n') || 'none'}` +
+    (block ?? `${EXTRACTION_HEADER} none`) +
     (beats.length
       ? `\n\nOpen story Beats:\n${beats.map((b) => `- [${b.id}] ${b.title}: ${b.description}`).join('\n')}`
       : '')
@@ -392,6 +397,8 @@ export interface ExtractionInput {
   campaignId: string
   characterId: string
   sessionId: string
+  /** The model's context window, in tokens; sizes the share given to existing records. */
+  contextLimit: number
   /** The unextracted Turns, oldest first; never empty. */
   turns: readonly Turn[]
   /** The Arc, when the Campaign has an accepted one: its open Beats go in, transitions come out. */
@@ -419,7 +426,7 @@ export async function runExtraction(
       messages: [
         {
           role: 'user',
-          content: `${compactRecords(repo, input.campaignId, input.characterId, openBeats)}\n\nNew transcript:\n${transcript}`
+          content: `${existingRecords(repo, input, transcript, openBeats)}\n\nNew transcript:\n${transcript}`
         }
       ],
       maxTokens: MEMORY_MAX_TOKENS,

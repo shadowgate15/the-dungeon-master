@@ -8,6 +8,7 @@ import { createWorldService } from '../world/service'
 import { createMemoryRepository, type MemoryRepository } from '../memory/repository'
 import {
   EXTRACTION_MARKER,
+  EXTRACTION_MEMORY_SHARE,
   MAX_CORRECTION_ITEMS,
   MAX_FACT_CREATES,
   MAX_NPC_ITEMS,
@@ -189,6 +190,28 @@ describe('post-turn memory extraction', () => {
     expect(second).toContain('I greet him.')
     expect(second).not.toContain('Grom the warden eyes you.')
     expect(sessions.get(sessionId)?.memoryThroughSeq).toBe(3)
+  })
+
+  it('sends the core and selected records, not just the newest, within its own budget', async () => {
+    const at = { sessionId, seq: 0 }
+    const old = memory.createNpc(
+      campaignId,
+      { name: 'Vorn', description: 'A sworn enemy.', role: 'rival', status: 'alive' },
+      at
+    )
+    memory.setDisposition(old.id, characterId, { stance: 'hostile' }, at)
+    for (let i = 0; i < 50; i++) {
+      memory.createNpc(
+        campaignId,
+        { name: `Filler${i}`, description: 'x', role: 'y', status: 'alive' },
+        at
+      )
+    }
+    await play(undefined, says('The road is quiet.'), extracts({ npcs: [], facts: [] }))
+    const sent = prompt(requests[1])
+    expect(sent).toContain(old.id)
+    expect(sent).toContain('hostile toward you')
+    expect(EXTRACTION_MEMORY_SHARE).toBe(0.5)
   })
 
   it('updates an NPC by id and moves its disposition', async () => {
@@ -639,6 +662,54 @@ describe('memory corrections', () => {
       MAX_CORRECTION_ITEMS
     )
     expect(logs).toHaveLength(2)
+  })
+
+  it('does not spend the correction cap on revives', async () => {
+    await play(
+      undefined,
+      says('Scene.'),
+      extracts({
+        npcs: [grom({ status: 'dead' })],
+        facts: Array.from({ length: 4 }, (_, i) => ({ title: `F${i}` }))
+      })
+    )
+    const ids = memory.facts(campaignId).map((f) => f.id)
+    const npcId = memory.npcs(campaignId)[0].id
+    await play(
+      'A.',
+      says('A.'),
+      extracts({
+        ...noDeltas,
+        revives: [{ id: npcId, reason: 'A cleric prays' }],
+        retires: ids.map((id) => ({ id, reason: 'Gone' }))
+      })
+    )
+    expect(memory.facts(campaignId).filter((f) => f.retiredAt !== null)).toHaveLength(
+      MAX_CORRECTION_ITEMS
+    )
+    expect(memory.npcs(campaignId)[0].status).toBe('alive')
+  })
+
+  it('shares an overflowing correction cap between retires and supersedes', async () => {
+    await play(
+      undefined,
+      says('Scene.'),
+      extracts({ npcs: [], facts: Array.from({ length: 8 }, (_, i) => ({ title: `F${i}` })) })
+    )
+    const ids = memory.facts(campaignId).map((f) => f.id)
+    await play(
+      'A.',
+      says('A.'),
+      extracts({
+        ...noDeltas,
+        retires: ids.slice(0, 4).map((id) => ({ id, reason: 'Gone' })),
+        supersedes: ids
+          .slice(4)
+          .map((id, i) => ({ id, reason: 'Changed', title: `New${i}`, detail: 'd' }))
+      })
+    )
+    const gone = memory.facts(campaignId).filter((f) => f.retiredAt !== null || f.supersededById)
+    expect(gone.map((f) => f.id).sort()).toEqual([...ids.slice(0, 2), ...ids.slice(4, 6)].sort())
   })
 
   it('shows only the most recently changed non-alive NPCs on the gone line', async () => {
