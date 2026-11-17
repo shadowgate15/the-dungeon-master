@@ -18,6 +18,10 @@
   let problem = $state<string | null>(null)
   // Events streamed in this page visit, on top of what the load returned.
   let streamed = $state<SessionEvent[]>([])
+  // The in-flight narration, shown until it is saved (then it arrives as an event) or discarded.
+  let live = $state('')
+  let thinking = $state(false)
+  let controller: AbortController | null = null
 
   const events = $derived(
     data.events.concat(streamed.filter((s) => !data.events.some((e) => e.id === s.id)))
@@ -31,18 +35,39 @@
     if (!text || busy) return
     busy = true
     problem = null
+    controller = new AbortController()
     try {
-      problem = await sendAction(data.session.id, text, (message) => {
-        if (message.type === 'event') streamed.push(message.event)
-        if (message.type === 'done' && message.reason === 'error') {
-          problem = message.message ?? 'Something went wrong.'
-        }
-      })
+      problem = await sendAction(
+        data.session.id,
+        text,
+        (message) => {
+          if (message.type === 'thinking') thinking = true
+          else if (message.type === 'delta') {
+            thinking = false
+            live += message.text
+          } else if (message.type === 'discard') live = ''
+          else if (message.type === 'event') {
+            thinking = false
+            live = ''
+            streamed.push(message.event)
+          } else if (message.type === 'done') {
+            thinking = false
+            live = ''
+            if (message.reason === 'error') problem = message.message ?? 'Something went wrong.'
+          }
+        },
+        controller.signal
+      )
       if (!problem) draft = ''
     } catch {
-      problem = 'That action could not be sent.'
+      // Stop aborts the request; anything else is a failed send.
+      if (!controller.signal.aborted) problem = 'That action could not be sent.'
+      else draft = ''
     } finally {
       busy = false
+      thinking = false
+      live = ''
+      controller = null
       await invalidateAll()
       streamed = []
     }
@@ -77,10 +102,10 @@
 
     <section aria-label="Story" class="flex min-h-96 flex-col gap-3">
       <div class="flex-1 rounded-panel border border-border bg-surface p-3">
-        {#if events.length === 0}
+        {#if events.length === 0 && !busy}
           <p class="text-muted">Nothing has happened yet. What do you do?</p>
         {:else}
-          <StoryLog {events} npcs={data.scene.npcs} />
+          <StoryLog {events} npcs={data.scene.npcs} {live} {thinking} />
         {/if}
       </div>
 
@@ -98,7 +123,13 @@
               placeholder={rollPending ? 'Roll first.' : 'What do you do?'}
             />
           </label>
-          <Button type="submit" disabled={busy || rollPending || !draft.trim()}>Send</Button>
+          {#if busy}
+            <Button type="button" variant="secondary" onclick={() => controller?.abort()}
+              >Stop</Button
+            >
+          {:else}
+            <Button type="submit" disabled={rollPending || !draft.trim()}>Send</Button>
+          {/if}
         </form>
       {/if}
     </section>

@@ -1,6 +1,7 @@
 import { getChatPort } from '../ai/index.ts'
 import type { ChatPort } from '../ai/port.ts'
 import { db } from '../db/index.ts'
+import { createDirectorPipeline } from './scene-director/pipeline.ts'
 import { createSceneRunner } from './scene-runner.ts'
 import { createSessionService } from './service.ts'
 
@@ -21,4 +22,8 @@ const modelPort: ChatPort = (request) => {
  * The scene runner over the real database. It holds the one-run-in-flight claim for the process,
  * so every caller must use this instance.
  */
-export const sceneRunner = createSceneRunner({ sessions, port: modelPort })
+export const sceneRunner = createSceneRunner({
+  sessions,
+  port: modelPort,
+  pipeline: createDirectorPipeline()
+})
