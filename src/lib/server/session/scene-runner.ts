@@ -23,7 +23,7 @@
  * - Roll resolution: a separate entry point on this runner that clears `pendingRoll`, appends
  *   `roll-resolved`, and runs the same pipeline.
  */
-import type { SessionEvent } from '#lib/session/enums.ts'
+import type { EventKind, Role, SessionEvent } from '#lib/session/enums.ts'
 import type { ChatPort } from '../ai/port.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
@@ -32,7 +32,14 @@ export type DoneReason = 'yield' | 'cap' | 'roll' | 'stopped' | 'error'
 
 /** What the runner streams. `event` carries a committed Event log entry; `done` ends the run. */
 export type PipelineEvent =
-  { type: 'event'; event: SessionEvent } | { type: 'done'; reason: DoneReason; message?: string }
+  | { type: 'event'; event: SessionEvent }
+  /** The Director is choosing; shown as a thinking indicator until the next event, delta or done. */
+  | { type: 'thinking'; role: Role }
+  /** A token of the in-flight event. It is not in the log yet, and may still be discarded. */
+  | { type: 'delta'; role: Role; kind: EventKind; text: string }
+  /** The in-flight event was stopped or failed: drop what the deltas built. Nothing was saved. */
+  | { type: 'discard' }
+  | { type: 'done'; reason: DoneReason; message?: string }
 
 /** Everything a pipeline step may use. State lives in the database, never in the pipeline. */
 export interface PipelineContext {

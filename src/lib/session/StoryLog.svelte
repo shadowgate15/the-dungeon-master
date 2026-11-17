@@ -1,7 +1,19 @@
 <script lang="ts">
   import type { SceneNpc, SessionEvent } from './enums.ts'
 
-  let { events, npcs }: { events: SessionEvent[]; npcs: SceneNpc[] } = $props()
+  let {
+    events,
+    npcs,
+    live = '',
+    thinking = false
+  }: {
+    events: SessionEvent[]
+    npcs: SceneNpc[]
+    /** Narration still streaming in; not in the log until it is saved. */
+    live?: string
+    /** The Director is choosing. */
+    thinking?: boolean
+  } = $props()
 
   const speaker = (event: SessionEvent) =>
     npcs.find((n) => n.id === event.npcId)?.name ?? event.npcId ?? 'Someone'
@@ -32,4 +44,12 @@
       {/if}
     </li>
   {/each}
+  {#if live}
+    <li aria-label="Narration in progress">
+      <p class="leading-relaxed whitespace-pre-wrap">{live}</p>
+    </li>
+  {/if}
+  {#if thinking && !live}
+    <li role="status" class="text-sm text-muted italic">The Dungeon Master is thinking&hellip;</li>
+  {/if}
 </ol>

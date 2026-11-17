@@ -1,8 +1,12 @@
-import type { SessionEvent } from './enums.ts'
+import type { EventKind, Role, SessionEvent } from './enums.ts'
 
-/** One line of the action stream: a saved event, or the end of the run. */
+/** One line of the action stream. Messages of a kind this page does not know are ignored. */
 export type StreamMessage =
-  { type: 'event'; event: SessionEvent } | { type: 'done'; reason: string; message?: string }
+  | { type: 'event'; event: SessionEvent }
+  | { type: 'thinking'; role: Role }
+  | { type: 'delta'; role: Role; kind: EventKind; text: string }
+  | { type: 'discard' }
+  | { type: 'done'; reason: string; message?: string }
 
 /** Sends a player action and reports each streamed message. Resolves with an error text or null. */
 export async function sendAction(

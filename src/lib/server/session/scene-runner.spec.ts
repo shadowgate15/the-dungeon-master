@@ -43,10 +43,11 @@ describe('a player action', () => {
       runnerWith().begin(sessionId, 'I look around', new AbortController().signal)
     )
 
-    expect(events.map((e) => (e.type === 'event' ? e.event.kind : `done:${e.reason}`))).toEqual([
-      'player-action',
-      'done:yield'
-    ])
+    expect(
+      events.map((e) =>
+        e.type === 'event' ? e.event.kind : e.type === 'done' ? `done:${e.reason}` : e.type
+      )
+    ).toEqual(['player-action', 'done:yield'])
     expect(log()).toEqual(['player:player-action:I look around'])
   })
 
