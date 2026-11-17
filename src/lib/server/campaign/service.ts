@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { Database } from '../db/connect'
-import { campaign, world, worldCampaign } from '../db/schema'
+import { campaign, campaignCharacter, character, world, worldCampaign } from '../db/schema'
 import { createWorldService, type World } from '../world/service'
 import { LENGTHS, PREMISE_SERVICE_MAX, TONES } from '#lib/campaign/enums.ts'
 import { NAME_MAX } from '#lib/world/seed.ts'
@@ -156,6 +156,33 @@ export function createCampaignService(db: Database, now: () => number = Date.now
     /** The archived Worlds that make a Campaign read-only, so the UI can name them. */
     blockingWorlds(id: string): World[] {
       return worlds.archivedWorldsOfCampaign(id)
+    },
+
+    /** The Campaign's linked Character, if any. The app links one per Campaign. */
+    linkedCharacterId(campaignId: string): string | undefined {
+      return db
+        .select({ id: campaignCharacter.characterId })
+        .from(campaignCharacter)
+        .where(eq(campaignCharacter.campaignId, campaignId))
+        .get()?.id
+    },
+
+    /** Links the Character to the Campaign, replacing any earlier link. */
+    linkCharacter(campaignId: string, characterId: string): void {
+      db.transaction((tx) => {
+        const camp = tx.select().from(campaign).where(eq(campaign.id, campaignId)).get()
+        if (!camp) throw new CampaignNotFoundError('Campaign not found')
+        if (camp.archivedAt !== null || worlds.isCampaignReadOnly(campaignId)) {
+          throw new CampaignValidationError('This Campaign is read-only')
+        }
+        const found = tx.select().from(character).where(eq(character.id, characterId)).get()
+        if (!found) throw new CampaignValidationError('Character not found')
+        if (found.archivedAt !== null) {
+          throw new CampaignValidationError('An archived Character cannot be linked')
+        }
+        tx.delete(campaignCharacter).where(eq(campaignCharacter.campaignId, campaignId)).run()
+        tx.insert(campaignCharacter).values({ campaignId, characterId }).run()
+      })
     },
 
     isReadOnly(id: string): boolean {

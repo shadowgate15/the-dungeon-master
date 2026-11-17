@@ -12,7 +12,6 @@
   let { data, form } = $props()
 
   const locked = $derived(data.campaign.archived || data.campaign.readOnly)
-  const when = (t: number) => new Date(t).toLocaleString()
 </script>
 
 <svelte:head><title>{data.campaign.name}</title></svelte:head>
@@ -27,8 +26,8 @@
 
   {#if locked}
     <Alert variant="warning">
-      This Campaign is read-only, so it cannot be played. Restore it, or the Worlds it uses, to
-      play.
+      This Campaign is read-only, so it cannot be changed. Restore it, or the Worlds it uses, to
+      edit it.
     </Alert>
   {/if}
   {#if form && 'error' in form && form.error}
@@ -46,7 +45,7 @@
       <p class="text-sm">
         You have no Characters yet. <Link href={resolve('/characters/new')}>Create one</Link>.
       </p>
-    {:else if !locked && !data.openSessionId}
+    {:else if !locked}
       <form method="POST" action="?/linkCharacter" use:enhance class="flex items-end gap-2">
         <label class="flex-1 text-sm">
           Character
@@ -66,44 +65,7 @@
     length={data.campaign.length}
     arc={data.arc}
     canGenerate={data.arcAvailability.canGenerate}
-    structureLocked={data.arcAvailability.structureLocked}
     readOnly={locked}
     onchange={() => invalidateAll()}
   />
-
-  <section aria-label="Sessions" class="space-y-2">
-    <h2 class="font-display text-lg">Sessions</h2>
-    {#if data.openSessionId}
-      <Button
-        href={resolve('/campaigns/[id]/sessions/[sessionId]', {
-          id: data.campaign.id,
-          sessionId: data.openSessionId
-        })}>Resume Session</Button
-      >
-    {:else}
-      <form method="POST" action="?/startSession" use:enhance>
-        <Button type="submit" disabled={locked || !data.linkedCharacter}>Start Session</Button>
-      </form>
-      {#if !data.linkedCharacter && !locked}
-        <p class="text-sm text-muted">Link a Character to start a Session.</p>
-      {/if}
-    {/if}
-    {#if data.sessions.length > 0}
-      <ul class="space-y-1 text-sm">
-        {#each [...data.sessions].reverse() as s (s.id)}
-          <li>
-            <Link
-              href={resolve('/campaigns/[id]/sessions/[sessionId]', {
-                id: data.campaign.id,
-                sessionId: s.id
-              })}>Session {s.number}</Link
-            >
-            <span class="text-muted">
-              {s.endedAt === null ? 'open' : 'ended'} · started {when(s.startedAt)}
-            </span>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-  </section>
 </main>

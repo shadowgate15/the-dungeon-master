@@ -1,24 +1,15 @@
-import { and, asc, eq, inArray } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
 import { arcProblems, type ArcDraft } from '#lib/arc/arc.ts'
 import type { Length } from '#lib/campaign/enums.ts'
-import type { JournalPosition } from '#lib/memory/journal.ts'
 import type { Database } from '../db/connect'
-import { arc, arcAct, arcBeat, campaign, session } from '../db/schema'
+import { arc, arcAct, arcBeat, campaign } from '../db/schema'
 import { createWorldService } from '../world/service'
 
 /** The input breaks an Arc rule (size ranges, blank or over-long text, no Arc to edit). */
 export class ArcValidationError extends Error {}
 
-/** The Campaign cannot change its Arc right now: read-only, or a Session has started. */
+/** The Campaign cannot change its Arc right now: it is read-only. */
 export class ArcLockedError extends Error {}
-
-/** A pending Beat extraction may move, with the name of its Act. */
-export interface OpenBeat {
-  id: string
-  title: string
-  description: string
-  act: string
-}
 
 export type ArcBeatView = typeof arcBeat.$inferSelect
 export interface ArcActView {
@@ -37,7 +28,7 @@ export interface ArcView {
   acts: ArcActView[]
 }
 
-/** What the player edits: the Arc's text and structure. Ids keep existing rows (and their state). */
+/** What the player edits: the Arc's text and structure. Ids keep existing rows. */
 export interface ArcEdit {
   title: string
   premise: string
@@ -58,14 +49,7 @@ export function createArcService(db: Database, now: () => number = Date.now) {
     const camp = db.select().from(campaign).where(eq(campaign.id, campaignId)).get()
     if (!camp) throw new ArcValidationError('Campaign not found')
     const readOnly = camp.archivedAt !== null || worlds.isCampaignReadOnly(campaignId)
-    const started =
-      db
-        .select({ id: session.id })
-        .from(session)
-        .where(eq(session.campaignId, campaignId))
-        .limit(1)
-        .get() !== undefined
-    return { length: camp.length as Length, readOnly, started }
+    return { length: camp.length as Length, readOnly }
   }
 
   function load(campaignId: string): ArcView | null {
@@ -127,51 +111,16 @@ export function createArcService(db: Database, now: () => number = Date.now) {
     /** The Campaign's Arc with Acts and Beats in order, or null. */
     get: load,
 
-    /**
-     * What the Campaign page may offer: Generate and Regenerate only before the first Session and
-     * on an editable Campaign; structure edits only before the first Session.
-     */
+    /** What the Campaign page may offer: Generate and Regenerate on an editable Campaign. */
     availability(campaignId: string) {
-      const { readOnly, started } = context(campaignId)
-      return { canGenerate: !readOnly && !started, structureLocked: started }
-    },
-
-    /**
-     * The Beats extraction may move now: the pending Beats of the current Act (the Act of the
-     * first pending Beat) and of the next Act. Empty without an accepted Arc, or once complete.
-     */
-    openBeats(campaignId: string): OpenBeat[] {
-      const found = load(campaignId)
-      if (!found || found.status !== 'accepted') return []
-      const current = found.acts.findIndex((a) => a.beats.some((b) => b.state === 'pending'))
-      if (current === -1) return []
-      return found.acts
-        .slice(current, current + 2)
-        .flatMap((a) =>
-          a.beats
-            .filter((b) => b.state === 'pending')
-            .map((b) => ({ id: b.id, title: b.title, description: b.description, act: a.name }))
-        )
-    },
-
-    /**
-     * Moves a pending Beat to `reached` or `abandoned` for good, stamping the source Session and
-     * Turn. False (and no change) when the Beat is not pending.
-     */
-    transitionBeat(beatId: string, state: 'reached' | 'abandoned', at: JournalPosition): boolean {
-      const changed = db
-        .update(arcBeat)
-        .set({ state, sourceSessionId: at.sessionId, sourceTurnSeq: at.seq })
-        .where(and(eq(arcBeat.id, beatId), eq(arcBeat.state, 'pending')))
-        .run().changes
-      return changed > 0
+      const { readOnly } = context(campaignId)
+      return { canGenerate: !readOnly }
     },
 
     /** Replaces the whole Arc (if any) with a freshly generated draft. */
     replaceWithDraft(campaignId: string, generated: ArcDraft): ArcView {
-      const { length, readOnly, started } = context(campaignId)
+      const { length, readOnly } = context(campaignId)
       if (readOnly) throw new ArcLockedError('This Campaign is read-only')
-      if (started) throw new ArcLockedError('The Arc is locked once a Session has started')
       const problems = arcProblems(generated, length, { generated: true })
       if (problems.length) throw new ArcValidationError(problems.join('; '))
       db.transaction((tx) => {
@@ -213,30 +162,17 @@ export function createArcService(db: Database, now: () => number = Date.now) {
     },
 
     /**
-     * Saves the player's edits. Before the first Session, Acts and Beats may be added, deleted and
-     * reordered within the Length ranges; afterwards only text changes, and Beat state is kept.
+     * Saves the player's edits. Acts and Beats may be added, deleted and reordered within the
+     * Length ranges.
      * `accept` marks the Arc accepted; saving never turns an accepted Arc back into a draft.
      */
     save(campaignId: string, input: ArcEdit, options: { accept?: boolean } = {}): ArcView {
-      const { length, readOnly, started } = context(campaignId)
+      const { length, readOnly } = context(campaignId)
       if (readOnly) throw new ArcLockedError('This Campaign is read-only')
       const current = load(campaignId)
       if (!current) throw new ArcValidationError('There is no Arc to edit')
       const edit = trimmed(input)
 
-      if (started) {
-        const sameShape =
-          edit.acts.length === current.acts.length &&
-          edit.acts.every(
-            (a, i) =>
-              a.id === current.acts[i].id &&
-              a.beats.length === current.acts[i].beats.length &&
-              a.beats.every((b, j) => b.id === current.acts[i].beats[j].id)
-          )
-        if (!sameShape) {
-          throw new ArcLockedError('The Arc structure is locked once a Session has started')
-        }
-      }
       const problems = arcProblems(edit, length)
       if (problems.length) throw new ArcValidationError(problems.join('; '))
 

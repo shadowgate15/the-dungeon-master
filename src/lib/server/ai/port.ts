@@ -6,8 +6,8 @@ import type { createChatAdapter } from './adapter.ts'
 /**
  * The neutral chat port: provider-neutral request and event types, the usage reader, a
  * classified structured call (`callModel`) and free-text calls (`streamText`, `collectText`),
- * and the production port over TanStack AI. Used by per-field generation and the Session
- * runner (turns, summary, recap).
+ * and the production port over TanStack AI. Used by per-field generation and the scene
+ * engine.
  */
 
 /** The failures a single model call can report; callers add their own kinds around these. */

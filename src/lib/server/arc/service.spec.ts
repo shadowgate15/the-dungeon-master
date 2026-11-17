@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { sql } from 'drizzle-orm'
 import type { ArcDraft } from '#lib/arc/arc.ts'
 import { createCampaignService, type CampaignService } from '../campaign/service'
 import { migrateDatabase, openDatabase, type Database } from '../db/connect'
-import { arcBeat, session } from '../db/schema'
+import { arcBeat } from '../db/schema'
 import { createWorldService, type WorldService } from '../world/service'
 import {
   ArcLockedError,
@@ -32,13 +31,6 @@ const draft = (title = 'The Ember Crown'): ArcDraft => ({
   resolution: 'The relic is destroyed.'
 })
 
-/** A started Session without the Character plumbing the service tests do not need. */
-function startSession() {
-  db.run(sql`PRAGMA foreign_keys = OFF`)
-  db.insert(session).values({ campaignId, characterId: 'nobody', startedAt: 1 }).run()
-  db.run(sql`PRAGMA foreign_keys = ON`)
-}
-
 beforeEach(() => {
   db = openDatabase(':memory:')
   migrateDatabase(db)
@@ -52,12 +44,12 @@ beforeEach(() => {
 })
 
 describe('Arc service', () => {
-  it('has no Arc until one is generated, and can generate until a Session starts', () => {
+  it('has no Arc until one is generated, and can generate on an editable Campaign', () => {
     expect(arcs.get(campaignId)).toBeNull()
-    expect(arcs.availability(campaignId)).toEqual({ canGenerate: true, structureLocked: false })
+    expect(arcs.availability(campaignId)).toEqual({ canGenerate: true })
   })
 
-  it('stores a generated Arc as a draft with stable Beat ids, all pending', () => {
+  it('stores a generated Arc as a draft with stable Beat ids', () => {
     const arc = arcs.replaceWithDraft(campaignId, draft())
 
     expect(arc.status).toBe('draft')
@@ -65,7 +57,6 @@ describe('Arc service', () => {
     const beats = arc.acts.flatMap((a) => a.beats)
     expect(beats).toHaveLength(6)
     expect(new Set(beats.map((b) => b.id)).size).toBe(6)
-    expect(beats.every((b) => b.state === 'pending')).toBe(true)
     expect(arcs.get(campaignId)?.title).toBe('The Ember Crown')
   })
 
@@ -117,42 +108,6 @@ describe('Arc service', () => {
     const edit = toEdit(accepted)
     edit.premise = 'Fixed typo.'
     expect(arcs.save(campaignId, edit).status).toBe('accepted')
-  })
-
-  describe('after the first Session starts', () => {
-    it('cannot generate or regenerate', () => {
-      arcs.replaceWithDraft(campaignId, draft())
-      startSession()
-
-      expect(arcs.availability(campaignId)).toEqual({ canGenerate: false, structureLocked: true })
-      expect(() => arcs.replaceWithDraft(campaignId, draft())).toThrow(ArcLockedError)
-    })
-
-    it('allows text edits that keep Beat state, but not structure changes', () => {
-      const arc = arcs.replaceWithDraft(campaignId, draft())
-      const beat = arc.acts[0].beats[0]
-      db.update(arcBeat)
-        .set({ state: 'reached', sourceTurnSeq: 4 })
-        .where(sql`id = ${beat.id}`)
-        .run()
-      startSession()
-
-      const edit = toEdit(arcs.get(campaignId)!)
-      edit.acts[0].beats[0].title = 'Better title'
-      const saved = arcs.save(campaignId, edit)
-      expect(saved.acts[0].beats[0]).toMatchObject({
-        title: 'Better title',
-        state: 'reached',
-        sourceTurnSeq: 4
-      })
-
-      const added = toEdit(saved)
-      added.acts[0].beats.push({ title: 'x', description: 'y' })
-      expect(() => arcs.save(campaignId, added)).toThrow(ArcLockedError)
-      const reordered = toEdit(saved)
-      reordered.acts.reverse()
-      expect(() => arcs.save(campaignId, reordered)).toThrow(ArcLockedError)
-    })
   })
 
   it('refuses generating or editing on an archived Campaign or one on an archived World', () => {
