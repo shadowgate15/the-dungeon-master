@@ -138,7 +138,10 @@ describe('a run', () => {
       [1, 'director', 'narrate'],
       [2, 'director', 'yield']
     ])
-    expect(steps[0].menu).toEqual(['narrate', 'yield'])
+    expect(steps[0].menu.filter((id) => !/^(npc-speaks|move|roll)[:]/.test(id))).toEqual([
+      'narrate',
+      'yield'
+    ])
   })
 
   it('stops at the step cap and counts the cap hit', async () => {

@@ -34,15 +34,16 @@ async function play(text: string) {
 const menu = () =>
   buildMenu(MENU_OPTIONS, { scene: sessions.scene(sessionId), events: sessions.events(sessionId) })
 
+// Other options (NPC voice, rolls) are covered in their own specs.
+const ids = () =>
+  menu()
+    .map((m) => m.id)
+    .filter((id) => !id.startsWith('npc-speaks') && !id.startsWith('roll:'))
+
 describe('moving through an exit', () => {
   it('offers one move option per existing exit after a player action', () => {
     sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text: 'I wait' })
-    expect(menu().map((m) => m.id)).toEqual([
-      'narrate',
-      'move:front-door',
-      'move:cellar-stairs',
-      'yield'
-    ])
+    expect(ids()).toEqual(['narrate', 'move:front-door', 'move:cellar-stairs', 'yield'])
   })
 
   it('points the Director at the exit the player names', () => {
@@ -60,7 +61,7 @@ describe('moving through an exit', () => {
     sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text: 'hi' })
     const scene = sessions.scene(sessionId)
     sessions.saveScene(sessionId, { ...scene, mode: 'dialogue', dialogueNpcId: 'marta' })
-    expect(menu().map((m) => m.id)).toEqual(['narrate', 'yield'])
+    expect(ids()).toEqual(['narrate', 'yield'])
   })
 
   it('changes the scene and logs a scene-changed event for a valid exit', async () => {
@@ -84,7 +85,8 @@ describe('moving through an exit', () => {
   })
 
   it('rejects an exit that does not exist like an invalid pick: no change, control returns', async () => {
-    model.enqueue(says('move:attic'))
+    // An unknown exit is an unusable pick twice (retry), then the fallback narrates.
+    model.enqueue(says('move:attic'), says('move:attic'), says('Rain.'), says('yield'))
 
     const events = await play('I climb to the attic')
 
