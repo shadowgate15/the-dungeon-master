@@ -121,7 +121,7 @@ A Session's append-only record of play, replacing a transcript of alternating ex
 _Avoid_: Transcript, history, chat
 
 **Arc**:
-The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It steers the DM and is not a script: the DM may deviate. The player can review, edit and regenerate it on the Campaign page before play. Once the first Session starts its text stays editable but its structure is fixed.
+The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It is the player's plan for the story, not a script. The player can review, edit and regenerate it on the Campaign page, and may keep editing it, structure included, until the Campaign is archived or its World is. The Director does not read it yet.
 _Avoid_: Plot, storyline, script, outline
 
 **Act**:
@@ -132,18 +132,18 @@ _Avoid_: Chapter, part
 A turning point or outcome the story should reach, with a title and a sentence or two of description, such as "the Characters learn the vizier is the cult's patron". It says what should become true, never how to get there. A Beat is not tied to one Session: a Session may reach several Beats or none.
 _Avoid_: Quest, objective, milestone
 
-**World memory**:
-The structured, Campaign-scoped record of what the DM has established: NPCs, places, factions, events and facts. Code validates and stores it, and the AI only proposes changes to it; code applies them. It is separate from the rolling summary, which is a lossy prose recap; where they disagree, memory wins. Records are never deleted, only retired, and each carries the Session and event it came from. Nothing carries over between Campaigns, even in a shared World.
+**World memory** (planned, not built yet):
+The structured, Campaign-scoped record of what the DM has established: NPCs, places, factions, events and facts. Code validates and stores it, and the AI only proposes changes to it; code applies them. Records are never deleted, only retired, and each carries the Session and event it came from. Nothing carries over between Campaigns, even in a shared World.
 _Avoid_: Lore, state, notes
 
 **NPC**:
 A non-player character the DM has introduced: a name, a short description, a role and a status (alive, dead, missing or departed). A dead NPC stays dead unless the story explicitly revives them for a stated reason. An NPC is World memory, not a Character.
 _Avoid_: Character, monster, contact
 
-**NPC memory**:
-What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the DM context and Journal show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character.
+**NPC memory** (planned, not built yet):
+What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the Director and the Journal would show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character.
 _Avoid_: Relationship score, reputation
 
-**Journal**:
+**Journal** (planned, not built yet):
 The player's read-only view of World memory: the NPCs, places, factions, events and facts the DM has established, grouped by the Session they first appeared in, with chips marking what is new or changed since the player last looked. It cannot be edited.
 _Avoid_: Codex, log, notes
