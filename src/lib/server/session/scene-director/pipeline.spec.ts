@@ -46,9 +46,9 @@ describe('the menu', () => {
       .map((m) => m.id)
       .filter((id) => !id.startsWith('npc-speaks')) // covered in steps/npc-speaks.spec.ts
 
-  it('offers narrate and yield after a player action', () => {
+  it('offers narrate, a move per exit and yield after a player action', () => {
     sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text: 'hi' })
-    expect(menuOf()).toEqual(['narrate', 'yield'])
+    expect(menuOf()).toEqual(['narrate', 'move:front-door', 'move:cellar-stairs', 'yield'])
   })
 
   it('drops narrate right after narration', () => {
