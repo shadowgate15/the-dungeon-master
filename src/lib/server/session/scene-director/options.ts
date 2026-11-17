@@ -9,7 +9,7 @@ import type { MenuOption } from './types.ts'
 
 /**
  * The Director's menu registry: one module per option under `steps/`, one line here. Order is the
- * order the Director sees. Later tickets add their options (NPC voice, movement, rolls) here.
+ * order the Director sees.
  */
 export const MENU_OPTIONS: MenuOption[] = [
   narrateOption,

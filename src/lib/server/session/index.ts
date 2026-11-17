@@ -1,3 +1,4 @@
+import { NO_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
 import type { AbilityKey } from '#lib/rules/registry.ts'
 import { getChatPort } from '../ai/index.ts'
@@ -29,7 +30,7 @@ function rollModifier(sessionId: string, check: string): number {
  */
 const modelPort: ChatPort = (request) => {
   const port = getChatPort()
-  if (!port) throw new Error('AI is not configured')
+  if (!port) throw new Error(NO_MODEL_MESSAGE)
   return port(request)
 }
 

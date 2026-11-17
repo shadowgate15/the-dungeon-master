@@ -115,6 +115,16 @@ describe('resolving a roll', () => {
     expect(types(events).at(-1)).toBe('done:yield')
   })
 
+  it('narrates the outcome through the fallback when the Director gives no usable answer', async () => {
+    await requestRoll()
+    model.enqueue(says('???'), says('???'), says('The guard looks away.'), says('yield'))
+
+    const events = await drain(runner(15, 3).resolveRoll(sessionId, signal()))
+
+    expect(log().slice(-2)).toEqual(['code:roll-resolved', 'narrator:narration'])
+    expect(events.find((e) => e.type === 'step')).toMatchObject({ pick: 'narrate', fallback: true })
+  })
+
   it('records a failure when the total is under the DC', async () => {
     await requestRoll()
     model.enqueue(says('yield'))

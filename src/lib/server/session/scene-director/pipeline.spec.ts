@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { NO_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import { createScriptedPort, fails, hangsAfter, says } from '../../../testing/scripted-chat-port'
 import { playableCampaign } from '../fixture'
 import { createSceneRunner, type PipelineEvent } from '../scene-runner.ts'
@@ -69,6 +70,24 @@ describe('the menu', () => {
     expect(parsePick(' Narrate ', menu)).toBe('narrate')
     expect(parsePick('I choose yield.', menu)).toBe('yield')
     expect(parsePick('dance', menu)).toBeUndefined()
+  })
+})
+
+describe('with no model configured', () => {
+  it('ends the run with the no-model message instead of a vague Director failure', async () => {
+    const runner = createSceneRunner({
+      sessions,
+      port: () => {
+        throw new Error(NO_MODEL_MESSAGE)
+      },
+      pipeline: createDirectorPipeline()
+    })
+    const result = runner.begin(sessionId, 'hello', new AbortController().signal)
+    if (!result.ok) throw new Error(result.reason)
+    const events: PipelineEvent[] = []
+    for await (const e of result.events) events.push(e)
+
+    expect(events.at(-1)).toEqual({ type: 'done', reason: 'error', message: NO_MODEL_MESSAGE })
   })
 })
 

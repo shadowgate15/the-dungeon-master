@@ -1,6 +1,6 @@
-import { streamText } from '../../../ai/port.ts'
 import { recentLines } from '../prompt.ts'
 import type { MenuOption } from '../types.ts'
+import { streamLine } from './stream-line.ts'
 
 const NARRATOR_MAX_TOKENS = 400
 
@@ -23,29 +23,16 @@ export const narrateOption: MenuOption = {
   async *run(ctx, _id, menu) {
     const { scene } = menu
     const system = `${NARRATOR_SYSTEM}\nLocation: ${scene.location.name}. ${scene.location.description}`
-    let text = ''
-    let failure: string | undefined
-    let finished = false
-    for await (const step of streamText(ctx.port, {
-      systemPrompts: [system],
-      messages: [{ role: 'user', content: recentLines(menu.events) }],
+    const prose = yield* streamLine(ctx, {
+      system,
+      content: recentLines(menu.events),
       maxTokens: NARRATOR_MAX_TOKENS,
-      threadId: ctx.sessionId,
-      signal: ctx.signal
-    })) {
-      if (step.type === 'delta') {
-        text += step.text
-        yield { type: 'delta', role: 'narrator', kind: 'narration', text: step.text }
-      } else if (step.type === 'error') failure = step.failure.message
-      else if (step.type === 'done') finished = true
-    }
-    const prose = text.trim()
-    if (ctx.signal.aborted || failure || !finished || !prose) {
-      yield { type: 'discard' }
-      // A stop ends the run quietly: the runner reports it as `stopped`.
-      if (ctx.signal.aborted) return { type: 'continue' }
-      throw new Error(failure ?? 'The narrator produced no text')
-    }
+      role: 'narrator',
+      kind: 'narration',
+      emptyMessage: 'The narrator produced no text'
+    })
+    // A stop ends the run quietly: the runner reports it as `stopped`.
+    if (prose === undefined) return { type: 'continue' }
     const event = ctx.sessions.appendEvent(ctx.sessionId, {
       role: 'narrator',
       kind: 'narration',

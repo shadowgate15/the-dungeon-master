@@ -17,3 +17,7 @@ export type AiStatus =
 /** Shown in the chat and the AI panel when the model returns no answer content. */
 export const REASONING_MODEL_MESSAGE =
   'The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.'
+
+/** Shown when a session is played with no model configured (LM_STUDIO_MODEL unset). */
+export const NO_MODEL_MESSAGE =
+  'No AI model is configured, so the Dungeon Master cannot respond. Set LM_STUDIO_MODEL, then restart the server.'

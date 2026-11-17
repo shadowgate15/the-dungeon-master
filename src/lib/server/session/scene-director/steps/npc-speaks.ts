@@ -1,6 +1,7 @@
-import { streamText } from '../../../ai/port.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
+import { makeOptionId, parseOptionId } from '../option-id.ts'
 import type { MenuOption } from '../types.ts'
+import { streamLine } from './stream-line.ts'
 
 const VERB = 'npc-speaks'
 const NPC_MAX_TOKENS = 200
@@ -12,13 +13,16 @@ const NPC_SYSTEM = [
   'Stay true to the personality and attitude below, and say only what this character knows.'
 ].join(' ')
 
-/** The conversation as this NPC heard it: its own lines under its name, anyone else's as "Someone". */
+/**
+ * The conversation as this NPC knows it: the player's actions and its own earlier lines, nothing
+ * else. Narration and other NPCs' lines stay out, so another character's knowledge cannot leak
+ * into this voice.
+ */
 function conversation(events: SessionEvent[], npcId: string, name: string): string {
   return events
     .map((e) => {
       if (e.kind === 'player-action') return `Player: ${e.text}`
-      if (e.kind === 'npc-line') return `${e.npcId === npcId ? name : 'Someone'}: ${e.text ?? ''}`
-      if (e.kind === 'narration') return `Narrator: ${e.text ?? ''}`
+      if (e.kind === 'npc-line' && e.npcId === npcId) return `${name}: ${e.text ?? ''}`
       return ''
     })
     .filter(Boolean)
@@ -34,11 +38,11 @@ export const npcSpeaksOption: MenuOption = {
   verb: VERB,
   offer: ({ scene }) =>
     scene.npcs.map((npc) => ({
-      id: `${VERB}:${npc.id}`,
+      id: makeOptionId(VERB, npc.id),
       hint: `${npc.name} (${npc.attitude}) says something to the player.`
     })),
   async *run(ctx, optionId, menu) {
-    const npcId = optionId.slice(VERB.length + 1)
+    const npcId = parseOptionId(optionId).arg
     const npc = menu.scene.npcs.find((n) => n.id === npcId)
     if (!npc) throw new Error(`No NPC ${npcId} is present`)
     const system = [
@@ -47,28 +51,16 @@ export const npcSpeaksOption: MenuOption = {
       `Attitude toward the player: ${npc.attitude}`,
       `What ${npc.name} knows: ${npc.knowledge}`
     ].join('\n')
-    let text = ''
-    let failure: string | undefined
-    let finished = false
-    for await (const step of streamText(ctx.port, {
-      systemPrompts: [system],
-      messages: [{ role: 'user', content: conversation(menu.events, npc.id, npc.name) }],
+    const line = yield* streamLine(ctx, {
+      system,
+      content: conversation(menu.events, npc.id, npc.name),
       maxTokens: NPC_MAX_TOKENS,
-      threadId: ctx.sessionId,
-      signal: ctx.signal
-    })) {
-      if (step.type === 'delta') {
-        text += step.text
-        yield { type: 'delta', role: 'npc', kind: 'npc-line', npcId: npc.id, text: step.text }
-      } else if (step.type === 'error') failure = step.failure.message
-      else if (step.type === 'done') finished = true
-    }
-    const line = text.trim()
-    if (ctx.signal.aborted || failure || !finished || !line) {
-      yield { type: 'discard' }
-      if (ctx.signal.aborted) return { type: 'continue' }
-      throw new Error(failure ?? `${npc.name} said nothing`)
-    }
+      role: 'npc',
+      kind: 'npc-line',
+      npcId: npc.id,
+      emptyMessage: `${npc.name} said nothing`
+    })
+    if (line === undefined) return { type: 'continue' }
     const event = ctx.sessions.appendEvent(ctx.sessionId, {
       role: 'npc',
       kind: 'npc-line',

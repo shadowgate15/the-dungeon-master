@@ -19,7 +19,7 @@ A complete game-running system. A player opens a session in the UI and sees the 
 
 1. The player asks the system to generate a campaign, optionally with parameters (tone, setting, length, etc.).
 2. The system generates a campaign setting and an initial arc for the characters.
-3. Play is improvised from there, in response to what the players do. The system keeps persistent memory of the story, NPCs and world.
+3. Play is improvised from there, in response to what the players do. Each Session keeps a persistent record of play (the event log) and the state of its current scene. Long-term memory of the story, NPCs and world across Sessions is not built yet.
 
 ## Current focus
 

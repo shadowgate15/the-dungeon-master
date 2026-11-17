@@ -1,3 +1,4 @@
+import { makeOptionId, parseOptionId } from '../option-id.ts'
 import type { MenuOption } from '../types.ts'
 
 const VERB = 'begin-dialogue'
@@ -12,12 +13,12 @@ export const beginDialogueOption: MenuOption = {
   offer: ({ scene }) =>
     scene.mode === 'exploration'
       ? scene.npcs.map((npc) => ({
-          id: `${VERB}:${npc.id}`,
+          id: makeOptionId(VERB, npc.id),
           hint: `Start a conversation with ${npc.name} (${npc.attitude}).`
         }))
       : [],
   async *run(ctx, optionId, menu) {
-    const npcId = optionId.slice(VERB.length + 1)
+    const npcId = parseOptionId(optionId).arg
     const npc = menu.scene.npcs.find((n) => n.id === npcId)
     if (menu.scene.mode !== 'exploration' || !npc) {
       throw new Error(`Cannot begin dialogue with ${npcId}`)
