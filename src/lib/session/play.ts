@@ -4,7 +4,7 @@ import type { EventKind, Role, SessionEvent } from './enums.ts'
 export type StreamMessage =
   | { type: 'event'; event: SessionEvent }
   | { type: 'thinking'; role: Role }
-  | { type: 'delta'; role: Role; kind: EventKind; text: string }
+  | { type: 'delta'; role: Role; kind: EventKind; text: string; npcId?: string }
   | { type: 'discard' }
   | { type: 'done'; reason: string; message?: string }
 
