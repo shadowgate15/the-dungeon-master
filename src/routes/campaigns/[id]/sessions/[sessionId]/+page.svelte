@@ -6,13 +6,8 @@
   import StoryLog from '#lib/session/StoryLog.svelte'
   import EventInspector from '#lib/session/EventInspector.svelte'
   import RollOverlay from '#lib/session/RollOverlay.svelte'
-  import {
-    resolveRoll,
-    sendAction,
-    type RunStats,
-    type StepMessage,
-    type StreamMessage
-  } from '#lib/session/play.ts'
+  import type { PipelineEvent, RunStats, StepMessage } from '#lib/session/pipeline-events.ts'
+  import { resolveRoll, sendAction } from '#lib/session/play.ts'
   import type { SessionEvent } from '#lib/session/enums.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
@@ -44,7 +39,7 @@
   const ended = $derived(data.session.endedAt !== null)
   const rollPending = $derived(data.scene.pendingRoll !== null)
 
-  function onMessage(message: StreamMessage) {
+  function onMessage(message: PipelineEvent) {
     if (message.type === 'thinking') thinking = true
     else if (message.type === 'delta') {
       thinking = false

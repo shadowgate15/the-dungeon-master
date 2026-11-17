@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RunStats, StepMessage } from './play.ts'
+  import type { RunStats, StepMessage } from './pipeline-events.ts'
 
   let { steps, stats }: { steps: StepMessage[]; stats: RunStats | null } = $props()
   const counts = $derived(
