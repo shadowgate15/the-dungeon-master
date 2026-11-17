@@ -1,6 +1,6 @@
 # Post-turn extraction instead of in-turn memory tools
 
-Status: accepted and implemented (#189).
+Status: superseded by ADR 0003 (scenes replace Turns). It was accepted and implemented in #189.
 
 ## Context
 
