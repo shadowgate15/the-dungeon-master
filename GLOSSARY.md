@@ -101,23 +101,27 @@ The D&D 5e SRD 5.1 reference content (races, classes, backgrounds, spells, equip
 _Avoid_: Reference data, compendium
 
 **Session**:
-One sitting of play within a Campaign, played by one Character. It has a start and an end and owns a transcript of Turns. A Campaign has many Sessions but at most one open at a time. An open Session can be resumed; an ended one is read-only.
+One sitting of play within a Campaign, played by one Character. It has a start and an end and owns an Event log and a Scene. A Campaign has many Sessions but at most one open at a time. An open Session can be resumed; an ended one is read-only.
 _Avoid_: Game, run, playthrough
 
-**Turn**:
-One side's contribution to a Session's transcript. A **player turn** is what the player does: a free-text action, or the result of a roll they made. A **DM turn** is what the DM does in response: narration and any roll request. Turns alternate and are append-only; a Turn is never edited or regenerated after it completes. A DM turn cut short by Stop or a model failure is discarded, never kept as partial narration.
-_Avoid_: Message, exchange, round
+**Scene**:
+Where and how play stands right now, owned by code and stored in the database: the current location (name and description), its exits and notable objects, the NPCs present (each with an attitude and a short knowledge note), the active Mode and any pending roll. The UI renders it beside the story, so the player never scrolls the log to learn where they are or who is here. Only code changes it, applying choices it has validated; the AI never edits it freely. A Scene is a situation, not a story unit: it is not a Beat.
+_Avoid_: Room, location, state
 
-**Roll request**:
-A DM turn's call for the player to make an ability or skill check, naming the check, the DC and the reason. The DM proposes them; code validates them. The DC is shown to the player. A Roll request ends the DM's turn and stays pending, across a closed browser, until the player rolls.
-_Avoid_: Check prompt, dice call
+**Mode**:
+The kind of exchange a Scene is in, one of exploration or dialogue. It sets the layout's emphasis. Code applies mode changes, from a Director pick or a player affordance. A roll is an overlay on any Mode, not a Mode.
+_Avoid_: State, phase, screen
 
-**Roll result**:
-The player turn that answers a Roll request. The player clicks Roll; code rolls the d20, adds the Character's derived modifier and records the total against the DC. The AI never rolls and players do not type in results. The result is passed to the DM, which narrates the outcome in its next turn.
-_Avoid_: Dice result, outcome
+**Director**:
+The narrow model step that picks what happens next in a run. Code builds a short menu of valid options from the Scene (narrate, an NPC speaks, request a roll, move through an exit, begin or end dialogue, yield), the Director answers with one short value, and code validates it. An invalid pick gets one retry, then a code-chosen fallback. It picks and never writes prose or changes state itself; the Narrator and NPC voice steps it selects write the prose. Code owns the loop and ends a run when the Director yields, a roll is requested, or a step cap is hit.
+_Avoid_: Agent, DM, orchestrator
+
+**Event log**:
+A Session's append-only record of play, replacing a transcript of alternating exchanges. Each entry is a typed event (player action, narration, NPC line, roll requested, roll resolved, scene changed, mode changed) tagged with the role that produced it. Streamed text lives inside one event. An event cut short by Stop or a model failure is discarded, never kept as partial text.
+_Avoid_: Transcript, history, chat
 
 **Arc**:
-The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It steers the DM and is not a script: the DM may deviate. The player can review, edit and regenerate it on the Campaign page before play. Once the first Session starts its text stays editable but its structure is fixed.
+The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It is the player's plan for the story, not a script. The player can review, edit and regenerate it on the Campaign page, and may keep editing it, structure included, until the Campaign is archived or its World is. The Director does not read it yet.
 _Avoid_: Plot, storyline, script, outline
 
 **Act**:
@@ -126,20 +130,20 @@ _Avoid_: Chapter, part
 
 **Beat**:
 A turning point or outcome the story should reach, with a title and a sentence or two of description, such as "the Characters learn the vizier is the cult's patron". It says what should become true, never how to get there. A Beat is not tied to one Session: a Session may reach several Beats or none.
-_Avoid_: Scene, quest, objective, milestone
+_Avoid_: Quest, objective, milestone
 
-**World memory**:
-The structured, Campaign-scoped record of what the DM has established: NPCs, places, factions, events and facts. Code validates and stores it, and the DM only proposes changes to it, in a silent extraction call after each saved DM turn. It is separate from the rolling summary, which is a lossy prose recap; where they disagree, memory wins. Records are never deleted, only retired, and each carries the Session and Turn it came from. Nothing carries over between Campaigns, even in a shared World.
+**World memory** (planned, not built yet):
+The structured, Campaign-scoped record of what the DM has established: NPCs, places, factions, events and facts. Code validates and stores it, and the AI only proposes changes to it; code applies them. Records are never deleted, only retired, and each carries the Session and event it came from. Nothing carries over between Campaigns, even in a shared World.
 _Avoid_: Lore, state, notes
 
 **NPC**:
 A non-player character the DM has introduced: a name, a short description, a role and a status (alive, dead, missing or departed). A dead NPC stays dead unless the story explicitly revives them for a stated reason. An NPC is World memory, not a Character.
 _Avoid_: Character, monster, contact
 
-**NPC memory**:
-What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the DM context and Journal show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character.
+**NPC memory** (planned, not built yet):
+What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the Director and the Journal would show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character.
 _Avoid_: Relationship score, reputation
 
-**Journal**:
+**Journal** (planned, not built yet):
 The player's read-only view of World memory: the NPCs, places, factions, events and facts the DM has established, grouped by the Session they first appeared in, with chips marking what is new or changed since the player last looked. It cannot be edited.
 _Avoid_: Codex, log, notes

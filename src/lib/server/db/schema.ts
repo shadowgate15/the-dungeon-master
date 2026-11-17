@@ -9,9 +9,7 @@ import {
   text,
   uniqueIndex
 } from 'drizzle-orm/sqlite-core'
-import { TURN_AUTHORS, TURN_KINDS, type RollRequest, type RollResult } from '../../session/enums'
 import { LENGTHS, TONES } from '../../campaign/enums'
-import { NPC_STATUSES, STANCES } from '../../memory/enums'
 import { ABILITY_KEYS } from '../../rules/registry'
 import { ABILITY_METHODS, ALIGNMENTS, PICK_SOURCES } from '../../character/enums'
 import {
@@ -25,6 +23,14 @@ import {
   subrace
 } from './rules-schema'
 import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '../../world/enums'
+import {
+  EVENT_KINDS,
+  MODES,
+  ROLES,
+  type PendingRoll,
+  type SceneExit,
+  type SceneNpc
+} from '../../session/enums'
 
 export const task = sqliteTable('task', {
   id: text('id')
@@ -217,10 +223,8 @@ export const characterChoice = sqliteTable(
 )
 
 /**
- * A Campaign's linked Character. The app allows one Character per Campaign (enforced in the
- * session service); the schema does not, so a later multiplayer Campaign needs no migration.
- * Deleting a Character with any Session is refused (see the Character service), so only the
- * link of a Character that never played cascades.
+ * A Campaign's linked Character. The app allows one Character per Campaign; the schema does not,
+ * so a later multiplayer Campaign needs no migration.
  */
 export const campaignCharacter = sqliteTable(
   'campaign_character',
@@ -237,7 +241,7 @@ export const campaignCharacter = sqliteTable(
 
 /**
  * One sitting of play, by one Character. Open while `ended_at` is null; the partial unique index
- * allows at most one open Session per Campaign.
+ * allows at most one open Session per Campaign. It owns one Scene and an Event log.
  */
 export const session = sqliteTable(
   'session',
@@ -248,21 +252,12 @@ export const session = sqliteTable(
     campaignId: text('campaign_id')
       .notNull()
       .references(() => campaign.id, { onDelete: 'cascade' }),
-    // Restrict: a Character that played is never deleted, since that would erase the transcripts.
+    // Restrict: a Character that played is never deleted, since that would erase the Event log.
     characterId: text('character_id')
       .notNull()
       .references(() => character.id, { onDelete: 'restrict' }),
     startedAt: integer('started_at').notNull(),
-    endedAt: integer('ended_at'),
-    /**
-     * The rolling summary of the story so far, written by a separate stateless call. A new
-     * Session starts from the previous Session's final summary. Contains no numbers.
-     */
-    summary: text('summary'),
-    /** The last Turn `seq` in this Session the summary already covers; 0 when none. */
-    summarizedThroughSeq: integer('summarized_through_seq').notNull().default(0),
-    /** The last Turn `seq` in this Session that memory extraction already covers; 0 when none. */
-    memoryThroughSeq: integer('memory_through_seq').notNull().default(0)
+    endedAt: integer('ended_at')
   },
   (t) => [
     uniqueIndex('session_one_open_per_campaign')
@@ -271,13 +266,32 @@ export const session = sqliteTable(
   ]
 )
 
+/** A Session's Scene: where and how play stands now. One row per Session; only code writes it. */
+export const sessionScene = sqliteTable(
+  'session_scene',
+  {
+    sessionId: text('session_id')
+      .primaryKey()
+      .references(() => session.id, { onDelete: 'cascade' }),
+    locationName: text('location_name').notNull(),
+    locationDescription: text('location_description').notNull(),
+    exits: text('exits', { mode: 'json' }).$type<SceneExit[]>().notNull(),
+    objects: text('objects', { mode: 'json' }).$type<string[]>().notNull(),
+    npcs: text('npcs', { mode: 'json' }).$type<SceneNpc[]>().notNull(),
+    mode: text('mode', { enum: MODES }).notNull(),
+    dialogueNpcId: text('dialogue_npc_id'),
+    pendingRoll: text('pending_roll', { mode: 'json' }).$type<PendingRoll>(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  () => [check('session_scene_mode_check', oneOf('mode', MODES))]
+)
+
 /**
- * A Session's transcript, append-only. `seq` is monotonic per Session. A DM turn carries
- * narration and optionally an inline Roll request; a player turn is a free-text action or a Roll
- * result. Whether a roll is pending is derived from the last Turn, never stored.
+ * A Session's Event log, append-only: the service has no update or delete. `seq` is monotonic per
+ * Session. Every event records the role that produced it.
  */
-export const turn = sqliteTable(
-  'turn',
+export const sessionEvent = sqliteTable(
+  'session_event',
   {
     id: text('id')
       .primaryKey()
@@ -286,162 +300,21 @@ export const turn = sqliteTable(
       .notNull()
       .references(() => session.id, { onDelete: 'cascade' }),
     seq: integer('seq').notNull(),
-    author: text('author', { enum: TURN_AUTHORS }).notNull(),
-    kind: text('kind', { enum: TURN_KINDS }).notNull(),
-    /** Narration (DM) or the typed action (player). Null for a Roll result. */
+    role: text('role', { enum: ROLES }).notNull(),
+    kind: text('kind', { enum: EVENT_KINDS }).notNull(),
     text: text('text'),
-    /** DM turn only: the inline Roll request. */
-    rollRequest: text('roll_request', { mode: 'json' }).$type<RollRequest>(),
-    /** Roll result only: the d20, the modifier and the total. */
-    rollResult: text('roll_result', { mode: 'json' }).$type<RollResult>(),
+    npcId: text('npc_id'),
+    data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
     createdAt: integer('created_at').notNull()
   },
   (t) => [
-    uniqueIndex('turn_session_seq').on(t.sessionId, t.seq),
-    check('turn_author_check', oneOf('author', TURN_AUTHORS)),
-    check('turn_kind_check', oneOf('kind', TURN_KINDS))
+    uniqueIndex('session_event_session_seq').on(t.sessionId, t.seq),
+    check('session_event_role_check', oneOf('role', ROLES)),
+    check('session_event_kind_check', oneOf('kind', EVENT_KINDS))
   ]
-)
-
-/**
- * World memory: structured, Campaign-scoped records the DM established. Every record carries
- * its provenance (created and last-changed Session and Turn seq) and is retired by flag, never
- * deleted. Records cascade with their Campaign.
- */
-const memoryColumns = () => ({
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  campaignId: text('campaign_id')
-    .notNull()
-    .references(() => campaign.id, { onDelete: 'cascade' }),
-  createdSessionId: text('created_session_id')
-    .notNull()
-    .references(() => session.id, { onDelete: 'cascade' }),
-  createdSeq: integer('created_seq').notNull(),
-  changedSessionId: text('changed_session_id')
-    .notNull()
-    .references(() => session.id, { onDelete: 'cascade' }),
-  changedSeq: integer('changed_seq').notNull(),
-  /** Set when the record was retired, with a short reason. */
-  retiredAt: integer('retired_at'),
-  retiredReason: text('retired_reason'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull()
-})
-
-export const place = sqliteTable(
-  'place',
-  { ...memoryColumns(), name: text('name').notNull(), description: text('description') },
-  (t) => [index('place_campaign_idx').on(t.campaignId)]
-)
-
-export const faction = sqliteTable(
-  'faction',
-  { ...memoryColumns(), name: text('name').notNull(), description: text('description') },
-  (t) => [index('faction_campaign_idx').on(t.campaignId)]
-)
-
-export const event = sqliteTable(
-  'event',
-  { ...memoryColumns(), name: text('name').notNull(), description: text('description') },
-  (t) => [index('event_campaign_idx').on(t.campaignId)]
-)
-
-export const npc = sqliteTable(
-  'npc',
-  {
-    ...memoryColumns(),
-    name: text('name').notNull(),
-    description: text('description'),
-    role: text('role'),
-    status: text('status', { enum: NPC_STATUSES }).notNull().default('alive'),
-    placeId: text('place_id').references(() => place.id, { onDelete: 'set null' })
-  },
-  (t) => [
-    index('npc_campaign_idx').on(t.campaignId),
-    check('npc_status_check', oneOf('status', NPC_STATUSES))
-  ]
-)
-
-/** A fact is immutable; it changes only by being superseded or retired. */
-export const fact = sqliteTable(
-  'fact',
-  {
-    ...memoryColumns(),
-    title: text('title').notNull(),
-    detail: text('detail'),
-    /** A change to the world itself, always kept in the DM's context. */
-    worldChanging: integer('world_changing', { mode: 'boolean' }).notNull().default(false),
-    supersededById: text('superseded_by_id').references((): AnySQLiteColumn => fact.id, {
-      onDelete: 'set null'
-    })
-  },
-  (t) => [index('fact_campaign_idx').on(t.campaignId)]
-)
-
-/** An NPC's stance toward one Character; keyed by Character so multi-Character Campaigns need no migration. */
-export const disposition = sqliteTable(
-  'disposition',
-  {
-    npcId: text('npc_id')
-      .notNull()
-      .references(() => npc.id, { onDelete: 'cascade' }),
-    characterId: text('character_id')
-      .notNull()
-      .references(() => character.id, { onDelete: 'cascade' }),
-    stance: text('stance', { enum: STANCES }).notNull(),
-    note: text('note'),
-    changedSessionId: text('changed_session_id')
-      .notNull()
-      .references(() => session.id, { onDelete: 'cascade' }),
-    changedSeq: integer('changed_seq').notNull(),
-    updatedAt: integer('updated_at').notNull()
-  },
-  (t) => [
-    primaryKey({ columns: [t.npcId, t.characterId] }),
-    check('disposition_stance_check', oneOf('stance', STANCES))
-  ]
-)
-
-/** What an NPC knows. World facts are never copied per Character. */
-export const npcFact = sqliteTable(
-  'npc_fact',
-  {
-    npcId: text('npc_id')
-      .notNull()
-      .references(() => npc.id, { onDelete: 'cascade' }),
-    factId: text('fact_id')
-      .notNull()
-      .references(() => fact.id, { onDelete: 'cascade' })
-  },
-  (t) => [primaryKey({ columns: [t.npcId, t.factId] })]
-)
-
-/**
- * Where the player last looked at the Journal, per (Campaign, Character): a Session and a Turn
- * seq position. Records created or changed after it carry chips. Advances when the overlay closes.
- */
-export const journalMarker = sqliteTable(
-  'journal_marker',
-  {
-    campaignId: text('campaign_id')
-      .notNull()
-      .references(() => campaign.id, { onDelete: 'cascade' }),
-    characterId: text('character_id')
-      .notNull()
-      .references(() => character.id, { onDelete: 'cascade' }),
-    sessionId: text('session_id')
-      .notNull()
-      .references(() => session.id, { onDelete: 'cascade' }),
-    seq: integer('seq').notNull(),
-    updatedAt: integer('updated_at').notNull()
-  },
-  (t) => [primaryKey({ columns: [t.campaignId, t.characterId] })]
 )
 
 export const ARC_STATUSES = ['draft', 'accepted'] as const
-export const BEAT_STATES = ['pending', 'reached', 'abandoned'] as const
 
 /**
  * A Campaign's Arc: at most one (unique `campaign_id`), no versions; regenerating replaces it.
@@ -486,8 +359,7 @@ export const arcAct = sqliteTable(
 )
 
 /**
- * A turning point. The id is stable across edits so progress survives them. `state` leaves
- * `pending` once, and then the source Session and Turn seq are stamped.
+ * A turning point. The id is stable across edits.
  */
 export const arcBeat = sqliteTable(
   'arc_beat',
@@ -500,17 +372,9 @@ export const arcBeat = sqliteTable(
       .references(() => arcAct.id, { onDelete: 'cascade' }),
     position: integer('position').notNull(),
     title: text('title').notNull(),
-    description: text('description').notNull(),
-    state: text('state', { enum: BEAT_STATES }).notNull().default('pending'),
-    sourceSessionId: text('source_session_id').references(() => session.id, {
-      onDelete: 'set null'
-    }),
-    sourceTurnSeq: integer('source_turn_seq')
+    description: text('description').notNull()
   },
-  (t) => [
-    index('arc_beat_act').on(t.actId, t.position),
-    check('arc_beat_state_check', oneOf('state', BEAT_STATES))
-  ]
+  (t) => [index('arc_beat_act').on(t.actId, t.position)]
 )
 
 export * from './rules-schema'

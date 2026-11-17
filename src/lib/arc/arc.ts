@@ -18,9 +18,7 @@ export interface ArcDraft {
   resolution: string
 }
 
-export type BeatState = 'pending' | 'reached' | 'abandoned'
-
-/** An Arc as the Campaign page receives it: text, structure, status and Beat state, with ids. */
+/** An Arc as the Campaign page receives it: text, structure, status and ids. */
 export interface ArcViewData extends Omit<ArcDraft, 'acts'> {
   id: string
   status: 'draft' | 'accepted'
@@ -32,9 +30,6 @@ export interface ArcViewData extends Omit<ArcDraft, 'acts'> {
       id: string
       title: string
       description: string
-      state: BeatState
-      /** The Session (by number) that moved the Beat off pending; null while pending. */
-      sessionNumber?: number | null
     }[]
   }[]
 }

@@ -12,7 +12,6 @@
   let { data, form } = $props()
 
   const locked = $derived(data.campaign.archived || data.campaign.readOnly)
-  const when = (t: number) => new Date(t).toLocaleString()
 </script>
 
 <svelte:head><title>{data.campaign.name}</title></svelte:head>
@@ -27,8 +26,8 @@
 
   {#if locked}
     <Alert variant="warning">
-      This Campaign is read-only, so it cannot be played. Restore it, or the Worlds it uses, to
-      play.
+      This Campaign is read-only, so it cannot be changed. Restore it, or the Worlds it uses, to
+      edit it.
     </Alert>
   {/if}
   {#if form && 'error' in form && form.error}
@@ -46,7 +45,7 @@
       <p class="text-sm">
         You have no Characters yet. <Link href={resolve('/characters/new')}>Create one</Link>.
       </p>
-    {:else if !locked && !data.openSessionId}
+    {:else if !locked}
       <form method="POST" action="?/linkCharacter" use:enhance class="flex items-end gap-2">
         <label class="flex-1 text-sm">
           Character
@@ -66,7 +65,6 @@
     length={data.campaign.length}
     arc={data.arc}
     canGenerate={data.arcAvailability.canGenerate}
-    structureLocked={data.arcAvailability.structureLocked}
     readOnly={locked}
     onchange={() => invalidateAll()}
   />
@@ -98,9 +96,7 @@
                 sessionId: s.id
               })}>Session {s.number}</Link
             >
-            <span class="text-muted">
-              {s.endedAt === null ? 'open' : 'ended'} · started {when(s.startedAt)}
-            </span>
+            <span class="text-muted">{s.endedAt === null ? 'open' : 'ended'}</span>
           </li>
         {/each}
       </ul>

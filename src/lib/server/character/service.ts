@@ -559,8 +559,8 @@ export function createCharacterService(
     },
 
     /**
-     * Hard delete; child rows cascade. Refused while the Character has any Session, because
-     * deleting it would erase the Session transcripts, which are append-only.
+     * Hard delete; child rows cascade. Refused once the Character has played any Session:
+     * deleting it would erase the Event logs, which are append-only.
      */
     delete(id: string): void {
       const played = db

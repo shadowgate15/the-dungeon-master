@@ -1,16 +1,22 @@
-import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
+import type { EventKind, Role, SceneState, SessionEvent } from '#lib/session/enums.ts'
 import type { Database } from '../db/connect'
-import { campaign, campaignCharacter, character, session, turn } from '../db/schema'
+import { campaign, campaignCharacter, session, sessionEvent, sessionScene } from '../db/schema'
 import { createWorldService } from '../world/service'
+import { seedScene } from './seed'
 
 export type Session = typeof session.$inferSelect
-export type Turn = typeof turn.$inferSelect
 
-/** What a new Turn carries; the service assigns the sequence number and time. */
-export type NewTurn = Pick<Turn, 'author' | 'kind'> &
-  Partial<Pick<Turn, 'text' | 'rollRequest' | 'rollResult'>>
+/** What a new event carries; the service assigns the id, sequence number and time. */
+export interface NewEvent {
+  role: Role
+  kind: EventKind
+  text?: string | null
+  npcId?: string | null
+  data?: Record<string, unknown> | null
+}
 
-/** The input breaks a Session rule (no Character, archived or read-only Campaign, ...). */
+/** The input breaks a Session rule (no Character, read-only Campaign, ended Session, ...). */
 export class SessionValidationError extends Error {}
 
 /** The Session does not exist. */
@@ -19,6 +25,35 @@ export class SessionNotFoundError extends Error {}
 /** The Campaign already has an open Session. */
 export class SessionAlreadyOpenError extends Error {}
 
+type SceneRow = typeof sessionScene.$inferSelect
+
+const toScene = (row: SceneRow): SceneState => ({
+  location: { name: row.locationName, description: row.locationDescription },
+  exits: row.exits,
+  objects: row.objects,
+  npcs: row.npcs,
+  mode: row.mode,
+  dialogueNpcId: row.dialogueNpcId,
+  pendingRoll: row.pendingRoll
+})
+
+const sceneColumns = (scene: SceneState, updatedAt: number) => ({
+  locationName: scene.location.name,
+  locationDescription: scene.location.description,
+  exits: scene.exits,
+  objects: scene.objects,
+  npcs: scene.npcs,
+  mode: scene.mode,
+  dialogueNpcId: scene.dialogueNpcId,
+  pendingRoll: scene.pendingRoll,
+  updatedAt
+})
+
+/**
+ * Sessions, their Scene and their Event log. The Event log is append-only: this service offers no
+ * way to edit or remove an event. The Scene changes only through `saveScene`, which the scene
+ * runner calls with changes code has validated.
+ */
 export function createSessionService(db: Database, now: () => number = Date.now) {
   const worlds = createWorldService(db, now)
 
@@ -38,37 +73,10 @@ export function createSessionService(db: Database, now: () => number = Date.now)
       .all()
 
   return {
-    /** The Campaign's linked Character, if any. The app links one per Campaign. */
-    linkedCharacterId(campaignId: string): string | undefined {
-      return db
-        .select({ id: campaignCharacter.characterId })
-        .from(campaignCharacter)
-        .where(eq(campaignCharacter.campaignId, campaignId))
-        .get()?.id
-    },
-
-    /** Links the Character to the Campaign, replacing any earlier link. Not while a Session is open. */
-    linkCharacter(campaignId: string, characterId: string): void {
-      db.transaction((tx) => {
-        const camp = tx.select().from(campaign).where(eq(campaign.id, campaignId)).get()
-        if (!camp) throw new SessionValidationError('Campaign not found')
-        if (camp.archivedAt !== null || worlds.isCampaignReadOnly(campaignId)) {
-          throw new SessionValidationError('This Campaign is read-only')
-        }
-        const found = tx.select().from(character).where(eq(character.id, characterId)).get()
-        if (!found) throw new SessionValidationError('Character not found')
-        if (found.archivedAt !== null) {
-          throw new SessionValidationError('An archived Character cannot be linked')
-        }
-        if (openSession(campaignId)) {
-          throw new SessionValidationError('End the open Session before changing the Character')
-        }
-        tx.delete(campaignCharacter).where(eq(campaignCharacter.campaignId, campaignId)).run()
-        tx.insert(campaignCharacter).values({ campaignId, characterId }).run()
-      })
-    },
-
-    /** Opens a Session for the Campaign's linked Character; one open Session per Campaign. */
+    /**
+     * Opens a Session for the Campaign's linked Character with its seeded Scene and an empty
+     * Event log; one open Session per Campaign.
+     */
     start(campaignId: string): Session {
       return db.transaction((tx) => {
         const camp = tx.select().from(campaign).where(eq(campaign.id, campaignId)).get()
@@ -85,18 +93,17 @@ export function createSessionService(db: Database, now: () => number = Date.now)
         if (openSession(campaignId)) {
           throw new SessionAlreadyOpenError('This Campaign already has an open Session')
         }
-        // The story so far carries over: the newest Session that wrote a summary.
-        const previous = tx
-          .select({ summary: session.summary })
-          .from(session)
-          .where(and(eq(session.campaignId, campaignId), isNotNull(session.summary)))
-          .orderBy(desc(session.startedAt), sql`rowid desc`)
-          .get()
-        return tx
+        const startedAt = now()
+        const created = tx
           .insert(session)
-          .values({ campaignId, characterId, startedAt: now(), summary: previous?.summary ?? null })
+          .values({ campaignId, characterId, startedAt })
           .returning()
           .get()
+        // World locations do not exist yet, so the first Scene is the generic starting tavern.
+        tx.insert(sessionScene)
+          .values({ sessionId: created.id, ...sceneColumns(seedScene(), startedAt) })
+          .run()
+        return created
       })
     },
 
@@ -113,23 +120,6 @@ export function createSessionService(db: Database, now: () => number = Date.now)
         .get()
     },
 
-    /**
-     * Saves the rolling summary and the last Turn it covers. Deliberately allowed on an ended
-     * Session, unlike `appendTurn`: the summary is derived housekeeping, not the transcript. One
-     * still being written when the player ends the Session is what the next Session inherits.
-     */
-    saveSummary(id: string, summary: string, throughSeq: number): void {
-      db.update(session)
-        .set({ summary, summarizedThroughSeq: throughSeq })
-        .where(eq(session.id, id))
-        .run()
-    },
-
-    /** Saves the last Turn memory extraction covers. Allowed on an ended Session, like the summary. */
-    saveMemoryThrough(id: string, throughSeq: number): void {
-      db.update(session).set({ memoryThroughSeq: throughSeq }).where(eq(session.id, id)).run()
-    },
-
     get(id: string): Session | undefined {
       return db.select().from(session).where(eq(session.id, id)).get()
     },
@@ -143,51 +133,60 @@ export function createSessionService(db: Database, now: () => number = Date.now)
       return [...listNewestFirst(campaignId)].reverse().map((s, i) => ({ ...s, number: i + 1 }))
     },
 
-    /** A Campaign's Sessions, newest first. */
-    list(campaignId: string): Session[] {
-      return listNewestFirst(campaignId)
+    /** The Session's Scene. Throws when the Session does not exist. */
+    scene(sessionId: string): SceneState {
+      const row = db.select().from(sessionScene).where(eq(sessionScene.sessionId, sessionId)).get()
+      if (!row) throw new SessionNotFoundError('Session not found')
+      return toScene(row)
     },
 
-    /**
-     * Appends a Turn to an open Session. Turns are append-only: there is no edit or delete.
-     * Rejects on an ended Session.
-     */
-    appendTurn(sessionId: string, input: NewTurn): Turn {
+    /** Replaces the Session's Scene. Only code calls this, with changes it has validated. */
+    saveScene(sessionId: string, scene: SceneState): void {
+      const changed = db
+        .update(sessionScene)
+        .set(sceneColumns(scene, now()))
+        .where(eq(sessionScene.sessionId, sessionId))
+        .run().changes
+      if (changed === 0) throw new SessionNotFoundError('Session not found')
+    },
+
+    /** A Session's Event log in sequence order. */
+    events(sessionId: string): SessionEvent[] {
+      return db
+        .select()
+        .from(sessionEvent)
+        .where(eq(sessionEvent.sessionId, sessionId))
+        .orderBy(asc(sessionEvent.seq))
+        .all()
+    },
+
+    /** Appends an event to an open Session. The log is append-only; rejects on an ended Session. */
+    appendEvent(sessionId: string, input: NewEvent): SessionEvent {
       return db.transaction((tx) => {
         const current = tx.select().from(session).where(eq(session.id, sessionId)).get()
         if (!current) throw new SessionNotFoundError('Session not found')
         if (current.endedAt !== null) throw new SessionValidationError('This Session has ended')
         const last = tx
-          .select({ seq: turn.seq })
-          .from(turn)
-          .where(eq(turn.sessionId, sessionId))
-          .orderBy(desc(turn.seq))
+          .select({ seq: sessionEvent.seq })
+          .from(sessionEvent)
+          .where(eq(sessionEvent.sessionId, sessionId))
+          .orderBy(desc(sessionEvent.seq))
           .get()
         return tx
-          .insert(turn)
+          .insert(sessionEvent)
           .values({
             sessionId,
             seq: (last?.seq ?? 0) + 1,
-            author: input.author,
+            role: input.role,
             kind: input.kind,
             text: input.text ?? null,
-            rollRequest: input.rollRequest ?? null,
-            rollResult: input.rollResult ?? null,
+            npcId: input.npcId ?? null,
+            data: input.data ?? null,
             createdAt: now()
           })
           .returning()
           .get()
       })
-    },
-
-    /** A Session's transcript in sequence order. */
-    turns(sessionId: string): Turn[] {
-      return db
-        .select()
-        .from(turn)
-        .where(eq(turn.sessionId, sessionId))
-        .orderBy(asc(turn.seq))
-        .all()
     }
   }
 }

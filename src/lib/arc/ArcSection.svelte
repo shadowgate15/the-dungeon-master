@@ -17,10 +17,8 @@
     campaignId: string
     length: Length
     arc: ArcViewData | null
-    /** Generate and Regenerate are offered: editable Campaign, no Session started. */
+    /** Generate and Regenerate are offered: the Campaign is editable. */
     canGenerate: boolean
-    /** A Session has started: text stays editable, structure and Regenerate are locked. */
-    structureLocked: boolean
     /** Archived Campaign, or one on an archived World: nothing can change. */
     readOnly: boolean
     onchange: () => void
@@ -31,7 +29,6 @@
     length,
     arc,
     canGenerate,
-    structureLocked,
     readOnly,
     onchange,
     fetcher = (...args) => fetch(...args)
@@ -100,18 +97,6 @@
         )
       : []
   )
-  const complete = $derived(
-    !!arc &&
-      arc.status === 'accepted' &&
-      arc.acts.every((a) => a.beats.every((b) => b.state !== 'pending'))
-  )
-  /** Beat state, read-only, once play has started. */
-  const stateText = (b: { id?: string }) => {
-    const beat = arc?.acts.flatMap((a) => a.beats).find((x) => x.id === b.id)
-    if (!beat || beat.state === 'pending') return 'Pending'
-    if (beat.state === 'abandoned') return 'Abandoned'
-    return beat.sessionNumber ? `Reached in Session ${beat.sessionNumber}` : 'Reached'
-  }
   const size = $derived(ARC_SIZES[length])
   const totalBeats = $derived(edit ? edit.acts.reduce((n, a) => n + a.beats.length, 0) : 0)
 
@@ -209,11 +194,7 @@
   }
 
   const regenerate = () => (arc?.status === 'accepted' ? (confirming = true) : generate())
-  const unavailable = $derived(
-    readOnly
-      ? 'This Campaign is read-only, so an Arc cannot be generated or changed.'
-      : 'This Campaign has already started play, so an Arc can no longer be generated.'
-  )
+  const unavailable = 'This Campaign is read-only, so an Arc cannot be generated or changed.'
 </script>
 
 <section aria-label="Arc" class="space-y-3">
@@ -251,10 +232,6 @@
         Draft Arc. The DM ignores it until you accept it. Edit any text, then accept. Regenerate
         freely until you do.
       </Alert>
-    {/if}
-
-    {#if complete && structureLocked}
-      <Alert variant="success">Arc complete. Every Beat has been reached or abandoned.</Alert>
     {/if}
 
     {#if !canGenerate}
@@ -340,19 +317,7 @@
                   disabled={frozen}
                   aria-label={`Act ${i + 1} Beat ${j + 1} description`}
                 />
-                {#if structureLocked && beat.id}
-                  <p class="text-xs text-muted">
-                    <Badge
-                      variant={stateText(beat) === 'Pending'
-                        ? 'neutral'
-                        : stateText(beat) === 'Abandoned'
-                          ? 'warning'
-                          : 'success'}
-                      size="sm">{stateText(beat)}</Badge
-                    >
-                  </p>
-                {/if}
-                {#if !structureLocked && !readOnly}
+                {#if !readOnly}
                   <div class="flex gap-1">
                     <Button
                       size="sm"
@@ -379,7 +344,7 @@
                 {/if}
               </div>
             {/each}
-            {#if !structureLocked && !readOnly}
+            {#if !readOnly}
               <div class="flex flex-wrap gap-1">
                 <Button
                   size="sm"
@@ -414,7 +379,7 @@
           </fieldset>
         {/each}
 
-        {#if !structureLocked && !readOnly}
+        {#if !readOnly}
           <Button size="sm" variant="secondary" disabled={frozen || !canAddAct} onclick={addAct}
             >Add Act</Button
           >
