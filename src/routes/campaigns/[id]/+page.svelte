@@ -68,4 +68,38 @@
     readOnly={locked}
     onchange={() => invalidateAll()}
   />
+
+  <section aria-label="Sessions" class="space-y-2">
+    <h2 class="font-display text-lg">Sessions</h2>
+    {#if data.openSessionId}
+      <Button
+        href={resolve('/campaigns/[id]/sessions/[sessionId]', {
+          id: data.campaign.id,
+          sessionId: data.openSessionId
+        })}>Resume Session</Button
+      >
+    {:else}
+      <form method="POST" action="?/startSession" use:enhance>
+        <Button type="submit" disabled={locked || !data.linkedCharacter}>Start Session</Button>
+      </form>
+      {#if !data.linkedCharacter && !locked}
+        <p class="text-sm text-muted">Link a Character to start a Session.</p>
+      {/if}
+    {/if}
+    {#if data.sessions.length > 0}
+      <ul class="space-y-1 text-sm">
+        {#each [...data.sessions].reverse() as s (s.id)}
+          <li>
+            <Link
+              href={resolve('/campaigns/[id]/sessions/[sessionId]', {
+                id: data.campaign.id,
+                sessionId: s.id
+              })}>Session {s.number}</Link
+            >
+            <span class="text-muted">{s.endedAt === null ? 'open' : 'ended'}</span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
 </main>
