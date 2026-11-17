@@ -50,6 +50,8 @@
             thinking = false
             live = ''
             streamed.push(message.event)
+            // Code changed the Scene: reload it now so the panel updates before the run ends.
+            if (message.event.kind === 'scene-changed') void invalidateAll()
           } else if (message.type === 'done') {
             thinking = false
             live = ''
