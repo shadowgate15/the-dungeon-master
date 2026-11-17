@@ -136,9 +136,7 @@
     <SceneStatePanel
       scene={data.scene}
       log={events}
-      onpick={data.affordances && !ended && !busy && !rollPending
-        ? (text) => (draft = text)
-        : undefined}
+      onpick={!ended && !busy && !rollPending ? (text) => (draft = text) : undefined}
     />
 
     <section aria-label="Story" class="flex min-h-96 flex-col gap-3">
@@ -161,12 +159,6 @@
         <Alert variant="danger">{problem}</Alert>
       {/if}
       {#if !ended}
-        <form method="POST" action="?/affordances" use:enhance class="text-sm">
-          <input type="hidden" name="affordances" value={data.affordances ? 'off' : 'on'} />
-          <Button type="submit" variant="secondary" aria-pressed={data.affordances}
-            >Action shortcuts: {data.affordances ? 'on' : 'off'}</Button
-          >
-        </form>
         <form onsubmit={send} class="flex items-end gap-2">
           <label class="flex-1 text-sm">
             Your action
