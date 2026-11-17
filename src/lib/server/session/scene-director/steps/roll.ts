@@ -1,3 +1,4 @@
+import { makeOptionId, parseOptionId } from '../option-id.ts'
 import type { MenuOption } from '../types.ts'
 
 /**
@@ -43,11 +44,11 @@ export const rollOption: MenuOption = {
     scene.pendingRoll || events.at(-1)?.kind !== 'player-action'
       ? []
       : Object.entries(ROLL_CHECKS).map(([check, { hint }]) => ({
-          id: `roll:${check}`,
+          id: makeOptionId('roll', check),
           hint: `Ask the player for a ${check} check. ${hint}`
         })),
   async *run(ctx, optionId) {
-    const check = optionId.slice('roll:'.length)
+    const check = parseOptionId(optionId).arg
     const entry = ROLL_CHECKS[check]
     if (!entry) throw new Error(`Unknown check: ${check}`)
     const pendingRoll = { check, dc: entry.dc, reason: entry.reason }

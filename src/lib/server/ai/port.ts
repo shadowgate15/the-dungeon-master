@@ -217,23 +217,32 @@ export async function* streamText(port: ChatPort, request: ChatRequest): AsyncGe
   if (!request.signal.aborted) yield { type: 'done', usage }
 }
 
+/** A free-text call collected into one string: the text, or why there is none. */
+export type TextCall = { ok: true; text: string } | { ok: false; failure?: ModelFailure }
+
 /**
  * A free-text call collected into one trimmed string, for side calls that need no streaming.
- * `undefined` on any failure: a model error, an abort, no `done`, or an empty answer.
+ * Fails on a model error (with its `failure`), an abort, no `done`, or an empty answer.
  */
-export async function collectText(
-  port: ChatPort,
-  request: ChatRequest
-): Promise<string | undefined> {
+export async function callText(port: ChatPort, request: ChatRequest): Promise<TextCall> {
   let text = ''
   let done = false
   for await (const event of streamText(port, request)) {
     if (event.type === 'delta') text += event.text
-    else if (event.type === 'error') return undefined
+    else if (event.type === 'error') return { ok: false, failure: event.failure }
     else if (event.type === 'done') done = true
   }
   const trimmed = text.trim()
-  return done && trimmed ? trimmed : undefined
+  return done && trimmed ? { ok: true, text: trimmed } : { ok: false }
+}
+
+/** `callText` reduced to the text; `undefined` on any failure. */
+export async function collectText(
+  port: ChatPort,
+  request: ChatRequest
+): Promise<string | undefined> {
+  const call = await callText(port, request)
+  return call.ok ? call.text : undefined
 }
 
 /** The production port: TanStack AI `chat()` over the configured adapter. */

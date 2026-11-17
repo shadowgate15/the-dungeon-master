@@ -25,7 +25,11 @@ beforeEach(() => {
   model = createScriptedPort()
 })
 
-const runnerWith = (pipeline?: Pipeline): SceneRunner =>
+const yieldsAtOnce: Pipeline = async function* () {
+  yield { type: 'done', reason: 'yield' }
+}
+
+const runnerWith = (pipeline: Pipeline = yieldsAtOnce): SceneRunner =>
   createSceneRunner({ sessions, port: model.port, pipeline })
 
 async function drain(result: BeginResult) {
@@ -38,7 +42,7 @@ async function drain(result: BeginResult) {
 const log = () => sessions.events(sessionId).map((e) => `${e.role}:${e.kind}:${e.text}`)
 
 describe('a player action', () => {
-  it('is saved as a player-action event, then the stub pipeline yields', async () => {
+  it('is saved as a player-action event, then the pipeline yields', async () => {
     const events = await drain(
       runnerWith().begin(sessionId, 'I look around', new AbortController().signal)
     )
@@ -110,6 +114,33 @@ describe('a player action', () => {
     const controller = new AbortController()
     runner.begin(sessionId, 'one', controller.signal)
     controller.abort()
+    expect(runner.begin(sessionId, 'two', new AbortController().signal).ok).toBe(true)
+  })
+})
+
+describe('the in-flight claim', () => {
+  it('is held until the pipeline actually finishes, even after the caller aborts', async () => {
+    let finish = () => {}
+    const slow: Pipeline = async function* () {
+      await new Promise<void>((resolve) => (finish = resolve)) // ignores the abort until told
+      yield { type: 'done', reason: 'yield' }
+    }
+    const runner = runnerWith(slow)
+    const controller = new AbortController()
+    const result = runner.begin(sessionId, 'one', controller.signal)
+    if (!result.ok) throw new Error(result.reason)
+    const reading = (async () => {
+      for await (const e of result.events) void e
+    })()
+    await new Promise((resolve) => setTimeout(resolve, 0)) // the stream is running
+    controller.abort()
+
+    expect(runner.begin(sessionId, 'two', new AbortController().signal)).toEqual({
+      ok: false,
+      reason: 'in-flight'
+    })
+    finish()
+    await reading
     expect(runner.begin(sessionId, 'two', new AbortController().signal).ok).toBe(true)
   })
 })

@@ -1,4 +1,4 @@
-import { collectText } from '../../ai/port.ts'
+import { callText, type TextCall } from '../../ai/port.ts'
 import type { PipelineContext } from '../scene-runner.ts'
 import { recentLines } from './prompt.ts'
 import type { MenuContext, MenuEntry } from './types.ts'
@@ -13,14 +13,14 @@ const DIRECTOR_SYSTEM = [
 
 /**
  * Asks the Director to pick one menu option: a non-streaming call that returns a short enum value.
- * `undefined` when the call fails or is stopped.
+ * Not ok when the call fails or is stopped; the failure says why when the model reported one.
  */
 export function askDirector(
   ctx: PipelineContext,
   menu: MenuContext,
   entries: MenuEntry[],
   retry = false
-): Promise<string | undefined> {
+): Promise<TextCall> {
   const { scene } = menu
   const prompt = [
     `Location: ${scene.location.name}`,
@@ -33,7 +33,7 @@ export function askDirector(
         ]
       : [])
   ].join('\n\n')
-  return collectText(ctx.port, {
+  return callText(ctx.port, {
     systemPrompts: [DIRECTOR_SYSTEM],
     messages: [{ role: 'user', content: prompt }],
     maxTokens: DIRECTOR_MAX_TOKENS,

@@ -1,4 +1,5 @@
 import type { SceneExit } from '#lib/session/enums.ts'
+import { makeOptionId, parseOptionId } from '../option-id.ts'
 import { placeBeyond } from '../places.ts'
 import type { MenuOption } from '../types.ts'
 
@@ -22,7 +23,7 @@ function named(action: string, exit: SceneExit): boolean {
 /**
  * Movement: the Director proposes `move:<exit id>`; code checks the exit exists in the current
  * Scene, replaces the Scene with the destination and logs a `scene-changed` event. Offered in
- * exploration, right after a player action. An exit that is not there changes nothing.
+ * exploration, right after a player action. An exit that is not on the menu is an invalid pick.
  */
 export const moveOption: MenuOption = {
   verb: 'move',
@@ -31,18 +32,20 @@ export const moveOption: MenuOption = {
     if (last?.kind !== 'player-action' || scene.mode !== 'exploration' || scene.pendingRoll)
       return []
     return scene.exits.map((exit) => ({
-      id: `move:${exit.id}`,
+      id: makeOptionId('move', exit.id),
       hint: `The player travels to: ${exit.name}.${
         named(last.text ?? '', exit) ? " The player's action names this exit." : ''
       }`
     }))
   },
   async *run(ctx, optionId) {
-    const exitId = optionId.slice(optionId.indexOf(':') + 1)
+    const exitId = parseOptionId(optionId).arg
     const scene = ctx.sessions.scene(ctx.sessionId)
     const exit = scene.exits.find((e) => e.id === exitId)
-    // Not an exit of this Scene: code refuses and nothing changes.
-    if (!exit) return { type: 'continue' }
+    // Unreachable through the pipeline: an exit the Scene lacks is never on the menu, so
+    // `parsePick` already counted it as an invalid pick (retry, then fallback). A throw, not a
+    // silent continue, keeps a broken caller from looking like a successful move.
+    if (!exit) throw new Error(`No exit ${exitId} in this Scene`)
     const place = placeBeyond(exit, scene.location.name)
     ctx.sessions.saveScene(ctx.sessionId, {
       ...place,

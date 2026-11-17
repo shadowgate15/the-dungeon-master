@@ -1,12 +1,14 @@
 import type { SessionEvent } from '#lib/session/enums.ts'
+import { parseOptionId } from './option-id.ts'
 import type { MenuContext, MenuEntry, MenuOption } from './types.ts'
 
 /**
  * The pick code makes when the Director gave no usable answer twice: narrate right after the
- * player acted if offered, else hand control back.
+ * player acted or a roll resolved (so the outcome is told) if offered, else hand control back.
  */
 export function fallbackPick(menu: MenuEntry[], events: SessionEvent[]): string {
-  const acted = events.at(-1)?.kind === 'player-action'
+  const last = events.at(-1)?.kind
+  const acted = last === 'player-action' || last === 'roll-resolved'
   return acted && menu.some((m) => m.id === 'narrate') ? 'narrate' : 'yield'
 }
 
@@ -34,6 +36,6 @@ export function parsePick(answer: string, menu: MenuEntry[]): string | undefined
 
 /** The option that owns a menu id. */
 export function optionFor(options: MenuOption[], id: string): MenuOption | undefined {
-  const verb = id.split(':', 1)[0]
+  const { verb } = parseOptionId(id)
   return options.find((o) => o.verb === verb)
 }

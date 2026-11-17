@@ -90,6 +90,37 @@ describe('an NPC line', () => {
     expect(prompt).not.toContain('secretly serves the duke')
   })
 
+  it("gives the voice only its own lines and the player's actions, not narration or other NPCs", async () => {
+    sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text: 'I ask around' })
+    sessions.appendEvent(sessionId, {
+      role: 'npc',
+      kind: 'npc-line',
+      npcId: 'borg',
+      text: 'The duke pays me well.'
+    })
+    sessions.appendEvent(sessionId, {
+      role: 'narrator',
+      kind: 'narration',
+      text: 'Borg glances at the duke’s ring.'
+    })
+    sessions.appendEvent(sessionId, {
+      role: 'npc',
+      kind: 'npc-line',
+      npcId: 'mira',
+      text: 'Welcome.'
+    })
+    model.enqueue(says('npc-speaks:mira'), says('Hello.'), says('yield'))
+    await play('I greet Mira')
+
+    const history = model.requests[1].messages.map((m) => m.content).join('\n')
+    expect(history).toContain('Player: I ask around')
+    expect(history).toContain('Player: I greet Mira')
+    expect(history).toContain('Mira: Welcome.')
+    expect(history).not.toContain('duke')
+    expect(history).not.toContain('Borg')
+    expect(history).not.toContain('Someone')
+  })
+
   it('discards the in-flight line and saves nothing when the model fails', async () => {
     model.enqueue(says('npc-speaks:mira'), fails)
     const events = await play('I greet Mira')

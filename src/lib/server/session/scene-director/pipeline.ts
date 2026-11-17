@@ -36,12 +36,16 @@ export function createDirectorPipeline(options: MenuOption[] = MENU_OPTIONS): Pi
         stats.directorCalls++
         const answer = await askDirector(ctx, menu, entries, attempt > 0)
         if (ctx.signal.aborted) return
-        if (answer === undefined) {
-          yield { type: 'done', reason: 'error', message: 'The Director could not choose' }
+        if (!answer.ok) {
+          yield {
+            type: 'done',
+            reason: 'error',
+            message: answer.failure?.message ?? 'The Director could not choose'
+          }
           return
         }
-        raw.push(answer)
-        pick = parsePick(answer, entries)
+        raw.push(answer.text)
+        pick = parsePick(answer.text, entries)
       }
       if (pick === undefined) {
         fallback = true
