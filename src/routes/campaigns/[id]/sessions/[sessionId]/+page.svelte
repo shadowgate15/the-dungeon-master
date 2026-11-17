@@ -20,6 +20,7 @@
   let streamed = $state<SessionEvent[]>([])
   // The in-flight narration, shown until it is saved (then it arrives as an event) or discarded.
   let live = $state('')
+  let liveNpcId = $state<string | null>(null)
   let thinking = $state(false)
   let controller: AbortController | null = null
 
@@ -45,6 +46,7 @@
           else if (message.type === 'delta') {
             thinking = false
             live += message.text
+            liveNpcId = message.npcId ?? null
           } else if (message.type === 'discard') live = ''
           else if (message.type === 'event') {
             thinking = false
@@ -105,7 +107,7 @@
         {#if events.length === 0 && !busy}
           <p class="text-muted">Nothing has happened yet. What do you do?</p>
         {:else}
-          <StoryLog {events} npcs={data.scene.npcs} {live} {thinking} />
+          <StoryLog {events} npcs={data.scene.npcs} {live} {liveNpcId} {thinking} />
         {/if}
       </div>
 

@@ -37,7 +37,9 @@ const types = (events: PipelineEvent[]) =>
 
 describe('the menu', () => {
   const menuOf = (events = sessions.events(sessionId)) =>
-    buildMenu(MENU_OPTIONS, { scene: sessions.scene(sessionId), events }).map((m) => m.id)
+    buildMenu(MENU_OPTIONS, { scene: sessions.scene(sessionId), events })
+      .map((m) => m.id)
+      .filter((id) => !id.startsWith('npc-speaks')) // covered in steps/npc-speaks.spec.ts
 
   it('offers narrate and yield after a player action', () => {
     sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text: 'hi' })

@@ -36,7 +36,7 @@ export type PipelineEvent =
   /** The Director is choosing; shown as a thinking indicator until the next event, delta or done. */
   | { type: 'thinking'; role: Role }
   /** A token of the in-flight event. It is not in the log yet, and may still be discarded. */
-  | { type: 'delta'; role: Role; kind: EventKind; text: string }
+  | { type: 'delta'; role: Role; kind: EventKind; text: string; npcId?: string }
   /** The in-flight event was stopped or failed: drop what the deltas built. Nothing was saved. */
   | { type: 'discard' }
   | { type: 'done'; reason: DoneReason; message?: string }
