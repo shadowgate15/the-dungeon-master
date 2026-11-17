@@ -48,7 +48,12 @@ describe('the menu', () => {
 
   it('offers narrate, a move per exit and yield after a player action', () => {
     sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text: 'hi' })
-    expect(menuOf()).toEqual(['narrate', 'move:front-door', 'move:cellar-stairs', 'yield'])
+    expect(menuOf().filter((id) => !id.startsWith('roll:'))).toEqual([
+      'narrate',
+      'move:front-door',
+      'move:cellar-stairs',
+      'yield'
+    ])
   })
 
   it('drops narrate right after narration', () => {

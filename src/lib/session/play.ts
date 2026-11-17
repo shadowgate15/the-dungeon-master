@@ -32,25 +32,45 @@ export type StreamMessage =
   | { type: 'done'; reason: string; message?: string }
 
 /** Sends a player action and reports each streamed message. Resolves with an error text or null. */
-export async function sendAction(
+export function sendAction(
   sessionId: string,
   text: string,
   onMessage: (message: StreamMessage) => void,
   signal?: AbortSignal
 ): Promise<string | null> {
-  const response = await fetch(`/api/sessions/${sessionId}/action`, {
+  return postStream(`/api/sessions/${sessionId}/action`, { text }, onMessage, signal)
+}
+
+/** Clicks Roll: code rolls, then the run continues and streams like an action. */
+export function resolveRoll(
+  sessionId: string,
+  onMessage: (message: StreamMessage) => void,
+  signal?: AbortSignal
+): Promise<string | null> {
+  return postStream(`/api/sessions/${sessionId}/roll`, {}, onMessage, signal)
+}
+
+async function postStream(
+  url: string,
+  payload: unknown,
+  onMessage: (message: StreamMessage) => void,
+  signal?: AbortSignal
+): Promise<string | null> {
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(payload),
     signal
   })
   if (!response.ok || !response.body) {
     const body = (await response.json().catch(() => null)) as { reason?: string } | null
     return body?.reason === 'roll-pending'
       ? 'Roll first.'
-      : body?.reason === 'in-flight'
-        ? 'The previous action is still running.'
-        : 'That action could not be sent.'
+      : body?.reason === 'no-pending-roll'
+        ? 'There is no roll to make.'
+        : body?.reason === 'in-flight'
+          ? 'The previous action is still running.'
+          : 'That action could not be sent.'
   }
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
   let buffer = ''
