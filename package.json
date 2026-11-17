@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.30.3",
   "scripts": {
     "dev": "vite dev",
+    "prototype": "vite dev --open /prototype/scene",
     "build": "vite build",
     "preview": "vite preview",
     "prepare": "husky && svelte-kit sync || echo ''",
