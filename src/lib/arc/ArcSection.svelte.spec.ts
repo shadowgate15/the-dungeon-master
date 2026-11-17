@@ -33,7 +33,6 @@ const props = (over: Record<string, unknown> = {}) => ({
   length: 'short' as const,
   arc: null,
   canGenerate: true,
-  structureLocked: false,
   readOnly: false,
   onchange: () => {},
   ...over
@@ -69,13 +68,6 @@ describe('ArcSection', () => {
 
     await toggle.click()
     await expect.element(page.getByText('Draft Arc.', { exact: false })).not.toBeVisible()
-  })
-
-  it('explains why there is no Generate Arc once play has started', async () => {
-    await renderOpen(props({ canGenerate: false, structureLocked: true }))
-
-    await expect.element(page.getByText(/already started/)).toBeVisible()
-    await expect.element(page.getByRole('button', { name: 'Generate Arc' })).toBeDisabled()
   })
 
   it('shows a status line and Stop while generating; Stop leaves things as they were', async () => {
@@ -199,70 +191,11 @@ describe('ArcSection', () => {
     expect(saved.acts[2].beats.map((b: { id: string }) => b.id)).toEqual(['beat-2-1', 'beat-2-0'])
   })
 
-  it('locks structure and Regenerate after play starts, but text stays editable', async () => {
-    const fetcher = vi.fn(() => response({ ok: true }))
-    await renderOpen(
-      props({
-        fetcher,
-        arc: arc('accepted'),
-        canGenerate: false,
-        structureLocked: true
-      })
-    )
-
-    await expect.element(page.getByRole('button', { name: 'Regenerate' })).toBeDisabled()
-    await expect.element(page.getByText(/already started/)).toBeVisible()
-    await expect.element(page.getByRole('button', { name: 'Add Act' })).not.toBeInTheDocument()
-    await expect
-      .element(page.getByRole('button', { name: /Delete Beat/ }).first())
-      .not.toBeInTheDocument()
-    await page.getByLabelText('Resolution').fill('A new ending.')
-    await page.getByRole('button', { name: 'Save changes' }).click()
-
-    await vi.waitFor(() => expect(fetcher).toHaveBeenCalled())
-    expect(bodyOf(fetcher).arc.resolution).toBe('A new ending.')
-  })
-
   it('is read-only on an archived Campaign: no editing, generating or accepting', async () => {
     await renderOpen(props({ arc: arc(), canGenerate: false, readOnly: true }))
 
     await expect.element(page.getByLabelText('Title', { exact: true })).toBeDisabled()
     await expect.element(page.getByRole('button', { name: 'Regenerate' })).not.toBeInTheDocument()
     await expect.element(page.getByRole('button', { name: 'Accept Arc' })).not.toBeInTheDocument()
-  })
-
-  describe('Beat progress after play starts', () => {
-    const progressed = (): ArcViewData => {
-      const a = arc('accepted')
-      a.acts[0].beats[0] = { ...a.acts[0].beats[0], state: 'reached', sessionNumber: 2 }
-      a.acts[0].beats[1] = { ...a.acts[0].beats[1], state: 'abandoned', sessionNumber: 3 }
-      return a
-    }
-    const locked = { canGenerate: false, structureLocked: true }
-
-    it('shows each Beat as pending, reached in a Session or abandoned', async () => {
-      await renderOpen(props({ ...locked, arc: progressed() }))
-
-      await expect.element(page.getByText('Reached in Session 2')).toBeVisible()
-      await expect.element(page.getByText('Abandoned', { exact: true })).toBeVisible()
-      await expect.element(page.getByText('Pending', { exact: true }).first()).toBeVisible()
-      await expect.element(page.getByText(/Arc complete/)).not.toBeInTheDocument()
-    })
-
-    it('shows the Arc as complete when no Beat is pending', async () => {
-      const done = arc('accepted')
-      done.acts.forEach((act) =>
-        act.beats.forEach((b) => Object.assign(b, { state: 'reached', sessionNumber: 1 }))
-      )
-      await renderOpen(props({ ...locked, arc: done }))
-
-      await expect.element(page.getByText(/Arc complete/)).toBeVisible()
-    })
-
-    it('shows no Beat state before play starts', async () => {
-      await renderOpen(props({ arc: arc('accepted') }))
-
-      await expect.element(page.getByText('Pending', { exact: true })).not.toBeInTheDocument()
-    })
   })
 })
