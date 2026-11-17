@@ -1,3 +1,5 @@
+import { beginDialogueOption } from './steps/begin-dialogue.ts'
+import { endDialogueOption } from './steps/end-dialogue.ts'
 import { moveOption } from './steps/move.ts'
 import { narrateOption } from './steps/narrate.ts'
 import { npcSpeaksOption } from './steps/npc-speaks.ts'
@@ -12,6 +14,8 @@ import type { MenuOption } from './types.ts'
 export const MENU_OPTIONS: MenuOption[] = [
   narrateOption,
   npcSpeaksOption,
+  beginDialogueOption,
+  endDialogueOption,
   moveOption,
   rollOption,
   yieldOption

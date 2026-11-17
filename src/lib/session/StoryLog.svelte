@@ -1,12 +1,13 @@
 <script lang="ts">
-  import type { SceneNpc, SessionEvent } from './enums.ts'
+  import type { Mode, SceneNpc, SessionEvent } from './enums.ts'
 
   let {
     events,
     npcs,
     live = '',
     liveNpcId = null,
-    thinking = false
+    thinking = false,
+    mode = 'exploration'
   }: {
     events: SessionEvent[]
     npcs: SceneNpc[]
@@ -16,6 +17,8 @@
     liveNpcId?: string | null
     /** The Director is choosing. */
     thinking?: boolean
+    /** In dialogue, narration reads as a stage direction between spoken lines. */
+    mode?: Mode
   } = $props()
 
   const speaker = (npcId: string | null) =>
@@ -28,7 +31,11 @@
       {#if event.kind === 'player-action'}
         <p class="text-accent italic">{event.text}</p>
       {:else if event.kind === 'narration'}
-        <p class="leading-relaxed whitespace-pre-wrap">{event.text}</p>
+        {#if mode === 'dialogue'}
+          <p data-aside class="text-sm text-muted italic">{event.text}</p>
+        {:else}
+          <p class="leading-relaxed whitespace-pre-wrap">{event.text}</p>
+        {/if}
       {:else if event.kind === 'npc-line'}
         <blockquote class="border-l-4 border-primary pl-3">
           <p class="text-xs font-semibold tracking-wide text-muted uppercase">

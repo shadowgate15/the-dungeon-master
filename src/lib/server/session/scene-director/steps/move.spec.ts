@@ -38,7 +38,9 @@ const menu = () =>
 const ids = () =>
   menu()
     .map((m) => m.id)
-    .filter((id) => !id.startsWith('npc-speaks') && !id.startsWith('roll:'))
+    .filter(
+      (id) => !id.startsWith('npc-speaks') && !id.startsWith('roll:') && !id.includes('dialogue')
+    )
 
 describe('moving through an exit', () => {
   it('offers one move option per existing exit after a player action', () => {

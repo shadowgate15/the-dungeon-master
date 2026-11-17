@@ -138,14 +138,21 @@
       dev ? 'lg:grid-cols-[18rem_1fr_20rem]' : 'lg:grid-cols-[18rem_1fr]'
     ]}
   >
-    <SceneStatePanel scene={data.scene} />
+    <SceneStatePanel scene={data.scene} log={events} />
 
     <section aria-label="Story" class="flex min-h-96 flex-col gap-3">
       <div class="flex-1 rounded-panel border border-border bg-surface p-3">
         {#if events.length === 0 && !busy}
           <p class="text-muted">Nothing has happened yet. What do you do?</p>
         {:else}
-          <StoryLog {events} npcs={data.scene.npcs} {live} {liveNpcId} {thinking} />
+          <StoryLog
+            {events}
+            npcs={data.scene.npcs}
+            {live}
+            {liveNpcId}
+            {thinking}
+            mode={data.scene.mode}
+          />
         {/if}
       </div>
 

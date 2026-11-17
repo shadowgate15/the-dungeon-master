@@ -1,8 +1,13 @@
 <script lang="ts">
-  import type { SceneState } from './enums.ts'
+  import type { SceneState, SessionEvent } from './enums.ts'
 
-  let { scene }: { scene: SceneState } = $props()
+  let { scene, log = [] }: { scene: SceneState; log?: SessionEvent[] } = $props()
   const talkingTo = $derived(scene.npcs.find((n) => n.id === scene.dialogueNpcId))
+  const inDialogue = $derived(scene.mode === 'dialogue')
+  // The talking NPC's most recent line, so the conversation is the focus of the panel.
+  const latestLine = $derived(
+    talkingTo ? log.findLast((e) => e.kind === 'npc-line' && e.npcId === talkingTo.id) : undefined
+  )
 </script>
 
 <aside
@@ -20,10 +25,22 @@
     </p>
   </section>
 
+  {#if inDialogue && talkingTo}
+    <section aria-label="Conversation" class="rounded-control border border-primary bg-raised p-3">
+      <p class="font-display text-xl">{talkingTo.name}</p>
+      <p class="text-xs text-muted">Attitude: {talkingTo.attitude}</p>
+      {#if latestLine}
+        <blockquote class="mt-2 whitespace-pre-wrap">&ldquo;{latestLine.text}&rdquo;</blockquote>
+      {:else}
+        <p class="mt-2 text-muted italic">Waiting to speak.</p>
+      {/if}
+    </section>
+  {/if}
+
   <section aria-label="Location">
     <h2 class="text-xs font-semibold text-muted uppercase">Location</h2>
-    <p class="font-display text-lg">{scene.location.name}</p>
-    <p>{scene.location.description}</p>
+    <p class={inDialogue ? 'text-xs text-muted' : 'font-display text-lg'}>{scene.location.name}</p>
+    {#if !inDialogue}<p>{scene.location.description}</p>{/if}
   </section>
 
   <section aria-label="Exits">
