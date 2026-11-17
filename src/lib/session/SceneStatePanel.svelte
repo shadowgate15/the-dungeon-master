@@ -1,7 +1,15 @@
 <script lang="ts">
+  import { examineText, goText, talkText } from './affordances.ts'
   import type { SceneState } from './enums.ts'
 
-  let { scene }: { scene: SceneState } = $props()
+  let {
+    scene,
+    onpick
+  }: {
+    scene: SceneState
+    /** When set, NPCs, exits and objects are clickable and call this with the action text to pre-fill. */
+    onpick?: (text: string) => void
+  } = $props()
   const talkingTo = $derived(scene.npcs.find((n) => n.id === scene.dialogueNpcId))
 </script>
 
@@ -32,7 +40,13 @@
       <p class="text-muted">None</p>
     {:else}
       <ul class="list-inside list-disc">
-        {#each scene.exits as exit (exit.id)}<li>{exit.name}</li>{/each}
+        {#each scene.exits as exit (exit.id)}
+          <li>
+            {#if onpick}<button type="button" class="underline" onclick={() => onpick(goText(exit))}
+                >{exit.name}</button
+              >{:else}{exit.name}{/if}
+          </li>
+        {/each}
       </ul>
     {/if}
   </section>
@@ -43,7 +57,15 @@
       <p class="text-muted">None</p>
     {:else}
       <ul class="list-inside list-disc">
-        {#each scene.objects as object (object)}<li>{object}</li>{/each}
+        {#each scene.objects as object (object)}
+          <li>
+            {#if onpick}<button
+                type="button"
+                class="underline"
+                onclick={() => onpick(examineText(object))}>{object}</button
+              >{:else}{object}{/if}
+          </li>
+        {/each}
       </ul>
     {/if}
   </section>
@@ -60,7 +82,13 @@
               ? 'border-primary bg-raised'
               : 'border-border'}"
           >
-            <p class="font-medium">{npc.name}</p>
+            <p class="font-medium">
+              {#if onpick}<button
+                  type="button"
+                  class="underline"
+                  onclick={() => onpick(talkText(npc))}>{npc.name}</button
+                >{:else}{npc.name}{/if}
+            </p>
             <p class="text-xs">Attitude: {npc.attitude}</p>
             <p class="text-xs text-muted">Knows: {npc.knowledge}</p>
           </li>
