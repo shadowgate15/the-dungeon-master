@@ -27,6 +27,15 @@ import type { EventKind, Role, SessionEvent } from '#lib/session/enums.ts'
 import type { ChatPort } from '../ai/port.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
+/** Per-run counters shown in the event inspector. */
+export interface RunStats {
+  steps: number
+  directorCalls: number
+  retries: number
+  fallbacks: number
+  capHits: number
+}
+
 /** Why control returned to the player. */
 export type DoneReason = 'yield' | 'cap' | 'roll' | 'stopped' | 'error'
 
@@ -39,6 +48,22 @@ export type PipelineEvent =
   | { type: 'delta'; role: Role; kind: EventKind; text: string }
   /** The in-flight event was stopped or failed: drop what the deltas built. Nothing was saved. */
   | { type: 'discard' }
+  /** Inspector: one Director step, with its role, the menu it saw and the pick that ran. */
+  | {
+      type: 'step'
+      step: number
+      role: Role
+      menu: string[]
+      pick: string
+      /** The first answer was unusable, so the Director was asked once more. */
+      retried: boolean
+      /** Both answers were unusable, so code chose the pick. */
+      fallback: boolean
+      /** What the Director said, one entry per call. */
+      raw: string[]
+    }
+  /** Inspector: running counters for this run. Not persisted. */
+  | { type: 'stats'; stats: RunStats }
   | { type: 'done'; reason: DoneReason; message?: string }
 
 /** Everything a pipeline step may use. State lives in the database, never in the pipeline. */

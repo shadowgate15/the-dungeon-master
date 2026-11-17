@@ -1,4 +1,14 @@
+import type { SessionEvent } from '#lib/session/enums.ts'
 import type { MenuContext, MenuEntry, MenuOption } from './types.ts'
+
+/**
+ * The pick code makes when the Director gave no usable answer twice: narrate right after the
+ * player acted if offered, else hand control back.
+ */
+export function fallbackPick(menu: MenuEntry[], events: SessionEvent[]): string {
+  const acted = events.at(-1)?.kind === 'player-action'
+  return acted && menu.some((m) => m.id === 'narrate') ? 'narrate' : 'yield'
+}
 
 /** Builds the Director's menu from scene state: every registered option's entries, in order. */
 export function buildMenu(options: MenuOption[], menu: MenuContext): MenuEntry[] {

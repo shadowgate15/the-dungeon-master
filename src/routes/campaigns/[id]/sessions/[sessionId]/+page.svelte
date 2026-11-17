@@ -4,12 +4,16 @@
   import { resolve } from '$app/paths'
   import SceneStatePanel from '#lib/session/SceneStatePanel.svelte'
   import StoryLog from '#lib/session/StoryLog.svelte'
-  import { sendAction } from '#lib/session/play.ts'
+  import EventInspector from '#lib/session/EventInspector.svelte'
+  import { sendAction, type RunStats, type StepMessage } from '#lib/session/play.ts'
   import type { SessionEvent } from '#lib/session/enums.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
   import Textarea from '#lib/ui/Textarea.svelte'
+
+  // The event inspector is for development only.
+  const dev = import.meta.env.DEV
 
   let { data } = $props()
 
@@ -21,6 +25,9 @@
   // The in-flight narration, shown until it is saved (then it arrives as an event) or discarded.
   let live = $state('')
   let thinking = $state(false)
+  // Event inspector data for the latest run (development only).
+  let steps = $state<StepMessage[]>([])
+  let stats = $state<RunStats | null>(null)
   let controller: AbortController | null = null
 
   const events = $derived(
@@ -36,6 +43,8 @@
     busy = true
     problem = null
     controller = new AbortController()
+    steps = []
+    stats = null
     try {
       problem = await sendAction(
         data.session.id,
@@ -45,7 +54,9 @@
           else if (message.type === 'delta') {
             thinking = false
             live += message.text
-          } else if (message.type === 'discard') live = ''
+          } else if (message.type === 'step') steps.push(message)
+          else if (message.type === 'stats') stats = message.stats
+          else if (message.type === 'discard') live = ''
           else if (message.type === 'event') {
             thinking = false
             live = ''
@@ -96,8 +107,13 @@
     <Alert variant="info">Session ended. This log is read-only.</Alert>
   {/if}
 
-  <!-- Three columns once the event inspector lands; scene state | story log | inspector. -->
-  <div class="grid grid-cols-1 gap-3 lg:grid-cols-[18rem_1fr]">
+  <!-- Scene state | story log | event inspector (development only). -->
+  <div
+    class={[
+      'grid grid-cols-1 gap-3',
+      dev ? 'lg:grid-cols-[18rem_1fr_20rem]' : 'lg:grid-cols-[18rem_1fr]'
+    ]}
+  >
     <SceneStatePanel scene={data.scene} />
 
     <section aria-label="Story" class="flex min-h-96 flex-col gap-3">
@@ -133,5 +149,9 @@
         </form>
       {/if}
     </section>
+
+    {#if dev}
+      <EventInspector {steps} {stats} />
+    {/if}
   </div>
 </main>
