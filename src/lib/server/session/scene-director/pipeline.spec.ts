@@ -5,7 +5,7 @@ import { createSceneRunner, type PipelineEvent } from '../scene-runner.ts'
 import { createSessionService, type SessionService } from '../service'
 import { buildMenu, parsePick } from './menu.ts'
 import { MENU_OPTIONS } from './options.ts'
-import { createDirectorPipeline } from './pipeline.ts'
+import { createDirectorPipeline, STEP_LIMIT } from './pipeline.ts'
 
 let sessions: SessionService
 let sessionId: string
@@ -33,7 +33,12 @@ async function play(text: string, signal = new AbortController().signal) {
 
 const log = () => sessions.events(sessionId).map((e) => `${e.role}:${e.kind}:${e.text}`)
 const types = (events: PipelineEvent[]) =>
-  events.map((e) => (e.type === 'done' ? `done:${e.reason}` : e.type))
+  events
+    .filter((e) => e.type !== 'step' && e.type !== 'stats')
+    .map((e) => (e.type === 'done' ? `done:${e.reason}` : e.type))
+
+const stepsOf = (events: PipelineEvent[]) => events.flatMap((e) => (e.type === 'step' ? [e] : []))
+const statsOf = (events: PipelineEvent[]) => events.findLast((e) => e.type === 'stats')?.stats
 
 describe('the menu', () => {
   const menuOf = (events = sessions.events(sessionId)) =>
@@ -96,9 +101,63 @@ describe('a run', () => {
     expect(log()).toEqual(['player:player-action:I wait'])
   })
 
-  it('treats an unusable Director answer as yield', async () => {
-    model.enqueue(says('???'))
-    expect((await play('hm')).at(-1)).toEqual({ type: 'done', reason: 'yield' })
+  it('retries an invalid pick once and uses the retry answer', async () => {
+    model.enqueue(says('???'), says('yield'))
+    const events = await play('hm')
+    expect(model.requests).toHaveLength(2)
+    expect(model.requests[1].messages.at(-1)?.content).toContain('narrate')
+    expect(events.at(-1)).toEqual({ type: 'done', reason: 'yield' })
+    expect(statsOf(events)).toMatchObject({ retries: 1, fallbacks: 0, directorCalls: 2 })
+  })
+
+  it('falls back to a code-chosen pick after a second invalid answer', async () => {
+    model.enqueue(says('???'), says('still no'), says('Rain falls.'), says('yield'))
+    const events = await play('hm')
+    // A fresh player action falls back to narrate; the next step is a normal pick.
+    expect(log()).toContain('narrator:narration:Rain falls.')
+    expect(stepsOf(events)[0]).toMatchObject({ pick: 'narrate', retried: true, fallback: true })
+    expect(statsOf(events)).toMatchObject({ retries: 1, fallbacks: 1 })
+  })
+
+  it('falls back to yield when there is nothing sensible to do', async () => {
+    model.enqueue(says('narrate'), says('Rain.'), says('???'), says('???'))
+    const events = await play('hm')
+    expect(events.at(-1)).toEqual({ type: 'done', reason: 'yield' })
+    expect(statsOf(events)).toMatchObject({ retries: 1, fallbacks: 1 })
+  })
+
+  it('reports each step with its role and pick', async () => {
+    model.enqueue(says('narrate'), says('Rain.'), says('yield'))
+    const steps = stepsOf(await play('hm'))
+    expect(steps.map((s) => [s.step, s.role, s.pick])).toEqual([
+      [1, 'director', 'narrate'],
+      [2, 'director', 'yield']
+    ])
+    expect(steps[0].menu).toEqual(['narrate', 'yield'])
+  })
+
+  it('stops at the step cap and counts the cap hit', async () => {
+    const opt = {
+      verb: 'spin',
+      offer: () => [{ id: 'spin', hint: 'spin' }],
+      async *run() {
+        yield* []
+        return { type: 'continue' as const }
+      }
+    }
+    for (let i = 0; i < STEP_LIMIT; i++) model.enqueue(says('spin'))
+    const runner = createSceneRunner({
+      sessions,
+      port: model.port,
+      pipeline: createDirectorPipeline([opt])
+    })
+    const result = runner.begin(sessionId, 'go', new AbortController().signal)
+    if (!result.ok) throw new Error(result.reason)
+    const events: PipelineEvent[] = []
+    for await (const e of result.events) events.push(e)
+    expect(events.at(-1)).toEqual({ type: 'done', reason: 'cap' })
+    expect(stepsOf(events)).toHaveLength(STEP_LIMIT)
+    expect(statsOf(events)).toMatchObject({ steps: STEP_LIMIT, capHits: 1 })
   })
 
   it('gives the Director only the menu code built, in a non-streaming small call', async () => {

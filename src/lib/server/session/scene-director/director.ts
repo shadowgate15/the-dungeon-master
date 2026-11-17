@@ -18,14 +18,20 @@ const DIRECTOR_SYSTEM = [
 export function askDirector(
   ctx: PipelineContext,
   menu: MenuContext,
-  entries: MenuEntry[]
+  entries: MenuEntry[],
+  retry = false
 ): Promise<string | undefined> {
   const { scene } = menu
   const prompt = [
     `Location: ${scene.location.name}`,
     `Mode: ${scene.mode}`,
     `Recent events:\n${recentLines(menu.events)}`,
-    `Options:\n${entries.map((e) => `${e.id}: ${e.hint}`).join('\n')}`
+    `Options:\n${entries.map((e) => `${e.id}: ${e.hint}`).join('\n')}`,
+    ...(retry
+      ? [
+          `Your last answer was not one of the option ids. Reply with exactly one of: ${entries.map((e) => e.id).join(', ')}`
+        ]
+      : [])
   ].join('\n\n')
   return collectText(ctx.port, {
     systemPrompts: [DIRECTOR_SYSTEM],
