@@ -6,7 +6,8 @@ import {
   integer,
   primaryKey,
   sqliteTable,
-  text
+  text,
+  uniqueIndex
 } from 'drizzle-orm/sqlite-core'
 import { LENGTHS, TONES } from '../../campaign/enums'
 import { ABILITY_KEYS } from '../../rules/registry'
@@ -22,6 +23,14 @@ import {
   subrace
 } from './rules-schema'
 import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '../../world/enums'
+import {
+  EVENT_KINDS,
+  MODES,
+  ROLES,
+  type PendingRoll,
+  type SceneExit,
+  type SceneNpc
+} from '../../session/enums'
 
 export const task = sqliteTable('task', {
   id: text('id')
@@ -228,6 +237,81 @@ export const campaignCharacter = sqliteTable(
       .references(() => character.id, { onDelete: 'cascade' })
   },
   (t) => [primaryKey({ columns: [t.campaignId, t.characterId] })]
+)
+
+/**
+ * One sitting of play, by one Character. Open while `ended_at` is null; the partial unique index
+ * allows at most one open Session per Campaign. It owns one Scene and an Event log.
+ */
+export const session = sqliteTable(
+  'session',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    campaignId: text('campaign_id')
+      .notNull()
+      .references(() => campaign.id, { onDelete: 'cascade' }),
+    // Restrict: a Character that played is never deleted, since that would erase the Event log.
+    characterId: text('character_id')
+      .notNull()
+      .references(() => character.id, { onDelete: 'restrict' }),
+    startedAt: integer('started_at').notNull(),
+    endedAt: integer('ended_at')
+  },
+  (t) => [
+    uniqueIndex('session_one_open_per_campaign')
+      .on(t.campaignId)
+      .where(sql`ended_at IS NULL`)
+  ]
+)
+
+/** A Session's Scene: where and how play stands now. One row per Session; only code writes it. */
+export const sessionScene = sqliteTable(
+  'session_scene',
+  {
+    sessionId: text('session_id')
+      .primaryKey()
+      .references(() => session.id, { onDelete: 'cascade' }),
+    locationName: text('location_name').notNull(),
+    locationDescription: text('location_description').notNull(),
+    exits: text('exits', { mode: 'json' }).$type<SceneExit[]>().notNull(),
+    objects: text('objects', { mode: 'json' }).$type<string[]>().notNull(),
+    npcs: text('npcs', { mode: 'json' }).$type<SceneNpc[]>().notNull(),
+    mode: text('mode', { enum: MODES }).notNull(),
+    dialogueNpcId: text('dialogue_npc_id'),
+    pendingRoll: text('pending_roll', { mode: 'json' }).$type<PendingRoll>(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  () => [check('session_scene_mode_check', oneOf('mode', MODES))]
+)
+
+/**
+ * A Session's Event log, append-only: the service has no update or delete. `seq` is monotonic per
+ * Session. Every event records the role that produced it.
+ */
+export const sessionEvent = sqliteTable(
+  'session_event',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => session.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    role: text('role', { enum: ROLES }).notNull(),
+    kind: text('kind', { enum: EVENT_KINDS }).notNull(),
+    text: text('text'),
+    npcId: text('npc_id'),
+    data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [
+    uniqueIndex('session_event_session_seq').on(t.sessionId, t.seq),
+    check('session_event_role_check', oneOf('role', ROLES)),
+    check('session_event_kind_check', oneOf('kind', EVENT_KINDS))
+  ]
 )
 
 export const ARC_STATUSES = ['draft', 'accepted'] as const

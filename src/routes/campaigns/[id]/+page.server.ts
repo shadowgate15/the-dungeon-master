@@ -1,4 +1,5 @@
-import { error, fail } from '@sveltejs/kit'
+import { error, fail, redirect } from '@sveltejs/kit'
+import { resolve } from '$app/paths'
 import {
   CampaignNotFoundError,
   CampaignValidationError,
@@ -7,6 +8,8 @@ import {
 import { createCharacterService } from '#lib/server/character/service.ts'
 import { arcs } from '#lib/server/arc/index.ts'
 import { db } from '#lib/server/db/index.ts'
+import { SessionAlreadyOpenError, SessionValidationError } from '#lib/server/session/service.ts'
+import { sessions } from '#lib/server/session/index.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 const campaigns = createCampaignService(db)
@@ -29,7 +32,14 @@ export const load: PageServerLoad = ({ params }) => {
     linkedCharacter: linkedId ? { id: linkedId, name: characters.get(linkedId)?.name ?? '' } : null,
     characters: characters.list().map((c) => ({ id: c.id, name: c.name })),
     arc,
-    arcAvailability: arcs.availability(found.id)
+    arcAvailability: arcs.availability(found.id),
+    openSessionId: sessions.openFor(found.id)?.id ?? null,
+    sessions: sessions.listNumbered(found.id).map((s) => ({
+      id: s.id,
+      number: s.number,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt
+    }))
   }
 }
 
@@ -44,5 +54,20 @@ export const actions: Actions = {
       throw e
     }
     return { linked: true }
+  },
+
+  startSession: ({ params }) => {
+    let started
+    try {
+      started = sessions.start(params.id)
+    } catch (e) {
+      if (e instanceof SessionAlreadyOpenError || e instanceof SessionValidationError)
+        return fail(400, { error: e.message })
+      throw e
+    }
+    redirect(
+      303,
+      resolve('/campaigns/[id]/sessions/[sessionId]', { id: params.id, sessionId: started.id })
+    )
   }
 }
