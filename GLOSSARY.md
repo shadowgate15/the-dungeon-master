@@ -121,7 +121,7 @@ A Session's append-only record of play, replacing a transcript of alternating ex
 _Avoid_: Transcript, history, chat
 
 **Arc**:
-The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It is the player's plan for the story, not a script. The player can review, edit and regenerate it on the Campaign page, and may keep editing it, structure included, until the Campaign is archived or its World is. The Director does not read it yet.
+The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It is the player's plan for the story, not a script. The player can review, edit and regenerate it on the Campaign page until the Campaign's first Session is created; the Arc must be accepted before a Session can start, and it is read-only from then on. The Director and Narrator steer by it: the Narrator sees the current Act and its open Beats, the Director only a compact summary.
 _Avoid_: Plot, storyline, script, outline
 
 **Act**:
@@ -129,8 +129,12 @@ A named phase of an Arc, such as setup, escalation or climax, with a one-line pu
 _Avoid_: Chapter, part
 
 **Beat**:
-A turning point or outcome the story should reach, with a title and a sentence or two of description, such as "the Characters learn the vizier is the cult's patron". It says what should become true, never how to get there. A Beat is not tied to one Session: a Session may reach several Beats or none.
+A turning point or outcome the story should reach, with a title and a sentence or two of description, such as "the Characters learn the vizier is the cult's patron". It says what should become true, never how to get there. A Beat is not tied to one Session: a Session may reach several Beats or none. A Beat has a **Beat state**.
 _Avoid_: Quest, objective, milestone
+
+**Beat state**:
+Whether a Beat is pending, reached or abandoned. A Beat leaves pending once and never returns. It is reached when play clearly established its outcome, and abandoned when the story made it impossible or irrelevant, or moved past its Act. Code validates and applies every change; the player never edits it. The current Act is the Act of the first pending Beat, and the Arc is complete when no Beat is pending.
+_Avoid_: Progress, status
 
 **World memory** (planned, not built yet):
 The structured, Campaign-scoped record of what the DM has established: NPCs, places, factions, events and facts. Code validates and stores it, and the AI only proposes changes to it; code applies them. Records are never deleted, only retired, and each carries the Session and event it came from. Nothing carries over between Campaigns, even in a shared World.
