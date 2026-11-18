@@ -133,15 +133,27 @@ A turning point or outcome the story should reach, with a title and a sentence o
 _Avoid_: Quest, objective, milestone
 
 **World memory** (planned, not built yet):
-The structured, Campaign-scoped record of what the DM has established: NPCs, places, factions, events and facts. Code validates and stores it, and the AI only proposes changes to it; code applies them. Records are never deleted, only retired, and each carries the Session and event it came from. Nothing carries over between Campaigns, even in a shared World.
+The structured, Campaign-scoped record of what the DM has established: places, NPCs and facts, with factions and events to follow once something writes them. Code validates and stores it, and the AI only proposes changes to it; code applies them. Records are never deleted, only retired, and each carries the Session and event it was created and last changed in. A place belongs to one of the Campaign's Worlds. Nothing carries over between Campaigns, even in a shared World.
 _Avoid_: Lore, state, notes
 
+**Place**:
+A location the story has established, with a name, a description and exits leading to other places. An exit's destination stays open until someone first goes through it, so returning through it leads to the same place. A Scene is set at a place. A place is World memory.
+_Avoid_: Room, location, map
+
+**Fact**:
+A short claim the story has established, such as "the vizier is the cult's patron", optionally marked as having changed the world itself. A fact is never edited: it changes only by being superseded by a newer fact or retired as mistaken. A fact is World memory.
+_Avoid_: Lore, note, secret
+
+**Retired**:
+A World memory record withdrawn as mistaken or no longer relevant, with a reason. It stays on record but is no longer used. Retiring is separate from an NPC's status: a dead NPC is not retired.
+_Avoid_: Deleted, archived, removed
+
 **NPC**:
-A non-player character the DM has introduced: a name, a short description, a role and a status (alive, dead, missing or departed). A dead NPC stays dead unless the story explicitly revives them for a stated reason. An NPC is World memory, not a Character.
+A non-player character the DM has introduced: a name, a short description, a role and a status (alive, dead, missing or departed). A dead NPC stays dead unless the story explicitly revives them for a stated reason. An NPC is placed at a place, which is where they are or were last seen. An NPC is World memory, not a Character.
 _Avoid_: Character, monster, contact
 
 **NPC memory** (planned, not built yet):
-What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the Director and the Journal would show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character.
+What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the Director and the Journal would show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character. A Scene's attitude for an NPC is the same stance, shown in the Scene.
 _Avoid_: Relationship score, reputation
 
 **Journal** (planned, not built yet):
