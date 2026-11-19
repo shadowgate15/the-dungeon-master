@@ -172,6 +172,6 @@ _Avoid_: Retrieval, context stuffing, RAG
 A short prose account of a Session's earlier events, kept so the Narrator can continue once the Event log outgrows its context. A separate model call writes it, not the Narrator, merging the previous summary with newly covered events, so it is rewritten rather than appended and stays bounded. It carries story and never numbers, which code and the database own. Its **watermark** is the last event it covers: events after the watermark are shown verbatim, and the watermark moves only when a summary succeeds. A Session's last summary is what the next Session's "Previously" recap shows.
 _Avoid_: Recap, compaction, memory
 
-**Journal** (planned, not built yet):
-The player's read-only view of World memory: the NPCs, places, factions, events and facts the DM has established, grouped by the Session they first appeared in, with chips marking what is new or changed since the player last looked. It cannot be edited.
+**Journal**:
+The player's read-only view of World memory, pure code with no model call: People, Places and Facts, grouped by the Session they first appeared in, newest first. An NPC appears only once the player has met them (in a Scene or in the story) and shows name, role, status and stance toward the playing Character only, never what they know. It cannot be edited.
 _Avoid_: Codex, log, notes
