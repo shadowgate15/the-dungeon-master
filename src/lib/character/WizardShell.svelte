@@ -50,6 +50,12 @@
   })
   const active = $derived(wizard.step(wizard.current))
   const View = $derived(STEP_VIEWS[wizard.current])
+  /** The steps keeping Review locked, so the player sees why Next cannot get there. */
+  const blockingReview = $derived(
+    wizard.steps.some((s) => s.id === 'review' && s.status === 'locked')
+      ? wizard.steps.filter((s) => s.id !== 'review' && s.status !== 'valid').map((s) => s.label)
+      : []
+  )
 </script>
 
 <svelte:window
@@ -97,6 +103,12 @@
       {/if}
       <View {wizard} />
     </div>
+
+    {#if blockingReview.length > 0}
+      <p class="text-sm text-muted" data-testid="review-blockers">
+        Review unlocks when every step is done. Still open: {blockingReview.join(', ')}.
+      </p>
+    {/if}
 
     <div class="flex justify-between">
       <Button

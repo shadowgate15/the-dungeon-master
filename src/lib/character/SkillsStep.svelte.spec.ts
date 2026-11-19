@@ -63,6 +63,17 @@ describe('SkillsStep', () => {
     await expect.element(group(/Fighting Style/)).toHaveTextContent('0 of 1')
   })
 
+  it('says how many picks an unfinished group still needs, next to the group', async () => {
+    setup({})
+    const skillsGroup = group(/Choose two skills/)
+
+    await expect.element(skillsGroup).toHaveTextContent('Choose 2 more to finish this step.')
+    await skillsGroup.getByRole('checkbox', { name: 'Athletics' }).click()
+    await expect.element(skillsGroup).toHaveTextContent('Choose 1 more to finish this step.')
+    await skillsGroup.getByRole('checkbox', { name: 'Acrobatics' }).click()
+    await expect.element(skillsGroup).not.toHaveTextContent('to finish this step')
+  })
+
   it('stops at the pick count by disabling the remaining options', async () => {
     const w = setup({})
     const skillsGroup = group(/Choose two skills/)
