@@ -46,7 +46,7 @@ beforeEach(() => {
 describe('Arc service', () => {
   it('has no Arc until one is generated, and can generate on an editable Campaign', () => {
     expect(arcs.get(campaignId)).toBeNull()
-    expect(arcs.availability(campaignId)).toEqual({ canGenerate: true })
+    expect(arcs.availability(campaignId)).toEqual({ canGenerate: true, locked: false })
   })
 
   it('stores a generated Arc as a draft with stable Beat ids', () => {

@@ -12,6 +12,9 @@
   let { data, form } = $props()
 
   const locked = $derived(data.campaign.archived || data.campaign.readOnly)
+  const arcAccepted = $derived(data.arc?.status === 'accepted')
+  let starting = $state(false)
+  const startFailed = $derived(Boolean(form && 'retry' in form && form.retry))
 </script>
 
 <svelte:head><title>{data.campaign.name}</title></svelte:head>
@@ -30,7 +33,7 @@
       edit it.
     </Alert>
   {/if}
-  {#if form && 'error' in form && form.error}
+  {#if form && 'error' in form && form.error && !startFailed}
     <Alert variant="danger">{form.error}</Alert>
   {/if}
 
@@ -41,7 +44,12 @@
     {:else}
       <p class="text-muted">No Character linked yet.</p>
     {/if}
-    {#if data.characters.length === 0}
+    {#if data.characterLocked}
+      <p class="text-sm text-muted">
+        The Character is fixed because this Campaign has a Session. It cannot be changed or
+        unlinked.
+      </p>
+    {:else if data.characters.length === 0}
       <p class="text-sm">
         You have no Characters yet. <Link href={resolve('/characters/new')}>Create one</Link>.
       </p>
@@ -57,6 +65,11 @@
         </label>
         <Button type="submit" variant="secondary">Link Character</Button>
       </form>
+      {#if data.linkedCharacter}
+        <form method="POST" action="?/unlinkCharacter" use:enhance>
+          <Button type="submit" variant="secondary">Unlink Character</Button>
+        </form>
+      {/if}
     {/if}
   </section>
 
@@ -65,7 +78,7 @@
     length={data.campaign.length}
     arc={data.arc}
     canGenerate={data.arcAvailability.canGenerate}
-    readOnly={locked}
+    readOnly={locked || data.arcAvailability.locked}
     onchange={() => invalidateAll()}
   />
 
@@ -79,11 +92,31 @@
         })}>Resume Session</Button
       >
     {:else}
-      <form method="POST" action="?/startSession" use:enhance>
-        <Button type="submit" disabled={locked || !data.linkedCharacter}>Start Session</Button>
+      {#if startFailed && form && 'error' in form}
+        <Alert variant="danger">{form.error}</Alert>
+      {/if}
+      <form
+        method="POST"
+        action="?/startSession"
+        use:enhance={() => {
+          starting = true
+          return async ({ update }) => {
+            await update()
+            starting = false
+          }
+        }}
+      >
+        <Button
+          type="submit"
+          disabled={locked || !data.linkedCharacter || !arcAccepted || starting}
+        >
+          {starting ? 'Preparing the opening Scene…' : startFailed ? 'Retry' : 'Start Session'}
+        </Button>
       </form>
       {#if !data.linkedCharacter && !locked}
         <p class="text-sm text-muted">Link a Character to start a Session.</p>
+      {:else if !arcAccepted && !locked}
+        <p class="text-sm text-muted">Accept the Arc to start a Session.</p>
       {/if}
     {/if}
     {#if data.sessions.length > 0}

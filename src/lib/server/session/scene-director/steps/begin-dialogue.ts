@@ -13,15 +13,15 @@ export const beginDialogueOption: MenuOption = {
   offer: ({ scene }) =>
     scene.mode === 'exploration'
       ? scene.npcs.map((npc) => ({
-          id: makeOptionId(VERB, npc.id),
+          id: makeOptionId(VERB, npc.key),
           hint: `Start a conversation with ${npc.name} (${npc.attitude}).`
         }))
       : [],
   async *run(ctx, optionId, menu) {
-    const npcId = parseOptionId(optionId).arg
-    const npc = menu.scene.npcs.find((n) => n.id === npcId)
+    const key = parseOptionId(optionId).arg
+    const npc = menu.scene.npcs.find((n) => n.key === key)
     if (menu.scene.mode !== 'exploration' || !npc) {
-      throw new Error(`Cannot begin dialogue with ${npcId}`)
+      throw new Error(`Cannot begin dialogue with ${key}`)
     }
     ctx.sessions.saveScene(ctx.sessionId, {
       ...menu.scene,

@@ -1,15 +1,9 @@
 import { callText, type TextCall } from '../../ai/port.ts'
 import type { PipelineContext } from '../scene-runner.ts'
-import { recentLines } from './prompt.ts'
+import { buildDirectorContext } from '../context/director.ts'
 import type { MenuContext, MenuEntry } from './types.ts'
 
 const DIRECTOR_MAX_TOKENS = 48
-
-const DIRECTOR_SYSTEM = [
-  'You direct a tabletop role-playing game.',
-  'Reply with ONLY the id of one option from the list, nothing else.',
-  'Prefer yield once the player has something to respond to.'
-].join(' ')
 
 /**
  * Asks the Director to pick one menu option: a non-streaming call that returns a short enum value.
@@ -21,21 +15,17 @@ export function askDirector(
   entries: MenuEntry[],
   retry = false
 ): Promise<TextCall> {
-  const { scene } = menu
-  const prompt = [
-    `Location: ${scene.location.name}`,
-    `Mode: ${scene.mode}`,
-    `Recent events:\n${recentLines(menu.events)}`,
-    `Options:\n${entries.map((e) => `${e.id}: ${e.hint}`).join('\n')}`,
-    ...(retry
-      ? [
-          `Your last answer was not one of the option ids. Reply with exactly one of: ${entries.map((e) => e.id).join(', ')}`
-        ]
-      : [])
-  ].join('\n\n')
+  const built = buildDirectorContext({
+    scene: menu.scene,
+    entries,
+    events: menu.events,
+    arcLine: ctx.steering?.()?.directorLine,
+    retry
+  })
+  ctx.report?.(built.report)
   return callText(ctx.port, {
-    systemPrompts: [DIRECTOR_SYSTEM],
-    messages: [{ role: 'user', content: prompt }],
+    systemPrompts: [built.system],
+    messages: [{ role: 'user', content: built.prompt }],
     maxTokens: DIRECTOR_MAX_TOKENS,
     threadId: ctx.sessionId,
     signal: ctx.signal

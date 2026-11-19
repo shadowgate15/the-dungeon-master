@@ -121,7 +121,7 @@ A Session's append-only record of play, replacing a transcript of alternating ex
 _Avoid_: Transcript, history, chat
 
 **Arc**:
-The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It is the player's plan for the story, not a script. The player can review, edit and regenerate it on the Campaign page, and may keep editing it, structure included, until the Campaign is archived or its World is. The Director does not read it yet.
+The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It is the player's plan for the story, not a script. The player can review, edit and regenerate it on the Campaign page until the Campaign's first Session is created; the Arc must be accepted before a Session can start, and it is read-only from then on. The Director and Narrator steer by it: the Narrator sees the current Act and its open Beats, the Director only a compact summary.
 _Avoid_: Plot, storyline, script, outline
 
 **Act**:
@@ -129,21 +129,49 @@ A named phase of an Arc, such as setup, escalation or climax, with a one-line pu
 _Avoid_: Chapter, part
 
 **Beat**:
-A turning point or outcome the story should reach, with a title and a sentence or two of description, such as "the Characters learn the vizier is the cult's patron". It says what should become true, never how to get there. A Beat is not tied to one Session: a Session may reach several Beats or none.
+A turning point or outcome the story should reach, with a title and a sentence or two of description, such as "the Characters learn the vizier is the cult's patron". It says what should become true, never how to get there. A Beat is not tied to one Session: a Session may reach several Beats or none. A Beat has a **Beat state**.
 _Avoid_: Quest, objective, milestone
 
-**World memory** (planned, not built yet):
-The structured, Campaign-scoped record of what the DM has established: NPCs, places, factions, events and facts. Code validates and stores it, and the AI only proposes changes to it; code applies them. Records are never deleted, only retired, and each carries the Session and event it came from. Nothing carries over between Campaigns, even in a shared World.
+**Beat state**:
+Whether a Beat is pending, reached or abandoned. A Beat leaves pending once and never returns. It is reached when play clearly established its outcome, and abandoned when the story made it impossible or irrelevant, or moved past its Act. Code validates and applies every change; the player never edits it. The current Act is the Act of the first pending Beat, and the Arc is complete when no Beat is pending.
+_Avoid_: Progress, status
+
+**Arc lock**:
+The rule that an Arc must be accepted before a Campaign's first Session starts, and is read-only from then on, so Beat state stays meaningful. The Campaign's linked Character is locked in the same way once its first Session exists.
+_Avoid_: Freeze, finalize
+
+**World memory**:
+The structured, Campaign-scoped record of what the DM has established: places, NPCs and facts, with factions and events to follow once something writes them. Code validates and stores it, and the AI only proposes changes to it; code applies them. Records are never deleted, only retired, and each carries the Session and event it was created and last changed in. A place belongs to one of the Campaign's Worlds. Nothing carries over between Campaigns, even in a shared World.
 _Avoid_: Lore, state, notes
 
+**Place**:
+A location the story has established, with a name, a description and exits leading to other places. An exit's destination stays open until someone first goes through it, so returning through it leads to the same place. A Scene is set at a place. A place is World memory.
+_Avoid_: Room, location, map
+
+**Fact**:
+A short claim the story has established, such as "the vizier is the cult's patron", optionally marked as having changed the world itself. A fact is never edited: it changes only by being superseded by a newer fact or retired as mistaken. A fact is World memory.
+_Avoid_: Lore, note, secret
+
+**Retired**:
+A World memory record withdrawn as mistaken or no longer relevant, with a reason. It stays on record but is no longer used. Retiring is separate from an NPC's status: a dead NPC is not retired.
+_Avoid_: Deleted, archived, removed
+
 **NPC**:
-A non-player character the DM has introduced: a name, a short description, a role and a status (alive, dead, missing or departed). A dead NPC stays dead unless the story explicitly revives them for a stated reason. An NPC is World memory, not a Character.
+A non-player character the DM has introduced: a name, a short description, a role and a status (alive, dead, missing or departed). A dead NPC stays dead unless the story explicitly revives them for a stated reason. An NPC is placed at a place, which is where they are or were last seen. An NPC is World memory, not a Character.
 _Avoid_: Character, monster, contact
 
-**NPC memory** (planned, not built yet):
-What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the Director and the Journal would show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character.
+**NPC memory**:
+What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the Director and the Journal would show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character. A Scene's attitude for an NPC is the same stance, shown in the Scene.
 _Avoid_: Relationship score, reputation
 
-**Journal** (planned, not built yet):
-The player's read-only view of World memory: the NPCs, places, factions, events and facts the DM has established, grouped by the Session they first appeared in, with chips marking what is new or changed since the player last looked. It cannot be edited.
+**World memory selection**:
+Choosing which World memory the Narrator sees on a run, within a fixed budget. The **core** is always included: the Scene's NPCs and place, the facts marked as changing the world, and one compact line naming the dead or retired. Everything else is **scored** each run by being named in recent history, being linked to an NPC in the Scene, and having changed recently, and is trimmed lowest score first. It is a pure function of the records, the history text and the budget. The Narrator sees selected facts but never what an individual NPC knows.
+_Avoid_: Retrieval, context stuffing, RAG
+
+**Rolling summary**:
+A short prose account of a Session's earlier events, kept so the Narrator can continue once the Event log outgrows its context. A separate model call writes it, not the Narrator, merging the previous summary with newly covered events, so it is rewritten rather than appended and stays bounded. It carries story and never numbers, which code and the database own. Its **watermark** is the last event it covers: events after the watermark are shown verbatim, and the watermark moves only when a summary succeeds. A Session's last summary is what the next Session's "Previously" recap shows.
+_Avoid_: Recap, compaction, memory
+
+**Journal**:
+The player's read-only view of World memory, pure code with no model call: People, Places and Facts, grouped by the Session they first appeared in, newest first. An NPC appears only once the player has met them (in a Scene or in the story) and shows name, role, status and stance toward the playing Character only, never what they know. It cannot be edited.
 _Avoid_: Codex, log, notes

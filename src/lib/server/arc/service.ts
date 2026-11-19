@@ -2,7 +2,7 @@ import { asc, eq, inArray } from 'drizzle-orm'
 import { arcProblems, type ArcDraft } from '#lib/arc/arc.ts'
 import type { Length } from '#lib/campaign/enums.ts'
 import type { Database } from '../db/connect'
-import { arc, arcAct, arcBeat, campaign } from '../db/schema'
+import { arc, arcAct, arcBeat, campaign, session } from '../db/schema'
 import { createWorldService } from '../world/service'
 
 /** The input breaks an Arc rule (size ranges, blank or over-long text, no Arc to edit). */
@@ -49,7 +49,14 @@ export function createArcService(db: Database, now: () => number = Date.now) {
     const camp = db.select().from(campaign).where(eq(campaign.id, campaignId)).get()
     if (!camp) throw new ArcValidationError('Campaign not found')
     const readOnly = camp.archivedAt !== null || worlds.isCampaignReadOnly(campaignId)
-    return { length: camp.length as Length, readOnly }
+    // The Arc lock: once the Campaign's first Session exists, the Arc is read-only.
+    const locked =
+      db
+        .select({ id: session.id })
+        .from(session)
+        .where(eq(session.campaignId, campaignId))
+        .get() !== undefined
+    return { length: camp.length as Length, readOnly: readOnly || locked, locked }
   }
 
   function load(campaignId: string): ArcView | null {
@@ -113,13 +120,14 @@ export function createArcService(db: Database, now: () => number = Date.now) {
 
     /** What the Campaign page may offer: Generate and Regenerate on an editable Campaign. */
     availability(campaignId: string) {
-      const { readOnly } = context(campaignId)
-      return { canGenerate: !readOnly }
+      const { readOnly, locked } = context(campaignId)
+      return { canGenerate: !readOnly, locked }
     },
 
     /** Replaces the whole Arc (if any) with a freshly generated draft. */
     replaceWithDraft(campaignId: string, generated: ArcDraft): ArcView {
-      const { length, readOnly } = context(campaignId)
+      const { length, readOnly, locked } = context(campaignId)
+      if (locked) throw new ArcLockedError('The Arc is read-only once the first Session exists')
       if (readOnly) throw new ArcLockedError('This Campaign is read-only')
       const problems = arcProblems(generated, length, { generated: true })
       if (problems.length) throw new ArcValidationError(problems.join('; '))
@@ -167,7 +175,8 @@ export function createArcService(db: Database, now: () => number = Date.now) {
      * `accept` marks the Arc accepted; saving never turns an accepted Arc back into a draft.
      */
     save(campaignId: string, input: ArcEdit, options: { accept?: boolean } = {}): ArcView {
-      const { length, readOnly } = context(campaignId)
+      const { length, readOnly, locked } = context(campaignId)
+      if (locked) throw new ArcLockedError('The Arc is read-only once the first Session exists')
       if (readOnly) throw new ArcLockedError('This Campaign is read-only')
       const current = load(campaignId)
       if (!current) throw new ArcValidationError('There is no Arc to edit')

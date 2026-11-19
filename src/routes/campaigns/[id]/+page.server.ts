@@ -8,7 +8,11 @@ import {
 import { createCharacterService } from '#lib/server/character/service.ts'
 import { arcs } from '#lib/server/arc/index.ts'
 import { db } from '#lib/server/db/index.ts'
-import { SessionAlreadyOpenError, SessionValidationError } from '#lib/server/session/service.ts'
+import {
+  SessionAlreadyOpenError,
+  SessionStartError,
+  SessionValidationError
+} from '#lib/server/session/service.ts'
 import { sessions } from '#lib/server/session/index.ts'
 import type { Actions, PageServerLoad } from './$types'
 
@@ -30,6 +34,7 @@ export const load: PageServerLoad = ({ params }) => {
       readOnly: campaigns.isReadOnly(found.id)
     },
     linkedCharacter: linkedId ? { id: linkedId, name: characters.get(linkedId)?.name ?? '' } : null,
+    characterLocked: campaigns.characterLocked(found.id),
     characters: characters.list().map((c) => ({ id: c.id, name: c.name })),
     arc,
     arcAvailability: arcs.availability(found.id),
@@ -56,13 +61,26 @@ export const actions: Actions = {
     return { linked: true }
   },
 
-  startSession: ({ params }) => {
+  unlinkCharacter: async ({ params }) => {
+    try {
+      campaigns.unlinkCharacter(params.id)
+    } catch (e) {
+      if (e instanceof CampaignValidationError || e instanceof CampaignNotFoundError)
+        return fail(400, { error: e.message })
+      throw e
+    }
+    return { unlinked: true }
+  },
+
+  startSession: async ({ params }) => {
     let started
     try {
-      started = sessions.start(params.id)
+      started = await sessions.start(params.id)
     } catch (e) {
       if (e instanceof SessionAlreadyOpenError || e instanceof SessionValidationError)
         return fail(400, { error: e.message })
+      // The opening Scene could not be generated: nothing was created, the player may retry.
+      if (e instanceof SessionStartError) return fail(502, { error: e.message, retry: true })
       throw e
     }
     redirect(

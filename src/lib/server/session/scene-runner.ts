@@ -8,9 +8,13 @@
  * roll. The stream ends with exactly one `done` event saying why control returned to the player.
  */
 import type { SessionEvent } from '#lib/session/enums.ts'
-import type { PipelineEvent } from '#lib/session/pipeline-events.ts'
+import type { ContextReport, PipelineEvent } from '#lib/session/pipeline-events.ts'
 import type { ChatPort } from '../ai/port.ts'
+import type { BeatProgress, Steering } from '../arc/beat-progress.ts'
+import type { MemoryExtraction } from '../memory/extraction.ts'
+import type { RollingSummary } from '../memory/summary.ts'
 import { dice as defaultDice, type Dice } from '../dice.ts'
+import type { ContextSources } from './context/sources.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
 export type { DoneReason, PipelineEvent, RunStats } from '#lib/session/pipeline-events.ts'
@@ -22,6 +26,12 @@ export interface PipelineContext {
   port: ChatPort
   /** Aborted when the player presses Stop or disconnects. */
   signal: AbortSignal
+  /** The Arc steering for the prompts, read fresh per call; null (or absent) when there is none. */
+  steering?: () => Steering | null
+  /** The Rolling summary and World memory for the Narrator's context; absent in some tests. */
+  context?: ContextSources
+  /** Reports a built context's usage, so the pipeline can add it to the run's stats. */
+  report?: (report: ContextReport) => void
 }
 
 /** One run after the player's action: yields pipeline events, ending with a `done`. */
@@ -45,6 +55,14 @@ export interface SceneRunnerDeps {
   dice?: Dice
   /** The Character's modifier for a pending roll's check. Defaults to 0. */
   rollModifier?: (sessionId: string, check: string) => number
+  /** Arc Beat-progress: steering for the prompts and the silent Beat check after each run. */
+  beatProgress?: BeatProgress
+  /** World memory extraction, fired in the background after each run that yields or rolls. */
+  memory?: MemoryExtraction
+  /** The Rolling summary, fired in the background alongside extraction. */
+  summary?: RollingSummary
+  /** What the Narrator's context reads beyond the log and Scene (summary, World memory). */
+  contextSources?: ContextSources
 }
 
 export function createSceneRunner(deps: SceneRunnerDeps) {
@@ -53,14 +71,44 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   // Sessions with a run in flight. Claimed synchronously when a run starts, so two quick requests
   // cannot both pass the check.
   const inFlight = new Set<string>()
+  // Background Beat checks, so a test (or shutdown) can wait for them.
+  const background = new Set<Promise<void>>()
 
-  async function* run(sessionId: string, signal: AbortSignal): AsyncGenerator<PipelineEvent> {
+  function inBackground(task: Promise<void>) {
+    background.add(task)
+    void task.finally(() => background.delete(task))
+  }
+
+  /**
+   * Fires the silent background work over a finished run (the Beat check over this run's events,
+   * memory extraction over the log past its watermark); never awaited by the run, never throws.
+   */
+  function checkBeats(sessionId: string, fromSeq: number) {
+    if (deps.beatProgress) inBackground(deps.beatProgress.check(sessionId, fromSeq, port))
+    if (deps.memory) inBackground(deps.memory.trigger(sessionId, port))
+    if (deps.summary) inBackground(deps.summary.trigger(sessionId, port))
+  }
+
+  async function* run(
+    sessionId: string,
+    signal: AbortSignal,
+    fromSeq: number
+  ): AsyncGenerator<PipelineEvent> {
     let finished = false
     try {
-      for await (const step of pipeline({ sessionId, sessions, port, signal })) {
+      const steering = deps.beatProgress && (() => deps.beatProgress!.steering(sessionId))
+      for await (const step of pipeline({
+        sessionId,
+        sessions,
+        port,
+        signal,
+        steering,
+        context: deps.contextSources
+      })) {
         yield step
         if (step.type === 'done') {
           finished = true
+          if (step.reason === 'yield' || step.reason === 'roll') checkBeats(sessionId, fromSeq)
           break
         }
       }
@@ -76,7 +124,10 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       }
       return
     }
-    if (!finished) yield { type: 'done', reason: signal.aborted ? 'stopped' : 'yield' }
+    if (!finished) {
+      if (!signal.aborted) checkBeats(sessionId, fromSeq)
+      yield { type: 'done', reason: signal.aborted ? 'stopped' : 'yield' }
+    }
   }
 
   /** The refusals every run shares: the Session must exist and not have ended. */
@@ -104,6 +155,9 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
 
     let first: SessionEvent
     try {
+      // The run boundary: NPCs that died, left or were retired since the last run drop out of the
+      // stored Scene (they never resolve in the meantime), ending a dialogue with them.
+      sessions.pruneScene(sessionId)
       first = record()
     } catch (error) {
       free()
@@ -115,7 +169,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       started = true
       try {
         yield { type: 'event', event: first }
-        yield* run(sessionId, signal)
+        yield* run(sessionId, signal, first.seq)
       } finally {
         free()
       }
@@ -124,6 +178,11 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   }
 
   return {
+    /** Resolves when every background Beat check and memory extraction has finished. */
+    async settled(): Promise<void> {
+      while (background.size) await Promise.all([...background])
+    },
+
     /**
      * Starts a run for the player's action. Refusals are decided synchronously, before anything
      * is saved. The action is saved before any model call, so a stopped or failed run keeps it.
