@@ -290,3 +290,60 @@ describe('Scene NPCs resolve live from World memory', () => {
     expect([row.changedSessionId, row.changedSeq]).toEqual([id, 1])
   })
 })
+
+describe('Scene carry-over and the Character lock', () => {
+  it('opens a later Session on a clone of the previous Scene with an empty Event log', async () => {
+    const first = await sessions.start(campaignId)
+    const npcId = sessions.scene(first.id).npcs[0].id
+    const roll = { check: 'Persuasion', dc: 12, reason: 'win her trust' }
+    db.update(sessionScene)
+      .set({ mode: 'dialogue', dialogueNpcId: npcId, pendingRoll: roll })
+      .where(eq(sessionScene.sessionId, first.id))
+      .run()
+    sessions.appendEvent(first.id, { role: 'player', kind: 'player-action', text: 'I look' })
+    sessions.end(first.id)
+
+    const second = await sessions.start(campaignId)
+
+    const before = sessions.scene(first.id)
+    const after = sessions.scene(second.id)
+    expect(after.location).toEqual(before.location)
+    expect(after.exits).toEqual(before.exits)
+    expect(after.npcs.map((n) => n.id)).toEqual(before.npcs.map((n) => n.id))
+    expect(after.mode).toBe('dialogue')
+    expect(after.dialogueNpcId).toBe(npcId)
+    expect(after.pendingRoll).toEqual(roll)
+    expect(sessions.events(second.id)).toEqual([])
+  })
+
+  it('carries from the most recent Session by start time', async () => {
+    const first = await sessions.start(campaignId)
+    sessions.end(first.id)
+    const second = await sessions.start(campaignId)
+    db.update(sessionScene)
+      .set({ locationName: 'The Deep Cellar' })
+      .where(eq(sessionScene.sessionId, second.id))
+      .run()
+    sessions.end(second.id)
+
+    const third = await sessions.start(campaignId)
+    expect(sessions.scene(third.id).location.name).toBe('The Deep Cellar')
+  })
+
+  it('rejects changing or unlinking the Character once a Session exists', async () => {
+    const campaigns = createCampaignService(db)
+    expect(campaigns.characterLocked(campaignId)).toBe(false)
+    await sessions.start(campaignId)
+
+    expect(() => campaigns.linkCharacter(campaignId, 'someone-else')).toThrow(/first Session/)
+    expect(() => campaigns.unlinkCharacter(campaignId)).toThrow(/first Session/)
+    expect(campaigns.linkedCharacterId(campaignId)).toBe(characterId)
+    expect(campaigns.characterLocked(campaignId)).toBe(true)
+  })
+
+  it('allows unlinking before any Session exists', () => {
+    const campaigns = createCampaignService(db)
+    campaigns.unlinkCharacter(campaignId)
+    expect(campaigns.linkedCharacterId(campaignId)).toBeUndefined()
+  })
+})
