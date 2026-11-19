@@ -260,7 +260,11 @@ export const session = sqliteTable(
     startedAt: integer('started_at').notNull(),
     endedAt: integer('ended_at'),
     /** The last Event seq memory extraction covers; moves only when an extraction succeeds. */
-    memoryThroughSeq: integer('memory_through_seq').notNull().default(0)
+    memoryThroughSeq: integer('memory_through_seq').notNull().default(0),
+    /** The Rolling summary: prose over the Events up to `summaryThroughSeq`; null until one finishes. */
+    summary: text('summary'),
+    /** The last Event seq the Rolling summary covers; moves only when a summary call succeeds. */
+    summaryThroughSeq: integer('summary_through_seq').notNull().default(0)
   },
   (t) => [
     uniqueIndex('session_one_open_per_campaign')

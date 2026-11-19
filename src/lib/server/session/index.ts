@@ -8,6 +8,8 @@ import { loadWizardRules } from '../character/wizard-rules.ts'
 import { db } from '../db/index.ts'
 import { createBeatProgress } from '../arc/beat-progress.ts'
 import { createMemoryExtraction } from '../memory/extraction.ts'
+import { createRollingSummary } from '../memory/summary.ts'
+import { createSessionEnd } from './end-session.ts'
 import { createDirectorPipeline } from './scene-director/pipeline.ts'
 import { createSceneRunner } from './scene-runner.ts'
 import { createSessionService } from './service.ts'
@@ -29,6 +31,17 @@ const characters = createCharacterService(db)
 /** World memory extraction: runs after each run in the background; the Session-end hook uses it too. */
 export const memoryExtraction = createMemoryExtraction(db, sessions)
 
+/** The Rolling summary: runs in the background once uncovered events outgrow its threshold. */
+export const rollingSummary = createRollingSummary(db)
+
+/** Ends a Session: drains extraction, marks it ended, then finalizes memory in the background. */
+export const sessionEnd = createSessionEnd({
+  sessions,
+  memory: memoryExtraction,
+  summary: rollingSummary,
+  port: modelPort
+})
+
 /** The Session's Character's modifier for a check (a skill slug, or an ability key); 0 if unknown. */
 function rollModifier(sessionId: string, check: string): number {
   const session = sessions.get(sessionId)
@@ -49,5 +62,6 @@ export const sceneRunner = createSceneRunner({
   pipeline: createDirectorPipeline(),
   beatProgress: createBeatProgress(db),
   memory: memoryExtraction,
+  summary: rollingSummary,
   rollModifier
 })

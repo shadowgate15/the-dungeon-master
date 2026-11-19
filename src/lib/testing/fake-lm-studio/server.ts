@@ -135,6 +135,17 @@ const isBeatCheck = (body: unknown) =>
     BEAT_CHECK_MARKER
   )
 
+/**
+ * Marks the Rolling summary call's system prompt (mirrors `SUMMARY_MARKER` on the server). It runs
+ * in the background, so it must not consume the DM answer queue.
+ */
+const SUMMARY_MARKER = 'ROLLING SUMMARY'
+
+const isSummary = (body: unknown) =>
+  JSON.stringify((body as { messages?: unknown } | undefined)?.messages ?? '').includes(
+    SUMMARY_MARKER
+  )
+
 export type Scenario = (ctx: ScenarioContext) => void | Promise<void>
 
 function json(res: ServerResponse, status: number, payload: unknown) {
@@ -392,6 +403,7 @@ export async function startFakeLmStudio(
       options: resolved,
       nextAnswer: () => {
         if (isBeatCheck(body)) return { content: defaultFor(requestSchema(body)), delayMs }
+        if (isSummary(body)) return { content: 'The party pressed on through the story.', delayMs }
         if (isExtraction(body)) {
           const scripted = extractionQueue.shift()
           if (scripted) return { delayMs, ...scripted }

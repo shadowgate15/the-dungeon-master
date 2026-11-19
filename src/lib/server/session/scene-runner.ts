@@ -12,6 +12,7 @@ import type { PipelineEvent } from '#lib/session/pipeline-events.ts'
 import type { ChatPort } from '../ai/port.ts'
 import type { BeatProgress, Steering } from '../arc/beat-progress.ts'
 import type { MemoryExtraction } from '../memory/extraction.ts'
+import type { RollingSummary } from '../memory/summary.ts'
 import { dice as defaultDice, type Dice } from '../dice.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
@@ -53,6 +54,8 @@ export interface SceneRunnerDeps {
   beatProgress?: BeatProgress
   /** World memory extraction, fired in the background after each run that yields or rolls. */
   memory?: MemoryExtraction
+  /** The Rolling summary, fired in the background alongside extraction. */
+  summary?: RollingSummary
 }
 
 export function createSceneRunner(deps: SceneRunnerDeps) {
@@ -76,6 +79,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   function checkBeats(sessionId: string, fromSeq: number) {
     if (deps.beatProgress) inBackground(deps.beatProgress.check(sessionId, fromSeq, port))
     if (deps.memory) inBackground(deps.memory.trigger(sessionId, port))
+    if (deps.summary) inBackground(deps.summary.trigger(sessionId, port))
   }
 
   async function* run(

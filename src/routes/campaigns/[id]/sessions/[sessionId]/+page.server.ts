@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit'
 import { createCampaignService } from '#lib/server/campaign/service.ts'
 import { createCharacterService } from '#lib/server/character/service.ts'
 import { db } from '#lib/server/db/index.ts'
-import { sessions } from '#lib/server/session/index.ts'
+import { sessionEnd, sessions } from '#lib/server/session/index.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 const campaigns = createCampaignService(db)
@@ -27,10 +27,10 @@ export const load: PageServerLoad = ({ params }) => {
 }
 
 export const actions: Actions = {
-  end: ({ params }) => {
+  end: async ({ params }) => {
     const found = sessions.get(params.sessionId)
     if (!found || found.campaignId !== params.id) error(404, 'Session not found')
-    sessions.end(found.id)
+    await sessionEnd.end(found.id)
     return { ended: true }
   }
 }
