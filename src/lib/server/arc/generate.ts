@@ -19,12 +19,13 @@ import { callModel, type ChatPort } from '../ai/port.ts'
  * through the injected `ChatPort`. Nothing is stored here.
  *
  * Structure for later tickets: every call goes through `runStep`, which is the one place for
- * retry (#256, done: up to 3 attempts per call), a per-step deadline
- * (#257: replace the run-wide timer with one per `runStep`) and progress (#258 builds on
+ * retry (#256, done: up to 3 attempts per call), a per-call deadline
+ * (#257, done: one budget per call, retries included, no overall cap) and progress (#258 builds on
  * `onProgress`, which `generateArc` already fires before each step).
  */
 
-export const ARC_TIMEOUT_MS = 180_000
+/** The budget of one call (the skeleton, or one Act's Beats), retries included. No overall cap. */
+export const ARC_CALL_TIMEOUT_MS = 120_000
 const SKELETON_MAX_TOKENS = 1500
 const ACT_MAX_TOKENS = 1500
 /** The first try plus two retries, per call. */
@@ -70,7 +71,7 @@ export type ArcResult = { ok: true; arc: ArcDraft } | { ok: false; failure: ArcF
 export interface GenerateArcOptions {
   /** Cancels the call (the player pressed Stop). */
   signal?: AbortSignal
-  /** The single deadline for the whole run. Injectable for tests. */
+  /** The deadline of each call, its retries included. Injectable for tests. */
   timeoutMs?: number
   /** Called when a step starts. */
   onProgress?: (step: ArcStep) => void
@@ -112,6 +113,9 @@ function systemPrompts(seed: ArcSeed): string[] {
     `Campaign:\n- Name: ${seed.name}\n- Premise: ${seed.premise}\n- Tone: ${seed.tone}\n- Length: ${seed.length}\nWorlds it is set in (stay consistent with them):\n${worlds}`
   ]
 }
+
+const timeoutName = (step: ArcStep) =>
+  step.kind === 'skeleton' ? 'the story plan' : `Act ${step.number}`
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -158,7 +162,6 @@ export async function generateArc(
 ): Promise<ArcResult> {
   const controller = new AbortController()
   let outcome: ArcResult | undefined
-  let current: ArcStep = { kind: 'skeleton' }
   const stop = (result: ArcResult) => {
     outcome ??= result
     controller.abort()
@@ -168,10 +171,6 @@ export async function generateArc(
     controller.signal.addEventListener('abort', () => resolve(outcome!))
   )
   const onCancel = () => stop(fail('cancelled', 'The request was stopped'))
-  const timer = setTimeout(
-    () => stop(fail('timeout', `The model took too long to write ${stepName(current)}`)),
-    options.timeoutMs ?? ARC_TIMEOUT_MS
-  )
   options.signal?.addEventListener('abort', onCancel)
   if (options.signal?.aborted) onCancel()
 
@@ -179,15 +178,32 @@ export async function generateArc(
    * One step: ask, parse, validate, up to `MAX_ATTEMPTS` times. Only invalid output (bad JSON or
    * rule violations) is retried; each retry is one stateless call with the same prompt plus the
    * rejected answer and its problems. Provider error, timeout, cancel and reasoning-model end the
-   * step at once. The deadline hook for #257 is the race against `stopped` below.
+   * step at once. One deadline covers all the step's attempts; it aborts the generator's controller
+   * (the run ends there), and the race against `stopped` frees the run from a port that ignores
+   * its signal.
    */
   const runStep = async <T>(
     step: ArcStep,
     request: { prompt: string; maxTokens: number; schema: z.ZodObject & z.ZodType<T> },
     problemsOf: (value: T) => string[]
   ): Promise<{ ok: true; value: T } | ArcResult> => {
-    current = step
     options.onProgress?.(step)
+    const timer = setTimeout(
+      () => stop(fail('timeout', `The model took too long to write ${timeoutName(step)}`)),
+      options.timeoutMs ?? ARC_CALL_TIMEOUT_MS
+    )
+    try {
+      return await attempts(step, request, problemsOf)
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  const attempts = async <T>(
+    step: ArcStep,
+    request: { prompt: string; maxTokens: number; schema: z.ZodObject & z.ZodType<T> },
+    problemsOf: (value: T) => string[]
+  ): Promise<{ ok: true; value: T } | ArcResult> => {
     let prompt = request.prompt
     let lastProblems: string[] = []
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -267,7 +283,6 @@ export async function generateArc(
     }
     return { ok: true, arc: draft }
   } finally {
-    clearTimeout(timer)
     options.signal?.removeEventListener('abort', onCancel)
   }
 }
