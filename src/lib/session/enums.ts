@@ -23,8 +23,8 @@ export const EVENT_KINDS = [
 ] as const
 export type EventKind = (typeof EVENT_KINDS)[number]
 
-/** How an NPC feels about the player's Character. */
-export const ATTITUDES = ['hostile', 'wary', 'neutral', 'friendly'] as const
+/** How an NPC feels about the player's Character: the stance of its disposition. */
+export const ATTITUDES = ['hostile', 'wary', 'neutral', 'friendly', 'allied'] as const
 export type Attitude = (typeof ATTITUDES)[number]
 
 export interface SceneExit {
@@ -33,12 +33,19 @@ export interface SceneExit {
   name: string
 }
 
+/**
+ * An NPC present in the Scene, as a view resolved live from World memory on every read; the Scene
+ * itself stores only the NPC row ids. Only alive, non-retired NPCs resolve.
+ */
 export interface SceneNpc {
-  /** Stable id; the Director's `npc-speaks:<id>` menu option names it. */
+  /** The NPC row id: what the Scene stores and what Events and `dialogueNpcId` refer to. */
   id: string
+  /** The NPC's unique name key, hyphenated; the Director's `npc-speaks:<key>` menu option names it. */
+  key: string
   name: string
+  /** The `(npc, character)` stance, neutral when none is recorded. */
   attitude: Attitude
-  /** A short note of what this NPC knows; the NPC voice sees only its own. */
+  /** The disposition note plus the linked Facts the NPC knows; the NPC voice sees only its own. */
   knowledge: string
 }
 
@@ -49,7 +56,10 @@ export interface PendingRoll {
   reason: string
 }
 
-/** Where and how play stands right now. Owned by code; the AI never edits it freely. */
+/**
+ * Where and how play stands right now, with NPCs resolved from World memory (the stored Scene
+ * holds their ids only). Owned by code; the AI never edits it freely.
+ */
 export interface SceneState {
   location: { name: string; description: string }
   exits: SceneExit[]

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createScriptedPort, fails, says } from '../../../../testing/scripted-chat-port'
-import { playableCampaign, sessionServiceWith } from '../../fixture'
+import {
+  addNpc,
+  playableCampaign,
+  sessionServiceWith,
+  setSceneNpcs,
+  updateNpc
+} from '../../fixture'
 import { createSceneRunner, type PipelineEvent } from '../../scene-runner.ts'
 import type { SessionService } from '../../service'
 import { buildMenu } from '../menu.ts'
@@ -9,20 +15,27 @@ import { createDirectorPipeline } from '../pipeline.ts'
 
 let sessions: SessionService
 let sessionId: string
+let fixture: ReturnType<typeof playableCampaign>
+let mira: string
+let borg: string
 let model: ReturnType<typeof createScriptedPort>
 
 beforeEach(async () => {
-  const fixture = playableCampaign()
+  fixture = playableCampaign()
   sessions = sessionServiceWith(fixture).sessions
   sessionId = (await sessions.start(fixture.campaignId)).id
   model = createScriptedPort()
-  sessions.saveScene(sessionId, {
-    ...sessions.scene(sessionId),
-    npcs: [
-      { id: 'mira', name: 'Mira', attitude: 'friendly', knowledge: 'The key is under the altar.' },
-      { id: 'borg', name: 'Borg', attitude: 'hostile', knowledge: 'Borg secretly serves the duke.' }
-    ]
+  mira = addNpc(fixture, {
+    name: 'Mira',
+    stance: 'friendly',
+    note: 'The key is under the altar.'
   })
+  borg = addNpc(fixture, {
+    name: 'Borg',
+    stance: 'hostile',
+    note: 'Borg secretly serves the duke.'
+  })
+  setSceneNpcs(fixture, sessionId, [mira, borg])
 })
 
 async function play(text: string) {
@@ -51,7 +64,7 @@ describe('the NPC speaks option', () => {
     expect(menuIds()).toEqual(['npc-speaks:mira', 'npc-speaks:borg'])
     sessions.saveScene(sessionId, {
       ...sessions.scene(sessionId),
-      npcs: sessions.scene(sessionId).npcs.filter((n) => n.id === 'borg')
+      npcs: sessions.scene(sessionId).npcs.filter((n) => n.id === borg)
     })
     expect(menuIds()).toEqual(['npc-speaks:borg'])
   })
@@ -69,12 +82,15 @@ describe('an NPC line', () => {
 
     const deltas = events.flatMap((e) => (e.type === 'delta' ? [e] : []))
     expect(deltas.map((d) => [d.kind, d.role, d.npcId, d.text])).toEqual([
-      ['npc-line', 'npc', 'mira', 'Welcome, '],
-      ['npc-line', 'npc', 'mira', 'traveller.']
+      ['npc-line', 'npc', mira, 'Welcome, '],
+      ['npc-line', 'npc', mira, 'traveller.']
     ])
     expect(
       sessions.events(sessionId).map((e) => `${e.role}:${e.kind}:${e.npcId}:${e.text}`)
-    ).toEqual(['player:player-action:null:I greet Mira', 'npc:npc-line:mira:Welcome, traveller.'])
+    ).toEqual([
+      'player:player-action:null:I greet Mira',
+      `npc:npc-line:${mira}:Welcome, traveller.`
+    ])
   })
 
   it("gives the voice only that NPC's own data", async () => {
@@ -95,7 +111,7 @@ describe('an NPC line', () => {
     sessions.appendEvent(sessionId, {
       role: 'npc',
       kind: 'npc-line',
-      npcId: 'borg',
+      npcId: borg,
       text: 'The duke pays me well.'
     })
     sessions.appendEvent(sessionId, {
@@ -106,7 +122,7 @@ describe('an NPC line', () => {
     sessions.appendEvent(sessionId, {
       role: 'npc',
       kind: 'npc-line',
-      npcId: 'mira',
+      npcId: mira,
       text: 'Welcome.'
     })
     model.enqueue(says('npc-speaks:mira'), says('Hello.'), says('yield'))
@@ -127,5 +143,37 @@ describe('an NPC line', () => {
     const tail = events.map((e) => (e.type === 'done' ? `done:${e.reason}` : e.type)).slice(-2)
     expect(tail).toEqual(['discard', 'done:error'])
     expect(sessions.events(sessionId)).toHaveLength(1)
+  })
+
+  it('sees a change to its memory on the very next step', async () => {
+    model.enqueue(
+      says('npc-speaks:mira'),
+      says('Hello.'),
+      says('npc-speaks:mira'),
+      says('Again.'),
+      says('yield')
+    )
+    const runner = createSceneRunner({
+      sessions,
+      port: model.port,
+      pipeline: createDirectorPipeline()
+    })
+    const result = runner.begin(sessionId, 'I greet Mira', new AbortController().signal)
+    if (!result.ok) throw new Error(result.reason)
+    let changed = false
+    for await (const e of result.events) {
+      if (e.type === 'event' && e.event.kind === 'npc-line' && !changed) {
+        changed = true
+        sessions.changeAttitude(sessionId, mira, { stance: 'allied', note: 'Trusts the party.' })
+        updateNpc(fixture, mira, { name: 'Mirabel' })
+      }
+    }
+
+    const voice = model.requests.filter((r) => r.systemPrompts.join('\n').includes('You voice'))
+    const prompt = voice.at(-1)!.systemPrompts.join('\n')
+    expect(prompt).toContain('Mirabel')
+    expect(prompt).toContain('allied')
+    expect(prompt).toContain('Trusts the party.')
+    expect(prompt).not.toContain('The key is under the altar.')
   })
 })

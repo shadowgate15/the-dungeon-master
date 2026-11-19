@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { collectText } from '../ai/port.ts'
 import type { Database } from '../db/connect'
 import { createScriptedPort, says } from '../../testing/scripted-chat-port'
-import { playableCampaign, sessionServiceWith } from './fixture'
+import { eq } from 'drizzle-orm'
+import { sessionScene } from '../db/schema'
+import { playableCampaign, sessionServiceWith, updateNpc } from './fixture'
 import {
   createSceneRunner,
   type BeginResult,
@@ -16,9 +18,10 @@ let db: Database
 let sessions: SessionService
 let sessionId: string
 let model: ReturnType<typeof createScriptedPort>
+let fixture: ReturnType<typeof playableCampaign>
 
 beforeEach(async () => {
-  const fixture = playableCampaign()
+  fixture = playableCampaign()
   db = fixture.db
   sessions = sessionServiceWith(fixture).sessions
   sessionId = (await sessions.start(fixture.campaignId)).id
@@ -196,5 +199,40 @@ describe('the pipeline seam', () => {
     const events = await drain(runner.begin(sessionId, 'hmm', new AbortController().signal))
     expect(events.at(-1)).toEqual({ type: 'done', reason: 'error', message: 'boom' })
     expect(runner.begin(sessionId, 'again', new AbortController().signal).ok).toBe(true)
+  })
+})
+
+describe('NPCs that no longer resolve', () => {
+  const stored = () =>
+    db.select().from(sessionScene).where(eq(sessionScene.sessionId, sessionId)).get()!
+
+  it('are pruned from the stored Scene at the next run boundary, ending their dialogue', async () => {
+    const [brenna, hob] = sessions.scene(sessionId).npcs
+    sessions.saveScene(sessionId, {
+      ...sessions.scene(sessionId),
+      mode: 'dialogue',
+      dialogueNpcId: hob.id
+    })
+    updateNpc(fixture, hob.id, { status: 'dead' })
+    expect(stored().npcs).toEqual([brenna.id, hob.id])
+
+    await drain(runnerWith().begin(sessionId, 'I look around', new AbortController().signal))
+
+    expect(stored()).toMatchObject({ npcs: [brenna.id], mode: 'exploration', dialogueNpcId: null })
+  })
+
+  it('are also pruned when a roll is resolved', async () => {
+    const [brenna, hob] = sessions.scene(sessionId).npcs
+    sessions.saveScene(sessionId, {
+      ...sessions.scene(sessionId),
+      pendingRoll: { check: 'perception', dc: 10, reason: 'listening' }
+    })
+    updateNpc(fixture, hob.id, { retiredAt: 9, retiredReason: 'gone' })
+
+    const result = runnerWith().resolveRoll(sessionId, new AbortController().signal)
+    if (!result.ok) throw new Error(result.reason)
+    for await (const e of result.events) void e
+
+    expect(stored().npcs).toEqual([brenna.id])
   })
 })

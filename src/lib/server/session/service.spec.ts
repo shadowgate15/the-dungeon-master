@@ -2,8 +2,14 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createCampaignService } from '../campaign/service'
 import { createCharacterService } from '../character/service'
 import { createWorldService } from '../world/service'
-import { sessionEvent } from '../db/schema'
-import { firstSceneScripts, playableCampaign, sessionServiceWith } from './fixture'
+import { disposition, sessionEvent, sessionScene } from '../db/schema'
+import {
+  addNpc,
+  firstSceneScripts,
+  playableCampaign,
+  sessionServiceWith,
+  updateNpc
+} from './fixture'
 import {
   SessionAlreadyOpenError,
   SessionNotFoundError,
@@ -150,5 +156,137 @@ describe('the Scene', () => {
       dialogueNpcId: scene.npcs[0].id,
       pendingRoll: { check: 'perception', dc: 12 }
     })
+  })
+})
+
+describe('Scene NPCs resolve live from World memory', () => {
+  const fixture = () => ({ db, campaignId, characterId })
+  const storedNpcs = (id: string) =>
+    db.select().from(sessionScene).where(eq(sessionScene.sessionId, id)).get()!.npcs
+
+  it('stores NPC row ids only, and the resolved view carries current memory', async () => {
+    const { id } = await sessions.start(campaignId)
+    const scene = sessions.scene(id)
+
+    expect(scene.npcs.map((n) => n.name)).toEqual(['Brenna', 'Old Hob'])
+    const stored = storedNpcs(id)
+    expect(stored).toEqual(scene.npcs.map((n) => n.id))
+    expect(stored.every((v) => typeof v === 'string')).toBe(true)
+    expect(scene.npcs[0]).toMatchObject({ attitude: 'friendly' })
+  })
+
+  it('shows a changed name, stance and note on the next read', async () => {
+    const { id } = await sessions.start(campaignId)
+    const hob = sessions.scene(id).npcs[1]
+    updateNpc(fixture(), hob.id, { name: 'Hobart' })
+    expect(
+      sessions.changeAttitude(id, hob.id, { stance: 'allied', note: 'Owes the party.' })
+    ).toEqual({
+      ok: true
+    })
+
+    expect(sessions.scene(id).npcs[1]).toMatchObject({
+      name: 'Hobart',
+      attitude: 'allied',
+      knowledge: 'Owes the party.'
+    })
+  })
+
+  it('renders knowledge from linked facts plus the disposition note', async () => {
+    const { id } = await sessions.start(campaignId)
+    const sage = addNpc(fixture(), {
+      name: 'Sage',
+      stance: 'wary',
+      note: 'Distrusts outsiders.',
+      knows: [{ title: 'The well', detail: 'It is poisoned.' }]
+    })
+    sessions.placeNpc(id, sage)
+
+    const resolved = sessions.scene(id).npcs.find((n) => n.id === sage)!
+    expect(resolved.knowledge).toBe('Distrusts outsiders. The well: It is poisoned.')
+  })
+
+  it('is neutral when there is no disposition toward the Character', async () => {
+    const { id } = await sessions.start(campaignId)
+    const stranger = addNpc(fixture(), { name: 'Stranger' })
+    sessions.placeNpc(id, stranger)
+
+    expect(sessions.scene(id).npcs.find((n) => n.id === stranger)).toMatchObject({
+      attitude: 'neutral',
+      knowledge: ''
+    })
+  })
+
+  it.each([
+    ['dead', { status: 'dead' as const }],
+    ['missing', { status: 'missing' as const }],
+    ['departed', { status: 'departed' as const }],
+    ['retired', { retiredAt: 5, retiredReason: 'gone' }]
+  ])('never resolves a %s NPC, and prunes it from storage', async (_label, change) => {
+    const { id } = await sessions.start(campaignId)
+    const [brenna, hob] = sessions.scene(id).npcs
+    updateNpc(fixture(), hob.id, change)
+
+    expect(sessions.scene(id).npcs.map((n) => n.id)).toEqual([brenna.id])
+    expect(storedNpcs(id)).toContain(hob.id)
+    sessions.pruneScene(id)
+    expect(storedNpcs(id)).toEqual([brenna.id])
+  })
+
+  it('ends dialogue when the dialogue partner no longer resolves', async () => {
+    const { id } = await sessions.start(campaignId)
+    const hob = sessions.scene(id).npcs[1]
+    sessions.saveScene(id, { ...sessions.scene(id), mode: 'dialogue', dialogueNpcId: hob.id })
+    updateNpc(fixture(), hob.id, { status: 'dead' })
+
+    expect(sessions.scene(id)).toMatchObject({ mode: 'exploration', dialogueNpcId: null })
+    sessions.pruneScene(id)
+    expect(sessions.scene(id)).toMatchObject({ mode: 'exploration', dialogueNpcId: null })
+  })
+
+  it('places a newcomer only when it is alive, not retired and not already present', async () => {
+    const { id } = await sessions.start(campaignId)
+    const ghost = addNpc(fixture(), { name: 'Ghost', status: 'dead' })
+    const guest = addNpc(fixture(), { name: 'Guest', stance: 'allied' })
+
+    expect(sessions.placeNpc(id, ghost)).toBe(false)
+    expect(sessions.placeNpc(id, guest)).toBe(true)
+    expect(sessions.placeNpc(id, guest)).toBe(true)
+    expect(sessions.scene(id).npcs.filter((n) => n.id === guest)).toHaveLength(1)
+    expect(sessions.scene(id).npcs.at(-1)?.attitude).toBe('allied')
+  })
+
+  it('applies attitude changes as validated writes to the disposition', async () => {
+    const { id } = await sessions.start(campaignId)
+    const hob = sessions.scene(id).npcs[1]
+
+    expect(sessions.changeAttitude(id, hob.id, { stance: 'furious', note: 'x' })).toMatchObject({
+      ok: false
+    })
+    expect(
+      sessions.changeAttitude(id, hob.id, { stance: 'friendly', note: 'Has 3 coins' })
+    ).toMatchObject({
+      ok: false
+    })
+    expect(sessions.scene(id).npcs[1].attitude).toBe('wary')
+
+    expect(sessions.changeAttitude(id, hob.id, { stance: 'hostile' })).toEqual({ ok: true })
+    expect(sessions.scene(id).npcs[1]).toMatchObject({
+      attitude: 'hostile',
+      knowledge: 'Saw lights on the north road.'
+    })
+    expect(sessions.changeAttitude(id, 'nobody', { stance: 'hostile' })).toMatchObject({
+      ok: false
+    })
+  })
+
+  it('stamps an attitude change with the Session and last Event seq', async () => {
+    const { id } = await sessions.start(campaignId)
+    sessions.appendEvent(id, { role: 'player', kind: 'player-action', text: 'hi' })
+    const hob = sessions.scene(id).npcs[1]
+    sessions.changeAttitude(id, hob.id, { stance: 'hostile' })
+
+    const row = db.select().from(disposition).where(eq(disposition.npcId, hob.id)).get()!
+    expect([row.changedSessionId, row.changedSeq]).toEqual([id, 1])
   })
 })

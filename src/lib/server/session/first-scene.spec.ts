@@ -63,7 +63,8 @@ describe('the first Session of a Campaign', () => {
       ['Brenna', p.id, null, 'alive'],
       ['Old Hob', p.id, null, 'alive']
     ])
-    expect(scene.npcs.map((n) => n.id)).toEqual(['brenna', 'old-hob'])
+    expect(scene.npcs.map((n) => n.id)).toEqual(npcs.map((n) => n.id))
+    expect(scene.npcs.map((n) => n.key)).toEqual(['brenna', 'old-hob'])
     expect(
       fixture.db
         .select()

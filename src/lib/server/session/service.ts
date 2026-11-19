@@ -1,5 +1,13 @@
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
-import type { EventKind, Role, SceneState, SessionEvent } from '#lib/session/enums.ts'
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { validateDisposition } from '#lib/memory/validate.ts'
+import type {
+  Attitude,
+  EventKind,
+  Role,
+  SceneNpc,
+  SceneState,
+  SessionEvent
+} from '#lib/session/enums.ts'
 import type { Database } from '../db/connect'
 import type { ChatPort } from '../ai/port'
 import { NO_MODEL_MESSAGE } from '#lib/ai/status.ts'
@@ -11,7 +19,9 @@ import {
   campaign,
   campaignCharacter,
   disposition,
+  fact,
   npc,
+  npcFact,
   place,
   placeExit,
   session,
@@ -48,22 +58,24 @@ export class SessionAlreadyOpenError extends Error {}
 
 type SceneRow = typeof sessionScene.$inferSelect
 
-const toScene = (row: SceneRow): SceneState => ({
-  location: { name: row.locationName, description: row.locationDescription },
-  exits: row.exits,
-  objects: row.objects,
-  npcs: row.npcs,
-  mode: row.mode,
-  dialogueNpcId: row.dialogueNpcId,
-  pendingRoll: row.pendingRoll
-})
+/** The Director-menu handle of an NPC: its unique name key, hyphenated. */
+const npcKey = (nameKey: string) => nameKey.replace(/\s+/g, '-')
+
+/** The change `changeAttitude` applies; the note stays as it was when omitted. */
+export interface AttitudeChange {
+  stance: string
+  note?: string
+}
+
+export type AttitudeResult = { ok: true } | { ok: false; reason: string }
 
 const sceneColumns = (scene: SceneState, updatedAt: number) => ({
   locationName: scene.location.name,
   locationDescription: scene.location.description,
   exits: scene.exits,
   objects: scene.objects,
-  npcs: scene.npcs,
+  // The Scene stores NPC row ids only; everything else about them is read from World memory.
+  npcs: scene.npcs.map((n) => n.id),
   mode: scene.mode,
   dialogueNpcId: scene.dialogueNpcId,
   pendingRoll: scene.pendingRoll,
@@ -83,6 +95,92 @@ export function createSessionService(
 ) {
   const worlds = createWorldService(db, now)
   const characters = createCharacterService(db)
+
+  /**
+   * Resolves the Scene's NPC ids against World memory right now: current name, the
+   * `(npc, character)` stance (neutral if none) and knowledge (the disposition note plus the live
+   * Facts the NPC is linked to). Only alive, non-retired NPCs of the Campaign resolve, in stored
+   * order. The dialogue partner must resolve too, else the Scene reads as exploration.
+   */
+  function resolveScene(row: SceneRow): SceneState {
+    const owner = db.select().from(session).where(eq(session.id, row.sessionId)).get()
+    let npcs: SceneNpc[] = []
+    if (owner && row.npcs.length > 0) {
+      const rows = db
+        .select()
+        .from(npc)
+        .where(
+          and(
+            inArray(npc.id, row.npcs),
+            eq(npc.campaignId, owner.campaignId),
+            eq(npc.status, 'alive'),
+            isNull(npc.retiredAt)
+          )
+        )
+        .all()
+      const dispositions = db
+        .select()
+        .from(disposition)
+        .where(
+          and(inArray(disposition.npcId, row.npcs), eq(disposition.characterId, owner.characterId))
+        )
+        .all()
+      const known = db
+        .select({ npcId: npcFact.npcId, title: fact.title, detail: fact.detail })
+        .from(npcFact)
+        .innerJoin(fact, eq(fact.id, npcFact.factId))
+        .where(
+          and(inArray(npcFact.npcId, row.npcs), isNull(fact.retiredAt), isNull(fact.supersededById))
+        )
+        .orderBy(asc(fact.title), asc(fact.id))
+        .all()
+      npcs = row.npcs.flatMap((id) => {
+        const found = rows.find((r) => r.id === id)
+        if (!found) return []
+        const stance = dispositions.find((d) => d.npcId === id)
+        const knowledge = [
+          stance?.note ?? '',
+          ...known.filter((k) => k.npcId === id).map((k) => `${k.title}: ${k.detail}`)
+        ]
+          .filter(Boolean)
+          .join(' ')
+        return [
+          {
+            id,
+            key: npcKey(found.nameKey),
+            name: found.name,
+            attitude: (stance?.stance ?? 'neutral') as Attitude,
+            knowledge
+          }
+        ]
+      })
+    }
+    const partner = npcs.some((n) => n.id === row.dialogueNpcId)
+    return {
+      location: { name: row.locationName, description: row.locationDescription },
+      exits: row.exits,
+      objects: row.objects,
+      npcs,
+      mode: partner ? row.mode : 'exploration',
+      dialogueNpcId: partner ? row.dialogueNpcId : null,
+      pendingRoll: row.pendingRoll
+    }
+  }
+
+  const sceneRow = (sessionId: string) => {
+    const row = db.select().from(sessionScene).where(eq(sessionScene.sessionId, sessionId)).get()
+    if (!row) throw new SessionNotFoundError('Session not found')
+    return row
+  }
+
+  function saveScene(sessionId: string, scene: SceneState): void {
+    const changed = db
+      .update(sessionScene)
+      .set(sceneColumns(scene, now()))
+      .where(eq(sessionScene.sessionId, sessionId))
+      .run().changes
+    if (changed === 0) throw new SessionNotFoundError('Session not found')
+  }
 
   const openSession = (campaignId: string) =>
     db
@@ -262,25 +360,20 @@ export function createSessionService(
               changedSeq: null
             })
             .run()
-          // The Scene id is the NPC's name key (unique per Campaign), readable in Director menus.
-          const id = n.nameKey.replace(/\s+/g, '-')
-          return { id, name: n.name, attitude: n.attitude, knowledge: n.knowledge }
+          return row.id
         })
         tx.insert(sessionScene)
           .values({
             sessionId: created.id,
-            ...sceneColumns(
-              {
-                location: { ...draft.place },
-                exits: draft.exits,
-                objects: draft.objects,
-                npcs: present,
-                mode: 'exploration',
-                dialogueNpcId: null,
-                pendingRoll: null
-              },
-              created.startedAt
-            )
+            locationName: draft.place.name,
+            locationDescription: draft.place.description,
+            exits: draft.exits,
+            objects: draft.objects,
+            npcs: present,
+            mode: 'exploration',
+            dialogueNpcId: null,
+            pendingRoll: null,
+            updatedAt: created.startedAt
           })
           .run()
         return created
@@ -313,21 +406,91 @@ export function createSessionService(
       return [...listNewestFirst(campaignId)].reverse().map((s, i) => ({ ...s, number: i + 1 }))
     },
 
-    /** The Session's Scene. Throws when the Session does not exist. */
+    /**
+     * The Session's Scene, with its NPCs resolved from World memory as of now. Throws when the
+     * Session does not exist.
+     */
     scene(sessionId: string): SceneState {
-      const row = db.select().from(sessionScene).where(eq(sessionScene.sessionId, sessionId)).get()
-      if (!row) throw new SessionNotFoundError('Session not found')
-      return toScene(row)
+      return resolveScene(sceneRow(sessionId))
     },
 
     /** Replaces the Session's Scene. Only code calls this, with changes it has validated. */
-    saveScene(sessionId: string, scene: SceneState): void {
-      const changed = db
-        .update(sessionScene)
-        .set(sceneColumns(scene, now()))
-        .where(eq(sessionScene.sessionId, sessionId))
-        .run().changes
-      if (changed === 0) throw new SessionNotFoundError('Session not found')
+    saveScene,
+
+    /**
+     * Drops NPC ids that no longer resolve (dead, departed, missing, retired) from the stored
+     * Scene, ending dialogue with one of them. The scene runner calls this at each run boundary.
+     */
+    pruneScene(sessionId: string): void {
+      saveScene(sessionId, resolveScene(sceneRow(sessionId)))
+    },
+
+    /**
+     * Code puts an NPC in the Scene (a newcomer narration placed here). Only an alive,
+     * non-retired NPC of the Session's Campaign can be placed; false when it cannot. Placing one
+     * already present is a no-op that returns true.
+     */
+    placeNpc(sessionId: string, npcId: string): boolean {
+      const row = sceneRow(sessionId)
+      const owner = db.select().from(session).where(eq(session.id, sessionId)).get()
+      const found = db.select().from(npc).where(eq(npc.id, npcId)).get()
+      if (
+        !owner ||
+        !found ||
+        found.campaignId !== owner.campaignId ||
+        found.status !== 'alive' ||
+        found.retiredAt !== null
+      ) {
+        return false
+      }
+      if (!row.npcs.includes(npcId)) {
+        db.update(sessionScene)
+          .set({ npcs: [...row.npcs, npcId], updatedAt: now() })
+          .where(eq(sessionScene.sessionId, sessionId))
+          .run()
+      }
+      return true
+    },
+
+    /**
+     * A validated write to the NPC's disposition toward the Session's Character, with the same
+     * validator memory extraction uses (known stance, note limits, no digits). The Scene sees it
+     * on its next read. The note stays as it was when omitted.
+     */
+    changeAttitude(sessionId: string, npcId: string, change: AttitudeChange): AttitudeResult {
+      const owner = db.select().from(session).where(eq(session.id, sessionId)).get()
+      if (!owner) throw new SessionNotFoundError('Session not found')
+      const found = db.select().from(npc).where(eq(npc.id, npcId)).get()
+      if (!found || found.campaignId !== owner.campaignId) {
+        return { ok: false, reason: 'unknown NPC' }
+      }
+      const existing = db
+        .select()
+        .from(disposition)
+        .where(and(eq(disposition.npcId, npcId), eq(disposition.characterId, owner.characterId)))
+        .get()
+      const checked = validateDisposition({
+        stance: change.stance,
+        note: change.note ?? existing?.note ?? ''
+      })
+      if (!checked.ok) return { ok: false, reason: checked.reason }
+      const last = db
+        .select({ seq: sessionEvent.seq })
+        .from(sessionEvent)
+        .where(eq(sessionEvent.sessionId, sessionId))
+        .orderBy(desc(sessionEvent.seq))
+        .get()
+      const values = {
+        stance: checked.value.stance,
+        note: checked.value.note,
+        changedSessionId: sessionId,
+        changedSeq: last?.seq ?? null
+      }
+      db.insert(disposition)
+        .values({ npcId, characterId: owner.characterId, ...values })
+        .onConflictDoUpdate({ target: [disposition.npcId, disposition.characterId], set: values })
+        .run()
+      return { ok: true }
     },
 
     /** A Session's Event log in sequence order. */

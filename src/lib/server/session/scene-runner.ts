@@ -104,6 +104,9 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
 
     let first: SessionEvent
     try {
+      // The run boundary: NPCs that died, left or were retired since the last run drop out of the
+      // stored Scene (they never resolve in the meantime), ending a dialogue with them.
+      sessions.pruneScene(sessionId)
       first = record()
     } catch (error) {
       free()

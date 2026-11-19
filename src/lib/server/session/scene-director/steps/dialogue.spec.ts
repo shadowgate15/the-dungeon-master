@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createScriptedPort, says } from '../../../../testing/scripted-chat-port'
-import { playableCampaign, sessionServiceWith } from '../../fixture'
+import { addNpc, playableCampaign, sessionServiceWith, setSceneNpcs } from '../../fixture'
 import { createSceneRunner, type PipelineEvent } from '../../scene-runner.ts'
 import type { SessionService } from '../../service'
 import { buildMenu } from '../menu.ts'
@@ -9,6 +9,7 @@ import { createDirectorPipeline } from '../pipeline.ts'
 
 let sessions: SessionService
 let sessionId: string
+let mira: string
 let model: ReturnType<typeof createScriptedPort>
 
 beforeEach(async () => {
@@ -16,12 +17,12 @@ beforeEach(async () => {
   sessions = sessionServiceWith(fixture).sessions
   sessionId = (await sessions.start(fixture.campaignId)).id
   model = createScriptedPort()
-  sessions.saveScene(sessionId, {
-    ...sessions.scene(sessionId),
-    npcs: [
-      { id: 'mira', name: 'Mira', attitude: 'friendly', knowledge: 'The key is under the altar.' }
-    ]
+  mira = addNpc(fixture, {
+    name: 'Mira',
+    stance: 'friendly',
+    note: 'The key is under the altar.'
   })
+  setSceneNpcs(fixture, sessionId, [mira])
 })
 
 const menuIds = () =>
@@ -54,7 +55,7 @@ describe('dialogue menu options', () => {
     sessions.saveScene(sessionId, {
       ...sessions.scene(sessionId),
       mode: 'dialogue',
-      dialogueNpcId: 'mira'
+      dialogueNpcId: mira
     })
     expect(menuIds()).toEqual(['end-dialogue'])
   })
@@ -70,12 +71,12 @@ describe('mode transitions', () => {
     model.enqueue(says('begin-dialogue:mira'), says('yield'))
     const events = await play('I approach Mira')
 
-    expect(sessions.scene(sessionId)).toMatchObject({ mode: 'dialogue', dialogueNpcId: 'mira' })
+    expect(sessions.scene(sessionId)).toMatchObject({ mode: 'dialogue', dialogueNpcId: mira })
     expect(sessions.events(sessionId).at(-1)).toMatchObject({
       role: 'code',
       kind: 'mode-changed',
-      npcId: 'mira',
-      data: { mode: 'dialogue', npcId: 'mira' }
+      npcId: mira,
+      data: { mode: 'dialogue', npcId: mira }
     })
     expect(events.some((e) => e.type === 'event' && e.event.kind === 'mode-changed')).toBe(true)
   })
@@ -84,7 +85,7 @@ describe('mode transitions', () => {
     sessions.saveScene(sessionId, {
       ...sessions.scene(sessionId),
       mode: 'dialogue',
-      dialogueNpcId: 'mira'
+      dialogueNpcId: mira
     })
     model.enqueue(says('end-dialogue'), says('yield'))
     await play('Farewell')

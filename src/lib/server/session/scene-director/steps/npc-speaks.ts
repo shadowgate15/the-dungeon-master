@@ -38,13 +38,13 @@ export const npcSpeaksOption: MenuOption = {
   verb: VERB,
   offer: ({ scene }) =>
     scene.npcs.map((npc) => ({
-      id: makeOptionId(VERB, npc.id),
+      id: makeOptionId(VERB, npc.key),
       hint: `${npc.name} (${npc.attitude}) says something to the player.`
     })),
   async *run(ctx, optionId, menu) {
-    const npcId = parseOptionId(optionId).arg
-    const npc = menu.scene.npcs.find((n) => n.id === npcId)
-    if (!npc) throw new Error(`No NPC ${npcId} is present`)
+    const key = parseOptionId(optionId).arg
+    const npc = menu.scene.npcs.find((n) => n.key === key)
+    if (!npc) throw new Error(`No NPC ${key} is present`)
     const system = [
       NPC_SYSTEM,
       `Character: ${npc.name}`,

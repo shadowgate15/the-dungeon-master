@@ -1,5 +1,18 @@
 /** Test-only: an in-memory database holding a Campaign with a linked Character, ready to play. */
-import { arc, arcAct, arcBeat } from '../db/schema'
+import { eq } from 'drizzle-orm'
+import {
+  arc,
+  arcAct,
+  arcBeat,
+  disposition,
+  fact,
+  npc,
+  npcFact,
+  session,
+  sessionScene
+} from '../db/schema'
+import { normalizeName } from '#lib/memory/validate.ts'
+import type { NpcStatus, Stance } from '#lib/memory/enums.ts'
 import { answers, createScriptedPort, type Script } from '../../testing/scripted-chat-port'
 import { createSessionService, type SessionService } from './service'
 import { createCampaignService } from '../campaign/service'
@@ -136,4 +149,84 @@ export function playableCampaign(options: { arc?: boolean } = {}): PlayableCampa
   campaigns.linkCharacter(campaignId, characterId)
   if (options.arc !== false) acceptArc(db, campaignId)
   return { db, campaignId, characterId }
+}
+
+/**
+ * Test-only: writes an NPC straight into World memory, with its disposition toward the
+ * Character, and returns its row id. It is not in any Scene until code places it.
+ */
+export function addNpc(
+  fixture: PlayableCampaign,
+  options: {
+    name: string
+    status?: NpcStatus
+    retired?: boolean
+    stance?: Stance
+    note?: string
+    /** Facts the NPC knows, linked rather than copied. */
+    knows?: { title: string; detail: string }[]
+  }
+): string {
+  const { db, campaignId, characterId } = fixture
+  // Provenance: the Campaign's Session this memory was written during (the tests start one first).
+  const during = db.select().from(session).where(eq(session.campaignId, campaignId)).get()!.id
+  const stamp = {
+    createdSessionId: during,
+    createdSeq: null,
+    changedSessionId: during,
+    changedSeq: null
+  }
+  const row = db
+    .insert(npc)
+    .values({
+      campaignId,
+      name: options.name,
+      nameKey: normalizeName(options.name),
+      description: `${options.name}, a local.`,
+      ...stamp,
+      role: 'Local',
+      status: options.status ?? 'alive',
+      ...(options.retired ? { retiredAt: 1, retiredReason: 'test' } : {})
+    })
+    .returning()
+    .get()
+  if (options.stance || options.note) {
+    db.insert(disposition)
+      .values({
+        npcId: row.id,
+        characterId,
+        stance: options.stance ?? 'neutral',
+        note: options.note ?? '',
+        changedSessionId: during,
+        changedSeq: null
+      })
+      .run()
+  }
+  for (const k of options.knows ?? []) {
+    const f = db
+      .insert(fact)
+      .values({ campaignId, title: k.title, detail: k.detail, ...stamp })
+      .returning()
+      .get()
+    db.insert(npcFact).values({ npcId: row.id, factId: f.id }).run()
+  }
+  return row.id
+}
+
+/** Test-only: changes an NPC's World memory record behind the Scene's back. */
+export function updateNpc(
+  fixture: PlayableCampaign,
+  npcId: string,
+  changes: Partial<typeof npc.$inferInsert>
+) {
+  fixture.db.update(npc).set(changes).where(eq(npc.id, npcId)).run()
+}
+
+/** Test-only: sets exactly which NPC ids the Session's stored Scene holds. */
+export function setSceneNpcs(fixture: PlayableCampaign, sessionId: string, ids: string[]) {
+  fixture.db
+    .update(sessionScene)
+    .set({ npcs: ids })
+    .where(eq(sessionScene.sessionId, sessionId))
+    .run()
 }

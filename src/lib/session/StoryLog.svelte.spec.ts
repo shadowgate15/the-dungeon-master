@@ -4,7 +4,9 @@ import { render } from 'vitest-browser-svelte'
 import type { SceneNpc, SessionEvent } from './enums.ts'
 import StoryLog from './StoryLog.svelte'
 
-const npcs: SceneNpc[] = [{ id: 'mira', name: 'Mira', attitude: 'friendly', knowledge: '' }]
+const npcs: SceneNpc[] = [
+  { id: 'mira', key: 'mira', name: 'Mira', attitude: 'friendly', knowledge: '' }
+]
 
 const event = (seq: number, kind: SessionEvent['kind'], text: string): SessionEvent => ({
   id: `e${seq}`,

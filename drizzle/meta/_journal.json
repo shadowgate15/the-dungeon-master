@@ -99,6 +99,13 @@
       "when": 1795099318163,
       "tag": "0013_fact_immutable",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1795100369634,
+      "tag": "0014_scene_npc_ids",
+      "breakpoints": true
     }
   ]
 }

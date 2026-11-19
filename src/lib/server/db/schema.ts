@@ -31,14 +31,7 @@ import {
   type DroppedItem
 } from '../../memory/enums'
 import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '../../world/enums'
-import {
-  EVENT_KINDS,
-  MODES,
-  ROLES,
-  type PendingRoll,
-  type SceneExit,
-  type SceneNpc
-} from '../../session/enums'
+import { EVENT_KINDS, MODES, ROLES, type PendingRoll, type SceneExit } from '../../session/enums'
 
 export const task = sqliteTable('task', {
   id: text('id')
@@ -285,7 +278,8 @@ export const sessionScene = sqliteTable(
     locationDescription: text('location_description').notNull(),
     exits: text('exits', { mode: 'json' }).$type<SceneExit[]>().notNull(),
     objects: text('objects', { mode: 'json' }).$type<string[]>().notNull(),
-    npcs: text('npcs', { mode: 'json' }).$type<SceneNpc[]>().notNull(),
+    /** NPC row ids; name, attitude and knowledge resolve live from World memory. */
+    npcs: text('npcs', { mode: 'json' }).$type<string[]>().notNull(),
     mode: text('mode', { enum: MODES }).notNull(),
     dialogueNpcId: text('dialogue_npc_id'),
     pendingRoll: text('pending_roll', { mode: 'json' }).$type<PendingRoll>(),

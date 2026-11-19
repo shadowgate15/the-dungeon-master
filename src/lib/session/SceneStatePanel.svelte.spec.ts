@@ -8,7 +8,9 @@ const scene: SceneState = {
   location: { name: 'The Rusty Flagon', description: 'A smoky tavern.' },
   exits: [{ id: 'door', name: 'Front door' }],
   objects: ['Hearth'],
-  npcs: [{ id: 'mira', name: 'Mira', attitude: 'friendly', knowledge: 'Knows the key.' }],
+  npcs: [
+    { id: 'mira', key: 'mira', name: 'Mira', attitude: 'friendly', knowledge: 'Knows the key.' }
+  ],
   mode: 'exploration',
   dialogueNpcId: null,
   pendingRoll: null
