@@ -163,6 +163,10 @@
               <Alert variant="danger">
                 {#each issues as issue (issue)}<p>{issue}</p>{/each}
               </Alert>
+            {:else if g.status === 'incomplete'}
+              <p class="text-sm font-medium text-warning" data-testid="group-incomplete">
+                Choose {g.choose - new Set(g.picks).size} more to finish this step.
+              </p>
             {/if}
           </fieldset>
         {/each}

@@ -56,6 +56,17 @@ describe('WizardShell with the Concept step', () => {
     await expect.element(page.getByRole('button', { name: /Review/ })).toBeDisabled()
   })
 
+  it('names the steps keeping Review locked once Concept is done', async () => {
+    const { wizard } = setup()
+    await expect.element(page.getByTestId('review-blockers')).toHaveTextContent(/Concept/)
+
+    wizard.update({ name: 'Brenna', race: 'human', class: 'fighter', background: 'acolyte' })
+
+    const note = page.getByTestId('review-blockers')
+    await expect.element(note).toHaveTextContent(/Ability scores, Skills & features, Equipment/)
+    await expect.element(note).not.toHaveTextContent(/Concept/)
+  })
+
   it('offers a subrace only for races that have one', async () => {
     setup()
 
