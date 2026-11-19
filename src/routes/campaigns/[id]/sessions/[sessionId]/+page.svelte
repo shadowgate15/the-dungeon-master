@@ -205,7 +205,7 @@
     </section>
 
     {#if dev}
-      <EventInspector {steps} {stats} />
+      <EventInspector {steps} {stats} memory={data.memory} onrefresh={() => void invalidateAll()} />
     {/if}
   </div>
 </main>

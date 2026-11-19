@@ -3,7 +3,13 @@ import { createCampaignService } from '#lib/server/campaign/service.ts'
 import { createCharacterService } from '#lib/server/character/service.ts'
 import { db } from '#lib/server/db/index.ts'
 import { createJournal } from '#lib/server/memory/journal.ts'
-import { rollingSummary, sessionEnd, sessions } from '#lib/server/session/index.ts'
+import { readMemoryInspector } from '#lib/server/memory/inspector.ts'
+import {
+  memoryExtraction,
+  rollingSummary,
+  sessionEnd,
+  sessions
+} from '#lib/server/session/index.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 const campaigns = createCampaignService(db)
@@ -33,7 +39,11 @@ export const load: PageServerLoad = ({ params, cookies }) => {
     scene: sessions.scene(found.id),
     events,
     recap: recap ?? null,
-    journal: journal.read(campaign.id, found.characterId)
+    journal: journal.read(campaign.id, found.characterId),
+    // For the dev-only inspector's Memory section.
+    memory: import.meta.env.DEV
+      ? readMemoryInspector(db, memoryExtraction, rollingSummary, found.id, events.at(-1)?.seq ?? 0)
+      : null
   }
 }
 
