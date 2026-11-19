@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { startFakeLmStudio, type FakeLmStudio } from '#lib/testing/fake-lm-studio/server.ts'
 import { createChatAdapter } from '../ai/adapter.ts'
-import { createChatPort } from '../ai/port.ts'
+import { createChatPort, type ChatPort } from '../ai/port.ts'
 import { generateArc, type ArcSeed } from './generate.ts'
 
 let fake: FakeLmStudio
@@ -258,12 +258,70 @@ describe('generateArc', () => {
     expect(bodies().length).toBeLessThanOrEqual(2)
   })
 
-  it('times out, naming the step', async () => {
+  it('times out a call that exceeds its deadline, naming the part', async () => {
     fake.queueAnswers({ content: skeletonJson(3), delayMs: 5000 })
 
     const result = await generateArc(port(), seed(), { timeoutMs: 50 })
 
     expect(result).toMatchObject({ ok: false, failure: { kind: 'timeout' } })
-    if (!result.ok) expect(result.failure.message).toMatch(/story plan|plan/i)
+    if (!result.ok)
+      expect(result.failure.message).toBe('The model took too long to write the story plan')
+  })
+
+  it('names the Act when an Act call times out', async () => {
+    fake.queueAnswers(
+      { content: skeletonJson(3) },
+      { content: actJson(1, 2) },
+      {
+        content: actJson(2, 2),
+        delayMs: 5000
+      }
+    )
+
+    const result = await generateArc(port(), seed(), { timeoutMs: 300 })
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { kind: 'timeout', message: 'The model took too long to write Act 2' }
+    })
+  })
+
+  it('shares one deadline across the retries of a call', async () => {
+    const wrong = { content: actJson(1, 4), delayMs: 200 }
+    fake.queueAnswers({ content: skeletonJson(3) }, wrong, wrong, wrong)
+
+    const result = await generateArc(port(), seed(), { timeoutMs: 500 })
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'timeout' } })
+  })
+
+  it('does not cap the total time, only each call', async () => {
+    const slow = (content: unknown) => ({ content, delayMs: 200 })
+    fake.queueAnswers(
+      slow(skeletonJson(3)),
+      slow(actJson(1, 2)),
+      slow(actJson(2, 2)),
+      slow(actJson(3, 2))
+    )
+
+    const result = await generateArc(port(), seed(), { timeoutMs: 500 })
+
+    expect(result.ok).toBe(true)
+  })
+
+  it('does not hang on a port that ignores the abort signal', async () => {
+    const hung: ChatPort = () => ({
+      [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}) })
+    })
+    const controller = new AbortController()
+
+    const stopped = generateArc(hung, seed(), { signal: controller.signal })
+    setTimeout(() => controller.abort(), 50)
+    expect(await stopped).toMatchObject({ ok: false, failure: { kind: 'cancelled' } })
+
+    expect(await generateArc(hung, seed(), { timeoutMs: 50 })).toMatchObject({
+      ok: false,
+      failure: { kind: 'timeout' }
+    })
   })
 })
