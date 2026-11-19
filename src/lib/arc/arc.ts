@@ -67,6 +67,85 @@ export function sizeText(length: Length): string {
   return `${describe(acts)} Act${acts[1] === 1 ? '' : 's'} and ${describe(beats)} Beats in total`
 }
 
+/** What code decides before any model call: Acts in the Arc and the exact Beats in each. */
+export interface ArcPlan {
+  acts: number
+  beats: number[]
+}
+
+/** Total Beats planned per Length: the midpoint of the Beat range, rounded to suit the Act count. */
+const PLANNED_BEATS: Record<Length, number> = { 'one-shot': 3, short: 6, medium: 12, long: 17 }
+
+/**
+ * Plans the Arc's size: the top of the Act range, and the planned total Beats spread evenly with
+ * the remainder going to the middle Acts (centre outwards, the earlier Act first on a tie).
+ */
+export function planArc(length: Length): ArcPlan {
+  const acts = ARC_SIZES[length].acts[1]
+  const total = PLANNED_BEATS[length]
+  const base = Math.floor(total / acts)
+  const beats = Array.from({ length: acts }, () => base)
+  const centre = (acts - 1) / 2
+  const order = beats
+    .map((_, i) => i)
+    .sort((x, y) => Math.abs(x - centre) - Math.abs(y - centre) || x - y)
+  for (let k = 0; k < total - base * acts; k++) beats[order[k]]++
+  return { acts, beats }
+}
+
+/** The shared text rule: required (after trimming) and within the cap. */
+const textProblem = (problems: string[], label: string, value: unknown, max: number) => {
+  if (typeof value !== 'string' || !value.trim()) problems.push(`${label} is required`)
+  else if (value.trim().length > max) problems.push(`${label} is too long (max ${max})`)
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+/** Skeleton call check: shape, required and capped text, and exactly `actCount` Acts. */
+export function skeletonProblems(skeleton: unknown, actCount: number): string[] {
+  if (!isRecord(skeleton)) return ['The skeleton must be an object']
+  const problems: string[] = []
+  textProblem(problems, 'The title', skeleton.title, ARC_MAX.title)
+  textProblem(problems, 'The premise', skeleton.premise, ARC_MAX.premise)
+  textProblem(problems, 'The stakes', skeleton.stakes, ARC_MAX.stakes)
+  textProblem(problems, 'The resolution', skeleton.resolution, ARC_MAX.resolution)
+  if (!Array.isArray(skeleton.acts)) return [...problems, 'The acts must be a list']
+  if (skeleton.acts.length !== actCount) {
+    problems.push(`The Arc needs exactly ${plural(actCount, 'Act')}, not ${skeleton.acts.length}`)
+  }
+  skeleton.acts.forEach((act: unknown, i: number) => {
+    if (!isRecord(act)) problems.push(`Act ${i + 1} must be an object with a name and purpose`)
+    else {
+      textProblem(problems, `Act ${i + 1}'s name`, act.name, ARC_MAX.actName)
+      textProblem(problems, `Act ${i + 1}'s purpose`, act.purpose, ARC_MAX.purpose)
+    }
+  })
+  return problems
+}
+
+/** Act call check: shape, exactly `beatCount` Beats, and capped non-empty Beat text. */
+export function actProblems(act: unknown, beatCount: number, actNumber: number): string[] {
+  if (!isRecord(act) || !Array.isArray(act.beats)) return [`Act ${actNumber} needs a list of Beats`]
+  const problems: string[] = []
+  if (act.beats.length !== beatCount) {
+    problems.push(
+      `Act ${actNumber} needs exactly ${plural(beatCount, 'Beat')}, not ${act.beats.length}`
+    )
+  }
+  act.beats.forEach((beat: unknown, j: number) => {
+    const at = `Act ${actNumber} Beat ${j + 1}`
+    if (!isRecord(beat)) problems.push(`${at} must be an object with a title and description`)
+    else {
+      textProblem(problems, `${at}'s title`, beat.title, ARC_MAX.beatTitle)
+      textProblem(problems, `${at}'s description`, beat.description, ARC_MAX.beatDescription)
+    }
+  })
+  return problems
+}
+
 /**
  * Every rule an Arc must satisfy, as readable problems (empty when valid). Shared by the server
  * (generation and saving) and the editor. `generated` adds the per-Act Beat count.
@@ -77,10 +156,8 @@ export function arcProblems(
   options: { generated?: boolean } = {}
 ): string[] {
   const problems: string[] = []
-  const text = (label: string, value: unknown, max: number) => {
-    if (typeof value !== 'string' || !value.trim()) problems.push(`${label} is required`)
-    else if (value.trim().length > max) problems.push(`${label} is too long (max ${max})`)
-  }
+  const text = (label: string, value: unknown, max: number) =>
+    textProblem(problems, label, value, max)
   text('The title', arc.title, ARC_MAX.title)
   text('The premise', arc.premise, ARC_MAX.premise)
   text('The stakes', arc.stakes, ARC_MAX.stakes)
