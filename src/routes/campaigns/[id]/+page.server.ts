@@ -34,6 +34,7 @@ export const load: PageServerLoad = ({ params }) => {
       readOnly: campaigns.isReadOnly(found.id)
     },
     linkedCharacter: linkedId ? { id: linkedId, name: characters.get(linkedId)?.name ?? '' } : null,
+    characterLocked: campaigns.characterLocked(found.id),
     characters: characters.list().map((c) => ({ id: c.id, name: c.name })),
     arc,
     arcAvailability: arcs.availability(found.id),
@@ -58,6 +59,17 @@ export const actions: Actions = {
       throw e
     }
     return { linked: true }
+  },
+
+  unlinkCharacter: async ({ params }) => {
+    try {
+      campaigns.unlinkCharacter(params.id)
+    } catch (e) {
+      if (e instanceof CampaignValidationError || e instanceof CampaignNotFoundError)
+        return fail(400, { error: e.message })
+      throw e
+    }
+    return { unlinked: true }
   },
 
   startSession: async ({ params }) => {

@@ -44,7 +44,12 @@
     {:else}
       <p class="text-muted">No Character linked yet.</p>
     {/if}
-    {#if data.characters.length === 0}
+    {#if data.characterLocked}
+      <p class="text-sm text-muted">
+        The Character is fixed because this Campaign has a Session. It cannot be changed or
+        unlinked.
+      </p>
+    {:else if data.characters.length === 0}
       <p class="text-sm">
         You have no Characters yet. <Link href={resolve('/characters/new')}>Create one</Link>.
       </p>
@@ -60,6 +65,11 @@
         </label>
         <Button type="submit" variant="secondary">Link Character</Button>
       </form>
+      {#if data.linkedCharacter}
+        <form method="POST" action="?/unlinkCharacter" use:enhance>
+          <Button type="submit" variant="secondary">Unlink Character</Button>
+        </form>
+      {/if}
     {/if}
   </section>
 

@@ -1,9 +1,17 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { Database } from '../db/connect'
-import { campaign, campaignCharacter, character, world, worldCampaign } from '../db/schema'
+import { campaign, campaignCharacter, character, session, world, worldCampaign } from '../db/schema'
 import { createWorldService, type World } from '../world/service'
 import { LENGTHS, PREMISE_SERVICE_MAX, TONES } from '#lib/campaign/enums.ts'
 import { NAME_MAX } from '#lib/world/seed.ts'
+
+const CHARACTER_LOCKED = "The Character is fixed once the Campaign's first Session exists"
+
+const hasSession = (
+  q: Database | Parameters<Parameters<Database['transaction']>[0]>[0],
+  id: string
+) =>
+  q.select({ id: session.id }).from(session).where(eq(session.campaignId, id)).get() !== undefined
 
 export type Campaign = typeof campaign.$inferSelect
 export type CampaignWithWorlds = Campaign & { worlds: World[] }
@@ -167,11 +175,31 @@ export function createCampaignService(db: Database, now: () => number = Date.now
         .get()?.id
     },
 
-    /** Links the Character to the Campaign, replacing any earlier link. */
+    /** True once the Campaign's first Session exists; the linked Character is then fixed. */
+    characterLocked(campaignId: string): boolean {
+      return hasSession(db, campaignId)
+    },
+
+    /** Removes the Character link; rejected once the Campaign's first Session exists. */
+    unlinkCharacter(campaignId: string): void {
+      db.transaction((tx) => {
+        if (!tx.select().from(campaign).where(eq(campaign.id, campaignId)).get()) {
+          throw new CampaignNotFoundError('Campaign not found')
+        }
+        if (hasSession(tx, campaignId)) throw new CampaignValidationError(CHARACTER_LOCKED)
+        tx.delete(campaignCharacter).where(eq(campaignCharacter.campaignId, campaignId)).run()
+      })
+    },
+
+    /**
+     * Links the Character to the Campaign, replacing any earlier link. Rejected once the
+     * Campaign's first Session exists, so carry-over stays coherent.
+     */
     linkCharacter(campaignId: string, characterId: string): void {
       db.transaction((tx) => {
         const camp = tx.select().from(campaign).where(eq(campaign.id, campaignId)).get()
         if (!camp) throw new CampaignNotFoundError('Campaign not found')
+        if (hasSession(tx, campaignId)) throw new CampaignValidationError(CHARACTER_LOCKED)
         if (camp.archivedAt !== null || worlds.isCampaignReadOnly(campaignId)) {
           throw new CampaignValidationError('This Campaign is read-only')
         }
