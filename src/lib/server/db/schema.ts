@@ -22,6 +22,14 @@ import {
   subclass,
   subrace
 } from './rules-schema'
+import {
+  BEAT_STATES,
+  MEMORY_RUN_KINDS,
+  MEMORY_RUN_OUTCOMES,
+  NPC_STATUSES,
+  STANCES,
+  type DroppedItem
+} from '../../memory/enums'
 import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '../../world/enums'
 import {
   EVENT_KINDS,
@@ -372,9 +380,202 @@ export const arcBeat = sqliteTable(
       .references(() => arcAct.id, { onDelete: 'cascade' }),
     position: integer('position').notNull(),
     title: text('title').notNull(),
-    description: text('description').notNull()
+    description: text('description').notNull(),
+    // Beat state: leaves `pending` once. The stamps record the Session and the last Event id the
+    // transition covered; all null while pending.
+    state: text('state', { enum: BEAT_STATES }).notNull().default('pending'),
+    stateSessionId: text('state_session_id').references(() => session.id, {
+      onDelete: 'set null'
+    }),
+    stateEventId: text('state_event_id').references(() => sessionEvent.id, {
+      onDelete: 'set null'
+    }),
+    stateChangedAt: integer('state_changed_at')
   },
-  (t) => [index('arc_beat_act').on(t.actId, t.position)]
+  (t) => [
+    index('arc_beat_act').on(t.actId, t.position),
+    check('arc_beat_state_check', oneOf('state', BEAT_STATES))
+  ]
+)
+
+// World memory. Every record is Campaign-scoped and cascades with its Campaign. Provenance: the
+// Session and Event seq a record was created and last changed in; seq is null only for first-Session
+// seeding. Records are retired (a timestamp and a reason), never deleted. See GLOSSARY.md.
+const campaignRef = () =>
+  text('campaign_id')
+    .notNull()
+    .references(() => campaign.id, { onDelete: 'cascade' })
+const sessionRef = (name: string) =>
+  text(name)
+    .notNull()
+    .references(() => session.id, { onDelete: 'cascade' })
+const provenance = () => ({
+  createdSessionId: sessionRef('created_session_id'),
+  createdSeq: integer('created_seq'),
+  changedSessionId: sessionRef('changed_session_id'),
+  changedSeq: integer('changed_seq')
+})
+const retirement = () => ({
+  retiredAt: integer('retired_at'),
+  retiredReason: text('retired_reason')
+})
+const retiredCheck = (table: string) =>
+  check(`${table}_retired_check`, sql.raw('(retired_at IS NULL) = (retired_reason IS NULL)'))
+
+/** A location the story established, hosted by one of the Campaign's Worlds. */
+export const place = sqliteTable(
+  'place',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    campaignId: campaignRef(),
+    worldId: text('world_id')
+      .notNull()
+      .references(() => world.id, { onDelete: 'restrict' }),
+    name: text('name').notNull(),
+    description: text('description').notNull(),
+    ...provenance(),
+    ...retirement()
+  },
+  (t) => [index('place_campaign').on(t.campaignId), retiredCheck('place')]
+)
+
+/**
+ * An exit, an edge owned by its place. `targetPlaceId` is null until the exit is first used, then
+ * fixed, so going back through it leads to the same place.
+ */
+export const placeExit = sqliteTable(
+  'place_exit',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    placeId: text('place_id')
+      .notNull()
+      .references(() => place.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    targetPlaceId: text('target_place_id').references(() => place.id, { onDelete: 'set null' })
+  },
+  (t) => [uniqueIndex('place_exit_place_name').on(t.placeId, t.name)]
+)
+
+/**
+ * An NPC. `nameKey` is the normalized name, unique per Campaign. `status` and retirement are
+ * separate: a dead NPC is not retired. `placeId` is where code last placed them.
+ */
+export const npc = sqliteTable(
+  'npc',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    campaignId: campaignRef(),
+    name: text('name').notNull(),
+    nameKey: text('name_key').notNull(),
+    description: text('description').notNull(),
+    role: text('role').notNull(),
+    status: text('status', { enum: NPC_STATUSES }).notNull().default('alive'),
+    placeId: text('place_id').references(() => place.id, { onDelete: 'set null' }),
+    ...provenance(),
+    ...retirement()
+  },
+  (t) => [
+    uniqueIndex('npc_campaign_name_key').on(t.campaignId, t.nameKey),
+    check('npc_status_check', oneOf('status', NPC_STATUSES)),
+    retiredCheck('npc')
+  ]
+)
+
+/** NPC memory: how an NPC regards a Character. Knowledge is `npcFact` links, never copied text. */
+export const disposition = sqliteTable(
+  'disposition',
+  {
+    npcId: text('npc_id')
+      .notNull()
+      .references(() => npc.id, { onDelete: 'cascade' }),
+    characterId: text('character_id')
+      .notNull()
+      .references(() => character.id, { onDelete: 'cascade' }),
+    stance: text('stance', { enum: STANCES }).notNull().default('neutral'),
+    note: text('note').notNull().default(''),
+    changedSessionId: sessionRef('changed_session_id'),
+    changedSeq: integer('changed_seq')
+  },
+  (t) => [
+    primaryKey({ columns: [t.npcId, t.characterId] }),
+    check('disposition_stance_check', oneOf('stance', STANCES))
+  ]
+)
+
+/**
+ * A claim the story established. Immutable: it changes only by being superseded (`supersededById`)
+ * or retired; a trigger rejects edits to its text or flag.
+ */
+export const fact = sqliteTable(
+  'fact',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    campaignId: campaignRef(),
+    title: text('title').notNull(),
+    detail: text('detail').notNull(),
+    worldChanging: integer('world_changing', { mode: 'boolean' }).notNull().default(false),
+    supersededById: text('superseded_by_id').references((): AnySQLiteColumn => fact.id, {
+      onDelete: 'set null'
+    }),
+    ...provenance(),
+    ...retirement()
+  },
+  (t) => [index('fact_campaign').on(t.campaignId), retiredCheck('fact')]
+)
+
+/** What an NPC knows: a link to a fact, never a copy of its text. */
+export const npcFact = sqliteTable(
+  'npc_fact',
+  {
+    npcId: text('npc_id')
+      .notNull()
+      .references(() => npc.id, { onDelete: 'cascade' }),
+    factId: text('fact_id')
+      .notNull()
+      .references(() => fact.id, { onDelete: 'cascade' })
+  },
+  (t) => [primaryKey({ columns: [t.npcId, t.factId] })]
+)
+
+/**
+ * One row per memory extraction or summary attempt, append-only and never pruned. Records counts
+ * and why items were dropped (`{kind, reason}`, never item text).
+ */
+export const memoryRun = sqliteTable(
+  'memory_run',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => session.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: MEMORY_RUN_KINDS }).notNull(),
+    fromSeq: integer('from_seq').notNull(),
+    toSeq: integer('to_seq').notNull(),
+    outcome: text('outcome', { enum: MEMORY_RUN_OUTCOMES }).notNull(),
+    accepted: integer('accepted').notNull().default(0),
+    dropped: integer('dropped').notNull().default(0),
+    droppedItems: text('dropped_items', { mode: 'json' })
+      .$type<DroppedItem[]>()
+      .notNull()
+      .default(sql`'[]'`),
+    durationMs: integer('duration_ms').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [
+    index('memory_run_session').on(t.sessionId, t.createdAt),
+    check('memory_run_kind_check', oneOf('kind', MEMORY_RUN_KINDS)),
+    check('memory_run_outcome_check', oneOf('outcome', MEMORY_RUN_OUTCOMES))
+  ]
 )
 
 export * from './rules-schema'
