@@ -1,22 +1,32 @@
 import { z } from 'zod'
 import {
   ARC_MAX,
-  GENERATED_BEATS_PER_ACT,
+  actProblems,
   arcProblems,
-  sizeText,
-  type ArcDraft
+  planArc,
+  skeletonProblems,
+  type ArcDraft,
+  type ArcPlan
 } from '#lib/arc/arc.ts'
 import type { Length, Tone } from '#lib/campaign/enums.ts'
 import { callModel, type ChatPort } from '../ai/port.ts'
 
 /**
- * Whole-Arc generation: one structured call from the Campaign Seed, validated by code (shape,
- * size ranges, text lengths) and retried once with the problem named. UI-free; the model is
- * reached only through the injected `ChatPort`. Nothing is stored here.
+ * Arc generation as a sequence of small calls driven by code: a skeleton call (title, premise,
+ * stakes, resolution, Acts with name and purpose), then one Beats call per Act in Act order.
+ * Code plans the counts (`planArc`) and validates every call (`skeletonProblems`, `actProblems`);
+ * the assembled draft is checked once more by `arcProblems`. UI-free; the model is reached only
+ * through the injected `ChatPort`. Nothing is stored here.
+ *
+ * Structure for later tickets: every call goes through `runStep`, which is the one place for
+ * retry (#256: loop over `runStep`'s ask/validate with the rejected answer), a per-step deadline
+ * (#257: replace the run-wide timer with one per `runStep`) and progress (#258 builds on
+ * `onProgress`, which `generateArc` already fires before each step).
  */
 
 export const ARC_TIMEOUT_MS = 180_000
-const MAX_TOKENS = 3500
+const SKELETON_MAX_TOKENS = 1500
+const ACT_MAX_TOKENS = 1500
 
 export interface ArcSeed {
   name: string
@@ -36,40 +46,80 @@ export type ArcResult = { ok: true; arc: ArcDraft } | { ok: false; failure: ArcF
 export interface GenerateArcOptions {
   /** Cancels the call (the player pressed Stop). */
   signal?: AbortSignal
-  /** The single deadline, retry included. Injectable for tests. */
+  /** The single deadline for the whole run. Injectable for tests. */
   timeoutMs?: number
+  /** Called when a step starts. */
+  onProgress?: (step: ArcStep) => void
 }
 
-const outputSchema = z.object({
+/** A step of generation: the skeleton, or one Act's Beats (`number` of `of`, from 1). */
+export type ArcStep = { kind: 'skeleton' } | { kind: 'act'; number: number; of: number }
+
+const stepName = (step: ArcStep) =>
+  step.kind === 'skeleton' ? 'the story plan' : `Act ${step.number} of ${step.of}`
+
+const skeletonSchema = z.object({
   title: z.string(),
   premise: z.string(),
   stakes: z.string(),
-  acts: z.array(
-    z.object({
-      name: z.string(),
-      purpose: z.string(),
-      beats: z.array(z.object({ title: z.string(), description: z.string() }))
-    })
-  ),
+  acts: z.array(z.object({ name: z.string(), purpose: z.string() })),
   resolution: z.string()
 })
+type Skeleton = z.infer<typeof skeletonSchema>
 
+const actSchema = z.object({
+  beats: z.array(z.object({ title: z.string(), description: z.string() }))
+})
+type ActBeats = z.infer<typeof actSchema>
+
+/** One system prompt shared by every call, plus the Campaign Seed with its Worlds. */
 function systemPrompts(seed: ArcSeed): string[] {
   const worlds = seed.worlds.length
     ? seed.worlds.map((w) => `- ${w.name}${w.premise ? `: ${w.premise}` : ''}`).join('\n')
     : '- (none)'
-  const [lo, hi] = GENERATED_BEATS_PER_ACT
   return [
-    'You are planning the story of a tabletop role-playing campaign. Write its Arc: the planned shape of the story, which a Dungeon Master will steer by but may deviate from. Reply with only the JSON object requested.',
+    'You are planning the story of a tabletop role-playing campaign. Write its Arc: the planned shape of the story, which a Dungeon Master will steer by but may deviate from. You write it in small steps, each asking for part of it. Reply with only the JSON object requested.',
     [
       'An Arc has a title, a premise (1 to 3 sentences), the stakes (1 to 3 sentences), an ordered series of Acts, and a resolution (the intended ending, not a Beat).',
       'An Act is a named phase (such as setup, escalation or climax) with a one-line purpose. It holds Beats.',
       'A Beat is a turning point or outcome the story should reach: a title and one or two sentences saying what should become true, never how to get there.',
-      `Size: ${sizeText(seed.length)}, with ${lo} to ${hi} Beats in each Act.`,
       `Keep text short: title at most ${ARC_MAX.title} characters, Beat descriptions at most ${ARC_MAX.beatDescription}, Act purposes at most ${ARC_MAX.purpose}.`
     ].join('\n'),
     `Campaign:\n- Name: ${seed.name}\n- Premise: ${seed.premise}\n- Tone: ${seed.tone}\n- Length: ${seed.length}\nWorlds it is set in (stay consistent with them):\n${worlds}`
   ]
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+function skeletonPrompt(plan: ArcPlan): string {
+  return `Plan the story. Give the title, premise, stakes, resolution, and exactly ${plural(plan.acts, 'Act')} in order, each with only a name and a purpose (no Beats yet).`
+}
+
+function actPrompt(plan: ArcPlan, skeleton: Skeleton, written: ActBeats[], index: number): string {
+  const lines = [
+    `The story plan:`,
+    `Title: ${skeleton.title}`,
+    `Premise: ${skeleton.premise}`,
+    `Stakes: ${skeleton.stakes}`,
+    `Resolution: ${skeleton.resolution}`,
+    `Acts:`,
+    ...skeleton.acts.map((a, i) => `${i + 1}. ${a.name}: ${a.purpose}`)
+  ]
+  written.forEach((act, i) => {
+    lines.push(
+      '',
+      `Beats already written for Act ${i + 1} (${skeleton.acts[i].name}):`,
+      ...act.beats.map((b, j) => `${j + 1}. ${b.title}: ${b.description}`)
+    )
+  })
+  lines.push(
+    '',
+    `Write the Beats for Act ${index + 1} of ${plan.acts} (${skeleton.acts[index].name}): exactly ${plural(plan.beats[index], 'Beat')}, as {"beats": [{"title", "description"}]}.`
+  )
+  if (index === plan.acts - 1) {
+    lines.push('This is the last Act: lead the story toward the resolution.')
+  }
+  return lines.join('\n')
 }
 
 const fail = (kind: ArcFailure['kind'], message: string): ArcResult => ({
@@ -84,64 +134,105 @@ export async function generateArc(
 ): Promise<ArcResult> {
   const controller = new AbortController()
   let outcome: ArcResult | undefined
+  let current: ArcStep = { kind: 'skeleton' }
   const stop = (result: ArcResult) => {
     outcome ??= result
     controller.abort()
   }
-  // Resolves when stopped, so a port that ignores its signal cannot hold the call.
+  // Resolves when stopped, so a port that ignores its signal cannot hold the run.
   const stopped = new Promise<ArcResult>((resolve) =>
     controller.signal.addEventListener('abort', () => resolve(outcome!))
   )
   const onCancel = () => stop(fail('cancelled', 'The request was stopped'))
   const timer = setTimeout(
-    () => stop(fail('timeout', 'The model took too long to reply')),
+    () => stop(fail('timeout', `The model took too long to write ${stepName(current)}`)),
     options.timeoutMs ?? ARC_TIMEOUT_MS
   )
   options.signal?.addEventListener('abort', onCancel)
   if (options.signal?.aborted) onCancel()
 
-  type Attempt = { ok: true; arc: ArcDraft } | { ok: false; problem: string } | ArcResult
-  const attempt = async (correction: string | null): Promise<Attempt> => {
-    const call = await callModel(port, {
-      systemPrompts: systemPrompts(seed),
-      messages: [
-        {
-          role: 'user',
-          content: correction
-            ? `Write the Arc. Your previous answer was rejected: ${correction}`
-            : 'Write the Arc.'
-        }
-      ],
-      maxTokens: MAX_TOKENS,
-      threadId: crypto.randomUUID(),
-      outputSchema,
-      signal: controller.signal
-    })
+  /** One call: ask, parse, validate. A single attempt; the hook for retries and deadlines. */
+  const runStep = async <T>(
+    step: ArcStep,
+    request: { prompt: string; maxTokens: number; schema: z.ZodObject & z.ZodType<T> },
+    problemsOf: (value: T) => string[]
+  ): Promise<{ ok: true; value: T } | ArcResult> => {
+    current = step
+    options.onProgress?.(step)
+    const raced = await Promise.race([
+      callModel(port, {
+        systemPrompts: systemPrompts(seed),
+        messages: [{ role: 'user', content: request.prompt }],
+        maxTokens: request.maxTokens,
+        threadId: crypto.randomUUID(),
+        outputSchema: request.schema,
+        signal: controller.signal
+      }).then((call) => ({ call })),
+      stopped.then((result) => ({ result }))
+    ])
+    if ('result' in raced) return raced.result
+    const call = raced.call
     if (!call.ok) {
-      return call.failure.kind === 'invalid-output'
-        ? { ok: false, problem: 'the answer was not the requested JSON object' }
-        : fail(call.failure.kind, call.failure.message)
+      const failure = call.failure
+      return failure.kind === 'invalid-output'
+        ? fail(
+            'invalid-output',
+            `${stepName(step)} could not be written: the answer was not the requested JSON object`
+          )
+        : fail(failure.kind, failure.message)
     }
-    const parsed = outputSchema.safeParse(call.object)
-    if (!parsed.success) {
-      return { ok: false, problem: 'the answer was not the requested JSON object' }
+    const parsed = request.schema.safeParse(call.object)
+    const problems = parsed.success
+      ? problemsOf(parsed.data)
+      : ['the answer was not the requested JSON object']
+    if (!parsed.success || problems.length) {
+      return fail(
+        'invalid-output',
+        `${stepName(step)} could not be written: ${problems.join('; ')}`
+      )
     }
-    const problems = arcProblems(parsed.data, seed.length, { generated: true })
-    return problems.length
-      ? { ok: false, problem: problems.join('; ') }
-      : { ok: true, arc: parsed.data }
+    return { ok: true, value: parsed.data }
   }
 
   try {
     if (controller.signal.aborted) return outcome!
-    let problem = ''
-    for (let tries = 0; tries < 2; tries++) {
-      const result = await Promise.race([attempt(problem || null), stopped])
-      if ('failure' in result) return result
-      if (result.ok && 'arc' in result) return { ok: true, arc: result.arc }
-      problem = (result as { problem: string }).problem
+    const plan = planArc(seed.length)
+
+    const skeleton = await runStep(
+      { kind: 'skeleton' },
+      { prompt: skeletonPrompt(plan), maxTokens: SKELETON_MAX_TOKENS, schema: skeletonSchema },
+      (value) => skeletonProblems(value, plan.acts)
+    )
+    if (!('value' in skeleton)) return skeleton
+
+    const written: ActBeats[] = []
+    for (let i = 0; i < plan.acts; i++) {
+      const act = await runStep(
+        { kind: 'act', number: i + 1, of: plan.acts },
+        {
+          prompt: actPrompt(plan, skeleton.value, written, i),
+          maxTokens: ACT_MAX_TOKENS,
+          schema: actSchema
+        },
+        (value) => actProblems(value, plan.beats[i], i + 1)
+      )
+      if (!('value' in act)) return act
+      written.push(act.value)
     }
-    return fail('invalid-output', `The model did not return a usable Arc: ${problem}`)
+
+    const draft: ArcDraft = {
+      title: skeleton.value.title,
+      premise: skeleton.value.premise,
+      stakes: skeleton.value.stakes,
+      resolution: skeleton.value.resolution,
+      acts: skeleton.value.acts.map((a, i) => ({ ...a, beats: written[i].beats }))
+    }
+    // Backstop against assembly bugs; every call has already passed its own checks.
+    const problems = arcProblems(draft, seed.length, { generated: true })
+    if (problems.length) {
+      return fail('invalid-output', `The Arc could not be assembled: ${problems.join('; ')}`)
+    }
+    return { ok: true, arc: draft }
   } finally {
     clearTimeout(timer)
     options.signal?.removeEventListener('abort', onCancel)
