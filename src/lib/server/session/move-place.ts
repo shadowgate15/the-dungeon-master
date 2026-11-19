@@ -1,7 +1,9 @@
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 import type { SceneExit } from '#lib/session/enums.ts'
+import { nameSlug } from '#lib/memory/validate.ts'
 import { createCharacterService } from '../character/service'
 import type { Database } from '../db/connect'
+import { changedStamp, createdStamp } from '../memory/stamp.ts'
 import {
   arc,
   arcAct,
@@ -17,7 +19,6 @@ import {
   world
 } from '../db/schema'
 import type { DestinationDraft, DestinationInput } from './destination.ts'
-import { exitSlug } from './generation-stages.ts'
 
 /**
  * Moving through an exit stores the destination as a place in World memory. The first move
@@ -63,7 +64,7 @@ export function createPlaceMover(db: Database, now: () => number) {
       .where(eq(placeExit.placeId, placeId))
       .orderBy(sql`rowid`)
       .all()
-      .map((e) => ({ id: exitSlug(e.name), name: e.name }))
+      .map((e) => ({ id: nameSlug(e.name), name: e.name }))
 
   /** The Arc's current Act: the first with a pending Beat, else the last. */
   function currentAct(campaignId: string) {
@@ -220,12 +221,7 @@ export function createPlaceMover(db: Database, now: () => number) {
           .where(eq(sessionEvent.sessionId, sessionId))
           .orderBy(desc(sessionEvent.seq))
           .get()
-        const stamp = {
-          createdSessionId: sessionId,
-          createdSeq: last?.seq ?? null,
-          changedSessionId: sessionId,
-          changedSeq: last?.seq ?? null
-        }
+        const stamp = createdStamp(sessionId, last?.seq ?? null)
         const worldId = hostWorld?.id
         if (!worldId) throw new Error('The Campaign has no World to host the place')
 
@@ -277,7 +273,7 @@ export function createPlaceMover(db: Database, now: () => number) {
         const way = backName(originName)
         const forward = bare
           ? []
-          : draft.exits.map((e) => e.name).filter((n) => exitSlug(n) !== exitSlug(way))
+          : draft.exits.map((e) => e.name).filter((n) => nameSlug(n) !== nameSlug(way))
         tx.insert(placeExit)
           .values([
             ...forward.map((name) => ({ placeId: dest.id, name })),
@@ -319,8 +315,7 @@ export function createPlaceMover(db: Database, now: () => number) {
               characterId: owner.characterId,
               stance: n.attitude,
               note: n.knowledge,
-              changedSessionId: sessionId,
-              changedSeq: stamp.changedSeq
+              ...changedStamp(sessionId, stamp.changedSeq)
             })
             .run()
           present.push(created.id)

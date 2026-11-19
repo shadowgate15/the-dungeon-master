@@ -3,6 +3,8 @@
  * and the UI. See GLOSSARY.md (Scene, Mode, Director, Event log) and docs/adr/0003.
  */
 
+import { STANCES, type Stance } from '#lib/memory/enums.ts'
+
 /** The kind of exchange a Scene is in. A roll is an overlay on any Mode, never a Mode. */
 export const MODES = ['exploration', 'dialogue'] as const
 export type Mode = (typeof MODES)[number]
@@ -24,8 +26,8 @@ export const EVENT_KINDS = [
 export type EventKind = (typeof EVENT_KINDS)[number]
 
 /** How an NPC feels about the player's Character: the stance of its disposition. */
-export const ATTITUDES = ['hostile', 'wary', 'neutral', 'friendly', 'allied'] as const
-export type Attitude = (typeof ATTITUDES)[number]
+export const ATTITUDES = STANCES
+export type Attitude = Stance
 
 export interface SceneExit {
   /** Stable id; the Director's `move:<id>` menu option names it. */

@@ -151,4 +151,25 @@ describe('the recap of an earlier Session', () => {
       text: 'The story so far.'
     })
   })
+
+  it('recaps the most recent earlier Session even when it was never ended', () => {
+    sessions.appendEvent(sessionId, { role: 'narrator', kind: 'narration', text: 'Cliffhanger.' })
+    const startedAt = sessions.get(sessionId)!.startedAt
+    const later = db
+      .insert(session)
+      .values({
+        campaignId: fixture.campaignId,
+        characterId: fixture.characterId,
+        startedAt: startedAt + 10,
+        endedAt: startedAt + 20
+      })
+      .returning()
+      .get()
+
+    expect(summary.recap(fixture.campaignId, later.id)).toEqual({
+      source: 'narration',
+      sessionId,
+      text: 'Cliffhanger.'
+    })
+  })
 })

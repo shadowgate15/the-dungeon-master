@@ -140,7 +140,7 @@ _Avoid_: Progress, status
 The rule that an Arc must be accepted before a Campaign's first Session starts, and is read-only from then on, so Beat state stays meaningful. The Campaign's linked Character is locked in the same way once its first Session exists.
 _Avoid_: Freeze, finalize
 
-**World memory** (planned, not built yet):
+**World memory**:
 The structured, Campaign-scoped record of what the DM has established: places, NPCs and facts, with factions and events to follow once something writes them. Code validates and stores it, and the AI only proposes changes to it; code applies them. Records are never deleted, only retired, and each carries the Session and event it was created and last changed in. A place belongs to one of the Campaign's Worlds. Nothing carries over between Campaigns, even in a shared World.
 _Avoid_: Lore, state, notes
 
@@ -160,7 +160,7 @@ _Avoid_: Deleted, archived, removed
 A non-player character the DM has introduced: a name, a short description, a role and a status (alive, dead, missing or departed). A dead NPC stays dead unless the story explicitly revives them for a stated reason. An NPC is placed at a place, which is where they are or were last seen. An NPC is World memory, not a Character.
 _Avoid_: Character, monster, contact
 
-**NPC memory** (planned, not built yet):
+**NPC memory**:
 What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the Director and the Journal would show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character. A Scene's attitude for an NPC is the same stance, shown in the Scene.
 _Avoid_: Relationship score, reputation
 

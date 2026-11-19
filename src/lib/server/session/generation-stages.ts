@@ -1,12 +1,14 @@
 import { z } from 'zod'
 import {
+  nameSlug,
   normalizeName,
   validateDisposition,
   validateExitName,
   validateNpc,
   validatePlace
 } from '#lib/memory/validate.ts'
-import { ATTITUDES, type Attitude } from '#lib/session/enums.ts'
+import type { Attitude } from '#lib/session/enums.ts'
+import { NO_DIGITS_RULE } from '#lib/memory/prompts.ts'
 import { callModel, type ChatPort } from '../ai/port.ts'
 
 /**
@@ -57,11 +59,9 @@ export const npcsSchema = z.object({
 
 const NOT_JSON = 'the answer was not the requested JSON object'
 
-/** A stable id for an exit from its name: lowercase words joined by hyphens. */
-export const exitSlug = (name: string) => normalizeName(name).replace(/\s+/g, '-')
-
 export const ROLE =
-  'You are the Dungeon Master of a tabletop role-playing game, preparing its opening Scene. Reply with only the JSON object requested. Never use digits or numerals in any text.'
+  'You are the Dungeon Master of a tabletop role-playing game, preparing its opening Scene. Reply with only the JSON object requested. ' +
+  NO_DIGITS_RULE
 
 export type StageOutcome<T> = { ok: true; value: T } | { ok: false; message: string }
 export type Verdict<T> = { ok: true; value: T } | { ok: false; problem: string }
@@ -131,7 +131,7 @@ export function checkPlace(raw: unknown, minExits: number = MIN_EXITS): Verdict<
   const exits: { id: string; name: string }[] = []
   for (const name of data.exits) {
     const check = validateExitName(name)
-    if (check.ok) exits.push({ id: exitSlug(check.value), name: check.value })
+    if (check.ok) exits.push({ id: nameSlug(check.value), name: check.value })
   }
   const kept = keep(exits, FIRST_SCENE_MAX.exits, (e) => e.id)
   if (kept.length < minExits) {
@@ -154,14 +154,13 @@ export function checkNpcs(raw: unknown, takenKeys: Iterable<string> = []): Verdi
   const npcs: NpcDraft[] = []
   for (const item of data.npcs) {
     if (npcs.length === FIRST_SCENE_MAX.npcs) break
-    if (!(ATTITUDES as readonly string[]).includes(item.attitude)) continue
     const npc = validateNpc(item, { takenKeys: taken })
     const disposition = validateDisposition({ stance: item.attitude, note: item.knowledge })
     if (!npc.ok || !disposition.ok) continue
     taken.add(npc.value.nameKey)
     npcs.push({
       ...npc.value,
-      attitude: item.attitude as Attitude,
+      attitude: disposition.value.stance,
       knowledge: disposition.value.note
     })
   }

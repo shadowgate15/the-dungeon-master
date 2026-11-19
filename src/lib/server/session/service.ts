@@ -1,14 +1,8 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
-import { validateDisposition } from '#lib/memory/validate.ts'
-import type {
-  Attitude,
-  EventKind,
-  Role,
-  SceneNpc,
-  SceneState,
-  SessionEvent
-} from '#lib/session/enums.ts'
+import { nameSlug, validateDisposition } from '#lib/memory/validate.ts'
+import type { EventKind, Role, SceneNpc, SceneState, SessionEvent } from '#lib/session/enums.ts'
 import type { Database } from '../db/connect'
+import { changedStamp, createdStamp } from '../memory/stamp.ts'
 import type { ChatPort } from '../ai/port'
 import { NO_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import { createCharacterService } from '../character/service'
@@ -58,9 +52,6 @@ export class SessionNotFoundError extends Error {}
 export class SessionAlreadyOpenError extends Error {}
 
 type SceneRow = typeof sessionScene.$inferSelect
-
-/** The Director-menu handle of an NPC: its unique name key, hyphenated. */
-const npcKey = (nameKey: string) => nameKey.replace(/\s+/g, '-')
 
 /** The change `changeAttitude` applies; the note stays as it was when omitted. */
 export interface AttitudeChange {
@@ -149,9 +140,9 @@ export function createSessionService(
         return [
           {
             id,
-            key: npcKey(found.nameKey),
+            key: nameSlug(found.nameKey),
             name: found.name,
-            attitude: (stance?.stance ?? 'neutral') as Attitude,
+            attitude: stance?.stance ?? 'neutral',
             knowledge
           }
         ]
@@ -318,12 +309,7 @@ export function createSessionService(
       return db.transaction((tx) => {
         recheck(tx, campaignId)
         const created = insertSession(tx, campaignId, ready.characterId)
-        const stamp = {
-          createdSessionId: created.id,
-          createdSeq: null,
-          changedSessionId: created.id,
-          changedSeq: null
-        }
+        const stamp = createdStamp(created.id, null)
         const hosted = tx
           .insert(place)
           .values({
@@ -358,8 +344,7 @@ export function createSessionService(
               characterId: ready.characterId,
               stance: n.attitude,
               note: n.knowledge,
-              changedSessionId: created.id,
-              changedSeq: null
+              ...changedStamp(created.id, null)
             })
             .run()
           return row.id
@@ -491,8 +476,7 @@ export function createSessionService(
       const values = {
         stance: checked.value.stance,
         note: checked.value.note,
-        changedSessionId: sessionId,
-        changedSeq: last?.seq ?? null
+        ...changedStamp(sessionId, last?.seq ?? null)
       }
       db.insert(disposition)
         .values({ npcId, characterId: owner.characterId, ...values })

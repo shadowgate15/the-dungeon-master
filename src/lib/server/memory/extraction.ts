@@ -20,6 +20,7 @@ import {
   validateNpc,
   validateNpcStatusChange
 } from '#lib/memory/validate.ts'
+import { NO_DIGITS_RULE } from '#lib/memory/prompts.ts'
 import { callModel, type ChatPort } from '../ai/port.ts'
 import type { Database } from '../db/connect'
 import {
@@ -93,7 +94,7 @@ const SYSTEM = [
   'facts: lasting claims the story established, each with a title and a detail. Set worldChanging only when it changes the world for everyone.',
   'dispositions: how an NPC (a ref or a name) now regards the player character: stance (hostile, wary, neutral, friendly or allied) and a short note.',
   'knowledge: which NPC (a ref or a name) knows which fact (a ref or a title).',
-  'Never write digits or numbers. Never invent anything the events do not show. Propose nothing when nothing new was established; empty lists are fine.'
+  `${NO_DIGITS_RULE} Never invent anything the events do not show. Propose nothing when nothing new was established; empty lists are fine.`
 ].join(' ')
 
 const ROLE_LABEL: Record<string, string> = {

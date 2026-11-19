@@ -12,7 +12,7 @@ import { createDirectorPipeline } from '../scene-director/pipeline.ts'
 import { createSceneRunner, type PipelineEvent } from '../scene-runner.ts'
 import type { SessionService } from '../service'
 import { buildNpcContext } from './npc.ts'
-import { createWorldReader } from './sources.ts'
+import { createFixedReader, createWorldReader } from './sources.ts'
 
 const SECRETS = {
   otherNote: 'PLANTED-OTHER-NPC-NOTE the duke pays Borg.',
@@ -150,5 +150,31 @@ describe('the other roles', () => {
     for (const text of [SECRETS.unknownFact, SECRETS.summary, 'MIRA-OWN-NOTE', 'Innkeeper']) {
       expect(director).not.toContain(text)
     }
+  })
+
+  it('gives the Narrator the Campaign Seed and the Character sheet, and the Director neither', async () => {
+    const model = createScriptedPort([says('narrate'), says('Dust settles.'), says('yield')])
+    const runner = createSceneRunner({
+      sessions,
+      port: model.port,
+      pipeline: createDirectorPipeline(),
+      contextSources: {
+        summary: () => ({ text: null, throughSeq: 0 }),
+        world: createWorldReader(fixture.db),
+        fixed: createFixedReader(fixture.db)
+      }
+    })
+    const result = runner.begin(sessionId, 'I look around', new AbortController().signal)
+    if (!result.ok) throw new Error(result.reason)
+    for await (const e of result.events) void e
+
+    const sentOf = (i: number) =>
+      JSON.stringify([model.requests[i].systemPrompts, model.requests[i].messages])
+    expect(sentOf(1)).toContain('Premise: P')
+    expect(sentOf(1)).toContain('Tone: dark')
+    expect(sentOf(1)).toContain('Rowan')
+    expect(sentOf(1)).toContain('Fighter')
+    expect(sentOf(0)).not.toContain('Rowan')
+    expect(sentOf(0)).not.toContain('Premise: P')
   })
 })

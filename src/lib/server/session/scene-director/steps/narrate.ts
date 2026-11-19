@@ -21,6 +21,7 @@ export const narrateOption: MenuOption = {
       events: ctx.sessions.events(ctx.sessionId),
       summary: ctx.context?.summary(ctx.sessionId) ?? { text: null, throughSeq: 0 },
       world: ctx.context?.world(ctx.sessionId) ?? null,
+      fixed: ctx.context?.fixed?.(ctx.sessionId),
       arcBlock: ctx.steering?.()?.arcBlock
     })
     ctx.report?.(built.report)

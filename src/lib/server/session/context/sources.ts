@@ -4,8 +4,12 @@
  * leave it out and the Narrator then sees history and Scene only.
  */
 import { and, eq, inArray, isNull, max } from 'drizzle-orm'
+import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
+import { createCharacterService } from '../../character/service.ts'
+import { loadWizardRules } from '../../character/wizard-rules.ts'
 import type { Database } from '../../db/connect'
-import { fact, npc, npcFact, place, session, sessionEvent } from '../../db/schema'
+import { campaign, fact, npc, npcFact, place, session, sessionEvent } from '../../db/schema'
+import { renderCharacter, renderSeed } from './fixed.ts'
 import type { WorldRecords } from './world-selection.ts'
 
 /** A record changed within this many events of the Session's latest counts as recent. Tunable. */
@@ -16,6 +20,23 @@ export interface ContextSources {
   summary(sessionId: string): { text: string | null; throughSeq: number }
   /** The Session's Campaign World memory, with retired records marked; null for an unknown Session. */
   world(sessionId: string): WorldRecords | null
+  /** The Narrator's never-trimmed Campaign Seed and Character sheet text; absent when unreadable. */
+  fixed?(sessionId: string): { seed?: string; character?: string }
+}
+
+/** Reads the Session's Campaign Seed and playing Character, rendered compactly for the Narrator. */
+export function createFixedReader(db: Database) {
+  const characters = createCharacterService(db)
+  return (sessionId: string): { seed?: string; character?: string } => {
+    const owner = db.select().from(session).where(eq(session.id, sessionId)).get()
+    if (!owner) return {}
+    const camp = db.select().from(campaign).where(eq(campaign.id, owner.campaignId)).get()
+    const hero = characters.get(owner.characterId)
+    return {
+      seed: camp && renderSeed(camp),
+      character: hero && renderCharacter(buildSummary(loadWizardRules(), detailToSummaryData(hero)))
+    }
+  }
 }
 
 export function createWorldReader(db: Database) {

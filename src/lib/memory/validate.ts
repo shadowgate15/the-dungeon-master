@@ -29,6 +29,9 @@ export function normalizeName(name: string): string {
     .trim()
 }
 
+/** A name's key as a slug (an NPC's menu handle, a Place exit id): the normalized name, hyphenated. */
+export const nameSlug = (name: string) => normalizeName(name).replace(/\s+/g, '-')
+
 /** Trim, then require non-empty, within `max`, and digit-free. `label` names the field. */
 function text(label: string, raw: unknown, max: number, required = true): Check<string> {
   if (typeof raw !== 'string') return fail(`${label} must be text`)

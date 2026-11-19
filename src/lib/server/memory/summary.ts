@@ -6,7 +6,8 @@
  * summary watermark advance. A failure leaves both untouched, is recorded as a `summary`
  * memory-run row and logged, and never throws into a run. One summary runs per Session at a time.
  */
-import { and, asc, desc, eq, gt, isNotNull, lt } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, lt } from 'drizzle-orm'
+import { NO_DIGITS_RULE } from '#lib/memory/prompts.ts'
 import { validateSummary } from '#lib/memory/validate.ts'
 import { callText, type ChatPort } from '../ai/port.ts'
 import type { Database } from '../db/connect'
@@ -30,7 +31,7 @@ const SYSTEM = [
   `${SUMMARY_MARKER}. You keep the running summary of a tabletop role-playing game.`,
   `You are given the summary so far (it may be empty) and the newer events. Write the updated summary: one piece of plain prose, past tense, under ${SUMMARY_SIZE_TOKENS} tokens, merging what mattered in the old summary with what the new events established.`,
   'Keep who the player met, what was learned, what was decided and where things stand. Leave out blow-by-blow detail.',
-  'Never write digits or numbers; spell any out in words. Never invent anything the events do not show. Reply with the summary text only.'
+  `${NO_DIGITS_RULE} Never invent anything the events do not show. Reply with the summary text only.`
 ].join(' ')
 
 const ROLE_LABEL: Record<string, string> = {
@@ -229,7 +230,8 @@ export function createRollingSummary(db: Database, options: RollingSummaryOption
     },
 
     /**
-     * What a new Session recaps: the latest ended Session of the Campaign that started before it,
+     * What a new Session recaps: the most recent Session of the Campaign that started before it
+     * (ended or not, the same one the Scene carries over from),
      * as its summary, else its last Narrator event verbatim; undefined when there is nothing to
      * recap (a first Session).
      */
@@ -239,13 +241,7 @@ export function createRollingSummary(db: Database, options: RollingSummaryOption
       const previous = db
         .select()
         .from(session)
-        .where(
-          and(
-            eq(session.campaignId, campaignId),
-            isNotNull(session.endedAt),
-            lt(session.startedAt, current.startedAt)
-          )
-        )
+        .where(and(eq(session.campaignId, campaignId), lt(session.startedAt, current.startedAt)))
         .orderBy(desc(session.startedAt))
         .get()
       if (!previous) return undefined
