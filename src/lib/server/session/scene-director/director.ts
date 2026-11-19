@@ -22,8 +22,10 @@ export function askDirector(
   retry = false
 ): Promise<TextCall> {
   const { scene } = menu
+  const arcLine = ctx.steering?.()?.directorLine
   const prompt = [
     `Location: ${scene.location.name}`,
+    ...(arcLine ? [arcLine] : []),
     `Mode: ${scene.mode}`,
     `Recent events:\n${recentLines(menu.events)}`,
     `Options:\n${entries.map((e) => `${e.id}: ${e.hint}`).join('\n')}`,

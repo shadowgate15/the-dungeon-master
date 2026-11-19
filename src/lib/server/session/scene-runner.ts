@@ -10,6 +10,7 @@
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type { PipelineEvent } from '#lib/session/pipeline-events.ts'
 import type { ChatPort } from '../ai/port.ts'
+import type { BeatProgress, Steering } from '../arc/beat-progress.ts'
 import { dice as defaultDice, type Dice } from '../dice.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
@@ -22,6 +23,8 @@ export interface PipelineContext {
   port: ChatPort
   /** Aborted when the player presses Stop or disconnects. */
   signal: AbortSignal
+  /** The Arc steering for the prompts, read fresh per call; null (or absent) when there is none. */
+  steering?: () => Steering | null
 }
 
 /** One run after the player's action: yields pipeline events, ending with a `done`. */
@@ -45,6 +48,8 @@ export interface SceneRunnerDeps {
   dice?: Dice
   /** The Character's modifier for a pending roll's check. Defaults to 0. */
   rollModifier?: (sessionId: string, check: string) => number
+  /** Arc Beat-progress: steering for the prompts and the silent Beat check after each run. */
+  beatProgress?: BeatProgress
 }
 
 export function createSceneRunner(deps: SceneRunnerDeps) {
@@ -53,14 +58,30 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   // Sessions with a run in flight. Claimed synchronously when a run starts, so two quick requests
   // cannot both pass the check.
   const inFlight = new Set<string>()
+  // Background Beat checks, so a test (or shutdown) can wait for them.
+  const background = new Set<Promise<void>>()
 
-  async function* run(sessionId: string, signal: AbortSignal): AsyncGenerator<PipelineEvent> {
+  /** Fires the silent Beat check over this run's events; never awaited by the run. */
+  function checkBeats(sessionId: string, fromSeq: number) {
+    if (!deps.beatProgress) return
+    const task = deps.beatProgress.check(sessionId, fromSeq, port)
+    background.add(task)
+    void task.finally(() => background.delete(task))
+  }
+
+  async function* run(
+    sessionId: string,
+    signal: AbortSignal,
+    fromSeq: number
+  ): AsyncGenerator<PipelineEvent> {
     let finished = false
     try {
-      for await (const step of pipeline({ sessionId, sessions, port, signal })) {
+      const steering = deps.beatProgress && (() => deps.beatProgress!.steering(sessionId))
+      for await (const step of pipeline({ sessionId, sessions, port, signal, steering })) {
         yield step
         if (step.type === 'done') {
           finished = true
+          if (step.reason === 'yield' || step.reason === 'roll') checkBeats(sessionId, fromSeq)
           break
         }
       }
@@ -76,7 +97,10 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       }
       return
     }
-    if (!finished) yield { type: 'done', reason: signal.aborted ? 'stopped' : 'yield' }
+    if (!finished) {
+      if (!signal.aborted) checkBeats(sessionId, fromSeq)
+      yield { type: 'done', reason: signal.aborted ? 'stopped' : 'yield' }
+    }
   }
 
   /** The refusals every run shares: the Session must exist and not have ended. */
@@ -115,7 +139,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       started = true
       try {
         yield { type: 'event', event: first }
-        yield* run(sessionId, signal)
+        yield* run(sessionId, signal, first.seq)
       } finally {
         free()
       }
@@ -124,6 +148,11 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   }
 
   return {
+    /** Resolves when every background Beat check has finished. */
+    async settled(): Promise<void> {
+      while (background.size) await Promise.all([...background])
+    },
+
     /**
      * Starts a run for the player's action. Refusals are decided synchronously, before anything
      * is saved. The action is saved before any model call, so a stopped or failed run keeps it.
