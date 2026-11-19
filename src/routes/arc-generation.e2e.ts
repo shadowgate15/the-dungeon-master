@@ -117,8 +117,9 @@ test('an invalid answer is retried once; a failure leaves the Arc unchanged', as
   request
 }) => {
   await setup(page, 'fail')
-  // Wrong size first (2 Acts for a short Campaign), then a valid one.
-  await queue(request, ...arcAnswers(2, 2), ...arcAnswers(3, 2, 'Retried'))
+  // The skeleton has the wrong size first (2 Acts for a short Campaign); only that call is
+  // retried, so the next answer is a valid skeleton, then one Beats answer per Act.
+  await queue(request, arcAnswers(2, 2)[0], ...arcAnswers(3, 2, 'Retried'))
   await page.getByRole('button', { name: 'Generate Arc' }).click()
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Retried')
 
