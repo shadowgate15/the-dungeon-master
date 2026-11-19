@@ -121,42 +121,121 @@ describe('generateArc', () => {
     ])
   })
 
-  it('fails naming the skeleton when it has the wrong Act count, without asking for Acts', async () => {
-    fake.queueAnswers({ content: skeletonJson(2) })
+  it('fails naming the skeleton after three wrong Act counts, without asking for Acts', async () => {
+    fake.queueAnswers({ content: skeletonJson(2), times: 3 })
 
     const result = await generateArc(port(), seed())
 
     expect(result).toMatchObject({ ok: false, failure: { kind: 'invalid-output' } })
     if (!result.ok) expect(result.failure.message).toMatch(/story plan.*exactly 3 Acts/s)
-    expect(bodies()).toHaveLength(1)
+    expect(bodies()).toHaveLength(3)
   })
 
-  it('fails naming the Act when its Beat count is wrong, and stops there', async () => {
+  it('fails naming the Act and the last problem after three wrong Beat counts', async () => {
     fake.queueAnswers(
       { content: skeletonJson(3) },
       { content: actJson(1, 2) },
-      { content: actJson(2, 5) }
+      { content: actJson(2, 5), times: 3 }
     )
 
     const result = await generateArc(port(), seed())
 
     expect(result).toMatchObject({ ok: false, failure: { kind: 'invalid-output' } })
     if (!result.ok) expect(result.failure.message).toMatch(/Act 2 of 3.*exactly 2 Beats/s)
+    expect(bodies()).toHaveLength(5)
+  })
+
+  it('retries only the failed call, which keeps the earlier Acts fixed', async () => {
+    fake.queueAnswers(
+      { content: skeletonJson(3) },
+      { content: actJson(1, 2) },
+      { content: actJson(2, 3) },
+      { content: actJson(2, 2) },
+      { content: actJson(3, 2) }
+    )
+
+    const result = await generateArc(port(), seed())
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.arc.acts.map((a) => a.beats.length)).toEqual([2, 2, 2])
+    expect(result.arc.acts[0].beats[0].title).toBe('Beat 1.1')
+    expect(bodies()).toHaveLength(5)
+    expect(prompt(1)).not.toContain('rejected')
+  })
+
+  it('shows the retry the rejected answer and the problems', async () => {
+    fake.queueAnswers(
+      { content: skeletonJson(3) },
+      { content: actJson(1, 4) },
+      { content: actJson(1, 2) },
+      { content: actJson(2, 2) },
+      { content: actJson(3, 2) }
+    )
+
+    await generateArc(port(), seed())
+
+    const retry = prompt(2)
+    expect(retry).toContain('Your previous answer was rejected for these problems')
+    expect(retry).toContain('exactly 2 Beats, not 4')
+    expect(retry).toContain('Beat 1.4')
+    expect(retry).toContain('Act 1 of 3')
+  })
+
+  it('retries over-long text', async () => {
+    fake.queueAnswers(
+      { content: { ...skeletonJson(3), title: 'x'.repeat(500) } },
+      { content: skeletonJson(3) },
+      { content: actJson(1, 2) },
+      { content: actJson(2, 2) },
+      { content: actJson(3, 2) }
+    )
+
+    const result = await generateArc(port(), seed())
+
+    expect(result.ok).toBe(true)
+    expect(prompt(1)).toContain('too long')
+  })
+
+  it('retries malformed answers and fails after three', async () => {
+    fake.queueAnswers({ content: { nonsense: true }, times: 3 })
+
+    const result = await generateArc(port(), seed())
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'invalid-output' } })
+    if (!result.ok) expect(result.failure.message).toMatch(/story plan.*could not be written/s)
     expect(bodies()).toHaveLength(3)
   })
 
-  it('fails on malformed output and over-long text', async () => {
-    fake.queueAnswers({ content: { nonsense: true } })
-    expect(await generateArc(port(), seed())).toMatchObject({
-      ok: false,
-      failure: { kind: 'invalid-output' }
-    })
+  it('repairs whitespace without a retry', async () => {
+    const padded = skeletonJson(3)
+    padded.title = '  The Ember Crown \n'
+    padded.acts[0].name = ' Act name 1  '
+    fake.queueAnswers(
+      { content: padded },
+      {
+        content: {
+          beats: [
+            { title: ' Beat 1.1 ', description: ' Something happens.\n' },
+            ...actJson(1, 1).beats
+          ]
+        }
+      },
+      { content: actJson(2, 2) },
+      { content: actJson(3, 2) }
+    )
 
-    const long = { ...skeletonJson(3), title: 'x'.repeat(500) }
-    fake.queueAnswers({ content: long })
     const result = await generateArc(port(), seed())
-    if (!result.ok) expect(result.failure.message).toContain('too long')
-    expect(result.ok).toBe(false)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.arc.title).toBe('The Ember Crown')
+    expect(result.arc.acts[0].name).toBe('Act name 1')
+    expect(result.arc.acts[0].beats[0]).toEqual({
+      title: 'Beat 1.1',
+      description: 'Something happens.'
+    })
+    expect(bodies()).toHaveLength(4)
   })
 
   it('fails with provider-error when the model fails', async () => {
@@ -165,6 +244,7 @@ describe('generateArc', () => {
     const result = await generateArc(port(), seed())
 
     expect(result).toMatchObject({ ok: false, failure: { kind: 'provider-error' } })
+    expect(bodies()).toHaveLength(3) // the client's own transport retries, not ours
   })
 
   it('is cancelled by Stop, skipping the remaining calls', async () => {

@@ -19,7 +19,7 @@ import { callModel, type ChatPort } from '../ai/port.ts'
  * through the injected `ChatPort`. Nothing is stored here.
  *
  * Structure for later tickets: every call goes through `runStep`, which is the one place for
- * retry (#256: loop over `runStep`'s ask/validate with the rejected answer), a per-step deadline
+ * retry (#256, done: up to 3 attempts per call), a per-step deadline
  * (#257: replace the run-wide timer with one per `runStep`) and progress (#258 builds on
  * `onProgress`, which `generateArc` already fires before each step).
  */
@@ -27,6 +27,30 @@ import { callModel, type ChatPort } from '../ai/port.ts'
 export const ARC_TIMEOUT_MS = 180_000
 const SKELETON_MAX_TOKENS = 1500
 const ACT_MAX_TOKENS = 1500
+/** The first try plus two retries, per call. */
+const MAX_ATTEMPTS = 3
+const NOT_JSON = 'the answer was not the requested JSON object'
+
+/** The only repair code makes: trim every string, however deeply nested. */
+function trimStrings(value: unknown): unknown {
+  if (typeof value === 'string') return value.trim()
+  if (Array.isArray(value)) return value.map(trimStrings)
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, trimStrings(v)]))
+  }
+  return value
+}
+
+/** The same prompt, plus the rejected answer (when there was one) and what was wrong with it. */
+function retryPrompt(prompt: string, rejected: unknown, problems: string[]): string {
+  return [
+    prompt,
+    '',
+    `Your previous answer was rejected for these problems: ${problems.join('; ')}`,
+    ...(rejected === undefined ? [] : ['The rejected answer:', JSON.stringify(rejected)]),
+    'Answer again, fixing every problem.'
+  ].join('\n')
+}
 
 export interface ArcSeed {
   name: string
@@ -151,7 +175,12 @@ export async function generateArc(
   options.signal?.addEventListener('abort', onCancel)
   if (options.signal?.aborted) onCancel()
 
-  /** One call: ask, parse, validate. A single attempt; the hook for retries and deadlines. */
+  /**
+   * One step: ask, parse, validate, up to `MAX_ATTEMPTS` times. Only invalid output (bad JSON or
+   * rule violations) is retried; each retry is one stateless call with the same prompt plus the
+   * rejected answer and its problems. Provider error, timeout, cancel and reasoning-model end the
+   * step at once. The deadline hook for #257 is the race against `stopped` below.
+   */
   const runStep = async <T>(
     step: ArcStep,
     request: { prompt: string; maxTokens: number; schema: z.ZodObject & z.ZodType<T> },
@@ -159,39 +188,43 @@ export async function generateArc(
   ): Promise<{ ok: true; value: T } | ArcResult> => {
     current = step
     options.onProgress?.(step)
-    const raced = await Promise.race([
-      callModel(port, {
-        systemPrompts: systemPrompts(seed),
-        messages: [{ role: 'user', content: request.prompt }],
-        maxTokens: request.maxTokens,
-        threadId: crypto.randomUUID(),
-        outputSchema: request.schema,
-        signal: controller.signal
-      }).then((call) => ({ call })),
-      stopped.then((result) => ({ result }))
-    ])
-    if ('result' in raced) return raced.result
-    const call = raced.call
-    if (!call.ok) {
-      const failure = call.failure
-      return failure.kind === 'invalid-output'
-        ? fail(
-            'invalid-output',
-            `${stepName(step)} could not be written: the answer was not the requested JSON object`
-          )
-        : fail(failure.kind, failure.message)
+    let prompt = request.prompt
+    let lastProblems: string[] = []
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const raced = await Promise.race([
+        callModel(port, {
+          systemPrompts: systemPrompts(seed),
+          messages: [{ role: 'user', content: prompt }],
+          maxTokens: request.maxTokens,
+          threadId: crypto.randomUUID(),
+          outputSchema: request.schema,
+          signal: controller.signal
+        }).then((call) => ({ call })),
+        stopped.then((result) => ({ result }))
+      ])
+      if ('result' in raced) return raced.result
+      const call = raced.call
+      let rejected: unknown
+      if (!call.ok) {
+        if (call.failure.kind !== 'invalid-output')
+          return fail(call.failure.kind, call.failure.message)
+        lastProblems = [NOT_JSON]
+      } else {
+        rejected = call.object
+        const parsed = request.schema.safeParse(trimStrings(call.object))
+        if (parsed.success) {
+          lastProblems = problemsOf(parsed.data)
+          if (!lastProblems.length) return { ok: true, value: parsed.data }
+        } else {
+          lastProblems = [NOT_JSON]
+        }
+      }
+      prompt = retryPrompt(request.prompt, rejected, lastProblems)
     }
-    const parsed = request.schema.safeParse(call.object)
-    const problems = parsed.success
-      ? problemsOf(parsed.data)
-      : ['the answer was not the requested JSON object']
-    if (!parsed.success || problems.length) {
-      return fail(
-        'invalid-output',
-        `${stepName(step)} could not be written: ${problems.join('; ')}`
-      )
-    }
-    return { ok: true, value: parsed.data }
+    return fail(
+      'invalid-output',
+      `${stepName(step)} could not be written: ${lastProblems.join('; ')}`
+    )
   }
 
   try {
