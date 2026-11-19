@@ -15,6 +15,8 @@ import type { AddressInfo } from 'node:net'
  * from the request's `response_format` (first enum slug, a short string for text, minimum-length
  * arrays). An answer can also script `toolCalls` (a `request_roll`, or an invalid call with raw
  * `arguments`), `status` (an HTTP failure) or `abortAfterChunks` (the connection drops mid-stream).
+ * The silent Arc Beat check (recognised by its system prompt) also never touches that queue: it
+ * always gets a schema-aware default (no transitions).
  * Memory extraction calls (recognised by their system prompt marker) never touch that queue, so a
  * scripted DM scenario is not disturbed by the silent call after each turn. They take the next
  * entry of their own queue (POST the same answer shape to `/__control/extractions`, `"replace":
@@ -120,6 +122,17 @@ const EXTRACTION_MARKER = 'MEMORY EXTRACTION'
 const isExtraction = (body: unknown) =>
   JSON.stringify((body as { messages?: unknown } | undefined)?.messages ?? '').includes(
     EXTRACTION_MARKER
+  )
+
+/**
+ * Marks the silent Arc Beat check's system prompt (mirrors `CHECK_SYSTEM` in `beat-progress.ts`).
+ * It runs in the background after a run, so it must not consume the DM answer queue.
+ */
+const BEAT_CHECK_MARKER = 'track which story beats'
+
+const isBeatCheck = (body: unknown) =>
+  JSON.stringify((body as { messages?: unknown } | undefined)?.messages ?? '').includes(
+    BEAT_CHECK_MARKER
   )
 
 export type Scenario = (ctx: ScenarioContext) => void | Promise<void>
@@ -378,6 +391,7 @@ export async function startFakeLmStudio(
       body,
       options: resolved,
       nextAnswer: () => {
+        if (isBeatCheck(body)) return { content: defaultFor(requestSchema(body)), delayMs }
         if (isExtraction(body)) {
           const scripted = extractionQueue.shift()
           if (scripted) return { delayMs, ...scripted }
