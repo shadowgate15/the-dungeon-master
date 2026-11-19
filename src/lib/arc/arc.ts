@@ -73,7 +73,11 @@ export interface ArcPlan {
   beats: number[]
 }
 
-/** Total Beats planned per Length: the midpoint of the Beat range, rounded to suit the Act count. */
+/**
+ * Total Beats planned per Length. Each lies inside that Length's `ARC_SIZES` Beat range and
+ * splits evenly enough to give every Act within `GENERATED_BEATS_PER_ACT` Beats (the spec checks
+ * both), so a plan always satisfies `arcProblems`.
+ */
 const PLANNED_BEATS: Record<Length, number> = { 'one-shot': 3, short: 6, medium: 12, long: 17 }
 
 /**
@@ -102,7 +106,7 @@ const textProblem = (problems: string[], label: string, value: unknown, max: num
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /** Skeleton call check: shape, required and capped text, and exactly `actCount` Acts. */
 export function skeletonProblems(skeleton: unknown, actCount: number): string[] {
@@ -189,3 +193,18 @@ export function arcProblems(
   }
   return problems
 }
+
+/** Why generation failed. */
+export interface ArcFailure {
+  kind: 'timeout' | 'invalid-output' | 'provider-error' | 'reasoning-model' | 'cancelled'
+  message: string
+}
+
+/** A step of generation: the skeleton, or one Act's Beats (`number` of `of`, from 1). */
+export type ArcStep = { kind: 'skeleton' } | { kind: 'act'; number: number; of: number }
+
+/** One line of the generate stream: progress as each step starts, then exactly one result. */
+export type ArcStreamLine =
+  | { type: 'progress'; step: ArcStep }
+  | { type: 'result'; ok: true }
+  | { type: 'result'; ok: false; failure: ArcFailure }

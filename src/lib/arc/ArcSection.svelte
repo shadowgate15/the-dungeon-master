@@ -5,7 +5,14 @@
   import Button from '../ui/Button.svelte'
   import Textarea from '../ui/Textarea.svelte'
   import TextInput from '../ui/TextInput.svelte'
-  import { ARC_SIZES, arcProblems, sizeText, type ArcViewData } from './arc.ts'
+  import {
+    ARC_SIZES,
+    arcProblems,
+    sizeText,
+    type ArcStep,
+    type ArcStreamLine,
+    type ArcViewData
+  } from './arc.ts'
 
   /**
    * The Arc section of the Campaign page: generate, edit inline, accept. The Arc is a draft
@@ -82,9 +89,8 @@
   let error = $state('')
   let confirming = $state(false)
   let controller: AbortController | undefined
-  type Step = { kind: 'skeleton' } | { kind: 'act'; number: number; of: number }
   /** The generation step being written; null until the first progress line. */
-  let step = $state<Step | null>(null)
+  let step = $state<ArcStep | null>(null)
   const stepLabel = $derived(
     step?.kind === 'act'
       ? `Writing Act ${step.number} of ${step.of}…`
@@ -141,7 +147,7 @@
   const addBeat = (act: EditAct) => act.beats.push(newBeat())
 
   type Outcome = { ok: true } | { ok: false; message: string }
-  const generic = 'The Arc could not be generated.'
+  const GENERIC_FAILURE = 'The Arc could not be generated.'
 
   /** Pre-flight rejections (conflict, AI unavailable) come back as one plain JSON body. */
   async function readJson(response: Response): Promise<Outcome> {
@@ -151,22 +157,17 @@
       failure?: { message?: string }
     } | null
     if (body?.ok) return { ok: true }
-    return { ok: false, message: body?.failure?.message ?? body?.error ?? generic }
+    return { ok: false, message: body?.failure?.message ?? body?.error ?? GENERIC_FAILURE }
   }
 
   /** Reads NDJSON lines: progress updates the step label; the final line decides the outcome. */
   async function readStream(response: Response): Promise<Outcome> {
-    if (!response.body) return { ok: false, message: generic }
+    if (!response.body) return { ok: false, message: GENERIC_FAILURE }
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
     let outcome: Outcome | undefined
-    const handle = (line: string) => {
+    const readLine = (line: string) => {
       if (!line.trim()) return
-      let parsed: {
-        type?: string
-        step?: Step
-        ok?: boolean
-        failure?: { message?: string }
-      }
+      let parsed: ArcStreamLine
       try {
         parsed = JSON.parse(line)
       } catch {
@@ -176,7 +177,7 @@
       else if (parsed.type === 'result') {
         outcome = parsed.ok
           ? { ok: true }
-          : { ok: false, message: parsed.failure?.message ?? generic }
+          : { ok: false, message: parsed.failure?.message ?? GENERIC_FAILURE }
       }
     }
     let buffer = ''
@@ -186,11 +187,11 @@
       buffer += value
       const lines = buffer.split('\n')
       buffer = lines.pop() ?? ''
-      lines.forEach(handle)
+      lines.forEach(readLine)
     }
-    handle(buffer)
+    readLine(buffer)
     // A stream that ends without a final line is a generic failure.
-    return outcome ?? { ok: false, message: generic }
+    return outcome ?? { ok: false, message: GENERIC_FAILURE }
   }
 
   async function generate() {

@@ -30,6 +30,7 @@ vi.mock('#lib/server/arc/index.ts', () => ({
 }))
 vi.mock('#lib/server/arc/generate.ts', () => ({ generateArc: mocks.generate }))
 
+import { ArcLockedError, ArcValidationError } from '#lib/server/arc/service.ts'
 import { POST } from './+server.ts'
 
 const post = (body: unknown, signal = new AbortController().signal) =>
@@ -89,6 +90,36 @@ describe('Arc endpoint generate action', () => {
       { type: 'result', ok: false, failure }
     ])
     expect(mocks.replaceWithDraft).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['locked', new ArcLockedError('The Arc is read-only')],
+    ['invalid', new ArcValidationError('The title is required')]
+  ])('reports a %s Arc as its own message, not a provider error', async (_n, error) => {
+    mocks.generate.mockResolvedValue({ ok: true, arc: {} })
+    mocks.replaceWithDraft.mockImplementation(() => {
+      throw error
+    })
+
+    const result = (await lines(await post({ action: 'generate' }))).at(-1)
+
+    expect(result).toEqual({
+      type: 'result',
+      ok: false,
+      failure: { kind: 'invalid-output', message: (error as Error).message }
+    })
+  })
+
+  it('reports an unexpected error as a provider error', async () => {
+    mocks.generate.mockResolvedValue({ ok: true, arc: {} })
+    mocks.replaceWithDraft.mockImplementation(() => {
+      throw new Error('disk')
+    })
+
+    expect((await lines(await post({ action: 'generate' }))).at(-1)).toMatchObject({
+      ok: false,
+      failure: { kind: 'provider-error' }
+    })
   })
 
   it('passes the request signal so Stop cancels generation', async () => {

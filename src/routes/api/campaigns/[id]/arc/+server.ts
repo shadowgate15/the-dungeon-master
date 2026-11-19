@@ -8,7 +8,8 @@ import {
 } from '#lib/server/ai/index.ts'
 import { unavailableFailure } from '#lib/server/ai/availability.ts'
 import { arcs } from '#lib/server/arc/index.ts'
-import { generateArc, type ArcFailure, type ArcStep } from '#lib/server/arc/generate.ts'
+import type { ArcFailure, ArcStreamLine } from '#lib/arc/arc.ts'
+import { generateArc } from '#lib/server/arc/generate.ts'
 import { ArcLockedError, ArcValidationError } from '#lib/server/arc/service.ts'
 import { createCampaignService } from '#lib/server/campaign/service.ts'
 import { db } from '#lib/server/db/index.ts'
@@ -42,12 +43,6 @@ function problem(error: unknown) {
   if (error instanceof ArcValidationError) return json({ error: error.message }, { status: 400 })
   throw error
 }
-
-/** One line of the generate stream: progress as each step starts, then exactly one result. */
-export type ArcStreamLine =
-  | { type: 'progress'; step: ArcStep }
-  | { type: 'result'; ok: true }
-  | { type: 'result'; ok: false; failure: ArcFailure }
 
 /**
  * Runs generation and streams it as newline-delimited JSON (`ArcStreamLine`). request.signal
@@ -89,11 +84,13 @@ function generationStream(
           send({ type: 'result', ok: true })
         }
       } catch (error) {
-        const message =
+        // The draft could not be stored. As on the pre-stream path, the player sees the rule's
+        // own message; the Arc stays as it was.
+        const failure: ArcFailure =
           error instanceof ArcLockedError || error instanceof ArcValidationError
-            ? error.message
-            : 'The Arc could not be generated.'
-        send({ type: 'result', ok: false, failure: { kind: 'provider-error', message } })
+            ? { kind: 'invalid-output', message: error.message }
+            : { kind: 'provider-error', message: 'The Arc could not be generated.' }
+        send({ type: 'result', ok: false, failure })
       }
       try {
         controller.close()

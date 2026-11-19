@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ARC_SIZES,
+  GENERATED_BEATS_PER_ACT,
   actProblems,
   arcProblems,
   planArc,
@@ -83,11 +84,12 @@ describe('planArc', () => {
     expect(long.beats.reduce((a, b) => a + b)).toBe(17)
   })
 
-  it('keeps every Act within 2 to 4 Beats and the total in range', () => {
+  it('keeps every Act within the generated Beats per Act and the total in range', () => {
     for (const length of Object.keys(ARC_SIZES) as (keyof typeof ARC_SIZES)[]) {
       const { acts, beats } = planArc(length)
       expect(beats).toHaveLength(acts)
-      for (const n of beats) expect(n >= 2 && n <= 4).toBe(true)
+      const [lo, hi] = GENERATED_BEATS_PER_ACT
+      for (const n of beats) expect(n >= lo && n <= hi).toBe(true)
       const total = beats.reduce((a, b) => a + b)
       expect(total >= ARC_SIZES[length].beats[0] && total <= ARC_SIZES[length].beats[1]).toBe(true)
     }

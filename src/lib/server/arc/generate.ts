@@ -3,10 +3,13 @@ import {
   ARC_MAX,
   actProblems,
   arcProblems,
+  plural,
   planArc,
   skeletonProblems,
   type ArcDraft,
-  type ArcPlan
+  type ArcFailure,
+  type ArcPlan,
+  type ArcStep
 } from '#lib/arc/arc.ts'
 import type { Length, Tone } from '#lib/campaign/enums.ts'
 import { callModel, type ChatPort } from '../ai/port.ts'
@@ -17,11 +20,6 @@ import { callModel, type ChatPort } from '../ai/port.ts'
  * Code plans the counts (`planArc`) and validates every call (`skeletonProblems`, `actProblems`);
  * the assembled draft is checked once more by `arcProblems`. UI-free; the model is reached only
  * through the injected `ChatPort`. Nothing is stored here.
- *
- * Structure for later tickets: every call goes through `runStep`, which is the one place for
- * retry (#256, done: up to 3 attempts per call), a per-call deadline
- * (#257, done: one budget per call, retries included, no overall cap) and progress (#258 builds on
- * `onProgress`, which `generateArc` already fires before each step).
  */
 
 /** The budget of one call (the skeleton, or one Act's Beats), retries included. No overall cap. */
@@ -61,10 +59,7 @@ export interface ArcSeed {
   worlds: { name: string; premise?: string | null }[]
 }
 
-export interface ArcFailure {
-  kind: 'timeout' | 'invalid-output' | 'provider-error' | 'reasoning-model' | 'cancelled'
-  message: string
-}
+export type { ArcFailure, ArcStep }
 
 export type ArcResult = { ok: true; arc: ArcDraft } | { ok: false; failure: ArcFailure }
 
@@ -77,9 +72,7 @@ export interface GenerateArcOptions {
   onProgress?: (step: ArcStep) => void
 }
 
-/** A step of generation: the skeleton, or one Act's Beats (`number` of `of`, from 1). */
-export type ArcStep = { kind: 'skeleton' } | { kind: 'act'; number: number; of: number }
-
+/** How a step is named to the player (and the model), in failure messages. */
 const stepName = (step: ArcStep) =>
   step.kind === 'skeleton' ? 'the story plan' : `Act ${step.number} of ${step.of}`
 
@@ -113,11 +106,6 @@ function systemPrompts(seed: ArcSeed): string[] {
     `Campaign:\n- Name: ${seed.name}\n- Premise: ${seed.premise}\n- Tone: ${seed.tone}\n- Length: ${seed.length}\nWorlds it is set in (stay consistent with them):\n${worlds}`
   ]
 }
-
-const timeoutName = (step: ArcStep) =>
-  step.kind === 'skeleton' ? 'the story plan' : `Act ${step.number}`
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 function skeletonPrompt(plan: ArcPlan): string {
   return `Plan the story. Give the title, premise, stakes, resolution, and exactly ${plural(plan.acts, 'Act')} in order, each with only a name and a purpose (no Beats yet).`
@@ -185,28 +173,31 @@ export async function generateArc(
   const runStep = async <T>(
     step: ArcStep,
     request: { prompt: string; maxTokens: number; schema: z.ZodObject & z.ZodType<T> },
-    problemsOf: (value: T) => string[]
+    problemsOf: (value: unknown) => string[]
   ): Promise<{ ok: true; value: T } | ArcResult> => {
+    // Stopped between steps: no progress, no call.
+    if (controller.signal.aborted) return outcome!
     options.onProgress?.(step)
     const timer = setTimeout(
-      () => stop(fail('timeout', `The model took too long to write ${timeoutName(step)}`)),
+      () => stop(fail('timeout', `The model took too long to write ${stepName(step)}`)),
       options.timeoutMs ?? ARC_CALL_TIMEOUT_MS
     )
     try {
-      return await attempts(step, request, problemsOf)
+      return await attemptStep(step, request, problemsOf)
     } finally {
       clearTimeout(timer)
     }
   }
 
-  const attempts = async <T>(
+  const attemptStep = async <T>(
     step: ArcStep,
     request: { prompt: string; maxTokens: number; schema: z.ZodObject & z.ZodType<T> },
-    problemsOf: (value: T) => string[]
+    problemsOf: (value: unknown) => string[]
   ): Promise<{ ok: true; value: T } | ArcResult> => {
     let prompt = request.prompt
     let lastProblems: string[] = []
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      if (controller.signal.aborted) return outcome!
       const raced = await Promise.race([
         callModel(port, {
           systemPrompts: systemPrompts(seed),
@@ -224,16 +215,17 @@ export async function generateArc(
       if (!call.ok) {
         if (call.failure.kind !== 'invalid-output')
           return fail(call.failure.kind, call.failure.message)
-        lastProblems = [NOT_JSON]
+        // The provider's own check rejected it (no object to show), so keep its reason.
+        lastProblems = [`${NOT_JSON} (${call.failure.message})`]
       } else {
         rejected = call.object
-        const parsed = request.schema.safeParse(trimStrings(call.object))
-        if (parsed.success) {
-          lastProblems = problemsOf(parsed.data)
-          if (!lastProblems.length) return { ok: true, value: parsed.data }
-        } else {
-          lastProblems = [NOT_JSON]
-        }
+        const trimmed = trimStrings(call.object)
+        const parsed = request.schema.safeParse(trimmed)
+        // The rule checks accept any shape and say what is wrong (a missing key included), so
+        // the retry names the rule rather than just "not the requested object".
+        lastProblems = problemsOf(parsed.success ? parsed.data : trimmed)
+        if (parsed.success && !lastProblems.length) return { ok: true, value: parsed.data }
+        if (!parsed.success && !lastProblems.length) lastProblems = [NOT_JSON]
       }
       prompt = retryPrompt(request.prompt, rejected, lastProblems)
     }

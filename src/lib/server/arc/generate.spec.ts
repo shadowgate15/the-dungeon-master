@@ -247,6 +247,69 @@ describe('generateArc', () => {
     expect(bodies()).toHaveLength(3) // the client's own transport retries, not ours
   })
 
+  it('does not retry a reasoning model', async () => {
+    fake.setScenario('reasoning-model')
+
+    const result = await generateArc(port(), seed())
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'reasoning-model' } })
+    expect(bodies()).toHaveLength(1)
+  })
+
+  it('does not retry a timeout', async () => {
+    fake.queueAnswers({ content: skeletonJson(3), delayMs: 5000 }, { content: skeletonJson(3) })
+
+    const result = await generateArc(port(), seed(), { timeoutMs: 50 })
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'timeout' } })
+    expect(bodies()).toHaveLength(1)
+  })
+
+  it('does not retry a cancelled call', async () => {
+    fake.queueAnswers({ content: skeletonJson(3), delayMs: 5000 }, { content: skeletonJson(3) })
+    const controller = new AbortController()
+
+    const pending = generateArc(port(), seed(), { signal: controller.signal })
+    setTimeout(() => controller.abort(), 100)
+
+    expect(await pending).toMatchObject({ ok: false, failure: { kind: 'cancelled' } })
+    expect(bodies()).toHaveLength(1)
+  })
+
+  it('names why the answer was rejected when a required part is missing', async () => {
+    fake.queueAnswers({ content: skeletonJson(3) }, { content: { notBeats: [] }, times: 3 })
+
+    const result = await generateArc(port(), seed())
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'invalid-output' } })
+    if (!result.ok) {
+      expect(result.failure.message).toMatch(
+        /^Act 1 of 3 could not be written: .*expected array, received undefined/
+      )
+    }
+    expect(prompt(2)).toContain('expected array, received undefined')
+  })
+
+  it('starts no call and reports no progress once stopped between steps', async () => {
+    fake.queueAnswers({ content: skeletonJson(3) }, { content: actJson(1, 2) })
+    const controller = new AbortController()
+    const base = port()
+    const stopAfterFirstCall: ChatPort = async function* (request) {
+      yield* base(request)
+      controller.abort()
+    }
+    const steps: unknown[] = []
+
+    const result = await generateArc(stopAfterFirstCall, seed(), {
+      signal: controller.signal,
+      onProgress: (step) => steps.push(step)
+    })
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'cancelled' } })
+    expect(steps).toEqual([{ kind: 'skeleton' }])
+    expect(bodies()).toHaveLength(1)
+  })
+
   it('is cancelled by Stop, skipping the remaining calls', async () => {
     fake.queueAnswers({ content: skeletonJson(3) }, { content: actJson(1, 2), delayMs: 5000 })
     const controller = new AbortController()
@@ -282,7 +345,7 @@ describe('generateArc', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      failure: { kind: 'timeout', message: 'The model took too long to write Act 2' }
+      failure: { kind: 'timeout', message: 'The model took too long to write Act 2 of 3' }
     })
   })
 
