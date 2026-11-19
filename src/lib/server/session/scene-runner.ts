@@ -8,12 +8,13 @@
  * roll. The stream ends with exactly one `done` event saying why control returned to the player.
  */
 import type { SessionEvent } from '#lib/session/enums.ts'
-import type { PipelineEvent } from '#lib/session/pipeline-events.ts'
+import type { ContextReport, PipelineEvent } from '#lib/session/pipeline-events.ts'
 import type { ChatPort } from '../ai/port.ts'
 import type { BeatProgress, Steering } from '../arc/beat-progress.ts'
 import type { MemoryExtraction } from '../memory/extraction.ts'
 import type { RollingSummary } from '../memory/summary.ts'
 import { dice as defaultDice, type Dice } from '../dice.ts'
+import type { ContextSources } from './context/sources.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
 export type { DoneReason, PipelineEvent, RunStats } from '#lib/session/pipeline-events.ts'
@@ -27,6 +28,10 @@ export interface PipelineContext {
   signal: AbortSignal
   /** The Arc steering for the prompts, read fresh per call; null (or absent) when there is none. */
   steering?: () => Steering | null
+  /** The Rolling summary and World memory for the Narrator's context; absent in some tests. */
+  context?: ContextSources
+  /** Reports a built context's usage, so the pipeline can add it to the run's stats. */
+  report?: (report: ContextReport) => void
 }
 
 /** One run after the player's action: yields pipeline events, ending with a `done`. */
@@ -56,6 +61,8 @@ export interface SceneRunnerDeps {
   memory?: MemoryExtraction
   /** The Rolling summary, fired in the background alongside extraction. */
   summary?: RollingSummary
+  /** What the Narrator's context reads beyond the log and Scene (summary, World memory). */
+  contextSources?: ContextSources
 }
 
 export function createSceneRunner(deps: SceneRunnerDeps) {
@@ -90,7 +97,14 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
     let finished = false
     try {
       const steering = deps.beatProgress && (() => deps.beatProgress!.steering(sessionId))
-      for await (const step of pipeline({ sessionId, sessions, port, signal, steering })) {
+      for await (const step of pipeline({
+        sessionId,
+        sessions,
+        port,
+        signal,
+        steering,
+        context: deps.contextSources
+      })) {
         yield step
         if (step.type === 'done') {
           finished = true

@@ -9,6 +9,7 @@ import { db } from '../db/index.ts'
 import { createBeatProgress } from '../arc/beat-progress.ts'
 import { createMemoryExtraction } from '../memory/extraction.ts'
 import { createRollingSummary } from '../memory/summary.ts'
+import { createWorldReader } from './context/sources.ts'
 import { createSessionEnd } from './end-session.ts'
 import { createDirectorPipeline } from './scene-director/pipeline.ts'
 import { createSceneRunner } from './scene-runner.ts'
@@ -63,5 +64,6 @@ export const sceneRunner = createSceneRunner({
   beatProgress: createBeatProgress(db),
   memory: memoryExtraction,
   summary: rollingSummary,
+  contextSources: { summary: rollingSummary.get, world: createWorldReader(db) },
   rollModifier
 })

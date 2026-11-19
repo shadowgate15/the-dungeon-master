@@ -1,33 +1,10 @@
-import type { SessionEvent } from '#lib/session/enums.ts'
+import { buildNpcContext } from '../../context/npc.ts'
 import { makeOptionId, parseOptionId } from '../option-id.ts'
 import type { MenuOption } from '../types.ts'
 import { streamLine } from './stream-line.ts'
 
 const VERB = 'npc-speaks'
 const NPC_MAX_TOKENS = 200
-
-const NPC_SYSTEM = [
-  'You voice one non-player character in a tabletop role-playing game.',
-  'Reply with only the words this character says aloud, one to three sentences, in first person.',
-  'Do not narrate, do not describe actions, do not speak for anyone else, and do not invent numbers or game state.',
-  'Stay true to the personality and attitude below, and say only what this character knows.'
-].join(' ')
-
-/**
- * The conversation as this NPC knows it: the player's actions and its own earlier lines, nothing
- * else. Narration and other NPCs' lines stay out, so another character's knowledge cannot leak
- * into this voice.
- */
-function conversation(events: SessionEvent[], npcId: string, name: string): string {
-  return events
-    .map((e) => {
-      if (e.kind === 'player-action') return `Player: ${e.text}`
-      if (e.kind === 'npc-line' && e.npcId === npcId) return `${name}: ${e.text ?? ''}`
-      return ''
-    })
-    .filter(Boolean)
-    .join('\n')
-}
 
 /**
  * NPC voice: one NPC present speaks a line, streamed as an attributed `npc-line` event. Offered once
@@ -45,15 +22,11 @@ export const npcSpeaksOption: MenuOption = {
     const key = parseOptionId(optionId).arg
     const npc = menu.scene.npcs.find((n) => n.key === key)
     if (!npc) throw new Error(`No NPC ${key} is present`)
-    const system = [
-      NPC_SYSTEM,
-      `Character: ${npc.name}`,
-      `Attitude toward the player: ${npc.attitude}`,
-      `What ${npc.name} knows: ${npc.knowledge}`
-    ].join('\n')
+    const built = buildNpcContext({ npc, events: ctx.sessions.events(ctx.sessionId) })
+    ctx.report?.(built.report)
     const line = yield* streamLine(ctx, {
-      system,
-      content: conversation(menu.events, npc.id, npc.name),
+      system: built.system,
+      content: built.content,
       maxTokens: NPC_MAX_TOKENS,
       role: 'npc',
       kind: 'npc-line',

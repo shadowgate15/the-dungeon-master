@@ -1,3 +1,4 @@
+import type { ContextReport, ContextStats, TrimCounts } from '#lib/session/pipeline-events.ts'
 import type { Pipeline, RunStats } from '../scene-runner.ts'
 import { askDirector } from './director.ts'
 import { buildMenu, fallbackPick, optionFor, parsePick } from './menu.ts'
@@ -14,9 +15,40 @@ const RECENT_EVENTS = 8
  * picks. Ends on `yield`, or at the step limit, which forces a yield. Streams `step` and `stats`
  * events for the inspector.
  */
+const noTrims = (): TrimCounts => ({ memory: 0, events: 0, summary: 0, uncovered: 0 })
+
+/** Folds one built context's report into the run's context stats (latest per role; trims summed). */
+function addReport(context: ContextStats, report: ContextReport) {
+  context.roles[report.role] = report
+  for (const key of Object.keys(context.trims) as (keyof TrimCounts)[]) {
+    context.trims[key] += report.trims[key]
+  }
+}
+
 export function createDirectorPipeline(options: MenuOption[] = MENU_OPTIONS): Pipeline {
   return async function* (ctx) {
-    const stats: RunStats = { steps: 0, directorCalls: 0, retries: 0, fallbacks: 0, capHits: 0 }
+    const context: ContextStats = { roles: {}, trims: noTrims() }
+    const stats: RunStats = {
+      steps: 0,
+      directorCalls: 0,
+      retries: 0,
+      fallbacks: 0,
+      capHits: 0,
+      context
+    }
+    let lastDirector: ContextReport | undefined
+    const snapshot = (): RunStats => ({
+      ...stats,
+      context: { roles: { ...context.roles }, trims: { ...context.trims } }
+    })
+    const run: typeof ctx = {
+      ...ctx,
+      report: (report) => {
+        addReport(context, report)
+        if (report.role === 'director') lastDirector = report
+        ctx.report?.(report)
+      }
+    }
     for (let step = 1; step <= STEP_LIMIT; step++) {
       const menu: MenuContext = {
         scene: ctx.sessions.scene(ctx.sessionId),
@@ -34,7 +66,7 @@ export function createDirectorPipeline(options: MenuOption[] = MENU_OPTIONS): Pi
           stats.retries++
         }
         stats.directorCalls++
-        const answer = await askDirector(ctx, menu, entries, attempt > 0)
+        const answer = await askDirector(run, menu, entries, attempt > 0)
         if (ctx.signal.aborted) return
         if (!answer.ok) {
           yield {
@@ -61,20 +93,22 @@ export function createDirectorPipeline(options: MenuOption[] = MENU_OPTIONS): Pi
         pick,
         retried,
         fallback,
-        raw
+        raw,
+        ...(lastDirector && { context: lastDirector })
       }
-      yield { type: 'stats', stats: { ...stats } }
+      yield { type: 'stats', stats: snapshot() }
       const option = optionFor(options, pick)
       if (!option) return
-      const outcome = yield* option.run(ctx, pick, menu)
+      const outcome = yield* option.run(run, pick, menu)
       if (ctx.signal.aborted) return
+      yield { type: 'stats', stats: snapshot() }
       if (outcome.type === 'done') {
         yield { type: 'done', reason: outcome.reason }
         return
       }
     }
     stats.capHits++
-    yield { type: 'stats', stats: { ...stats } }
+    yield { type: 'stats', stats: snapshot() }
     yield { type: 'done', reason: 'cap' }
   }
 }

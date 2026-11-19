@@ -1,13 +1,8 @@
-import { recentLines } from '../prompt.ts'
+import { buildNarratorContext } from '../../context/narrator.ts'
 import type { MenuOption } from '../types.ts'
 import { streamLine } from './stream-line.ts'
 
 const NARRATOR_MAX_TOKENS = 400
-
-const NARRATOR_SYSTEM = [
-  'You are the narrator of a tabletop role-playing game. Describe what happens next in 2 to 4 sentences of second-person prose.',
-  'Do not speak for non-player characters, do not invent numbers, dice results or game state, and do not ask what the player does.'
-].join(' ')
 
 /**
  * The Narrator: streams scene prose as a `narration` event. Offered unless the last event is
@@ -21,16 +16,17 @@ export const narrateOption: MenuOption = {
       ? []
       : [{ id: 'narrate', hint: "Describe what happens as a result of the player's action." }],
   async *run(ctx, _id, menu) {
-    const { scene } = menu
-    const arc = ctx.steering?.()?.arcBlock
-    const system = [
-      NARRATOR_SYSTEM,
-      `Location: ${scene.location.name}. ${scene.location.description}`,
-      ...(arc ? [arc] : [])
-    ].join('\n')
+    const built = buildNarratorContext({
+      scene: menu.scene,
+      events: ctx.sessions.events(ctx.sessionId),
+      summary: ctx.context?.summary(ctx.sessionId) ?? { text: null, throughSeq: 0 },
+      world: ctx.context?.world(ctx.sessionId) ?? null,
+      arcBlock: ctx.steering?.()?.arcBlock
+    })
+    ctx.report?.(built.report)
     const prose = yield* streamLine(ctx, {
-      system,
-      content: recentLines(menu.events),
+      system: built.system,
+      content: built.content,
       maxTokens: NARRATOR_MAX_TOKENS,
       role: 'narrator',
       kind: 'narration',

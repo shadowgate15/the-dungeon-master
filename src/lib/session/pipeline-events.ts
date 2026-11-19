@@ -1,5 +1,42 @@
 import type { EventKind, Role, SessionEvent } from './enums.ts'
 
+/** The roles whose context is built and budgeted. */
+export type ContextRole = 'director' | 'narrator' | 'npc'
+
+/** Trim steps fired while building context. Counts only, never what was trimmed. */
+export interface TrimCounts {
+  /** World memory entries taken names-only or dropped. */
+  memory: number
+  /** Events dropped from context (the Event log is untouched). */
+  events: number
+  /** Summary tail sentences cut. */
+  summary: number
+  /** Of the dropped events, those the summary did not cover (a summary that keeps failing). */
+  uncovered: number
+}
+
+/** One built context: tokens used against the role's cap, plus what the Narrator's held. */
+export interface ContextReport {
+  role: ContextRole
+  /** Estimated tokens of the whole prompt. */
+  used: number
+  cap: number
+  /** Tokens of World memory shown (Narrator only; 0 for the other roles). */
+  memoryUsed: number
+  memoryBudget: number
+  /** Events shown verbatim. */
+  verbatim: number
+  /** Events the summary stands in for (Narrator only; 0 for the other roles). */
+  summarised: number
+  trims: TrimCounts
+}
+
+/** Per-run context reporting: the latest report per role, and trim counts summed over the run. */
+export interface ContextStats {
+  roles: Partial<Record<ContextRole, ContextReport>>
+  trims: TrimCounts
+}
+
 /** Per-run counters shown in the event inspector. */
 export interface RunStats {
   steps: number
@@ -7,6 +44,8 @@ export interface RunStats {
   retries: number
   fallbacks: number
   capHits: number
+  /** Context usage so far this run; absent from a pipeline that does not report it. */
+  context?: ContextStats
 }
 
 /** One Director step, as the event inspector shows it. */
@@ -22,6 +61,8 @@ export interface StepMessage {
   fallback: boolean
   /** What the Director said, one entry per call. */
   raw: string[]
+  /** The Director's context for this step: tokens used against its cap, trims fired. */
+  context?: ContextReport
 }
 
 /** Why control returned to the player. */
