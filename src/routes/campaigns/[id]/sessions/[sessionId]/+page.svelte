@@ -5,12 +5,15 @@
   import SceneStatePanel from '#lib/session/SceneStatePanel.svelte'
   import StoryLog from '#lib/session/StoryLog.svelte'
   import EventInspector from '#lib/session/EventInspector.svelte'
+  import Journal from '#lib/session/Journal.svelte'
+  import Previously from '#lib/session/Previously.svelte'
   import RollOverlay from '#lib/session/RollOverlay.svelte'
   import type { PipelineEvent, RunStats, StepMessage } from '#lib/session/pipeline-events.ts'
   import { resolveRoll, sendAction } from '#lib/session/play.ts'
   import type { SessionEvent } from '#lib/session/enums.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
+  import Dialog from '#lib/ui/Dialog.svelte'
   import Link from '#lib/ui/Link.svelte'
   import Textarea from '#lib/ui/Textarea.svelte'
 
@@ -21,6 +24,7 @@
 
   let draft = $state('')
   let busy = $state(false)
+  let journalOpen = $state(false)
   let problem = $state<string | null>(null)
   // Events streamed in this page visit, on top of what the load returned.
   let streamed = $state<SessionEvent[]>([])
@@ -115,15 +119,35 @@
       <h1 class="font-display text-2xl">Session {data.session.number}</h1>
       <p class="text-sm text-muted">Playing as {data.character.name}</p>
     </div>
-    {#if !ended}
-      <form method="POST" action="?/end" use:enhance>
-        <Button type="submit" variant="secondary">End Session</Button>
-      </form>
-    {/if}
+    <div class="flex items-center gap-2">
+      <Button type="button" variant="secondary" onclick={() => (journalOpen = true)}>Journal</Button
+      >
+      {#if !ended}
+        <form method="POST" action="?/end" use:enhance>
+          <Button type="submit" variant="secondary">End Session</Button>
+        </form>
+      {/if}
+    </div>
   </header>
+
+  <Dialog
+    bind:open={journalOpen}
+    title="Journal"
+    closeHref={resolve('/campaigns/[id]/sessions/[sessionId]', {
+      id: data.campaign.id,
+      sessionId: data.session.id
+    })}
+  >
+    <Journal journal={data.journal} />
+  </Dialog>
 
   {#if ended}
     <Alert variant="info">Session ended. This log is read-only.</Alert>
+  {/if}
+
+  <!-- Gone once the player acts: the load only returns it while the log is empty. -->
+  {#if data.recap && events.length === 0}
+    <Previously recap={data.recap} />
   {/if}
 
   <!-- Scene state | story log | event inspector (development only). -->
