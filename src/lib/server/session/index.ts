@@ -6,6 +6,7 @@ import type { ChatPort } from '../ai/port.ts'
 import { createCharacterService } from '../character/service.ts'
 import { loadWizardRules } from '../character/wizard-rules.ts'
 import { db } from '../db/index.ts'
+import { createBeatProgress } from '../arc/beat-progress.ts'
 import { createDirectorPipeline } from './scene-director/pipeline.ts'
 import { createSceneRunner } from './scene-runner.ts'
 import { createSessionService } from './service.ts'
@@ -42,5 +43,6 @@ export const sceneRunner = createSceneRunner({
   sessions,
   port: modelPort,
   pipeline: createDirectorPipeline(),
+  beatProgress: createBeatProgress(db),
   rollModifier
 })

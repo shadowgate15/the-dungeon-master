@@ -22,7 +22,12 @@ export const narrateOption: MenuOption = {
       : [{ id: 'narrate', hint: "Describe what happens as a result of the player's action." }],
   async *run(ctx, _id, menu) {
     const { scene } = menu
-    const system = `${NARRATOR_SYSTEM}\nLocation: ${scene.location.name}. ${scene.location.description}`
+    const arc = ctx.steering?.()?.arcBlock
+    const system = [
+      NARRATOR_SYSTEM,
+      `Location: ${scene.location.name}. ${scene.location.description}`,
+      ...(arc ? [arc] : [])
+    ].join('\n')
     const prose = yield* streamLine(ctx, {
       system,
       content: recentLines(menu.events),
