@@ -8,7 +8,11 @@ import {
 import { createCharacterService } from '#lib/server/character/service.ts'
 import { arcs } from '#lib/server/arc/index.ts'
 import { db } from '#lib/server/db/index.ts'
-import { SessionAlreadyOpenError, SessionValidationError } from '#lib/server/session/service.ts'
+import {
+  SessionAlreadyOpenError,
+  SessionStartError,
+  SessionValidationError
+} from '#lib/server/session/service.ts'
 import { sessions } from '#lib/server/session/index.ts'
 import type { Actions, PageServerLoad } from './$types'
 
@@ -56,13 +60,15 @@ export const actions: Actions = {
     return { linked: true }
   },
 
-  startSession: ({ params }) => {
+  startSession: async ({ params }) => {
     let started
     try {
-      started = sessions.start(params.id)
+      started = await sessions.start(params.id)
     } catch (e) {
       if (e instanceof SessionAlreadyOpenError || e instanceof SessionValidationError)
         return fail(400, { error: e.message })
+      // The opening Scene could not be generated: nothing was created, the player may retry.
+      if (e instanceof SessionStartError) return fail(502, { error: e.message, retry: true })
       throw e
     }
     redirect(

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { seedCharacter } from './character-helpers'
+import { acceptArc, FIRST_SCENE, queueBrokenFirstScene, queueFirstScene } from './session-helpers'
 import { createWorld } from './world-helpers'
 
 /** Creates a Campaign through the dialog and opens it from the list. */
@@ -20,7 +21,8 @@ async function openCampaign(page: Page, name: string, world: string) {
 }
 
 test('starts a Session, shows its Scene, saves an action and restores both on reload', async ({
-  page
+  page,
+  request
 }) => {
   const stamp = Date.now()
   const world = `Sceneworld ${stamp}`
@@ -32,25 +34,30 @@ test('starts a Session, shows its Scene, saves an action and restores both on re
 
   await expect(page.getByRole('button', { name: 'Start Session' })).toBeDisabled()
   await page.waitForLoadState('networkidle')
+  await acceptArc(page, request)
   await page.locator('select[name=characterId]').selectOption({ label: hero })
   await page.getByRole('button', { name: 'Link Character' }).click()
   await expect(page.getByText(`Playing as ${hero}.`)).toBeVisible()
 
+  // A failed First Scene creates nothing and offers a Retry; there is no fallback Scene.
+  await queueBrokenFirstScene(request)
   await page.getByRole('button', { name: 'Start Session' }).click()
+  await expect(page.getByText(/Could not generate the opening Scene/)).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Resume Session' })).toHaveCount(0)
+  await queueFirstScene(request)
+  await page.getByRole('button', { name: 'Retry' }).click()
   await expect(page.getByRole('heading', { name: 'Session 1' })).toBeVisible()
 
   // The seeded Scene is on screen, the log is empty.
   const scene = page.getByRole('complementary', { name: 'Scene' })
-  await expect(scene.getByRole('region', { name: 'Location' })).toContainText(
-    'The Sleeping Griffin'
-  )
+  await expect(scene.getByRole('region', { name: 'Location' })).toContainText(FIRST_SCENE.place)
   await expect(scene.getByRole('region', { name: 'Exits' }).getByRole('listitem')).not.toHaveCount(
     0
   )
   await expect(
     scene.getByRole('region', { name: 'Objects' }).getByRole('listitem')
   ).not.toHaveCount(0)
-  await expect(scene.getByRole('region', { name: 'Present' })).toContainText('Marta')
+  await expect(scene.getByRole('region', { name: 'Present' })).toContainText(FIRST_SCENE.npc)
   await expect(scene.getByRole('region', { name: 'Mode' })).toContainText('exploration')
   await expect(scene.getByRole('region', { name: 'Pending roll' })).toContainText('None')
   await expect(page.getByText('Nothing has happened yet.')).toBeVisible()
@@ -69,7 +76,7 @@ test('starts a Session, shows its Scene, saves an action and restores both on re
   )
   await expect(
     page.getByRole('complementary', { name: 'Scene' }).getByRole('region', { name: 'Location' })
-  ).toContainText('The Sleeping Griffin')
+  ).toContainText(FIRST_SCENE.place)
 
   // A second Session cannot start while this one is open: the Campaign page offers Resume.
   await page.getByRole('link', { name: campaign }).click()

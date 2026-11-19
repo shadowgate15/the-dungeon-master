@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { collectText } from '../ai/port.ts'
 import type { Database } from '../db/connect'
 import { createScriptedPort, says } from '../../testing/scripted-chat-port'
-import { playableCampaign } from './fixture'
+import { playableCampaign, sessionServiceWith } from './fixture'
 import {
   createSceneRunner,
   type BeginResult,
@@ -17,11 +17,11 @@ let sessions: SessionService
 let sessionId: string
 let model: ReturnType<typeof createScriptedPort>
 
-beforeEach(() => {
+beforeEach(async () => {
   const fixture = playableCampaign()
   db = fixture.db
-  sessions = createSessionService(db)
-  sessionId = sessions.start(fixture.campaignId).id
+  sessions = sessionServiceWith(fixture).sessions
+  sessionId = (await sessions.start(fixture.campaignId)).id
   model = createScriptedPort()
 })
 

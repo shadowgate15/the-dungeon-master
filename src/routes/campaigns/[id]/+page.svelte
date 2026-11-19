@@ -12,6 +12,9 @@
   let { data, form } = $props()
 
   const locked = $derived(data.campaign.archived || data.campaign.readOnly)
+  const arcAccepted = $derived(data.arc?.status === 'accepted')
+  let starting = $state(false)
+  const startFailed = $derived(Boolean(form && 'retry' in form && form.retry))
 </script>
 
 <svelte:head><title>{data.campaign.name}</title></svelte:head>
@@ -30,7 +33,7 @@
       edit it.
     </Alert>
   {/if}
-  {#if form && 'error' in form && form.error}
+  {#if form && 'error' in form && form.error && !startFailed}
     <Alert variant="danger">{form.error}</Alert>
   {/if}
 
@@ -65,7 +68,7 @@
     length={data.campaign.length}
     arc={data.arc}
     canGenerate={data.arcAvailability.canGenerate}
-    readOnly={locked}
+    readOnly={locked || data.arcAvailability.locked}
     onchange={() => invalidateAll()}
   />
 
@@ -79,11 +82,31 @@
         })}>Resume Session</Button
       >
     {:else}
-      <form method="POST" action="?/startSession" use:enhance>
-        <Button type="submit" disabled={locked || !data.linkedCharacter}>Start Session</Button>
+      {#if startFailed && form && 'error' in form}
+        <Alert variant="danger">{form.error}</Alert>
+      {/if}
+      <form
+        method="POST"
+        action="?/startSession"
+        use:enhance={() => {
+          starting = true
+          return async ({ update }) => {
+            await update()
+            starting = false
+          }
+        }}
+      >
+        <Button
+          type="submit"
+          disabled={locked || !data.linkedCharacter || !arcAccepted || starting}
+        >
+          {starting ? 'Preparing the opening Scene…' : startFailed ? 'Retry' : 'Start Session'}
+        </Button>
       </form>
       {#if !data.linkedCharacter && !locked}
         <p class="text-sm text-muted">Link a Character to start a Session.</p>
+      {:else if !arcAccepted && !locked}
+        <p class="text-sm text-muted">Accept the Arc to start a Session.</p>
       {/if}
     {/if}
     {#if data.sessions.length > 0}

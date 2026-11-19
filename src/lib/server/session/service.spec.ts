@@ -3,9 +3,8 @@ import { createCampaignService } from '../campaign/service'
 import { createCharacterService } from '../character/service'
 import { createWorldService } from '../world/service'
 import { sessionEvent } from '../db/schema'
-import { playableCampaign } from './fixture'
+import { firstSceneScripts, playableCampaign, sessionServiceWith } from './fixture'
 import {
-  createSessionService,
   SessionAlreadyOpenError,
   SessionNotFoundError,
   SessionValidationError,
@@ -22,13 +21,14 @@ let clock: number
 
 beforeEach(() => {
   clock = 1000
-  ;({ db, campaignId, characterId } = playableCampaign())
-  sessions = createSessionService(db, () => clock++)
+  const fixture = playableCampaign()
+  ;({ db, campaignId, characterId } = fixture)
+  ;({ sessions } = sessionServiceWith(fixture, firstSceneScripts(), () => clock++))
 })
 
 describe('starting a Session', () => {
-  it('creates a seeded Scene and an empty Event log', () => {
-    const session = sessions.start(campaignId)
+  it('creates a generated Scene and an empty Event log', async () => {
+    const session = await sessions.start(campaignId)
 
     expect(session.campaignId).toBe(campaignId)
     expect(session.characterId).toBe(characterId)
@@ -44,42 +44,42 @@ describe('starting a Session', () => {
     expect(sessions.events(session.id)).toEqual([])
   })
 
-  it('refuses a second open Session for the same Campaign', () => {
-    sessions.start(campaignId)
-    expect(() => sessions.start(campaignId)).toThrow(SessionAlreadyOpenError)
+  it('refuses a second open Session for the same Campaign', async () => {
+    await sessions.start(campaignId)
+    await expect(sessions.start(campaignId)).rejects.toThrow(SessionAlreadyOpenError)
   })
 
-  it('allows a new Session once the open one has ended', () => {
-    const first = sessions.start(campaignId)
+  it('allows a new Session once the open one has ended', async () => {
+    const first = await sessions.start(campaignId)
     sessions.end(first.id)
-    const second = sessions.start(campaignId)
+    const second = await sessions.start(campaignId)
     expect(second.id).not.toBe(first.id)
     expect(sessions.openFor(campaignId)?.id).toBe(second.id)
     expect(sessions.listNumbered(campaignId).map((s) => s.number)).toEqual([1, 2])
   })
 
-  it('refuses without a linked Character', () => {
+  it('refuses without a linked Character', async () => {
     const worldId = createWorldService(db).create({ name: 'Other' }).id
     const other = createCampaignService(db).create(
       { name: 'D', premise: 'P', tone: 'dark', length: 'short' },
       [worldId]
     ).id
-    expect(() => sessions.start(other)).toThrow(/Link a Character/)
+    await expect(sessions.start(other)).rejects.toThrow(/Link a Character/)
   })
 
-  it('refuses on an unknown Campaign', () => {
-    expect(() => sessions.start('nope')).toThrow(SessionValidationError)
+  it('refuses on an unknown Campaign', async () => {
+    await expect(sessions.start('nope')).rejects.toThrow(SessionValidationError)
   })
 
-  it('stops the played Character being deleted', () => {
-    sessions.start(campaignId)
+  it('stops the played Character being deleted', async () => {
+    await sessions.start(campaignId)
     expect(() => createCharacterService(db).delete(characterId)).toThrow(/played Sessions/)
   })
 })
 
 describe('the Event log', () => {
-  it('appends events in sequence, each with its producing role', () => {
-    const { id } = sessions.start(campaignId)
+  it('appends events in sequence, each with its producing role', async () => {
+    const { id } = await sessions.start(campaignId)
 
     const a = sessions.appendEvent(id, { role: 'player', kind: 'player-action', text: 'I look' })
     const b = sessions.appendEvent(id, {
@@ -95,20 +95,20 @@ describe('the Event log', () => {
     ])
   })
 
-  it('keeps an event payload and speaker', () => {
-    const { id } = sessions.start(campaignId)
+  it('keeps an event payload and speaker', async () => {
+    const { id } = await sessions.start(campaignId)
     sessions.appendEvent(id, {
       role: 'npc',
       kind: 'npc-line',
       text: 'Welcome.',
-      npcId: 'marta',
+      npcId: 'someone',
       data: { tone: 'warm' }
     })
-    expect(sessions.events(id)[0]).toMatchObject({ npcId: 'marta', data: { tone: 'warm' } })
+    expect(sessions.events(id)[0]).toMatchObject({ npcId: 'someone', data: { tone: 'warm' } })
   })
 
-  it('exposes no way to edit or remove an event, and the database rejects a bad role', () => {
-    const { id } = sessions.start(campaignId)
+  it('exposes no way to edit or remove an event, and the database rejects a bad role', async () => {
+    const { id } = await sessions.start(campaignId)
     expect(Object.keys(sessions)).not.toEqual(
       expect.arrayContaining(['updateEvent', 'deleteEvent'])
     )
@@ -121,8 +121,8 @@ describe('the Event log', () => {
     expect(db.select().from(sessionEvent).where(eq(sessionEvent.sessionId, id)).all()).toEqual([])
   })
 
-  it('refuses to append to an ended or unknown Session', () => {
-    const { id } = sessions.start(campaignId)
+  it('refuses to append to an ended or unknown Session', async () => {
+    const { id } = await sessions.start(campaignId)
     sessions.end(id)
     expect(() =>
       sessions.appendEvent(id, { role: 'player', kind: 'player-action', text: 'x' })
@@ -134,8 +134,8 @@ describe('the Event log', () => {
 })
 
 describe('the Scene', () => {
-  it('persists code-applied changes', () => {
-    const { id } = sessions.start(campaignId)
+  it('persists code-applied changes', async () => {
+    const { id } = await sessions.start(campaignId)
     const scene = sessions.scene(id)
 
     sessions.saveScene(id, {

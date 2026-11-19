@@ -1,6 +1,5 @@
 import type { SceneExit } from '#lib/session/enums.ts'
 import { makeOptionId, parseOptionId } from '../option-id.ts'
-import { placeBeyond } from '../places.ts'
 import type { MenuOption } from '../types.ts'
 
 const normalise = (text: string) =>
@@ -46,7 +45,14 @@ export const moveOption: MenuOption = {
     // `parsePick` already counted it as an invalid pick (retry, then fallback). A throw, not a
     // silent continue, keeps a broken caller from looking like a successful move.
     if (!exit) throw new Error(`No exit ${exitId} in this Scene`)
-    const place = placeBeyond(exit, scene.location.name)
+    // A bare place named after the exit, with a way back. Generating the destination from the
+    // World comes later; until then a move never dead-ends.
+    const place = {
+      location: { name: exit.name, description: '' },
+      exits: [{ id: 'back', name: `Back to ${scene.location.name}` }],
+      objects: [],
+      npcs: []
+    }
     ctx.sessions.saveScene(ctx.sessionId, {
       ...place,
       mode: 'exploration',

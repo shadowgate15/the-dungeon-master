@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import { seedCharacter } from './character-helpers'
+import { acceptArc, queueFirstScene } from './session-helpers'
 import { createWorld } from './world-helpers'
 
 const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
@@ -16,7 +17,7 @@ async function script(request: APIRequestContext, answers: string[]) {
 }
 
 /** Creates a World, a Character and a Campaign, links them and starts a Session. */
-async function startSession(page: Page) {
+async function startSession(page: Page, request: APIRequestContext) {
   const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`
   const world = `Tavernworld ${stamp}`
   const campaign = `Tavern ${stamp}`
@@ -43,6 +44,8 @@ async function startSession(page: Page) {
   await page.locator('select[name=characterId]').selectOption({ label: hero })
   await page.getByRole('button', { name: 'Link Character' }).click()
   await expect(page.getByText(`Playing as ${hero}.`)).toBeVisible()
+  await acceptArc(page, request)
+  await queueFirstScene(request)
   await page.getByRole('button', { name: 'Start Session' }).click()
   await expect(page.getByRole('heading', { name: 'Session 1' })).toBeVisible()
   await page.waitForLoadState('networkidle')
@@ -52,7 +55,7 @@ test('plays a scene: narration, an NPC line, dialogue, a roll and the story cont
   page,
   request
 }) => {
-  await startSession(page)
+  await startSession(page, request)
   const log = page.getByRole('list', { name: 'Story log' })
   const scene = page.getByRole('complementary', { name: 'Scene' })
   const act = async (text: string) => {
@@ -60,31 +63,31 @@ test('plays a scene: narration, an NPC line, dialogue, a roll and the story cont
     await page.getByRole('button', { name: 'Send' }).click()
   }
 
-  // Action 1: the Director narrates, lets Marta speak, opens dialogue, then yields.
+  // Action 1: the Director narrates, lets Orla speak, opens dialogue, then yields.
   await script(request, [
     'narrate',
     'The hearth crackles as the room turns to look at you.',
-    'npc-speaks:marta',
+    'npc-speaks:orla',
     'Welcome in, traveller. Sit and warm yourself.',
-    'begin-dialogue:marta',
+    'begin-dialogue:orla',
     'yield'
   ])
   await act('I push open the door and step inside')
   await expect(log).toContainText('I push open the door and step inside')
   await expect(log).toContainText('The hearth crackles as the room turns to look at you.')
-  await expect(log.getByRole('blockquote')).toContainText('Marta')
+  await expect(log.getByRole('blockquote')).toContainText('Orla')
   await expect(log).toContainText('Welcome in, traveller. Sit and warm yourself.')
-  await expect(log).toContainText('Dialogue with Marta')
+  await expect(log).toContainText('Dialogue with Orla')
   await expect(scene.getByRole('region', { name: 'Mode' })).toContainText('dialogue')
 
   // Action 2: the Director asks for a roll, and the player must answer it.
   await script(request, [
     'roll:persuasion',
     'narrate',
-    'Marta weighs your words, then nods slowly.',
+    'Orla weighs your words, then nods slowly.',
     'yield'
   ])
-  await act('I ask Marta for a discount on a room')
+  await act('I ask Orla for a discount on a room')
   const prompt = page.getByRole('alertdialog')
   await expect(prompt).toContainText('persuasion check')
   await expect(prompt).toContainText('DC 13')
@@ -98,7 +101,7 @@ test('plays a scene: narration, an NPC line, dialogue, a roll and the story cont
   await page.waitForLoadState('networkidle')
   await page.getByRole('button', { name: 'Roll d20' }).click()
   await expect(page.getByRole('alertdialog')).toBeHidden()
-  await expect(log).toContainText('Marta weighs your words, then nods slowly.')
+  await expect(log).toContainText('Orla weighs your words, then nods slowly.')
   await expect(scene.getByRole('region', { name: 'Pending roll' })).toContainText('None')
   await expect(page.getByLabel('Your action')).toBeEnabled()
 })

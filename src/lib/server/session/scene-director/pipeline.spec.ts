@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { NO_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import { createScriptedPort, fails, hangsAfter, says } from '../../../testing/scripted-chat-port'
-import { playableCampaign } from '../fixture'
+import { playableCampaign, sessionServiceWith } from '../fixture'
 import { createSceneRunner, type PipelineEvent } from '../scene-runner.ts'
-import { createSessionService, type SessionService } from '../service'
+import type { SessionService } from '../service'
 import { buildMenu, parsePick } from './menu.ts'
 import { MENU_OPTIONS } from './options.ts'
 import { createDirectorPipeline, STEP_LIMIT } from './pipeline.ts'
@@ -12,10 +12,10 @@ let sessions: SessionService
 let sessionId: string
 let model: ReturnType<typeof createScriptedPort>
 
-beforeEach(() => {
+beforeEach(async () => {
   const fixture = playableCampaign()
-  sessions = createSessionService(fixture.db)
-  sessionId = sessions.start(fixture.campaignId).id
+  sessions = sessionServiceWith(fixture).sessions
+  sessionId = (await sessions.start(fixture.campaignId)).id
   model = createScriptedPort()
 })
 

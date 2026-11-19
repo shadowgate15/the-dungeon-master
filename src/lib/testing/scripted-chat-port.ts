@@ -17,6 +17,13 @@ export const says = (...parts: string[]): Script =>
     yield finished
   }
 
+/** Answers a structured-output call with this object (what the production port yields). */
+export const answers = (object: unknown): Script =>
+  async function* () {
+    yield { type: 'CUSTOM', name: 'structured-output.complete', value: { object } }
+    yield finished
+  }
+
 /** Streams one piece, then waits until aborted (a long step the player stops). */
 export const hangsAfter = (part: string): Script =>
   async function* (request) {
