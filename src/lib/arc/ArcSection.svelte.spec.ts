@@ -28,6 +28,18 @@ const arc = (status: 'draft' | 'accepted' = 'draft'): ArcViewData => ({
 const response = (body: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(body), { status }))
 
+/** A streamed NDJSON response the test feeds line by line, like the endpoint's generate stream. */
+const ndjson = () => {
+  const encoder = new TextEncoder()
+  let controller!: ReadableStreamDefaultController<Uint8Array>
+  const body = new ReadableStream<Uint8Array>({ start: (c) => (controller = c) })
+  return {
+    response: new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }),
+    send: (line: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`)),
+    close: () => controller.close()
+  }
+}
+
 const props = (over: Record<string, unknown> = {}) => ({
   campaignId: 'c1',
   length: 'short' as const,
@@ -90,6 +102,63 @@ describe('ArcSection', () => {
     await expect.element(page.getByRole('button', { name: 'Generate Arc' })).toBeVisible()
     expect(onchange).not.toHaveBeenCalled()
     await expect.element(page.getByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows the step label and Stop throughout, and the draft arrives on the final line', async () => {
+    const stream = ndjson()
+    const onchange = vi.fn()
+    await renderOpen(props({ fetcher: vi.fn(() => Promise.resolve(stream.response)), onchange }))
+
+    await page.getByRole('button', { name: 'Generate Arc' }).click()
+    await expect.element(page.getByRole('button', { name: 'Stop' })).toBeVisible()
+
+    stream.send({ type: 'progress', step: { kind: 'skeleton' } })
+    await expect.element(page.getByText('Planning the story…')).toBeVisible()
+    await expect.element(page.getByRole('button', { name: 'Stop' })).toBeVisible()
+
+    stream.send({ type: 'progress', step: { kind: 'act', number: 2, of: 3 } })
+    await expect.element(page.getByText('Writing Act 2 of 3…')).toBeVisible()
+    await expect.element(page.getByRole('button', { name: 'Stop' })).toBeVisible()
+    expect(onchange).not.toHaveBeenCalled()
+
+    stream.send({ type: 'result', ok: true })
+    stream.close()
+    await vi.waitFor(() => expect(onchange).toHaveBeenCalledOnce())
+  })
+
+  it('shows the failure from a final failure line', async () => {
+    const stream = ndjson()
+    await renderOpen(props({ fetcher: vi.fn(() => Promise.resolve(stream.response)) }))
+
+    await page.getByRole('button', { name: 'Generate Arc' }).click()
+    stream.send({ type: 'progress', step: { kind: 'skeleton' } })
+    stream.send({ type: 'result', ok: false, failure: { kind: 'timeout', message: 'Too slow' } })
+    stream.close()
+
+    await expect.element(page.getByRole('alert')).toHaveTextContent(/Too slow/)
+  })
+
+  it('treats a stream that ends without a final line as a generic failure', async () => {
+    const stream = ndjson()
+    const onchange = vi.fn()
+    await renderOpen(props({ fetcher: vi.fn(() => Promise.resolve(stream.response)), onchange }))
+
+    await page.getByRole('button', { name: 'Generate Arc' }).click()
+    stream.send({ type: 'progress', step: { kind: 'act', number: 1, of: 3 } })
+    stream.close()
+
+    await expect.element(page.getByRole('alert')).toHaveTextContent(/could not be generated/)
+    await expect.element(page.getByRole('button', { name: 'Try again' })).toBeVisible()
+    expect(onchange).not.toHaveBeenCalled()
+  })
+
+  it('shows a plain JSON pre-flight rejection as a failure', async () => {
+    const fetcher = vi.fn(() => response({ error: 'AI is not configured' }, 503))
+    await renderOpen(props({ fetcher }))
+
+    await page.getByRole('button', { name: 'Generate Arc' }).click()
+
+    await expect.element(page.getByRole('alert')).toHaveTextContent(/AI is not configured/)
   })
 
   it('shows a danger alert with Try again on failure, and tries again', async () => {

@@ -82,6 +82,16 @@
   let error = $state('')
   let confirming = $state(false)
   let controller: AbortController | undefined
+  type Step = { kind: 'skeleton' } | { kind: 'act'; number: number; of: number }
+  /** The generation step being written; null until the first progress line. */
+  let step = $state<Step | null>(null)
+  const stepLabel = $derived(
+    step?.kind === 'act'
+      ? `Writing Act ${step.number} of ${step.of}…`
+      : step?.kind === 'skeleton'
+        ? 'Planning the story…'
+        : 'Generating the Arc…'
+  )
 
   const busy = $derived(phase !== 'idle')
   const frozen = $derived(readOnly || busy)
@@ -130,11 +140,65 @@
   }
   const addBeat = (act: EditAct) => act.beats.push(newBeat())
 
+  type Outcome = { ok: true } | { ok: false; message: string }
+  const generic = 'The Arc could not be generated.'
+
+  /** Pre-flight rejections (conflict, AI unavailable) come back as one plain JSON body. */
+  async function readJson(response: Response): Promise<Outcome> {
+    const body = (await response.json().catch(() => null)) as {
+      ok?: boolean
+      error?: string
+      failure?: { message?: string }
+    } | null
+    if (body?.ok) return { ok: true }
+    return { ok: false, message: body?.failure?.message ?? body?.error ?? generic }
+  }
+
+  /** Reads NDJSON lines: progress updates the step label; the final line decides the outcome. */
+  async function readStream(response: Response): Promise<Outcome> {
+    if (!response.body) return { ok: false, message: generic }
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+    let outcome: Outcome | undefined
+    const handle = (line: string) => {
+      if (!line.trim()) return
+      let parsed: {
+        type?: string
+        step?: Step
+        ok?: boolean
+        failure?: { message?: string }
+      }
+      try {
+        parsed = JSON.parse(line)
+      } catch {
+        return
+      }
+      if (parsed.type === 'progress' && parsed.step) step = parsed.step
+      else if (parsed.type === 'result') {
+        outcome = parsed.ok
+          ? { ok: true }
+          : { ok: false, message: parsed.failure?.message ?? generic }
+      }
+    }
+    let buffer = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += value
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      lines.forEach(handle)
+    }
+    handle(buffer)
+    // A stream that ends without a final line is a generic failure.
+    return outcome ?? { ok: false, message: generic }
+  }
+
   async function generate() {
     confirming = false
     failure = ''
     error = ''
     phase = 'generating'
+    step = null
     controller = new AbortController()
     try {
       const response = await fetcher(`/api/campaigns/${campaignId}/arc`, {
@@ -143,17 +207,15 @@
         body: JSON.stringify({ action: 'generate' }),
         signal: controller.signal
       })
-      const body = (await response.json().catch(() => null)) as {
-        ok?: boolean
-        error?: string
-        failure?: { message?: string }
-      } | null
-      if (body?.ok) {
+      const outcome = response.headers.get('content-type')?.includes('application/x-ndjson')
+        ? await readStream(response)
+        : await readJson(response)
+      if (outcome.ok) {
         phase = 'idle'
         onchange()
         return
       }
-      failure = body?.failure?.message ?? body?.error ?? 'The Arc could not be generated.'
+      failure = outcome.message
     } catch (e) {
       // Stop: the stored Arc is untouched and nothing is shown.
       if (!(e instanceof DOMException && e.name === 'AbortError')) {
@@ -242,7 +304,7 @@
       <div class="flex flex-wrap items-center gap-2">
         {#if phase === 'generating'}
           <Button variant="secondary" onclick={stop}>Stop</Button>
-          <span class="text-sm text-muted" role="status">Generating the Arc…</span>
+          <span class="text-sm text-muted" role="status">{stepLabel}</span>
         {:else if arc}
           <Button variant="secondary" onclick={regenerate} disabled={busy || !canGenerate}
             >Regenerate</Button

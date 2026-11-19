@@ -7,20 +7,30 @@ const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
 const control = (request: APIRequestContext, path: string, data: unknown) =>
   request.post(`${FAKE_LM_STUDIO}/__control/${path}`, { data })
 
-const arcAnswer = (acts: number, beats: number, title = 'The Ember Crown') => ({
-  title,
-  premise: 'A relic wakes.',
-  stakes: 'The valley burns.',
-  acts: Array.from({ length: acts }, (_, a) => ({
-    name: `Act ${a + 1} name`,
-    purpose: 'Things escalate.',
-    beats: Array.from({ length: beats }, (_, b) => ({
-      title: `Beat ${a + 1}.${b + 1}`,
-      description: 'Something happens.'
-    }))
-  })),
-  resolution: 'The relic is destroyed.'
-})
+/** The model's answers for one Arc: the skeleton, then one Beats answer per Act. */
+const arcAnswers = (acts: number, beats: number, title = 'The Ember Crown', delayMs?: number) => [
+  {
+    content: {
+      title,
+      premise: 'A relic wakes.',
+      stakes: 'The valley burns.',
+      acts: Array.from({ length: acts }, (_, a) => ({
+        name: `Act ${a + 1} name`,
+        purpose: 'Things escalate.'
+      })),
+      resolution: 'The relic is destroyed.'
+    },
+    delayMs
+  },
+  ...Array.from({ length: acts }, (_, a) => ({
+    content: {
+      beats: Array.from({ length: beats }, (_, b) => ({
+        title: `Beat ${a + 1}.${b + 1}`,
+        description: 'Something happens.'
+      }))
+    }
+  }))
+]
 
 const queue = (request: APIRequestContext, ...answers: object[]) =>
   control(request, 'answers', { answers })
@@ -63,7 +73,7 @@ async function setup(page: Page, label: string) {
 test('generates a draft Arc, edits it, accepts it', async ({ page, request }) => {
   await setup(page, 'flow')
   await expect(page.getByText(/No Arc yet/)).toBeVisible()
-  await queue(request, { content: arcAnswer(3, 2) })
+  await queue(request, ...arcAnswers(3, 2))
 
   await page.getByRole('button', { name: 'Generate Arc' }).click()
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('The Ember Crown')
@@ -84,18 +94,18 @@ test('regenerate is free on a draft; on an accepted Arc it asks first', async ({
   request
 }) => {
   await setup(page, 'regen')
-  await queue(request, { content: arcAnswer(3, 2, 'First') })
+  await queue(request, ...arcAnswers(3, 2, 'First'))
   await page.getByRole('button', { name: 'Generate Arc' }).click()
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('First')
 
-  await queue(request, { content: arcAnswer(3, 2, 'Second') })
+  await queue(request, ...arcAnswers(3, 2, 'Second'))
   await page.getByRole('button', { name: 'Regenerate' }).click()
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Second')
 
   await page.getByRole('button', { name: 'Accept Arc' }).click()
   await expect(page.getByRole('button', { name: 'Accept Arc' })).toHaveCount(0)
 
-  await queue(request, { content: arcAnswer(3, 2, 'Third') })
+  await queue(request, ...arcAnswers(3, 2, 'Third'))
   await page.getByRole('button', { name: 'Regenerate' }).click()
   await expect(page.getByText(/replaces the whole Arc, including your edits/)).toBeVisible()
   await page.getByRole('button', { name: 'Replace Arc' }).click()
@@ -108,7 +118,7 @@ test('an invalid answer is retried once; a failure leaves the Arc unchanged', as
 }) => {
   await setup(page, 'fail')
   // Wrong size first (2 Acts for a short Campaign), then a valid one.
-  await queue(request, { content: arcAnswer(2, 2) }, { content: arcAnswer(3, 2, 'Retried') })
+  await queue(request, ...arcAnswers(2, 2), ...arcAnswers(3, 2, 'Retried'))
   await page.getByRole('button', { name: 'Generate Arc' }).click()
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Retried')
 
@@ -121,10 +131,10 @@ test('an invalid answer is retried once; a failure leaves the Arc unchanged', as
 
 test('Stop cancels generation and keeps things as they were', async ({ page, request }) => {
   await setup(page, 'stop')
-  await queue(request, { content: arcAnswer(3, 2), delayMs: 8000 })
+  await queue(request, ...arcAnswers(3, 2, 'The Ember Crown', 8000))
 
   await page.getByRole('button', { name: 'Generate Arc' }).click()
-  await expect(page.getByText('Generating the Arc…')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible()
   await page.getByRole('button', { name: 'Stop' }).click()
 
   await expect(page.getByRole('button', { name: 'Generate Arc' })).toBeVisible()

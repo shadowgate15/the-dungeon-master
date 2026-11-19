@@ -8,7 +8,7 @@ import {
 } from '#lib/server/ai/index.ts'
 import { unavailableFailure } from '#lib/server/ai/availability.ts'
 import { arcs } from '#lib/server/arc/index.ts'
-import { generateArc } from '#lib/server/arc/generate.ts'
+import { generateArc, type ArcFailure, type ArcStep } from '#lib/server/arc/generate.ts'
 import { ArcLockedError, ArcValidationError } from '#lib/server/arc/service.ts'
 import { createCampaignService } from '#lib/server/campaign/service.ts'
 import { db } from '#lib/server/db/index.ts'
@@ -43,11 +43,74 @@ function problem(error: unknown) {
   throw error
 }
 
+/** One line of the generate stream: progress as each step starts, then exactly one result. */
+export type ArcStreamLine =
+  | { type: 'progress'; step: ArcStep }
+  | { type: 'result'; ok: true }
+  | { type: 'result'; ok: false; failure: ArcFailure }
+
 /**
- * The Campaign page's Arc actions. `generate` runs one structured call and, on success,
- * replaces the whole Arc with a draft; on failure or Stop the current Arc is untouched.
- * `save` stores the player's edits, and with `accept` accepts the Arc. Answers
- * `{ ok: true }` or `{ ok: false, failure }` (generation) / `{ error }` (anything else).
+ * Runs generation and streams it as newline-delimited JSON (`ArcStreamLine`). request.signal
+ * fires when the browser drops the request (Stop), which cancels the model call; nothing is
+ * stored then.
+ */
+function generationStream(
+  campaign: NonNullable<ReturnType<typeof campaigns.get>>,
+  port: NonNullable<ReturnType<typeof getChatPort>>,
+  signal: AbortSignal
+) {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (line: ArcStreamLine) => {
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`))
+        } catch {
+          // The client is gone (Stop); there is no one to tell.
+        }
+      }
+      try {
+        const result = await generateArc(
+          port,
+          {
+            name: campaign.name,
+            premise: campaign.premise,
+            tone: campaign.tone,
+            length: campaign.length,
+            worlds: campaign.worlds.map((w) => ({ name: w.name, premise: w.premise }))
+          },
+          { signal, onProgress: (step) => send({ type: 'progress', step }) }
+        )
+        if (!result.ok) {
+          if (result.failure.kind === 'reasoning-model') lockReasoningModel()
+          send({ type: 'result', ok: false, failure: result.failure })
+        } else {
+          arcs.replaceWithDraft(campaign.id, result.arc)
+          send({ type: 'result', ok: true })
+        }
+      } catch (error) {
+        const message =
+          error instanceof ArcLockedError || error instanceof ArcValidationError
+            ? error.message
+            : 'The Arc could not be generated.'
+        send({ type: 'result', ok: false, failure: { kind: 'provider-error', message } })
+      }
+      try {
+        controller.close()
+      } catch {
+        // Already closed by the client.
+      }
+    }
+  })
+  return new Response(stream, { headers: { 'content-type': 'application/x-ndjson' } })
+}
+
+/**
+ * The Campaign page's Arc actions. `generate` replaces the whole Arc with a draft on success;
+ * on failure or Stop the current Arc is untouched. It answers an NDJSON stream (progress lines,
+ * then one result line); rejections before generation starts are plain JSON (`{ error }`, or
+ * `{ ok: false, failure, status }` when the AI is unavailable). `save` stores the player's
+ * edits, and with `accept` accepts the Arc, answering `{ ok: true }` or `{ error }`.
  */
 export const POST: RequestHandler = async ({ request, params }) => {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null))
@@ -74,24 +137,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
     const unavailable = unavailableFailure(status)
     if (unavailable) return json({ ok: false, failure: unavailable, status }, { status: 503 })
 
-    // request.signal fires when the browser drops the request (Stop), cancelling the call.
-    const result = await generateArc(
-      port,
-      {
-        name: campaign.name,
-        premise: campaign.premise,
-        tone: campaign.tone,
-        length: campaign.length,
-        worlds: campaign.worlds.map((w) => ({ name: w.name, premise: w.premise }))
-      },
-      { signal: request.signal }
-    )
-    if (!result.ok) {
-      if (result.failure.kind === 'reasoning-model') lockReasoningModel()
-      return json(result)
-    }
-    arcs.replaceWithDraft(campaign.id, result.arc)
-    return json({ ok: true })
+    return generationStream(campaign, port, request.signal)
   } catch (error) {
     return problem(error)
   }
