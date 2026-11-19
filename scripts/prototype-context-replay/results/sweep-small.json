@@ -1,0 +1,1868 @@
+{
+  "model": "qwen/qwen3-4b-2507",
+  "started": "2026-11-18T22:15:10.540Z",
+  "sizes": [600, 1300, 2600, 4000, 8000, 16000],
+  "trials": 3,
+  "director": [
+    {
+      "size": 600,
+      "trials": [
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 282.16949999999997,
+          "promptTokens": 580
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 436.48079200000006,
+          "promptTokens": 598
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 258.797375,
+          "promptTokens": 564
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 228.01979099999994,
+          "promptTokens": 577
+        },
+        {
+          "case": "after-player-action",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 853.2655410000002,
+          "promptTokens": 560
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 1044.9921250000002,
+          "promptTokens": 588
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 999.0101670000004,
+          "promptTokens": 560
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 893.7040829999996,
+          "promptTokens": 595
+        },
+        {
+          "case": "after-player-action",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 848.3986250000007,
+          "promptTokens": 574
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 1050.6484580000006,
+          "promptTokens": 597
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 1045.364375,
+          "promptTokens": 578
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 894.5306669999991,
+          "promptTokens": 577
+        }
+      ]
+    },
+    {
+      "size": 1300,
+      "trials": [
+        {
+          "case": "after-player-action",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 1972.1050839999953,
+          "promptTokens": 1223
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 2068.182166999999,
+          "promptTokens": 1252
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 2076.4681249999994,
+          "promptTokens": 1248
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 1870.168583999999,
+          "promptTokens": 1233
+        },
+        {
+          "case": "after-player-action",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 1862.5911250000063,
+          "promptTokens": 1246
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 1977.620167000001,
+          "promptTokens": 1227
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 2032.2196660000045,
+          "promptTokens": 1235
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 1867.9479999999967,
+          "promptTokens": 1246
+        },
+        {
+          "case": "after-player-action",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 1968.0434160000004,
+          "promptTokens": 1280
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 2029.4703749999971,
+          "promptTokens": 1242
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 1857.3942500000048,
+          "promptTokens": 1228
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 1920.0297079999946,
+          "promptTokens": 1258
+        }
+      ]
+    },
+    {
+      "size": 2600,
+      "trials": [
+        {
+          "case": "after-player-action",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 3741.416292000009,
+          "promptTokens": 2494
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 3841.649583999999,
+          "promptTokens": 2489
+        },
+        {
+          "case": "after-narration",
+          "raw": "marta",
+          "valid": false,
+          "exact": false,
+          "good": false,
+          "ms": 3698.8755829999864,
+          "promptTokens": 2478
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 3752.9249169999966,
+          "promptTokens": 2515
+        },
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 3738.287458000006,
+          "promptTokens": 2507
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 3852.442708000017,
+          "promptTokens": 2488
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 3806.386666000006,
+          "promptTokens": 2489
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 3708.3724159999983,
+          "promptTokens": 2488
+        },
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 3729.5033750000002,
+          "promptTokens": 2506
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 3861.921166999993,
+          "promptTokens": 2475
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 3660.4274999999907,
+          "promptTokens": 2460
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 3717.877750000014,
+          "promptTokens": 2504
+        }
+      ]
+    },
+    {
+      "size": 4000,
+      "trials": [
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 6129.172999999981,
+          "promptTokens": 3811
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 6251.400458999997,
+          "promptTokens": 3820
+        },
+        {
+          "case": "after-narration",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 6049.250375000003,
+          "promptTokens": 3834
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "npc-speaks:tobb: Old Tobb (wary) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": false,
+          "ms": 6259.690624999988,
+          "promptTokens": 3819
+        },
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 6139.122417000006,
+          "promptTokens": 3850
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 6250.338208000001,
+          "promptTokens": 3837
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 6094.874167000002,
+          "promptTokens": 3835
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 6007.7087089999695,
+          "promptTokens": 3807
+        },
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 5958.019750000036,
+          "promptTokens": 3822
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 5959.146749999956,
+          "promptTokens": 3838
+        },
+        {
+          "case": "after-narration",
+          "raw": "marta",
+          "valid": false,
+          "exact": false,
+          "good": false,
+          "ms": 5991.487000000023,
+          "promptTokens": 3798
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 6125.790249999962,
+          "promptTokens": 3845
+        }
+      ]
+    },
+    {
+      "size": 8000,
+      "trials": [
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 13584.909500000067,
+          "promptTokens": 7676
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 13417.040041,
+          "promptTokens": 7643
+        },
+        {
+          "case": "after-narration",
+          "raw": "marta",
+          "valid": false,
+          "exact": false,
+          "good": false,
+          "ms": 13309.378500000108,
+          "promptTokens": 7641
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 13489.931333000073,
+          "promptTokens": 7657
+        },
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 13402.414833000046,
+          "promptTokens": 7686
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 13618.150499999989,
+          "promptTokens": 7644
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 13328.538624999928,
+          "promptTokens": 7618
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 13353.503417000058,
+          "promptTokens": 7660
+        },
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 13542.742708000005,
+          "promptTokens": 7655
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 13438.13612499996,
+          "promptTokens": 7616
+        },
+        {
+          "case": "after-narration",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 13592.798290999955,
+          "promptTokens": 7677
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 13405.660249999957,
+          "promptTokens": 7649
+        }
+      ]
+    },
+    {
+      "size": 16000,
+      "trials": [
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 33384.12908300012,
+          "promptTokens": 15301
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 32634.968500000192,
+          "promptTokens": 15302
+        },
+        {
+          "case": "after-narration",
+          "raw": "marta",
+          "valid": false,
+          "exact": false,
+          "good": false,
+          "ms": 32679.093917000107,
+          "promptTokens": 15282
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "narrate",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 32553.16654100013,
+          "promptTokens": 15299
+        },
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 32546.272666000063,
+          "promptTokens": 15304
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "npc-speaks:marta: Marta (friendly) says something to the player.",
+          "valid": true,
+          "exact": false,
+          "good": true,
+          "ms": 32632.63704099995,
+          "promptTokens": 15258
+        },
+        {
+          "case": "after-narration",
+          "raw": "marta",
+          "valid": false,
+          "exact": false,
+          "good": false,
+          "ms": 32608.58641699981,
+          "promptTokens": 15329
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 32402.729290999938,
+          "promptTokens": 15308
+        },
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 32497.25308299996,
+          "promptTokens": 15324
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 32488.867499999935,
+          "promptTokens": 15348
+        },
+        {
+          "case": "after-narration",
+          "raw": "marta",
+          "valid": false,
+          "exact": false,
+          "good": false,
+          "ms": 32400.95579099981,
+          "promptTokens": 15295
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 32254.50562499999,
+          "promptTokens": 15317
+        }
+      ]
+    }
+  ],
+  "narrator": [
+    {
+      "size": 600,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 2728.6615,
+          "ttft": 1481.9341669999994,
+          "promptTokens": 919,
+          "excerpt": "The flaking gold paint of the signboard reads \"The Gilded Heron,\" but the letters are worn thin, as if the wind has trie"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 2374.180958000001,
+          "ttft": 1366.5623750000013,
+          "promptTokens": 919,
+          "excerpt": "The wind carries the flaking gold letters of \"The Gilded Heron\" like whispers, the paint peeling at the edges as if it t"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 2388.875582999999,
+          "ttft": 1378.165332999999,
+          "promptTokens": 929,
+          "excerpt": "The letters of \"The Gilded Heron\" are faded, the gold paint flaking like old skin, and one word stands out—*Heron*—etche"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 2459.9892910000017,
+          "ttft": 1372.9209579999988,
+          "promptTokens": 928,
+          "excerpt": "The flaking gold paint of the signboard reads \"The Gilded Heron,\" but the letters are blistered and uneven, as if worn b"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 2412.5702920000003,
+          "ttft": 1366.7015829999982,
+          "promptTokens": 938,
+          "excerpt": "The wind carries a whisper through the cracks of the tavern door, and you catch the faded letters of the signboard: *\"Th"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 2197.902167,
+          "ttft": 1406.1888340000005,
+          "promptTokens": 922,
+          "excerpt": "The wind tugs at the flaking gold paint, and the letters of \"The Gilded Heron\" ripple slightly as if breathing. You feel"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 2495.108375,
+          "ttft": 1373.796875,
+          "promptTokens": 935,
+          "excerpt": "The flaking gold paint of the signboard reads \"The Gilded Heron,\" though the letters are cracked and streaked with time,"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 2346.250791999999,
+          "ttft": 1381.7069169999995,
+          "promptTokens": 915,
+          "excerpt": "The wind stirs the flaking gold paint, and the letters of \"The Gilded Heron\" ripple slightly, as if brushed by a hand un"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 2343.28975,
+          "ttft": 1378.5475000000006,
+          "promptTokens": 927,
+          "excerpt": "The signboard above the door reads \"The Gilded Heron\" in flaking gold paint, the letters peeling at the edges like old s"
+        }
+      ]
+    },
+    {
+      "size": 1300,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 3917.921000000002,
+          "ttft": 2846.558833999996,
+          "promptTokens": 1758,
+          "excerpt": "The faded gold paint peels away slightly, revealing the words \"The Gilded Heron\" beneath, but the letters are smudged an"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 3623.4218330000003,
+          "ttft": 2669.116332999998,
+          "promptTokens": 1737,
+          "excerpt": "The wind tugs at the flaking gold paint, and the letters of \"The Gilded Heron\" ripple slightly, as if breathing. You cat"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 3861.5176250000077,
+          "ttft": 2714.535042000003,
+          "promptTokens": 1762,
+          "excerpt": "The lettering on the signboard is flaking, the gold paint peeling back to reveal faded green beneath, as if the tavern i"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 2,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 3825.9330829999963,
+          "ttft": 2725.8542499999894,
+          "promptTokens": 1751,
+          "excerpt": "The wind stirs the flaking gold paint of the signboard, causing the letters to ripple like old parchment. You read \"The "
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 3826.6246660000033,
+          "ttft": 2712.388625000007,
+          "promptTokens": 1765,
+          "excerpt": "The letters of \"The Gilded Heron\" are flaking and smudged, as if eroded by time and damp, the gold paint peeling back to"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 1,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 3669.273417000004,
+          "ttft": 2715.1381249999977,
+          "promptTokens": 1752,
+          "excerpt": "The flaking gold paint of the signboard reads \"The Gilded Heron\" — but the letters are peeling at the edges, revealing a"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 3585.7707919999957,
+          "ttft": 2720.5128330000007,
+          "promptTokens": 1770,
+          "excerpt": "The wind stirs the flaking gold paint of the sign, and the letters \"The Gilded Heron\" ripple slightly, as if breathing. "
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 1,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 3614.420708000005,
+          "ttft": 2682.815208,
+          "promptTokens": 1741,
+          "excerpt": "The flaking gold paint of the signboard reads *\"The Gilded Heron\"*—but the letters are beginning to peel, revealing a fa"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 2,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 3716.551250000004,
+          "ttft": 2726.011500000008,
+          "promptTokens": 1770,
+          "excerpt": "The flaking gold paint of the signboard reads \"The Gilded Heron\" in worn letters, but one corner peels back slightly to "
+        }
+      ]
+    },
+    {
+      "size": 2600,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 6955.668249999988,
+          "ttft": 5315.923665999988,
+          "promptTokens": 3343,
+          "excerpt": "The flaking gold paint of the signboard reads \"The Gilded Heron\" in worn, uneven letters, but beneath the surface, one l"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 6632.31025000001,
+          "ttft": 5081.912249999994,
+          "promptTokens": 3318,
+          "excerpt": "The wind carries a dry whisper through the alley, and the flaking gold paint of \"The Gilded Heron\" catches the weak afte"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 6519.541291000001,
+          "ttft": 5165.419582999981,
+          "promptTokens": 3343,
+          "excerpt": "The letters of \"The Gilded Heron\" flicker in the wind, their flaking gold paint revealing a fresh gouge near the bottom—"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 6296.8217920000025,
+          "ttft": 5186.847209,
+          "promptTokens": 3350,
+          "excerpt": "The flaking gold paint of the signboard reads \"The Gilded Heron,\" but the letters are peeling at the edges, revealing a "
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 6561.48891700001,
+          "ttft": 5099.172499999986,
+          "promptTokens": 3306,
+          "excerpt": "The wind carries a whisper through the cracks of the tavern door, and the flaking gold paint of the signboard reads *\"Th"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 6363.824916999991,
+          "ttft": 5194.167959000013,
+          "promptTokens": 3344,
+          "excerpt": "The wind carries a whisper through the cracks of the tavern’s door, and the flaking gold paint of \"The Gilded Heron\" see"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 6520.567874999979,
+          "ttft": 5167.94070799998,
+          "promptTokens": 3309,
+          "excerpt": "The wind tugs at the flaking gold paint, and the words \"The Gilded Heron\" blur slightly in the draft, as if the letters "
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 6410.899624999991,
+          "ttft": 5131.500916999998,
+          "promptTokens": 3325,
+          "excerpt": "The letters of the signboard are faded, the flaking gold paint revealing a smudge of dark stain at the top left corner. "
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 6499.486583999998,
+          "ttft": 5136.680292000005,
+          "promptTokens": 3324,
+          "excerpt": "The wind stirs the flaking gold paint of the sign, causing it to ripple slightly as if breathing. Beneath the letters *\""
+        }
+      ]
+    },
+    {
+      "size": 4000,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 9855.05816700001,
+          "ttft": 8292.32704199996,
+          "promptTokens": 5101,
+          "excerpt": "The signboard above the door, once proud and gilded, now flaking in the dim light, reads *\"The Gilded Heron\"*—though the"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 9590.611334000016,
+          "ttft": 8099.735584000009,
+          "promptTokens": 5071,
+          "excerpt": "The wind carries a whisper through the tavern’s open door, and you read the flaking gold letters of \"The Gilded Heron\" o"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 2,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 9296.10495800001,
+          "ttft": 7988.623332999996,
+          "promptTokens": 4991,
+          "excerpt": "The signboard above the tavern door, once gleaming with gold, now bears the fading letters of \"The Gilded Heron,\" its ed"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 9718.465125000046,
+          "ttft": 8162.535000000033,
+          "promptTokens": 5071,
+          "excerpt": "The sign above the door, once proud and gilded, now flakes at the edges, revealing the faded script beneath: *\"The Gilde"
+        },
+        {
+          "depth": 0.5,
+          "recalled": false,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 9615.328125,
+          "ttft": 8072.303332999989,
+          "promptTokens": 5053,
+          "excerpt": "The wind stirs the flaking gold paint of the signboard, and for a moment, the letters seem to ripple as if breathing. Yo"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 9601.334875,
+          "ttft": 8230.323416000057,
+          "promptTokens": 5068,
+          "excerpt": "The wind stirs the flaking gold paint of the sign, and the letters \"The Gilded Heron\" ripple slightly, as if disturbed b"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 9356.272832999995,
+          "ttft": 8207.986708000011,
+          "promptTokens": 5066,
+          "excerpt": "The weathered letters of \"The Gilded Heron\" flicker in the twilight, the flaking gold paint revealing a faint, fresh scr"
+        },
+        {
+          "depth": 0.5,
+          "recalled": false,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 9457.022125000018,
+          "ttft": 8061.543791999982,
+          "promptTokens": 5042,
+          "excerpt": "The signboard above the door, once gleaming with pride, now hangs crooked, its flaking gold paint revealing the word *\"G"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 9338.836124999973,
+          "ttft": 8035.494041999977,
+          "promptTokens": 5006,
+          "excerpt": "The wind rustles the flaking gold letters of \"The Gilded Heron,\" and for a moment, the paint seems to shimmer, as if the"
+        }
+      ]
+    },
+    {
+      "size": 8000,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 20153.903500000015,
+          "ttft": 18665.810583999963,
+          "promptTokens": 9965,
+          "excerpt": "The wind rustles the flaking gold paint, and the words \"The Gilded Heron\" shimmer faintly in the dim light, as if touche"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 20561.890957999974,
+          "ttft": 18471.102416999987,
+          "promptTokens": 10003,
+          "excerpt": "The wind stirs the flaking gold paint of the sign, and for a moment, the letters shimmer faintly, as if breathing. You r"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 20468.866917000036,
+          "ttft": 18424.10908299999,
+          "promptTokens": 9954,
+          "excerpt": "The wind carries the scent of damp earth and old wood as you step outside, the faded gold paint of the signboard flaking"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 20439.932583000045,
+          "ttft": 18579.422458000015,
+          "promptTokens": 10012,
+          "excerpt": "The wind tugs at the flaking gold paint, and the words \"The Gilded Heron\" blur and shift in the draft, as if the letters"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 20711.159875000012,
+          "ttft": 18704.879125000094,
+          "promptTokens": 10004,
+          "excerpt": "The wind carries a faint scent of damp earth and iron as you step outside, the cold air biting at your cheeks. The signb"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 20438.03254100005,
+          "ttft": 18420.506125000073,
+          "promptTokens": 9964,
+          "excerpt": "The wind carries a whisper through the cracks of the tavern’s wooden door, and the signboard above it, \"The Gilded Heron"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 20319.376374999993,
+          "ttft": 18648.116500000004,
+          "promptTokens": 10016,
+          "excerpt": "The wind stirs the flaking gold paint of the sign, and for a moment, the letters ripple like old ink. *The Gilded Heron*"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 20329.49133300013,
+          "ttft": 18305.741374999983,
+          "promptTokens": 9930,
+          "excerpt": "The wind carries a whisper through the cracks of the tavern's door, and the flaking gold paint of \"The Gilded Heron\" cat"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 20201.459500000114,
+          "ttft": 18423.720333999954,
+          "promptTokens": 9977,
+          "excerpt": "The wind carries the scent of damp earth and woodsmoke as you step outside, the signboard above the tavern door now glow"
+        }
+      ]
+    },
+    {
+      "size": 16000,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 49291.19366599992,
+          "ttft": 47063.49016600009,
+          "promptTokens": 19840,
+          "excerpt": "The weathered letters of \"The Gilded Heron\" flicker in the dim light, the flaking gold paint revealing patches of rusted"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 48318.362041000044,
+          "ttft": 46382.49170799996,
+          "promptTokens": 19806,
+          "excerpt": "The signboard above the door, \"The Gilded Heron,\" is flaking at the edges, the gold paint peeling like old skin, reveali"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 48740.034499999834,
+          "ttft": 46534.71170799993,
+          "promptTokens": 19839,
+          "excerpt": "The wind catches the flaking gold paint of the signboard, and the letters *Gilded Heron* ripple like a whisper, half-era"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 2,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 48898.692833000096,
+          "ttft": 46694.49791699997,
+          "promptTokens": 19855,
+          "excerpt": "The signboard above the door, flaking and weathered, reads *\"The Gilded Heron\"* in faded gold paint, but the letters are"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 49964.61245799996,
+          "ttft": 46898.298875000095,
+          "promptTokens": 19833,
+          "excerpt": "The wind carries a dry whisper through the cracks of the tavern’s door, and the flaking gold paint of \"The Gilded Heron\""
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 2,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 49345.041708000004,
+          "ttft": 46934.2952500002,
+          "promptTokens": 19875,
+          "excerpt": "The wind picks up, tugging at the flaking gold paint of the signboard, and the words \"The Gilded Heron\" ripple slightly "
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 48946.00008399994,
+          "ttft": 46781.84850000008,
+          "promptTokens": 19815,
+          "excerpt": "The signboard above the tavern door reads \"The Gilded Heron\" in flaking gold paint, the letters peeling away like old sk"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 4,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 49361.85933299991,
+          "ttft": 46960.96337500005,
+          "promptTokens": 19868,
+          "excerpt": "The wind carries the scent of damp earth and woodsmoke as you step outside, the old oak door creaking softly behind you."
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 2,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 49520.93816699996,
+          "ttft": 47182.94674999989,
+          "promptTokens": 19855,
+          "excerpt": "The flaking gold paint of the signboard reads \"The Gilded Heron,\" but beneath the paint, where the letters have peeled b"
+        }
+      ]
+    }
+  ],
+  "npc": [
+    {
+      "size": 600,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "ms": 1289.1010000000024,
+          "ttft": 897.2849170000009,
+          "promptTokens": 522,
+          "excerpt": "Oh, you're asking about the caravan master? Well, yes! He left a sealed letter with me for anyone who comes asking. I’ll"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 1009.8475829999952,
+          "ttft": 771.8288329999996,
+          "promptTokens": 537,
+          "excerpt": "Yes, he did. He left a sealed letter with me for whoever asks about the caravan. You can have it if you’d like."
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 1033.442584000004,
+          "ttft": 764.2084590000013,
+          "promptTokens": 522,
+          "excerpt": "Yes, he did! He left a sealed letter with me for anyone who asks about the caravan. I’ll be happy to hand it over to you"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "ms": 1238.2816250000033,
+          "ttft": 753.8810830000002,
+          "promptTokens": 524,
+          "excerpt": "Oh, you're asking about the caravan? Well, yes! Hobb Wethers left a sealed letter for anyone who asks—just like he said."
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 999.1302080000023,
+          "ttft": 771.1906250000029,
+          "promptTokens": 540,
+          "excerpt": "Yes, he did. He left a sealed letter with me for anyone who asks about the caravan. You’re welcome to take it."
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 1052.8999590000021,
+          "ttft": 782.3791249999995,
+          "promptTokens": 534,
+          "excerpt": "Yes, he did. A sealed letter was left with me for anyone who asks about the caravan. You’ll find it in my office if you "
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 1125.8152090000003,
+          "ttft": 763.3528340000048,
+          "promptTokens": 531,
+          "excerpt": "Oh, you're asking about the caravan master? Well, he did leave a sealed letter with me. If you’d like, I can pass it alo"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 1003.6385000000009,
+          "ttft": 766.1126660000009,
+          "promptTokens": 526,
+          "excerpt": "Yes, he did. He left a sealed letter with me for whoever asks about the caravan. You can have it if you’d like."
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 1081.296957999999,
+          "ttft": 760.1285829999979,
+          "promptTokens": 524,
+          "excerpt": "Yes, he did! He left a sealed letter with me for whoever asks about the caravan. You’d better read it when you have a mo"
+        }
+      ]
+    },
+    {
+      "size": 1300,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "ms": 2215.407416000002,
+          "ttft": 1830.989916000006,
+          "promptTokens": 1143,
+          "excerpt": "Oh, you're asking about the caravan master? Yes, he did! He left a sealed letter with me for anyone who comes looking. I"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 2088.9071669999976,
+          "ttft": 1737.4702079999988,
+          "promptTokens": 1161,
+          "excerpt": "Yes, the caravan master left a sealed letter with me. If you’d like, I can pass it along to you. Just ask, and I’ll hand"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 2074.777041999987,
+          "ttft": 1692.8208749999903,
+          "promptTokens": 1148,
+          "excerpt": "Oh, you're asking about the caravan master! Yes, he did leave a sealed letter with me. If you’d like, I can pass it alon"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "ms": 2350.986290999994,
+          "ttft": 1693.5314579999977,
+          "promptTokens": 1144,
+          "excerpt": "Oh, you're asking about the caravan master? Well, yes! He left a sealed letter with me for anyone who comes to ask. I’m "
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 2128.4012499999953,
+          "ttft": 1732.7662920000002,
+          "promptTokens": 1160,
+          "excerpt": "Oh, you're wondering about the caravan master! Yes, he did leave a sealed letter with me for anyone who asks. If you'd l"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 2,
+          "ms": 2000.2124170000025,
+          "ttft": 1704.9859589999978,
+          "promptTokens": 1148,
+          "excerpt": "Yes, the caravan master left a sealed letter with me for anyone who asks about the caravan. I’ll be happy to pass it alo"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 4,
+          "ms": 2140.349833,
+          "ttft": 1734.8364160000056,
+          "promptTokens": 1155,
+          "excerpt": "Oh, you asked about the caravan? Well, yes! He left a sealed letter with me for anyone who comes asking. I’d be happy to"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 2145.1682909999945,
+          "ttft": 1749.9529159999947,
+          "promptTokens": 1160,
+          "excerpt": "Yes, he did! He left a sealed letter with me for whoever asks about the caravan. You should go find it—it’s tucked in th"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 2,
+          "ms": 2066.64675,
+          "ttft": 1727.3310829999973,
+          "promptTokens": 1182,
+          "excerpt": "Yes, the caravan master left a sealed letter with me for whoever asks about the caravan. You might want to take a look a"
+        }
+      ]
+    },
+    {
+      "size": 2600,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 3885.193874999997,
+          "ttft": 3473.0590000000084,
+          "promptTokens": 2324,
+          "excerpt": "Oh, you're asking about the caravan master! Yes, he did leave a sealed letter with me. If you'd like, I can pass it alon"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 3946.954375000001,
+          "ttft": 3331.053667,
+          "promptTokens": 2308,
+          "excerpt": "Oh, you’re asking about the caravan master! Yes, he did leave a sealed letter for anyone who asks—just a little note tuc"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 3732.0678330000082,
+          "ttft": 3357.99887499999,
+          "promptTokens": 2324,
+          "excerpt": "Yes, he did! He left a sealed letter with me for anyone who asks about the caravan. You’ll find it in my desk drawer if "
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 3769.1068749999977,
+          "ttft": 3381.4487089999893,
+          "promptTokens": 2309,
+          "excerpt": "Oh, you're asking about the caravan master! Yes, he did leave a sealed letter with me for anyone who asks. Just let me k"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 3844.882416999986,
+          "ttft": 3365.612792,
+          "promptTokens": 2313,
+          "excerpt": "Oh, you're asking about the caravan master? He did leave a sealed letter with me, for anyone who wants to know about the"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 3656.6843750000116,
+          "ttft": 3356.0860000000102,
+          "promptTokens": 2306,
+          "excerpt": "Oh, you're asking about the caravan master? He did leave a sealed letter with me! I'll be happy to pass it along to you."
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 3734.843499999988,
+          "ttft": 3361.063582999981,
+          "promptTokens": 2326,
+          "excerpt": "Oh, you asked about the caravan! Yes, he did leave a sealed letter with me. If you'd like, I can give it to you—just say"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 3710.531458000012,
+          "ttft": 3303.827250000002,
+          "promptTokens": 2300,
+          "excerpt": "Oh, you're asking about the caravan master! Yes, he did leave a sealed letter with me. If you'd like, I can pass it alon"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 3689.6056249999965,
+          "ttft": 3310.931540999998,
+          "promptTokens": 2299,
+          "excerpt": "Oh, you're asking about the caravan master! Yes, he did leave a sealed letter with me for anyone who comes looking. I’ll"
+        }
+      ]
+    },
+    {
+      "size": 4000,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 5954.400709000009,
+          "ttft": 5636.504917000013,
+          "promptTokens": 3547,
+          "excerpt": "Yes, he did! He left a sealed letter with me for anyone who asks about the caravan. I’ll give it to you if you’d like."
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 5909.624208000023,
+          "ttft": 5504.265625,
+          "promptTokens": 3548,
+          "excerpt": "Oh, you're asking about the caravan master! Yes, he left a sealed letter with me for anyone who asks. I’ll be happy to p"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 5787.855166999972,
+          "ttft": 5480.7543339999975,
+          "promptTokens": 3551,
+          "excerpt": "Yes, he did! He left a sealed letter with me for whoever asks about the caravan. I’ll give it to you if you’d like."
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 2,
+          "ms": 5784.625082999992,
+          "ttft": 5608.886207999953,
+          "promptTokens": 3564,
+          "excerpt": "Yes, he did. He left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 5916.138250000018,
+          "ttft": 5546.495042000024,
+          "promptTokens": 3565,
+          "excerpt": "Oh, you're asking about the caravan master? Yes, he did leave a sealed letter with me. If you'd like, I can pass it alon"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 5983.606499999994,
+          "ttft": 5515.323333000008,
+          "promptTokens": 3557,
+          "excerpt": "Oh, you asked about the caravan master! Yes, he did leave a sealed letter with me. I'm sure you'll find it interesting—j"
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 162442.02875,
+          "ttft": 162122.10179200006,
+          "promptTokens": 3548,
+          "excerpt": "Yes, he did! He left a sealed letter with me for whoever asks about the caravan. I’ll pass it along to you if you’d like"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 4,
+          "ms": 149324.555667,
+          "ttft": 148868.59612499992,
+          "promptTokens": 3548,
+          "excerpt": "Oh, you're asking about the caravan master? Yes! He left a sealed letter with me for whoever asks about the caravan. I’d"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 6195.695958000026,
+          "ttft": 5673.791332999943,
+          "promptTokens": 3576,
+          "excerpt": "Oh, you're just in time! The caravan master, Hobb Wethers, left a sealed letter with me for whoever asks about the carav"
+        }
+      ]
+    },
+    {
+      "size": 8000,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 12445.725708000129,
+          "ttft": 12283.58737500012,
+          "promptTokens": 7142,
+          "excerpt": "Yes, he left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 12562.180416000076,
+          "ttft": 12150.73887500004,
+          "promptTokens": 7133,
+          "excerpt": "Yes, he did! He left a sealed letter with me for whoever asks about the caravan. You’ll find it in the merchant’s stall "
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 2,
+          "ms": 12594.932208999991,
+          "ttft": 12135.94862499996,
+          "promptTokens": 7116,
+          "excerpt": "Yes, the caravan master left a sealed letter for whoever asks about the caravan. I’d be happy to pass it along if you’d "
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 2,
+          "ms": 12234.110624999972,
+          "ttft": 12042.013958000112,
+          "promptTokens": 7098,
+          "excerpt": "Yes, he did. A sealed letter was left with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 12560.376416000072,
+          "ttft": 12187.64091600012,
+          "promptTokens": 7142,
+          "excerpt": "Yes, he did! He left a sealed letter with me for whoever asks about the caravan. You can take it from me if you'd like."
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 12375.60858400003,
+          "ttft": 12167.411542000016,
+          "promptTokens": 7180,
+          "excerpt": "The caravan master left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 12746.76512500015,
+          "ttft": 12116.031167000066,
+          "promptTokens": 7122,
+          "excerpt": "Oh, you asked about the caravan master! Yes, he left a sealed letter with me for whoever asks about the caravan. I’m sur"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 2,
+          "ms": 12363.780792000005,
+          "ttft": 12156.182333000004,
+          "promptTokens": 7122,
+          "excerpt": "Yes, he did! He left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 12662.117833000142,
+          "ttft": 12099.379375000019,
+          "promptTokens": 7118,
+          "excerpt": "Oh, you're wondering about the caravan master! He did leave a sealed letter with me for anyone who asks. I'll pass it al"
+        }
+      ]
+    },
+    {
+      "size": 16000,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 30001.832042000024,
+          "ttft": 29527.030959000112,
+          "promptTokens": 14254,
+          "excerpt": "Oh, you asked about the caravan master! Yes, he left a sealed letter for whoever asks about the caravan. I have it right"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 29931.294917000225,
+          "ttft": 29463.215417000232,
+          "promptTokens": 14263,
+          "excerpt": "Oh, you should check with me! The caravan master left a sealed letter for whoever asks about the caravan. I have it righ"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 29637.615250000264,
+          "ttft": 29375.570833000354,
+          "promptTokens": 14221,
+          "excerpt": "The caravan master left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 29662.27941699978,
+          "ttft": 29209.869291999843,
+          "promptTokens": 14201,
+          "excerpt": "Oh! The caravan master left a sealed letter for whoever asks about the caravan. I’ll be happy to pass it along to you."
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "ms": 29981.985208000056,
+          "ttft": 29442.871000000276,
+          "promptTokens": 14258,
+          "excerpt": "Oh, you asked about the caravan master! Yes, he left a sealed letter with me for whoever asks about the caravan. I’ll pa"
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 29599.311749999877,
+          "ttft": 29338.44175000023,
+          "promptTokens": 14260,
+          "excerpt": "The caravan master left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 29693.179707999807,
+          "ttft": 29434.789499999955,
+          "promptTokens": 14259,
+          "excerpt": "The caravan master left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 29575.516625000164,
+          "ttft": 29316.297207999974,
+          "promptTokens": 14265,
+          "excerpt": "The caravan master left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 29790.751708999742,
+          "ttft": 29533.408541999757,
+          "promptTokens": 14265,
+          "excerpt": "The caravan master left a sealed letter with me for whoever asks about the caravan."
+        }
+      ]
+    }
+  ],
+  "isolation": [
+    {
+      "leakyControl": false,
+      "secretInPrompt": false,
+      "leaked": false,
+      "excerpt": "Oh, you're thinking of Old Tobb? He’s been gone for three weeks, gone to the east—same caravan that left at dawn. I don’"
+    },
+    {
+      "leakyControl": false,
+      "secretInPrompt": false,
+      "leaked": false,
+      "excerpt": "I don’t know anything about the cellar key. Old Tobb’s long since passed on, and I don’t know what he knew. But you run "
+    },
+    {
+      "leakyControl": false,
+      "secretInPrompt": false,
+      "leaked": false,
+      "excerpt": "Oh, the cellar key? I don’t know where it is, but I *do* know that Old Tobb left the tavern at dawn—heading east, just l"
+    },
+    {
+      "leakyControl": true,
+      "secretInPrompt": true,
+      "leaked": true,
+      "excerpt": "Oh, you mean the cellar key? Well, I don’t know Old Tobb—never met him, actually. But I *do* know where the key is: hidd"
+    },
+    {
+      "leakyControl": true,
+      "secretInPrompt": true,
+      "leaked": true,
+      "excerpt": "Oh, you're thinking of the cellar key? Well, I don't know Old Tobb—never met him, I think you're mixing things up. But I"
+    },
+    {
+      "leakyControl": true,
+      "secretInPrompt": true,
+      "leaked": true,
+      "excerpt": "Oh, you're thinking of the cellar key? Well, I don’t know Old Tobb—never met him, really. But I *do* know where the key "
+    }
+  ]
+}

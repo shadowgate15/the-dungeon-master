@@ -1,0 +1,263 @@
+{
+  "model": "qwen/qwen3-4b-2507",
+  "started": "2026-11-18T22:54:01.695Z",
+  "sizes": [32000, 64000, 128000],
+  "trials": 1,
+  "director": [
+    {
+      "size": 32000,
+      "trials": [
+        {
+          "case": "after-player-action",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 89998.56066599999,
+          "promptTokens": 30633
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 88710.40783299999,
+          "promptTokens": 30647
+        },
+        {
+          "case": "after-narration",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 88819.768916,
+          "promptTokens": 30629
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 88984.601417,
+          "promptTokens": 30662
+        }
+      ]
+    },
+    {
+      "size": 64000,
+      "trials": [
+        {
+          "error": "fetch failed"
+        },
+        {
+          "case": "after-player-ask-marta",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": false,
+          "ms": 275958.9353749999,
+          "promptTokens": 61319
+        },
+        {
+          "case": "after-narration",
+          "raw": "marta",
+          "valid": false,
+          "exact": false,
+          "good": false,
+          "ms": 275027.387291,
+          "promptTokens": 61179
+        },
+        {
+          "case": "after-npc-line",
+          "raw": "yield",
+          "valid": true,
+          "exact": true,
+          "good": true,
+          "ms": 275236.27891700016,
+          "promptTokens": 61292
+        }
+      ]
+    },
+    {
+      "size": 128000,
+      "trials": [
+        {
+          "error": "fetch failed"
+        },
+        {
+          "error": "fetch failed"
+        },
+        {
+          "error": "fetch failed"
+        },
+        {
+          "error": "fetch failed"
+        }
+      ]
+    }
+  ],
+  "narrator": [
+    {
+      "size": 32000,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 140914.348208,
+          "ttft": 136427.243083,
+          "promptTokens": 39819,
+          "excerpt": "The signboard above the door, flaking and worn, reads \"The Gilded Heron\" in pale, ghostly gold paint—its edges peeled ba"
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 3,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 138148.84075000003,
+          "ttft": 134945.129458,
+          "promptTokens": 39882,
+          "excerpt": "The signboard above the tavern door, flaking and weathered, reads *\"The Gilded Heron\"* in faded gold paint, its letters "
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 2,
+          "asksPlayer": false,
+          "digits": false,
+          "ms": 138049.73004199995,
+          "ttft": 135038.80254199996,
+          "promptTokens": 39892,
+          "excerpt": "The faded gold paint of the signboard, \"The Gilded Heron,\" flaking at the edges like old skin, catches the dim light fro"
+        }
+      ]
+    },
+    {
+      "size": 64000,
+      "trials": [
+        {
+          "error": "terminated"
+        },
+        {
+          "error": "terminated"
+        },
+        {
+          "error": "terminated"
+        }
+      ]
+    },
+    {
+      "size": 128000,
+      "trials": [
+        {
+          "error": "terminated"
+        },
+        {
+          "error": "terminated"
+        },
+        {
+          "error": "terminated"
+        }
+      ]
+    }
+  ],
+  "npc": [
+    {
+      "size": 32000,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 79883.56070799998,
+          "ttft": 79519.23162500001,
+          "promptTokens": 28485,
+          "excerpt": "The caravan master left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 79959.227083,
+          "ttft": 79584.18670800002,
+          "promptTokens": 28515,
+          "excerpt": "The caravan master left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 80090.93466699996,
+          "ttft": 79694.94825000002,
+          "promptTokens": 28571,
+          "excerpt": "Yes, the caravan master left a sealed letter with me for whoever asks about the caravan."
+        }
+      ]
+    },
+    {
+      "size": 64000,
+      "trials": [
+        {
+          "depth": 0.1,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 248707.4806660004,
+          "ttft": 248165.115458,
+          "promptTokens": 57051,
+          "excerpt": "The caravan master left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.5,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 244782.17679199995,
+          "ttft": 243965.30004199967,
+          "promptTokens": 57077,
+          "excerpt": "The caravan master left a sealed letter with me for whoever asks about the caravan."
+        },
+        {
+          "depth": 0.9,
+          "recalled": true,
+          "sentences": 1,
+          "ms": 244935.62295799982,
+          "ttft": 244100.55112499977,
+          "promptTokens": 57062,
+          "excerpt": "The caravan master, Hobb Wethers, left a sealed letter with me for whoever asks about the caravan."
+        }
+      ]
+    },
+    {
+      "size": 128000,
+      "trials": [
+        {
+          "error": "terminated"
+        },
+        {
+          "error": "terminated"
+        },
+        {
+          "error": "terminated"
+        }
+      ]
+    }
+  ],
+  "isolation": [
+    {
+      "leakyControl": false,
+      "secretInPrompt": false,
+      "leaked": false,
+      "excerpt": "Oh, you're thinking of Old Tobb? He’s not here anymore, sorry. The cellar key? I’d say it’s been in the Rusty Flagon for"
+    },
+    {
+      "leakyControl": true,
+      "secretInPrompt": true,
+      "leaked": true,
+      "excerpt": "Oh, you're thinking of the cellar key? Well, I don’t know Old Tobb personally, but I *do* know where the key is hidden—u"
+    }
+  ]
+}
