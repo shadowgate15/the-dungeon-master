@@ -32,6 +32,7 @@ import {
 } from '../db/schema'
 import { createWorldService } from '../world/service'
 import { generateFirstScene, type FirstSceneInput } from './first-scene'
+import { createPlaceMover } from './move-place'
 
 export type Session = typeof session.$inferSelect
 
@@ -95,6 +96,7 @@ export function createSessionService(
 ) {
   const worlds = createWorldService(db, now)
   const characters = createCharacterService(db)
+  const placeMover = createPlaceMover(db, now)
 
   /**
    * Resolves the Scene's NPC ids against World memory right now: current name, the
@@ -416,6 +418,12 @@ export function createSessionService(
 
     /** Replaces the Session's Scene. Only code calls this, with changes it has validated. */
     saveScene,
+
+    /**
+     * Moves the Scene through one of its exits to a stored place, creating it on the first move
+     * (generated through `generate`, else bare) with a way back. See `createPlaceMover`.
+     */
+    moveThrough: placeMover.moveThrough,
 
     /**
      * Drops NPC ids that no longer resolve (dead, departed, missing, retired) from the stored

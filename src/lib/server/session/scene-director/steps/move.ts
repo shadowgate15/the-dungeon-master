@@ -1,4 +1,5 @@
 import type { SceneExit } from '#lib/session/enums.ts'
+import { generateDestination } from '../../destination.ts'
 import { makeOptionId, parseOptionId } from '../option-id.ts'
 import type { MenuOption } from '../types.ts'
 
@@ -21,7 +22,7 @@ function named(action: string, exit: SceneExit): boolean {
 
 /**
  * Movement: the Director proposes `move:<exit id>`; code checks the exit exists in the current
- * Scene, replaces the Scene with the destination and logs a `scene-changed` event. Offered in
+ * Scene, moves the Scene to the destination place (generated and stored on the first move) and logs a `scene-changed` event. Offered in
  * exploration, right after a player action. An exit that is not on the menu is an invalid pick.
  */
 export const moveOption: MenuOption = {
@@ -45,25 +46,17 @@ export const moveOption: MenuOption = {
     // `parsePick` already counted it as an invalid pick (retry, then fallback). A throw, not a
     // silent continue, keeps a broken caller from looking like a successful move.
     if (!exit) throw new Error(`No exit ${exitId} in this Scene`)
-    // A bare place named after the exit, with a way back. Generating the destination from the
-    // World comes later; until then a move never dead-ends.
-    const place = {
-      location: { name: exit.name, description: '' },
-      exits: [{ id: 'back', name: `Back to ${scene.location.name}` }],
-      objects: [],
-      npcs: []
-    }
-    ctx.sessions.saveScene(ctx.sessionId, {
-      ...place,
-      mode: 'exploration',
-      dialogueNpcId: null,
-      pendingRoll: null
+    // The first move through an exit generates and stores the destination; later moves reuse it.
+    // When generation fails the place is a bare one named after the exit, with a way back.
+    const destination = await ctx.sessions.moveThrough(ctx.sessionId, exit.id, async (input) => {
+      const result = await generateDestination(ctx.port, input, { signal: ctx.signal })
+      return result.ok ? result.draft : null
     })
     const event = ctx.sessions.appendEvent(ctx.sessionId, {
       role: 'code',
       kind: 'scene-changed',
-      text: `You go through: ${exit.name}. You are now at ${place.location.name}.`,
-      data: { exitId: exit.id, from: scene.location.name, to: place.location.name }
+      text: `You go through: ${exit.name}. You are now at ${destination.name}.`,
+      data: { exitId: exit.id, from: scene.location.name, to: destination.name }
     })
     yield { type: 'event', event }
     return { type: 'continue' }
