@@ -1,0 +1,1 @@
+ALTER TABLE `session` ADD `memory_through_seq` integer DEFAULT 0 NOT NULL;

@@ -11,6 +11,7 @@ import type { SessionEvent } from '#lib/session/enums.ts'
 import type { PipelineEvent } from '#lib/session/pipeline-events.ts'
 import type { ChatPort } from '../ai/port.ts'
 import type { BeatProgress, Steering } from '../arc/beat-progress.ts'
+import type { MemoryExtraction } from '../memory/extraction.ts'
 import { dice as defaultDice, type Dice } from '../dice.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
@@ -50,6 +51,8 @@ export interface SceneRunnerDeps {
   rollModifier?: (sessionId: string, check: string) => number
   /** Arc Beat-progress: steering for the prompts and the silent Beat check after each run. */
   beatProgress?: BeatProgress
+  /** World memory extraction, fired in the background after each run that yields or rolls. */
+  memory?: MemoryExtraction
 }
 
 export function createSceneRunner(deps: SceneRunnerDeps) {
@@ -61,12 +64,18 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   // Background Beat checks, so a test (or shutdown) can wait for them.
   const background = new Set<Promise<void>>()
 
-  /** Fires the silent Beat check over this run's events; never awaited by the run. */
-  function checkBeats(sessionId: string, fromSeq: number) {
-    if (!deps.beatProgress) return
-    const task = deps.beatProgress.check(sessionId, fromSeq, port)
+  function inBackground(task: Promise<void>) {
     background.add(task)
     void task.finally(() => background.delete(task))
+  }
+
+  /**
+   * Fires the silent background work over a finished run (the Beat check over this run's events,
+   * memory extraction over the log past its watermark); never awaited by the run, never throws.
+   */
+  function checkBeats(sessionId: string, fromSeq: number) {
+    if (deps.beatProgress) inBackground(deps.beatProgress.check(sessionId, fromSeq, port))
+    if (deps.memory) inBackground(deps.memory.trigger(sessionId, port))
   }
 
   async function* run(
@@ -151,7 +160,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   }
 
   return {
-    /** Resolves when every background Beat check has finished. */
+    /** Resolves when every background Beat check and memory extraction has finished. */
     async settled(): Promise<void> {
       while (background.size) await Promise.all([...background])
     },

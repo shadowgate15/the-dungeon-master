@@ -7,6 +7,7 @@ import { createCharacterService } from '../character/service.ts'
 import { loadWizardRules } from '../character/wizard-rules.ts'
 import { db } from '../db/index.ts'
 import { createBeatProgress } from '../arc/beat-progress.ts'
+import { createMemoryExtraction } from '../memory/extraction.ts'
 import { createDirectorPipeline } from './scene-director/pipeline.ts'
 import { createSceneRunner } from './scene-runner.ts'
 import { createSessionService } from './service.ts'
@@ -24,6 +25,9 @@ const modelPort: ChatPort = (request) => {
 /** Server-only singletons: the Session service and the process-wide scene runner. */
 export const sessions = createSessionService(db, Date.now, modelPort)
 const characters = createCharacterService(db)
+
+/** World memory extraction: runs after each run in the background; the Session-end hook uses it too. */
+export const memoryExtraction = createMemoryExtraction(db, sessions)
 
 /** The Session's Character's modifier for a check (a skill slug, or an ability key); 0 if unknown. */
 function rollModifier(sessionId: string, check: string): number {
@@ -44,5 +48,6 @@ export const sceneRunner = createSceneRunner({
   port: modelPort,
   pipeline: createDirectorPipeline(),
   beatProgress: createBeatProgress(db),
+  memory: memoryExtraction,
   rollModifier
 })

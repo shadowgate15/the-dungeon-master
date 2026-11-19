@@ -258,7 +258,9 @@ export const session = sqliteTable(
       .notNull()
       .references(() => character.id, { onDelete: 'restrict' }),
     startedAt: integer('started_at').notNull(),
-    endedAt: integer('ended_at')
+    endedAt: integer('ended_at'),
+    /** The last Event seq memory extraction covers; moves only when an extraction succeeds. */
+    memoryThroughSeq: integer('memory_through_seq').notNull().default(0)
   },
   (t) => [
     uniqueIndex('session_one_open_per_campaign')
