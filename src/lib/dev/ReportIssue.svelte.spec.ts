@@ -25,14 +25,14 @@ describe('ReportIssue', () => {
     await expect.element(page.getByRole('dialog', { name: 'Report an issue' })).toBeVisible()
   })
 
-  it('will not send a report without a title', async () => {
+  it('will not send a report without a description', async () => {
     const fetcher = reply(200, {})
     render(ReportIssue, { ...props, fetcher })
     await open()
 
     await page.getByRole('button', { name: 'Send report' }).click()
 
-    await expect.element(page.getByText('Add a title')).toBeVisible()
+    await expect.element(page.getByText('Add a description')).toBeVisible()
     expect(fetcher).not.toHaveBeenCalled()
   })
 
@@ -41,7 +41,6 @@ describe('ReportIssue', () => {
     render(ReportIssue, { ...props, fetcher })
     await open()
 
-    await userEvent.fill(page.getByLabelText('Title'), 'Roll button does nothing')
     await userEvent.fill(page.getByLabelText('What happened?'), 'Clicked it twice.')
     await page.getByRole('button', { name: 'Send report' }).click()
 
@@ -52,22 +51,42 @@ describe('ReportIssue', () => {
     const [endpoint, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit]
     expect(endpoint).toBe('/api/dev/report-issue')
     expect(init.method).toBe('POST')
-    expect(JSON.parse(init.body as string)).toMatchObject({
-      title: 'Roll button does nothing',
+    const sent = JSON.parse(init.body as string)
+    expect(sent).toMatchObject({
       description: 'Clicked it twice.',
       context: { url: props.url, route: props.route, params: props.params }
     })
+    expect(sent).not.toHaveProperty('title')
+  })
+
+  it('has no title to fill in, since one is generated', async () => {
+    render(ReportIssue, { ...props, fetcher: reply(200, {}) })
+
+    await open()
+
+    await expect.element(page.getByLabelText('Title')).not.toBeInTheDocument()
+  })
+
+  it('shows that it is filing while the report is on its way', async () => {
+    const fetcher = vi.fn(() => new Promise<Response>(() => {}))
+    render(ReportIssue, { ...props, fetcher })
+    await open()
+    await userEvent.fill(page.getByLabelText('What happened?'), 'Clicked it twice.')
+
+    await page.getByRole('button', { name: 'Send report' }).click()
+
+    await expect.element(page.getByRole('button', { name: 'Filing…' })).toBeDisabled()
   })
 
   it('keeps a half-written report when the dialog is closed and reopened', async () => {
     render(ReportIssue, { ...props, fetcher: reply(200, {}) })
     await open()
-    await userEvent.fill(page.getByLabelText('Title'), 'Roll button does nothing')
+    await userEvent.fill(page.getByLabelText('What happened?'), 'Clicked it twice.')
 
     await page.getByRole('link', { name: 'Close' }).click()
     await open()
 
-    await expect.element(page.getByLabelText('Title')).toHaveValue('Roll button does nothing')
+    await expect.element(page.getByLabelText('What happened?')).toHaveValue('Clicked it twice.')
   })
 
   it('starts a fresh report after one was sent', async () => {
@@ -76,14 +95,14 @@ describe('ReportIssue', () => {
       fetcher: reply(200, { url: 'https://github.com/o/r/issues/301' })
     })
     await open()
-    await userEvent.fill(page.getByLabelText('Title'), 'Roll button does nothing')
+    await userEvent.fill(page.getByLabelText('What happened?'), 'Clicked it twice.')
     await page.getByRole('button', { name: 'Send report' }).click()
     await expect.element(page.getByRole('link', { name: /issues\/301/ })).toBeVisible()
 
     await page.getByRole('link', { name: 'Close' }).click()
     await open()
 
-    await expect.element(page.getByLabelText('Title')).toHaveValue('')
+    await expect.element(page.getByLabelText('What happened?')).toHaveValue('')
   })
 
   it('shows why the report failed and keeps what was written', async () => {
@@ -93,10 +112,10 @@ describe('ReportIssue', () => {
     })
     await open()
 
-    await userEvent.fill(page.getByLabelText('Title'), 'Roll button does nothing')
+    await userEvent.fill(page.getByLabelText('What happened?'), 'Clicked it twice.')
     await page.getByRole('button', { name: 'Send report' }).click()
 
     await expect.element(page.getByRole('alert')).toHaveTextContent('`gh` is not installed')
-    await expect.element(page.getByLabelText('Title')).toHaveValue('Roll button does nothing')
+    await expect.element(page.getByLabelText('What happened?')).toHaveValue('Clicked it twice.')
   })
 })

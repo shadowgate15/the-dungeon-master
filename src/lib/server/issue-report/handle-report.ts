@@ -3,8 +3,7 @@ import { z } from 'zod'
 import type { CreateIssueResult, IssueReport, ReportContext } from './create-issue.ts'
 
 const reportSchema = z.object({
-  title: z.string().trim().min(1),
-  description: z.string(),
+  description: z.string().trim().min(1),
   context: z.object({
     url: z.string(),
     route: z.string().nullable(),
@@ -32,9 +31,9 @@ export const handleReport = async (body: unknown, deps: HandleReportDeps): Promi
   const parsed = reportSchema.safeParse(body)
   if (!parsed.success) return json({ error: 'Invalid request' }, { status: 400 })
 
-  const { title, description, context } = parsed.data
+  const { description, context } = parsed.data
   const result = await deps.createIssue(
-    { title, description },
+    { description },
     { ...context, timestamp: deps.now().toISOString(), commit: deps.commit() }
   )
   if (!result.ok) return json({ error: result.error }, { status: 502 })
