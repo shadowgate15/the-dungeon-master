@@ -44,10 +44,18 @@ const buildBody = (report: IssueReport, context: ReportContext) => {
   ].join('\n\n')
 }
 
+const AUTH_FAILURE = /credentials|unauthori[sz]ed|authenticat|not logged in|\b401\b/i
+
 const describeFailure = (cause: unknown) => {
   const { code, stderr } = cause as { code?: string; stderr?: string }
   if (code === 'ENOENT') return '`gh` is not installed, so no issue was filed.'
-  return stderr?.trim() || (cause instanceof Error ? cause.message : String(cause))
+  const reason = stderr?.trim()
+  // An exec error's own message repeats the whole command, report body included.
+  if (!reason) return '`gh` failed without saying why, so no issue was filed.'
+  if (AUTH_FAILURE.test(reason) && !reason.includes('gh auth login')) {
+    return `${reason}\nRun \`gh auth login\` and try again.`
+  }
+  return reason
 }
 
 /** Files the report as a GitHub issue through the `gh` CLI, which brings its own authentication. */

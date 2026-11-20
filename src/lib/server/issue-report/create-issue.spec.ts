@@ -82,6 +82,30 @@ describe('createIssue', () => {
     })
   })
 
+  it('tells the reporter to run `gh auth login` when gh rejects its credentials', async () => {
+    const gh: GhRunner = async () => {
+      throw Object.assign(new Error('Command failed'), {
+        stderr: 'HTTP 401: Bad credentials (https://api.github.com/graphql)'
+      })
+    }
+
+    const result = await createIssue({ title: 'x', description: '' }, context, { gh })
+
+    expect(result).toEqual({ ok: false, error: expect.stringContaining('gh auth login') })
+  })
+
+  it('does not echo the command or report body when gh fails silently', async () => {
+    const gh: GhRunner = async () => {
+      throw new Error('Command failed: gh issue create --body Clicked it twice.')
+    }
+
+    const result = await createIssue({ title: 'x', description: 'Clicked it twice.' }, context, {
+      gh
+    })
+
+    expect(result).toEqual({ ok: false, error: expect.not.stringContaining('Clicked it twice.') })
+  })
+
   it("passes on gh's own message when it fails, e.g. not logged in", async () => {
     const gh: GhRunner = async () => {
       throw Object.assign(new Error('Command failed'), {

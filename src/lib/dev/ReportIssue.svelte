@@ -26,12 +26,17 @@
   let error = $state<string>()
   let issueUrl = $state<string>()
 
-  const reset = () => {
-    title = ''
-    description = ''
-    titleError = undefined
+  const SEND_FAILED = 'The report could not be sent.'
+
+  // A report that was sent starts over; one that was only closed is kept as drafted.
+  const openDialog = () => {
+    if (issueUrl) {
+      title = ''
+      description = ''
+      issueUrl = undefined
+    }
     error = undefined
-    issueUrl = undefined
+    open = true
   }
 
   const send = async (event: SubmitEvent) => {
@@ -61,9 +66,9 @@
       })
       const result = (await response.json().catch(() => ({}))) as { url?: string; error?: string }
       if (response.ok && result.url) issueUrl = result.url
-      else error = result.error ?? 'The report could not be sent.'
+      else error = result.error ?? SEND_FAILED
     } catch {
-      error = 'The report could not be sent.'
+      error = SEND_FAILED
     } finally {
       sending = false
     }
@@ -73,11 +78,8 @@
 <Button
   variant="secondary"
   size="sm"
-  class="fixed right-4 bottom-4 z-50 shadow-overlay"
-  onclick={() => {
-    reset()
-    open = true
-  }}>Report an issue</Button
+  class="fixed bottom-4 left-4 z-50 shadow-overlay"
+  onclick={openDialog}>Report an issue</Button
 >
 
 <Dialog bind:open title="Report an issue" closeHref={url} class="max-w-xl">

@@ -59,6 +59,33 @@ describe('ReportIssue', () => {
     })
   })
 
+  it('keeps a half-written report when the dialog is closed and reopened', async () => {
+    render(ReportIssue, { ...props, fetcher: reply(200, {}) })
+    await open()
+    await userEvent.fill(page.getByLabelText('Title'), 'Roll button does nothing')
+
+    await page.getByRole('link', { name: 'Close' }).click()
+    await open()
+
+    await expect.element(page.getByLabelText('Title')).toHaveValue('Roll button does nothing')
+  })
+
+  it('starts a fresh report after one was sent', async () => {
+    render(ReportIssue, {
+      ...props,
+      fetcher: reply(200, { url: 'https://github.com/o/r/issues/301' })
+    })
+    await open()
+    await userEvent.fill(page.getByLabelText('Title'), 'Roll button does nothing')
+    await page.getByRole('button', { name: 'Send report' }).click()
+    await expect.element(page.getByRole('link', { name: /issues\/301/ })).toBeVisible()
+
+    await page.getByRole('link', { name: 'Close' }).click()
+    await open()
+
+    await expect.element(page.getByLabelText('Title')).toHaveValue('')
+  })
+
   it('shows why the report failed and keeps what was written', async () => {
     render(ReportIssue, {
       ...props,
