@@ -65,7 +65,7 @@ Remaining misses on the winning contract are `absent-innkeeper` ("I ask the innk
 
 ### Winning contract
 
-The contract now lives in the app, in `src/lib/server/session/exchange/contract.ts`, and the harness imports it, so the eval always scores what the app sends. The losing variants (v1, v2-prompt, v2-resists) are no longer runnable; they survive only as the recorded results in this doc and `results/`.
+The contract now lives in the app, in `src/lib/server/session/exchange/contract.ts`, and the harness imports it, so the eval always scores what the app sends. Its prompts and wire JSON Schema were checked to be identical to the fix round's v2-flat, so the 94–95% gate result above carries over. **A live re-run on the app's contract is still owed** (#270): on 2026-11-20 LM Studio listed the MLX 4bit model, but it stayed in `loading` and did not answer even a 5-token request, so the run was stopped after its first case timed out. Re-run with `pnpm eval:exchange --mode schema --runs 5 --label app-contract-schema` and record the result here. The losing variants (v1, v2-prompt, v2-resists) are no longer runnable; they survive only as the recorded results in this doc and `results/`.
 
 Wire schema (`adjudicationSchema`), sent as `response_format: json_schema, strict`:
 
