@@ -1,0 +1,627 @@
+{
+  "label": "qwen3.5-9b-mlx4-thinking-schema",
+  "model": "exchange-eval",
+  "mode": "schema",
+  "runs": 1,
+  "temperature": 0.7,
+  "think": true,
+  "memory": "5.57 GiB (safetensors, 4bit)",
+  "startedAt": "2026-11-20T18:32:21.063Z",
+  "wire": {
+    "max_tokens": 200,
+    "model": "exchange-eval",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the referee of a Dungeons & Dragons 5e game. The player declares what their character does.\nDecide how the declaration resolves. Do not narrate. Answer only with the JSON object.\noutcome is one of:\n- \"happens\": it simply works, with no real chance of failure: speaking, asking a question, looking around, picking up or using an ordinary object, going through an exit, starting or ending a conversation with someone present.\n- \"impossible\": it cannot happen here: physically absurd, or the person or thing it needs is not in the scene.\n- \"check\": it could plausibly work but might fail, and failure would matter. Set skill to the one skill or saving throw that fits best and difficulty to easy, medium, hard or very_hard.\n- \"ask\": the declaration is too vague to resolve, for example it does not say what, where, who or with what. Set question to one short question for the player, and optionally choices to two to four short answers.\nOnly set skill and difficulty for \"check\", and question and choices for \"ask\".\nMost declarations simply happen. Call for a check only when something in the scene stands in the way (an obstacle, a hazard, or someone who would resist), never for ordinary walking, talking or handling things."
+      },
+      {
+        "role": "user",
+        "content": "Character: Mira Ashdown, a level 1 human rogue\n\nLocation: The Drowned Lantern. A low, smoky harbor tavern. Rain drums on the shutters.\n\nMode: exploration\n\nExits:\n- exit-street: Front door out to Harbor Street\n- exit-cellar: Trapdoor down to the cellar\n- exit-stairs: Stairs up to the rented rooms\n\nObjects:\n- a half-full mug of ale on your table\n- a notice board by the door\n- a cold hearth\n- a locked iron-bound chest behind the bar\n\nPeople present:\n- npc-maren: Maren Holt, the barkeep, friendly\n- npc-voss: Sergeant Voss, an off-duty city watchman, suspicious\n\nRecent events:\nnarrator: You shake the rain from your cloak as the door bangs shut behind you.\nnarrator: Maren wipes down the bar. Sergeant Voss watches you over his tankard.\nPlayer: I sit at a corner table and order an ale.\nnarrator: Maren sets a mug in front of you and returns to the bar.\n\nThe player declares: \"I pick up my mug of ale and take a sip.\""
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "structured_output",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": ["happens", "impossible", "check", "ask"]
+            },
+            "skill": {
+              "type": ["string", "null"],
+              "enum": [
+                "acrobatics",
+                "animal_handling",
+                "arcana",
+                "athletics",
+                "deception",
+                "history",
+                "insight",
+                "intimidation",
+                "investigation",
+                "medicine",
+                "nature",
+                "perception",
+                "performance",
+                "persuasion",
+                "religion",
+                "sleight_of_hand",
+                "stealth",
+                "survival",
+                "strength_save",
+                "dexterity_save",
+                "constitution_save",
+                "intelligence_save",
+                "wisdom_save",
+                "charisma_save"
+              ]
+            },
+            "difficulty": {
+              "type": ["string", "null"],
+              "enum": ["easy", "medium", "hard", "very_hard"]
+            },
+            "question": {
+              "type": ["string", "null"]
+            },
+            "choices": {
+              "type": ["array", "null"],
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["outcome", "skill", "difficulty", "question", "choices"],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    },
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    },
+    "temperature": 0.7
+  },
+  "records": [
+    {
+      "caseId": "sip-ale",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"history\", \"difficulty\": \"easy\", \"question\": \"What do you do with the ale?\", \"choices\": [\"Drink it\", \"Pour it out\", \"Leave it\"]}",
+        "ttftMs": 3205,
+        "totalMs": 4048
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"none\", \"exitId\": \"exit-street\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 1405,
+        "totalMs": 1794
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"strength_save\", \"difficulty\": \"easy\", \"question\": null, \"choices\": null}",
+        "ttftMs": 1826,
+        "totalMs": 2373
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"none\", \"exitId\": \"exit-north\"}",
+        "ttftMs": 1254,
+        "totalMs": 1465
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"What do you want to read? Choose from the notices if you want.\", \"choices\": [\"A wanted poster for a missing merchant\", \"A missing cat\", \"A job posting for a thief\"]}",
+        "ttftMs": 269,
+        "totalMs": 1416
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"none\", \"exitId\": \"exit-street\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 628,
+        "totalMs": 1002
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"dexterity_save\", \"difficulty\": \"easy\", \"question\": \"Do you want to climb the seawall now?\", \"choices\": [\"climb\", \"swim\"]}",
+        "ttftMs": 972,
+        "totalMs": 1840
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"none\", \"exitId\": \"exit-gate\", \"npcId\": \"npc-brannoc\"}",
+        "ttftMs": 1478,
+        "totalMs": 1903
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"strength_save\", \"difficulty\": \"easy\", \"question\": \"Do you want to leave the tavern right now, or wait and talk to Maren?\", \"choices\": [\"Leave the tavern\", \"Talk to Maren\"]}",
+        "ttftMs": 268,
+        "totalMs": 1293
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"move\", \"exitId\": \"exit-street\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 647,
+        "totalMs": 1027
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"check\", \"skill\": \"stealth\", \"difficulty\": \"easy\", \"question\": \"Do you climb down the trapdoor into the cellar?\", \"choices\": [\"Climb down carefully\", \"Climb down quickly\", \"Try to pry the trapdoor open first\"]}",
+        "ttftMs": 254,
+        "totalMs": 1296
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"move\", \"exitId\": \"exit-cellar\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 651,
+        "totalMs": 1034
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"check\", \"skill\": \"stealth\", \"difficulty\": \"easy\", \"question\": \"Do you try to sneak up, or just walk normally?\", \"choices\": [\"walk normally\", \"sneak up\"]}",
+        "ttftMs": 268,
+        "totalMs": 1145
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"move\", \"exitId\": \"exit-stairs\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 718,
+        "totalMs": 1123
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"strength_save\", \"difficulty\": \"easy\", \"question\": null, \"choices\": null}",
+        "ttftMs": 1149,
+        "totalMs": 1703
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"move\", \"exitId\": \"exit-docks\", \"npcId\": \"npc-brannoc\"}",
+        "ttftMs": 611,
+        "totalMs": 1021
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"strength_save\", \"difficulty\": \"easy\", \"question\": null, \"choices\": null}",
+        "ttftMs": 881,
+        "totalMs": 1388
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"move\", \"exitId\": \"exit-north\"}",
+        "ttftMs": 432,
+        "totalMs": 636
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"medicine\", \"difficulty\": \"easy\", \"question\": \"What do you say to Maren?\", \"choices\": [\"Ask about the tavern's history.\", \"Compliment the ale.\", \"Mention you saw something suspicious.\", \"Just say hello.\"]}",
+        "ttftMs": 343,
+        "totalMs": 1504
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"talk\", \"exitId\": \"exit-street\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 719,
+        "totalMs": 1096
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"check\", \"skill\": \"sleight_of_hand\", \"difficulty\": \"easy\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 350,
+        "totalMs": 873
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"talk\", \"exitId\": \"exit-street\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 671,
+        "totalMs": 1068
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"persuasion\", \"difficulty\": \"easy\", \"question\": \"none\", \"choices\": [\"none\"]}",
+        "ttftMs": 1101,
+        "totalMs": 1716
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"talk\", \"exitId\": \"exit-gate\", \"npcId\": \"npc-brannoc\"}",
+        "ttftMs": 618,
+        "totalMs": 1033
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"history\", \"difficulty\": \"easy\", \"question\": \"What do you do next?\", \"choices\": [\"Leave via the front door\", \"Leave via the stairs\", \"Leave via the cellar\"]}",
+        "ttftMs": 1112,
+        "totalMs": 2043
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"end_talk\", \"exitId\": \"exit-street\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 1405,
+        "totalMs": 1826
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"acrobatics\", \"difficulty\": \"very_hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 356,
+        "totalMs": 887
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"end_talk\", \"exitId\": \"exit-street\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 748,
+        "totalMs": 1177
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"Who was with you last night?\", \"choices\": [\"Maren was working\", \"Maren wasn't there\", \"Maren was with someone else\"]}",
+        "ttftMs": 366,
+        "totalMs": 1385
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"talk\", \"exitId\": \"exit-street\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 823,
+        "totalMs": 1226
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"ask\", \"skill\": \"insight\", \"difficulty\": \"easy\", \"question\": \"Do you know anything about the smugglers working the docks?\", \"choices\": [\"You don't know anything specific.\", \"I heard whispers about them.\", \"The watchmen are on edge about them.\"]}",
+        "ttftMs": 398,
+        "totalMs": 1600
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"talk\", \"exitId\": \"exit-street\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 784,
+        "totalMs": 1171
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"happens\", \"skill\": \"strength_save\", \"difficulty\": \"easy\", \"question\": null, \"choices\": null}",
+        "ttftMs": 359,
+        "totalMs": 872
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"talk\", \"exitId\": \"exit-street\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 730,
+        "totalMs": 1107
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"impossible\", \"skill\": \"acrobatics\", \"difficulty\": \"very_hard\", \"question\": \"Are you trying to leap onto the standing stones, or is this a different kind of jump?\", \"choices\": [\"Try to jump to the moon\", \"Try to jump to the standing stones\", \"Try to jump to a nearby tree\", \"Try to jump to the stream bank\"]}",
+        "ttftMs": 865,
+        "totalMs": 2367
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"impossible\", \"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"Who is the innkeeper?\", \"choices\": [\"Wait for the innkeeper to arrive\", \"Search for the innkeeper's name on the sign\", \"Leave the clearing to find an inn\"]}",
+        "ttftMs": 843,
+        "totalMs": 2002
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"impossible\", \"skill\": \"perception\", \"difficulty\": \"medium\", \"question\": \"What dragon? Is there a dragon in this scene?\", \"choices\": [\"Look around the room for a dragon\", \"Ask Maren if there's a dragon in the tavern\"]}",
+        "ttftMs": 259,
+        "totalMs": 1367
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"impossible\", \"skill\": \"nature\", \"difficulty\": \"hard\", \"question\": \"Do you have a magical means to fly, or do you have a rope and grappling hook to scale the wall?\", \"choices\": [\"fly\", \"scale the wall\", \"climb the crates\"]}",
+        "ttftMs": 1078,
+        "totalMs": 2252
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"impossible\", \"skill\": \"strength_save\", \"difficulty\": \"very_hard\", \"question\": \"Can you lift the whole tavern over your head?\", \"choices\": [\"Attempt to lift the tavern (DC 25 Strength (Str) check)\", \"Try to find a magical item that might help\", \"Give up and try something else\"]}",
+        "ttftMs": 264,
+        "totalMs": 1575
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"check\", \"skill\": \"acrobatics\", \"difficulty\": \"hard\", \"question\": null, \"choices\": null}",
+        "ttftMs": 925,
+        "totalMs": 1424
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"move\", \"exitId\": \"exit-docks\", \"npcId\": \"npc-brannoc\"}",
+        "ttftMs": 563,
+        "totalMs": 969
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"check\", \"skill\": \"stealth\", \"difficulty\": \"hard\", \"question\": \"Do you attempt to sneak past Brannoc or try to open the gate quietly?\", \"choices\": [\"Sneak past Brannoc\", \"Pick the lock if there is one\", \"Climb the gate\"]}",
+        "ttftMs": 1015,
+        "totalMs": 2291
+      },
+      "effect": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"effect\": \"move\", \"exitId\": \"exit-gate\", \"npcId\": \"npc-brannoc\"}",
+        "ttftMs": 583,
+        "totalMs": 997
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"check\", \"skill\": \"persuasion\", \"difficulty\": \"easy\", \"question\": \"How would you try to persuade him? What reason would you give?\", \"choices\": [\"Lie that you are an important merchant\", \"Claim you have a valid letter from the High Priest\", \"Pretend to be a member of the city guard\"]}",
+        "ttftMs": 1046,
+        "totalMs": 2426
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"ask\", \"skill\": \"deception\", \"difficulty\": \"medium\", \"question\": \"How specifically do you claim to be of the city watch? Do you show any identifying mark, badge, or uniform, or do you just say it's a mistake and that you're a fellow guard?\", \"choices\": [\"Lie and say you're an off-duty guard with a badge that's actually yours\", \"Lie and say you're a high-ranking guard on a secret missio",
+        "ttftMs": 350,
+        "totalMs": 2679
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"check\", \"skill\": \"sleight_of_hand\", \"difficulty\": \"hard\", \"question\": \"Do you want to try to pick the lock on the chest, or try to slip past Sergeant Voss to get to it?\", \"choices\": [\"Pick the lock\", \"Slip past Sergeant Voss\"]}",
+        "ttftMs": 361,
+        "totalMs": 1589
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"check\", \"skill\": \"acrobatics\", \"difficulty\": \"medium\", \"question\": \"Do you attempt to balance across the slippery log, or do you choose to search the log for something useful?\", \"choices\": [\"I balance across the slippery log.\", \"I search the log for something useful.\", \"I wait for a safer crossing.\"]}",
+        "ttftMs": 918,
+        "totalMs": 2364
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"ask\", \"skill\": \"stealth\", \"difficulty\": \"easy\", \"question\": \"What thing? Which thing? Are you trying to hide, steal, or something else?\", \"choices\": [\"Hide in the shadows\", \"Steal the ale\", \"Confront the watchman\"]}",
+        "ttftMs": 282,
+        "totalMs": 1460
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"ask\", \"skill\": \"stealth\", \"difficulty\": \"easy\", \"question\": \"Where exactly do you want to go? The gates are watched, the alley is narrow, and the docks are open but wet.\", \"choices\": [\"Sneak to the gate to try to pass Brannoc\", \"Go down the stairs to the docks\", \"Climb over the seawall\", \"Slip into the alley\"]}",
+        "ttftMs": 1043,
+        "totalMs": 2727
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"ask\", \"skill\": \"dexterity_save\", \"difficulty\": \"easy\", \"question\": \"What did you intend to use? The old wooden door, the moss-covered fallen log, or something else?\", \"choices\": [\"Open the old wooden door\", \"Jump the moss-covered fallen log\", \"Use the ring of standing stones\"]}",
+        "ttftMs": 830,
+        "totalMs": 2130
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 1,
+      "adjudication": {
+        "ok": false,
+        "error": "reasoning-model: The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.",
+        "raw": "",
+        "reasoning": "{\"outcome\": \"ask\", \"skill\": \"deception\", \"difficulty\": \"medium\", \"question\": \"What exactly do you try to do? Do you try to talk to someone, steal something, or just wait and see? Be more specific about your attempt.\", \"choices\": [\"Talk to Maren\", \"Talk to Sergeant Voss\", \"Look around the room\", \"Try to open the chest\"]}",
+        "ttftMs": 264,
+        "totalMs": 1785
+      }
+    }
+  ]
+}

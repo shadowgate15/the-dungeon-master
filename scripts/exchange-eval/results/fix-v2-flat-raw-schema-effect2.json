@@ -1,0 +1,3823 @@
+{
+  "label": "fix-v2-flat-raw-schema-effect2",
+  "model": "exchange-eval",
+  "mode": "raw-schema",
+  "contract": "v2-flat",
+  "runs": 5,
+  "temperature": 0.7,
+  "think": false,
+  "startedAt": "2026-11-20T21:52:25.188Z",
+  "wire": {
+    "model": "exchange-eval",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the referee of a Dungeons & Dragons 5e game. The player declares what their character does.\nDecide how the declaration resolves. Do not narrate. Answer only with the JSON object.\n\nThe principle: call for a check only when something in the scene resists the action (a person who would object or notice, a lock, a hazard, a hard climb) AND failure would matter. Everything ordinary simply happens.\n\noutcome is one of:\n- \"happens\": it simply works. Going through a listed exit, up or down stairs or ladders, starting or ending a conversation with someone present, saying or asking anything in a conversation, and handling ordinary objects all happen. A question in conversation is never a check: the NPC answers it in the narration.\n- \"impossible\": it needs a person or thing that is not in the scene (anyone not listed under People present, anything not listed or described), or it is physically absurd.\n- \"check\": something in the scene resists and failure would matter.\n- \"ask\": the declaration does not say what, where, who or with what, so you cannot tell what the character does.\n\nSkills follow the SRD: climbing, jumping and swimming are athletics; balancing and tumbling are acrobatics; hiding and sneaking are stealth; lock picking and pickpocketing are sleight_of_hand; convincing honestly is persuasion; lying is deception.\n\nExamples (not from this scene):\n- In a mill with an exit \"Ladder up to the loft\": \"I climb up to the loft.\" -> happens\n- Talking with a merchant: \"So what brings you to town?\" -> happens\n- Talking with a merchant: \"Have you heard any rumors about the mine?\" -> happens\n- Nobody named Tobin is present: \"I ask Tobin for directions.\" -> impossible\n- A guard is watching the door: \"I slip past the guard unseen.\" -> check, stealth\n- A cliff with loose rock: \"I climb the cliff.\" -> check, athletics\n- \"I look at that.\" -> ask\n\nFill every field:\n- outcome: as above.\n- skill: for \"check\", the one skill or saving throw that fits best; otherwise \"none\".\n- difficulty: for \"check\", easy, medium, hard or very_hard; otherwise \"none\".\n- question: for \"ask\", one short question for the player; otherwise \"\".\n- choices: for \"ask\", two to four short answers; otherwise []."
+      },
+      {
+        "role": "user",
+        "content": "Character: Mira Ashdown, a level 1 human rogue\n\nLocation: The Drowned Lantern. A low, smoky harbor tavern. Rain drums on the shutters.\n\nMode: exploration\n\nExits:\n- exit-street: Front door out to Harbor Street\n- exit-cellar: Trapdoor down to the cellar\n- exit-stairs: Stairs up to the rented rooms\n\nObjects:\n- a half-full mug of ale on your table\n- a notice board by the door\n- a cold hearth\n- a locked iron-bound chest behind the bar\n\nPeople present:\n- npc-maren: Maren Holt, the barkeep, friendly\n- npc-voss: Sergeant Voss, an off-duty city watchman, suspicious\n\nRecent events:\nnarrator: You shake the rain from your cloak as the door bangs shut behind you.\nnarrator: Maren wipes down the bar. Sergeant Voss watches you over his tankard.\nPlayer: I sit at a corner table and order an ale.\nnarrator: Maren sets a mug in front of you and returns to the bar.\n\nThe player declares: \"I pick up my mug of ale and take a sip.\""
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "adjudicate",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": ["happens", "impossible", "check", "ask"]
+            },
+            "skill": {
+              "type": "string",
+              "enum": [
+                "acrobatics",
+                "animal_handling",
+                "arcana",
+                "athletics",
+                "deception",
+                "history",
+                "insight",
+                "intimidation",
+                "investigation",
+                "medicine",
+                "nature",
+                "perception",
+                "performance",
+                "persuasion",
+                "religion",
+                "sleight_of_hand",
+                "stealth",
+                "survival",
+                "strength_save",
+                "dexterity_save",
+                "constitution_save",
+                "intelligence_save",
+                "wisdom_save",
+                "charisma_save",
+                "none"
+              ]
+            },
+            "difficulty": {
+              "type": "string",
+              "enum": ["easy", "medium", "hard", "very_hard", "none"]
+            },
+            "question": {
+              "type": "string"
+            },
+            "choices": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["outcome", "skill", "difficulty", "question", "choices"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "max_tokens": 200,
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    },
+    "temperature": 0.7,
+    "reasoning_effort": "none"
+  },
+  "records": [
+    {
+      "caseId": "sip-ale",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 289,
+        "totalMs": 762
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 430,
+        "totalMs": 468
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 742,
+        "totalMs": 1230
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 1039,
+        "totalMs": 1079
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 285,
+        "totalMs": 790
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 397,
+        "totalMs": 439
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1137,
+        "totalMs": 1655
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 269,
+        "totalMs": 308
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 272,
+        "totalMs": 759
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-street\"}",
+        "ttftMs": 353,
+        "totalMs": 561
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "athletics",
+          "difficulty": "medium"
+        },
+        "completionTokens": 43,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"athletics\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": [\"Try to climb down\", \"Try to slip through the trapdoor quietly\"]}",
+        "ttftMs": 255,
+        "totalMs": 968
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-cellar"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-cellar\"}",
+        "ttftMs": 345,
+        "totalMs": 551
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "medium"
+        },
+        "completionTokens": 68,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"stealth\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": [\"Move normally, risking being spotted by Sergeant Voss\", \"Move stealthily, using the shadows and corners\", \"Climb out the window\", \"Pick the lock on your rented room door\"]}",
+        "ttftMs": 255,
+        "totalMs": 1448
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-stairs\"}",
+        "ttftMs": 369,
+        "totalMs": 585
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1088,
+        "totalMs": 1607
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-docks\"}",
+        "ttftMs": 281,
+        "totalMs": 505
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 886,
+        "totalMs": 1397
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-north\"}",
+        "ttftMs": 1093,
+        "totalMs": 1316
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 280,
+        "totalMs": 777
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-maren"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 456,
+        "totalMs": 667
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 260,
+        "totalMs": 728
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 433,
+        "totalMs": 641
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 972,
+        "totalMs": 1468
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-brannoc"
+        },
+        "completionTokens": 17,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-brannoc\"}",
+        "ttftMs": 261,
+        "totalMs": 493
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 370,
+        "totalMs": 866
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 18,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"end_talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 477,
+        "totalMs": 735
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 283,
+        "totalMs": 774
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 18,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"end_talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 475,
+        "totalMs": 736
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 273,
+        "totalMs": 774
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 501,
+        "totalMs": 726
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 408,
+        "totalMs": 922
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 508,
+        "totalMs": 729
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 282,
+        "totalMs": 774
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 464,
+        "totalMs": 503
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 793,
+        "totalMs": 1259
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 67,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"Who is the innkeeper and where are they located?\", \"choices\": [\"Find the innkeeper in the village\", \"Find the innkeeper in the ruined tower\", \"Find the innkeeper in a nearby town\"]}",
+        "ttftMs": 782,
+        "totalMs": 1982
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 264,
+        "totalMs": 727
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1027,
+        "totalMs": 1515
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 287,
+        "totalMs": 781
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "athletics",
+          "difficulty": "hard"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"athletics\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1168,
+        "totalMs": 1672
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 279,
+        "totalMs": 316
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "hard"
+        },
+        "completionTokens": 96,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"stealth\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": [\"Attempt to sneak past Brannoc (DC 16)\", \"Try to distract Brannoc with a sound or gesture (Persuasion/Deception DC 14)\", \"Climb over the gate wall instead of slipping through (Athletics DC 12)\", \"Wait for Brannoc to move or be relieved\"]}",
+        "ttftMs": 1060,
+        "totalMs": 2799
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 246,
+        "totalMs": 282
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "persuasion",
+          "difficulty": "medium"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"persuasion\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 951,
+        "totalMs": 1450
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "medium"
+        },
+        "completionTokens": 88,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"deception\", \"difficulty\": \"medium\", \"question\": \"How do you plan to convince him? Do you show a badge, mimic his manner, or claim you know an important person?\", \"choices\": [\"Show a forged or stolen badge\", \"Lie convincingly about your rank or connection\", \"Act nervous and stumble through it\", \"Pull a bluff involving a fake emergency\"]}",
+        "ttftMs": 279,
+        "totalMs": 1943
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "sleight_of_hand",
+          "difficulty": "hard"
+        },
+        "completionTokens": 83,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"sleight_of_hand\", \"difficulty\": \"hard\", \"question\": \"Do you want to attempt a Sleight of Hand check to pick the lock?\", \"choices\": [\"Yes, attempt the check.\", \"No, try to distract the guard instead.\", \"No, just ask the guard for an item.\", \"No, give up and leave.\"]}",
+        "ttftMs": 283,
+        "totalMs": 1888
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "completionTokens": 55,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"acrobatics\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": [\"attempt to balance\", \"distract yourself to steady your focus\", \"use a piece of gear like a rope or stick\"]}",
+        "ttftMs": 931,
+        "totalMs": 1974
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What do you do next?",
+          "choices": [
+            "Ask Maren for fresh ale",
+            "Talk to Sergeant Voss",
+            "Search the notice board",
+            "Try to open the chest"
+          ]
+        },
+        "completionTokens": 60,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What do you do next?\", \"choices\": [\"Ask Maren for fresh ale\", \"Talk to Sergeant Voss\", \"Search the notice board\", \"Try to open the chest\"]}",
+        "ttftMs": 285,
+        "totalMs": 1366
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "Which direction do you mean: to the gate, down to the docks, or into the alley?",
+          "choices": ["Go to the city gate", "Go down to the docks", "Go down the alley"]
+        },
+        "completionTokens": 66,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"Which direction do you mean: to the gate, down to the docks, or into the alley?\", \"choices\": [\"Go to the city gate\", \"Go down to the docks\", \"Go down the alley\"]}",
+        "ttftMs": 885,
+        "totalMs": 2071
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What do you use it for?",
+          "choices": [
+            "Open the door",
+            "Cross the stream",
+            "Examine the stones",
+            "Pickpocket someone"
+          ]
+        },
+        "completionTokens": 55,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What do you use it for?\", \"choices\": [\"Open the door\", \"Cross the stream\", \"Examine the stones\", \"Pickpocket someone\"]}",
+        "ttftMs": 798,
+        "totalMs": 1791
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What specific action are you attempting?",
+          "choices": [
+            "Ask Maren for a drink",
+            "Talk to Sergeant Voss about the town",
+            "Examine the notice board",
+            "Check the locked chest behind the bar"
+          ]
+        },
+        "completionTokens": 67,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What specific action are you attempting?\", \"choices\": [\"Ask Maren for a drink\", \"Talk to Sergeant Voss about the town\", \"Examine the notice board\", \"Check the locked chest behind the bar\"]}",
+        "ttftMs": 278,
+        "totalMs": 1500
+      }
+    },
+    {
+      "caseId": "sip-ale",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 271,
+        "totalMs": 768
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 498,
+        "totalMs": 538
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 896,
+        "totalMs": 1415
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 1115,
+        "totalMs": 1154
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 285,
+        "totalMs": 775
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "completionTokens": 25,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\", \"exitId\": \"exit-street\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 360,
+        "totalMs": 744
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 938,
+        "totalMs": 1418
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 251,
+        "totalMs": 287
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 254,
+        "totalMs": 723
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-street\"}",
+        "ttftMs": 340,
+        "totalMs": 548
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 276,
+        "totalMs": 751
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-cellar"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-cellar\"}",
+        "ttftMs": 360,
+        "totalMs": 578
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 268,
+        "totalMs": 768
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-stairs\"}",
+        "ttftMs": 405,
+        "totalMs": 628
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1225,
+        "totalMs": 1757
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-docks\"}",
+        "ttftMs": 281,
+        "totalMs": 508
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 857,
+        "totalMs": 1351
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-north\"}",
+        "ttftMs": 1009,
+        "totalMs": 1225
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 278,
+        "totalMs": 761
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-maren"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 455,
+        "totalMs": 672
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 279,
+        "totalMs": 760
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 455,
+        "totalMs": 668
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1052,
+        "totalMs": 1566
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-brannoc"
+        },
+        "completionTokens": 17,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-brannoc\"}",
+        "ttftMs": 288,
+        "totalMs": 532
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 405,
+        "totalMs": 920
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 18,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"end_talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 524,
+        "totalMs": 791
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 287,
+        "totalMs": 792
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 18,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"end_talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 487,
+        "totalMs": 744
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 272,
+        "totalMs": 760
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 468,
+        "totalMs": 683
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 368,
+        "totalMs": 851
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 471,
+        "totalMs": 685
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 271,
+        "totalMs": 760
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 472,
+        "totalMs": 512
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 848,
+        "totalMs": 1337
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "Who is the innkeeper? There is no innkeeper present in this scene.",
+          "choices": [
+            "Ask a traveler if they know an inn",
+            "Head north toward the ruined tower",
+            "Try to find a spot to camp",
+            "Walk along the stream to see if there's a village"
+          ]
+        },
+        "completionTokens": 82,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"Who is the innkeeper? There is no innkeeper present in this scene.\", \"choices\": [\"Ask a traveler if they know an inn\", \"Head north toward the ruined tower\", \"Try to find a spot to camp\", \"Walk along the stream to see if there's a village\"]}",
+        "ttftMs": 892,
+        "totalMs": 2463
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 283,
+        "totalMs": 765
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1096,
+        "totalMs": 1586
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 280,
+        "totalMs": 758
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "athletics",
+          "difficulty": "hard"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"athletics\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1049,
+        "totalMs": 1527
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 264,
+        "totalMs": 303
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "hard"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"stealth\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1027,
+        "totalMs": 1504
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-gate\"}",
+        "ttftMs": 263,
+        "totalMs": 479
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "persuasion",
+          "difficulty": "medium"
+        },
+        "completionTokens": 55,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"persuasion\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": [\"explain your urgent business\", \"offer a bribe\", \"pretend you know the guard\", \"appeal to his duty\"]}",
+        "ttftMs": 1028,
+        "totalMs": 2040
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "hard"
+        },
+        "completionTokens": 63,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"deception\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": [\"I lie smoothly and casually.\", \"I bluff with confidence.\", \"I try to sound authoritative but hesitate.\", \"I use a piece of fake paperwork to back me up.\"]}",
+        "ttftMs": 286,
+        "totalMs": 1464
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "sleight_of_hand",
+          "difficulty": "hard"
+        },
+        "completionTokens": 32,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"sleight_of_hand\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 291,
+        "totalMs": 838
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"acrobatics\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 873,
+        "totalMs": 1387
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What do you do?",
+          "choices": [
+            "Ask Maren for a drink",
+            "Inspect the notice board",
+            "Talk to Sergeant Voss",
+            "Check the locked chest"
+          ]
+        },
+        "completionTokens": 58,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What do you do?\", \"choices\": [\"Ask Maren for a drink\", \"Inspect the notice board\", \"Talk to Sergeant Voss\", \"Check the locked chest\"]}",
+        "ttftMs": 300,
+        "totalMs": 1360
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "Do you mean the gate, the steps down to the docks, or the alley?",
+          "choices": [
+            "I go to the gate",
+            "I go down to the docks",
+            "I go down the alley",
+            "I go over the seawall"
+          ]
+        },
+        "completionTokens": 73,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"Do you mean the gate, the steps down to the docks, or the alley?\", \"choices\": [\"I go to the gate\", \"I go down to the docks\", \"I go down the alley\", \"I go over the seawall\"]}",
+        "ttftMs": 931,
+        "totalMs": 2287
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What do you use it for?",
+          "choices": [
+            "Open the wooden door",
+            "Cross the stream via the log",
+            "Leave the clearing",
+            "Examine the standing stones"
+          ]
+        },
+        "completionTokens": 59,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What do you use it for?\", \"choices\": [\"Open the wooden door\", \"Cross the stream via the log\", \"Leave the clearing\", \"Examine the standing stones\"]}",
+        "ttftMs": 832,
+        "totalMs": 1944
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What do you try to do or obtain?",
+          "choices": [
+            "Order an ale",
+            "Pickpocket Sergeant Voss",
+            "Search the notice board",
+            "Investigate the locked chest"
+          ]
+        },
+        "completionTokens": 61,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What do you try to do or obtain?\", \"choices\": [\"Order an ale\", \"Pickpocket Sergeant Voss\", \"Search the notice board\", \"Investigate the locked chest\"]}",
+        "ttftMs": 286,
+        "totalMs": 1427
+      }
+    },
+    {
+      "caseId": "sip-ale",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 298,
+        "totalMs": 808
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 524,
+        "totalMs": 564
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 907,
+        "totalMs": 1415
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 1072,
+        "totalMs": 1111
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 284,
+        "totalMs": 767
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 367,
+        "totalMs": 406
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 994,
+        "totalMs": 1483
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 260,
+        "totalMs": 298
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 265,
+        "totalMs": 757
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-street\"}",
+        "ttftMs": 363,
+        "totalMs": 577
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "athletics",
+          "difficulty": "medium"
+        },
+        "completionTokens": 48,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"athletics\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": [\"climb down\", \"drop down\", \"jump down\", \"wait for the door to open\"]}",
+        "ttftMs": 268,
+        "totalMs": 1133
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-cellar"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-cellar\"}",
+        "ttftMs": 405,
+        "totalMs": 630
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 293,
+        "totalMs": 812
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-stairs\"}",
+        "ttftMs": 423,
+        "totalMs": 652
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1161,
+        "totalMs": 1670
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-docks\"}",
+        "ttftMs": 270,
+        "totalMs": 485
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 802,
+        "totalMs": 1286
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-north\"}",
+        "ttftMs": 983,
+        "totalMs": 1200
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 271,
+        "totalMs": 760
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-maren"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 466,
+        "totalMs": 682
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 271,
+        "totalMs": 768
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 484,
+        "totalMs": 705
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1153,
+        "totalMs": 1682
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-brannoc"
+        },
+        "completionTokens": 17,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-brannoc\"}",
+        "ttftMs": 287,
+        "totalMs": 532
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 398,
+        "totalMs": 899
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 18,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"end_talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 485,
+        "totalMs": 740
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 270,
+        "totalMs": 754
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 18,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"end_talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 454,
+        "totalMs": 706
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 259,
+        "totalMs": 739
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 459,
+        "totalMs": 672
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 370,
+        "totalMs": 866
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 488,
+        "totalMs": 526
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 285,
+        "totalMs": 794
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 502,
+        "totalMs": 542
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 897,
+        "totalMs": 1393
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "Who is the innkeeper and where is the inn?",
+          "choices": [
+            "Look for a signpost marking the inn",
+            "Ask any traveler you see if they know the inn",
+            "Check the map for the location of the inn",
+            "Describe a different action you want to take"
+          ]
+        },
+        "completionTokens": 80,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"Who is the innkeeper and where is the inn?\", \"choices\": [\"Look for a signpost marking the inn\", \"Ask any traveler you see if they know the inn\", \"Check the map for the location of the inn\", \"Describe a different action you want to take\"]}",
+        "ttftMs": 908,
+        "totalMs": 2408
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 265,
+        "totalMs": 727
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1008,
+        "totalMs": 1490
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 279,
+        "totalMs": 759
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "athletics",
+          "difficulty": "hard"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"athletics\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1082,
+        "totalMs": 1571
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-gate\"}",
+        "ttftMs": 276,
+        "totalMs": 497
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "hard"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"stealth\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1071,
+        "totalMs": 1559
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-gate\"}",
+        "ttftMs": 274,
+        "totalMs": 496
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "persuasion",
+          "difficulty": "medium"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"persuasion\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1092,
+        "totalMs": 1601
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "medium"
+        },
+        "completionTokens": 96,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"deception\", \"difficulty\": \"medium\", \"question\": \"How exactly do you plan to convince him that you are a member of the city watch?\", \"choices\": [\"You claim you are a new recruit from a different district.\", \"You quote a specific watch regulation or order.\", \"You bluff your way through by mimicking Voss's tone.\", \"You mention a shared acquaintance or secret both of you know.\"]}",
+        "ttftMs": 283,
+        "totalMs": 2082
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "sleight_of_hand",
+          "difficulty": "hard"
+        },
+        "completionTokens": 32,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"sleight_of_hand\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 276,
+        "totalMs": 809
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "completionTokens": 93,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"acrobatics\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": [\"You make a DC 13 AC check to maintain your balance. On a failure, you fall into the stream (no damage, but you are wet and surprised).\", \"You try to move carefully along the log's uneven surface.\", \"You grip the mossy bark with both hands, slowing your progress.\"]}",
+        "ttftMs": 823,
+        "totalMs": 2632
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What do you want to do? \"I do the thing\" is too vague.",
+          "choices": [
+            "Sit at a corner table",
+            "Order an ale",
+            "Search the locked chest",
+            "Slip past Sergeant Voss"
+          ]
+        },
+        "completionTokens": 69,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What do you want to do? \\\"I do the thing\\\" is too vague.\", \"choices\": [\"Sit at a corner table\", \"Order an ale\", \"Search the locked chest\", \"Slip past Sergeant Voss\"]}",
+        "ttftMs": 288,
+        "totalMs": 1596
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "Which direction do you mean: towards the gate guard, down to the docks, or into the alley?",
+          "choices": [
+            "I move towards the gate guard",
+            "I move down to the docks",
+            "I move into the alley"
+          ]
+        },
+        "completionTokens": 70,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"Which direction do you mean: towards the gate guard, down to the docks, or into the alley?\", \"choices\": [\"I move towards the gate guard\", \"I move down to the docks\", \"I move into the alley\"]}",
+        "ttftMs": 1004,
+        "totalMs": 2362
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What do you mean by \"it\"? Is it the wooden door, the fallen log, or the ring of standing stones?",
+          "choices": [
+            "Use the wooden door",
+            "Use the fallen log",
+            "Use the standing stones",
+            "I'm not sure what you mean"
+          ]
+        },
+        "completionTokens": 79,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What do you mean by \\\"it\\\"? Is it the wooden door, the fallen log, or the ring of standing stones?\", \"choices\": [\"Use the wooden door\", \"Use the fallen log\", \"Use the standing stones\", \"I'm not sure what you mean\"]}",
+        "ttftMs": 902,
+        "totalMs": 2396
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What are you trying to do?",
+          "choices": [
+            "sit at the corner table",
+            "order an ale",
+            "speak to Maren",
+            "speak to Sergeant Voss"
+          ]
+        },
+        "completionTokens": 60,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What are you trying to do?\", \"choices\": [\"sit at the corner table\", \"order an ale\", \"speak to Maren\", \"speak to Sergeant Voss\"]}",
+        "ttftMs": 280,
+        "totalMs": 1350
+      }
+    },
+    {
+      "caseId": "sip-ale",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 271,
+        "totalMs": 763
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 490,
+        "totalMs": 528
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 855,
+        "totalMs": 1370
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 1138,
+        "totalMs": 1178
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 295,
+        "totalMs": 804
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 395,
+        "totalMs": 435
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1066,
+        "totalMs": 1569
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 263,
+        "totalMs": 302
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 265,
+        "totalMs": 750
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-street\"}",
+        "ttftMs": 353,
+        "totalMs": 565
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 263,
+        "totalMs": 742
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-cellar"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-cellar\"}",
+        "ttftMs": 364,
+        "totalMs": 578
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 265,
+        "totalMs": 753
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-stairs\"}",
+        "ttftMs": 379,
+        "totalMs": 598
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1100,
+        "totalMs": 1616
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-docks\"}",
+        "ttftMs": 281,
+        "totalMs": 505
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 38,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": [\"I follow the trail toward the ruined tower.\"]}",
+        "ttftMs": 866,
+        "totalMs": 1534
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-north\"}",
+        "ttftMs": 1086,
+        "totalMs": 1307
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 286,
+        "totalMs": 786
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-maren"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 481,
+        "totalMs": 697
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 269,
+        "totalMs": 756
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 458,
+        "totalMs": 670
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1023,
+        "totalMs": 1524
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-brannoc"
+        },
+        "completionTokens": 17,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-brannoc\"}",
+        "ttftMs": 269,
+        "totalMs": 506
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 379,
+        "totalMs": 873
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 18,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"end_talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 480,
+        "totalMs": 737
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 292,
+        "totalMs": 787
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk"
+        },
+        "completionTokens": 9,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"end_talk\"}",
+        "ttftMs": 482,
+        "totalMs": 561
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 272,
+        "totalMs": 773
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 497,
+        "totalMs": 537
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 408,
+        "totalMs": 919
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 516,
+        "totalMs": 741
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 290,
+        "totalMs": 795
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 493,
+        "totalMs": 532
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 839,
+        "totalMs": 1315
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 62,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"Who is the innkeeper?\", \"choices\": [\"Find the innkeeper\", \"Ask a traveler at the clearing for directions to the inn\", \"Search the ring of standing stones for clues\"]}",
+        "ttftMs": 816,
+        "totalMs": 1939
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 266,
+        "totalMs": 730
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 49,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": [\"Climb over the wall\", \"Sneak around the guard\", \"Talk to the guard\"]}",
+        "ttftMs": 1041,
+        "totalMs": 1947
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 287,
+        "totalMs": 781
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "athletics",
+          "difficulty": "hard"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"athletics\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1199,
+        "totalMs": 1704
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-gate\"}",
+        "ttftMs": 283,
+        "totalMs": 507
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "hard"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"stealth\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1091,
+        "totalMs": 1553
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-gate\"}",
+        "ttftMs": 260,
+        "totalMs": 473
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "persuasion",
+          "difficulty": "medium"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"persuasion\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 989,
+        "totalMs": 1481
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "medium"
+        },
+        "completionTokens": 50,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"deception\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": [\"Lie convincingly\", \"Lie poorly\", \"Admit the truth\", \"Ask for proof of her status\"]}",
+        "ttftMs": 270,
+        "totalMs": 1146
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "sleight_of_hand",
+          "difficulty": "medium"
+        },
+        "completionTokens": 32,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"sleight_of_hand\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 271,
+        "totalMs": 796
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"acrobatics\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 816,
+        "totalMs": 1335
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What exactly do you intend to do by doing 'the thing'?",
+          "choices": [
+            "Order a round of drinks",
+            "Listen to the barkeep's gossip",
+            "Ask about the locked chest",
+            "Confront the watchman"
+          ]
+        },
+        "completionTokens": 70,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What exactly do you intend to do by doing 'the thing'?\", \"choices\": [\"Order a round of drinks\", \"Listen to the barkeep's gossip\", \"Ask about the locked chest\", \"Confront the watchman\"]}",
+        "ttftMs": 292,
+        "totalMs": 1658
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "Go where exactly? To the gate, down the stairs to the docks, or into the alley?",
+          "choices": [
+            "Go to the gate",
+            "Go down the stairs to the docks",
+            "Go into the alley",
+            "Climb the seawall"
+          ]
+        },
+        "completionTokens": 75,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"Go where exactly? To the gate, down the stairs to the docks, or into the alley?\", \"choices\": [\"Go to the gate\", \"Go down the stairs to the docks\", \"Go into the alley\", \"Climb the seawall\"]}",
+        "ttftMs": 1113,
+        "totalMs": 2565
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "It? What item are you referring to?",
+          "choices": [
+            "The old wooden door",
+            "The moss-covered log",
+            "The ring of standing stones",
+            "Nothing"
+          ]
+        },
+        "completionTokens": 57,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"It? What item are you referring to?\", \"choices\": [\"The old wooden door\", \"The moss-covered log\", \"The ring of standing stones\", \"Nothing\"]}",
+        "ttftMs": 835,
+        "totalMs": 1859
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What do you try to do?",
+          "choices": [
+            "Try to talk to Maren",
+            "Try to talk to Sergeant Voss",
+            "Try to look around the room",
+            "Try to examine the notice board"
+          ]
+        },
+        "completionTokens": 66,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What do you try to do?\", \"choices\": [\"Try to talk to Maren\", \"Try to talk to Sergeant Voss\", \"Try to look around the room\", \"Try to examine the notice board\"]}",
+        "ttftMs": 266,
+        "totalMs": 1454
+      }
+    },
+    {
+      "caseId": "sip-ale",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 269,
+        "totalMs": 758
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 487,
+        "totalMs": 527
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 877,
+        "totalMs": 1397
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 1207,
+        "totalMs": 1249
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 310,
+        "totalMs": 820
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 395,
+        "totalMs": 435
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1034,
+        "totalMs": 1524
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 255,
+        "totalMs": 293
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 256,
+        "totalMs": 729
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-street\"}",
+        "ttftMs": 341,
+        "totalMs": 552
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 252,
+        "totalMs": 727
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-cellar"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-cellar\"}",
+        "ttftMs": 361,
+        "totalMs": 574
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "completionTokens": 72,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"acrobatics\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": [\"Attempt to climb or jump up the stairs\", \"Attempt to push your way through Sergeant Voss\", \"Persuade Sergeant Voss to let you pass\", \"Hide and try to slip past in the shadows\"]}",
+        "ttftMs": 266,
+        "totalMs": 1613
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-stairs\"}",
+        "ttftMs": 411,
+        "totalMs": 639
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1260,
+        "totalMs": 1831
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-docks\"}",
+        "ttftMs": 292,
+        "totalMs": 518
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 887,
+        "totalMs": 1390
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-north\"}",
+        "ttftMs": 1027,
+        "totalMs": 1245
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 276,
+        "totalMs": 757
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-maren"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 449,
+        "totalMs": 658
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 260,
+        "totalMs": 750
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 452,
+        "totalMs": 666
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1051,
+        "totalMs": 1566
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "npcId": "npc-brannoc"
+        },
+        "completionTokens": 17,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"talk\", \"npcId\": \"npc-brannoc\"}",
+        "ttftMs": 282,
+        "totalMs": 527
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 396,
+        "totalMs": 907
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 18,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"end_talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 513,
+        "totalMs": 778
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 287,
+        "totalMs": 795
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 18,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"end_talk\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 506,
+        "totalMs": 769
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 281,
+        "totalMs": 783
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 488,
+        "totalMs": 527
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 385,
+        "totalMs": 880
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "npcId": "npc-voss"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\", \"npcId\": \"npc-voss\"}",
+        "ttftMs": 479,
+        "totalMs": 694
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 271,
+        "totalMs": 759
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 466,
+        "totalMs": 504
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 820,
+        "totalMs": 1300
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "Who is the innkeeper?",
+          "choices": [
+            "Ask the NPC named Innkeeper",
+            "Ask the NPC named Tavernmaster",
+            "Ask the NPC named Keeper"
+          ]
+        },
+        "completionTokens": 55,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"Who is the innkeeper?\", \"choices\": [\"Ask the NPC named Innkeeper\", \"Ask the NPC named Tavernmaster\", \"Ask the NPC named Keeper\"]}",
+        "ttftMs": 851,
+        "totalMs": 1860
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 284,
+        "totalMs": 761
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1095,
+        "totalMs": 1594
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"impossible\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 296,
+        "totalMs": 792
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "athletics",
+          "difficulty": "hard"
+        },
+        "completionTokens": 29,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"athletics\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 1121,
+        "totalMs": 1610
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none"
+        },
+        "completionTokens": 7,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"none\"}",
+        "ttftMs": 273,
+        "totalMs": 312
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "hard"
+        },
+        "completionTokens": 58,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"stealth\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": [\"Sneak past the guard\", \"Talk to the guard\", \"Climb over the gate wall\", \"Use the lantern to distract the guard\"]}",
+        "ttftMs": 1034,
+        "totalMs": 2073
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate"
+        },
+        "completionTokens": 16,
+        "reasoningTokens": 0,
+        "raw": "{\"effect\": \"move\", \"exitId\": \"exit-gate\"}",
+        "ttftMs": 255,
+        "totalMs": 463
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "persuasion",
+          "difficulty": "hard"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"persuasion\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 997,
+        "totalMs": 1500
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "medium"
+        },
+        "completionTokens": 58,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"deception\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": [\"You bluff him and he seems impressed.\", \"You bluff him but he remains skeptical.\", \"You fail to convince him and he draws his weapon.\"]}",
+        "ttftMs": 280,
+        "totalMs": 1354
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "sleight_of_hand",
+          "difficulty": "hard"
+        },
+        "completionTokens": 89,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"sleight_of_hand\", \"difficulty\": \"hard\", \"question\": \"\", \"choices\": [\"Make a Dexterity (Sleight of Hand) check against DC 15 to pick the lock.\", \"Try to distract Sergeant Voss while you work.\", \"Use a common lock pick if you have one.\", \"Give up and try to pickpocket Maren instead.\"]}",
+        "ttftMs": 288,
+        "totalMs": 2047
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "completionTokens": 30,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"check\", \"skill\": \"acrobatics\", \"difficulty\": \"medium\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 980,
+        "totalMs": 1519
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What do you do?",
+          "choices": [
+            "sit at a corner table and order an ale",
+            "sit at the bar and talk to Maren",
+            "go to the notice board and read it",
+            "climb down to the cellar"
+          ]
+        },
+        "completionTokens": 71,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What do you do?\", \"choices\": [\"sit at a corner table and order an ale\", \"sit at the bar and talk to Maren\", \"go to the notice board and read it\", \"climb down to the cellar\"]}",
+        "ttftMs": 296,
+        "totalMs": 1622
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "Where exactly do you intend to go? The gate is shut and guarded, the steps lead down to the docks, and there is an alley to the east.",
+          "choices": [
+            "Go through the gate anyway",
+            "Take the steps down to the docks",
+            "Run down the alley"
+          ]
+        },
+        "completionTokens": 80,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"Where exactly do you intend to go? The gate is shut and guarded, the steps lead down to the docks, and there is an alley to the east.\", \"choices\": [\"Go through the gate anyway\", \"Take the steps down to the docks\", \"Run down the alley\"]}",
+        "ttftMs": 911,
+        "totalMs": 2398
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What do you use? Where do you use it? On what?",
+          "choices": [
+            "Use the wooden door",
+            "Use the fallen log",
+            "Use the standing stones",
+            "Use a tool from your backpack"
+          ]
+        },
+        "completionTokens": 66,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What do you use? Where do you use it? On what?\", \"choices\": [\"Use the wooden door\", \"Use the fallen log\", \"Use the standing stones\", \"Use a tool from your backpack\"]}",
+        "ttftMs": 832,
+        "totalMs": 2077
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "question": "What does the character try?",
+          "choices": [
+            "try to talk to Sergeant Voss",
+            "try to pick the chest lock",
+            "try to hide in the shadows",
+            "try to sneak past Voss"
+          ]
+        },
+        "completionTokens": 65,
+        "reasoningTokens": 0,
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"none\", \"difficulty\": \"none\", \"question\": \"What does the character try?\", \"choices\": [\"try to talk to Sergeant Voss\", \"try to pick the chest lock\", \"try to hide in the shadows\", \"try to sneak past Voss\"]}",
+        "ttftMs": 285,
+        "totalMs": 1526
+      }
+    }
+  ]
+}
