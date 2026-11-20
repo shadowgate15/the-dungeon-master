@@ -1,5 +1,5 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
-import { expandArc } from './arc-helpers'
+import { arcAnswers, expandArc } from './arc-helpers'
 
 const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
 
@@ -8,21 +8,6 @@ const queue = async (request: APIRequestContext, ...answers: object[]) => {
     data: { answers, replace: true }
   })
   expect(response.ok()).toBe(true)
-}
-
-const arcAnswer = {
-  title: 'The Ember Crown',
-  premise: 'A relic wakes.',
-  stakes: 'The valley burns.',
-  acts: Array.from({ length: 3 }, (_, a) => ({
-    name: `Act ${a + 1} name`,
-    purpose: 'Things escalate.',
-    beats: Array.from({ length: 2 }, (_, b) => ({
-      title: `Beat ${a + 1}.${b + 1}`,
-      description: 'Something happens.'
-    }))
-  })),
-  resolution: 'The relic is destroyed.'
 }
 
 /** What the model answers for the three First Scene stages (situation, place, NPCs). */
@@ -62,7 +47,7 @@ const firstSceneAnswers = () => [
 /** Generates and accepts the Arc on the Campaign page (a Session requires an accepted Arc). */
 export async function acceptArc(page: Page, request: APIRequestContext) {
   await expandArc(page)
-  await queue(request, { content: arcAnswer })
+  await queue(request, ...arcAnswers(3, 2)) // a short Campaign: 3 Acts, 2 Beats each
   await page.getByRole('button', { name: 'Generate Arc' }).click()
   await page.getByRole('button', { name: 'Accept Arc' }).click()
   await expect(page.getByRole('button', { name: 'Accept Arc' })).toHaveCount(0)

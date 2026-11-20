@@ -1,36 +1,11 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
-import { expandArc } from './arc-helpers'
+import { arcAnswers, expandArc } from './arc-helpers'
 import { createWorld } from './world-helpers'
 
 const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
 
 const control = (request: APIRequestContext, path: string, data: unknown) =>
   request.post(`${FAKE_LM_STUDIO}/__control/${path}`, { data })
-
-/** The model's answers for one Arc: the skeleton, then one Beats answer per Act. */
-const arcAnswers = (acts: number, beats: number, title = 'The Ember Crown', delayMs?: number) => [
-  {
-    content: {
-      title,
-      premise: 'A relic wakes.',
-      stakes: 'The valley burns.',
-      acts: Array.from({ length: acts }, (_, a) => ({
-        name: `Act ${a + 1} name`,
-        purpose: 'Things escalate.'
-      })),
-      resolution: 'The relic is destroyed.'
-    },
-    delayMs
-  },
-  ...Array.from({ length: acts }, (_, a) => ({
-    content: {
-      beats: Array.from({ length: beats }, (_, b) => ({
-        title: `Beat ${a + 1}.${b + 1}`,
-        description: 'Something happens.'
-      }))
-    }
-  }))
-]
 
 const queue = (request: APIRequestContext, ...answers: object[]) =>
   control(request, 'answers', { answers })
