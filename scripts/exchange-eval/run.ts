@@ -4,6 +4,7 @@
 //   pnpm eval:exchange --model <id> [--mode schema|raw-schema|tools] [--runs 5] [--cases a,b]
 //                      [--label x] [--temperature 0.7] [--think] [--out path]
 //                      [--contract v1|v2-prompt|v2-flat|v2-resists] [--max-tokens n] [--no-effects]
+//                      [--mode systemone [--no-examples]]
 //
 // Modes:
 // - schema: the app's real port (createChatPort over createChatAdapter) with `outputSchema`, so a
@@ -14,6 +15,9 @@
 // - prompt-json: no wire constraint; the schema is given in the prompt and the JSON is read from the
 //   final content. The only mode that works with thinking on: with a `response_format`, LM Studio
 //   applies the grammar to the reasoning itself, so the JSON lands in `reasoning_content`.
+// - systemone: a decision model (LM Studio's /v1/systemone) answering the v2 contract as typed
+//   choice questions, one request per step (see systemone.ts). --no-examples drops the worked
+//   examples from the outcome instructions. Temperature and --contract do not apply.
 // --contract picks the prompt and schema variant (see CONTRACTS in contract.ts).
 // The first adjudication request body of the cell is recorded as `wire`.
 //
@@ -27,7 +31,17 @@ import { callModel, createChatPort } from '#lib/server/ai/port.ts'
 import type { z } from 'zod'
 import { CASES, CHARACTER, type Case } from './cases.ts'
 import {
+  adjudicationRequest,
+  effectRequest,
+  sceneState,
+  toAdjudication,
+  toEffect,
+  type ChoiceAnswer,
+  type SystemOneRequest
+} from './systemone.ts'
+import {
   CONTRACTS,
+  adjudicationSchema,
   effectSchema,
   fromFlat,
   jsonSchemaOf,
@@ -40,7 +54,7 @@ export const BASE_URL = process.env.LM_STUDIO_BASE_URL ?? 'http://localhost:1234
 const ADJUDICATION_MAX_TOKENS = 200
 const EFFECT_MAX_TOKENS = 80
 
-export type Mode = 'schema' | 'raw-schema' | 'tools' | 'prompt-json'
+export type Mode = 'schema' | 'raw-schema' | 'tools' | 'prompt-json' | 'systemone'
 
 export interface Wire {
   request?: Record<string, unknown>
@@ -66,6 +80,9 @@ export interface Attempt {
   totalMs: number
   completionTokens?: number
   reasoningTokens?: number
+  /** systemone only: the model's confidence and probabilities per question. */
+  confidence?: Record<string, number>
+  probabilities?: Record<string, Record<string, number>>
 }
 
 export interface CaseRecord {
@@ -85,6 +102,8 @@ export interface CellResult {
   think: boolean
   /** Extra sampling fields sent with every request (e.g. presence_penalty for thinking). */
   sampling?: Record<string, unknown>
+  /** systemone only: whether the outcome instructions carried the worked examples. */
+  examples?: boolean
   memory?: string
   startedAt: string
   wire?: Record<string, unknown>
@@ -373,11 +392,57 @@ async function requestRaw(spec: RequestSpec, wiring: Wiring): Promise<Attempt> {
   return finish(wire, verdictFor(spec, parsed))
 }
 
-const SENDERS: Record<Mode, (spec: RequestSpec) => Promise<Attempt>> = {
+const SENDERS: Record<Exclude<Mode, 'systemone'>, (spec: RequestSpec) => Promise<Attempt>> = {
   schema: requestSchema,
   'raw-schema': (spec) => requestRaw(spec, 'response_format'),
   tools: (spec) => requestRaw(spec, 'tools'),
   'prompt-json': (spec) => requestRaw(spec, 'prompt')
+}
+
+/**
+ * One decision-model request (see systemone.ts). Not streamed, so there is no TTFT. The answer is
+ * valid when every choice is one of its criteria and the mapped object passes the contract schema.
+ */
+async function requestSystemOne(
+  body: SystemOneRequest,
+  toObject: (answers: Record<string, ChoiceAnswer>) => unknown,
+  schema: z.ZodType
+): Promise<Attempt> {
+  const startedAt = performance.now()
+  const totalMs = () => Math.round(performance.now() - startedAt)
+  lastWire = body as unknown as Record<string, unknown>
+  let text = ''
+  try {
+    const res = await realFetch(`${BASE_URL}/systemone`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120_000)
+    })
+    text = await res.text()
+    if (!res.ok)
+      return { ok: false, error: `http ${res.status}`, raw: text.slice(0, 400), totalMs: totalMs() }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      raw: text,
+      totalMs: totalMs()
+    }
+  }
+  const answers = (JSON.parse(text) as { answers?: Record<string, ChoiceAnswer> }).answers ?? {}
+  const meta = {
+    raw: JSON.stringify(Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, a.choice]))),
+    totalMs: totalMs(),
+    confidence: Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, a.confidence])),
+    probabilities: Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, a.probabilities]))
+  }
+  for (const [id, question] of Object.entries(body.questions)) {
+    const choice = answers[id]?.choice
+    if (choice === undefined || !(choice in question.criteria))
+      return { ok: false, error: `${id}: no valid choice (${choice})`, ...meta }
+  }
+  return { ...judge(schema, toObject(answers)), ...meta }
 }
 
 // ---- the cell ---------------------------------------------------------------------------------
@@ -395,6 +460,8 @@ export interface CellOptions {
   maxTokens?: number
   /** Run the Effect request too (default true). */
   effects?: boolean
+  /** systemone only: put the fix-round worked examples in the outcome instructions (default true). */
+  examples?: boolean
   memory?: string
   cases?: Case[]
   log?: (line: string) => void
@@ -408,40 +475,17 @@ export async function runCell(options: CellOptions): Promise<CellResult> {
     ...options.sampling,
     ...(!options.think && { reasoning_effort: 'none' })
   }
-  const send = SENDERS[options.mode]
   const records: CaseRecord[] = []
   let wire: Record<string, unknown> | undefined
   for (let run = 1; run <= options.runs; run++) {
     for (const c of cases) {
-      const user = sceneContext(c.scene, CHARACTER, c.declaration)
-      const adjudication = await send({
-        model: options.model,
-        mode: options.mode,
-        system: contract.adjudicationSystem,
-        user,
-        schema: contract.adjudicationWire,
-        ...(contract.flat && { post: fromFlat }),
-        toolName: 'adjudicate',
-        toolDescription: 'Record how the player’s declaration resolves.',
-        maxTokens: options.maxTokens ?? ADJUDICATION_MAX_TOKENS,
-        inject
-      })
+      const record =
+        options.mode === 'systemone'
+          ? await decisionCase(c, options)
+          : await chatCase(c, options, contract, inject)
       wire ??= lastWire
-      const effect =
-        c.effect && options.effects !== false
-          ? await send({
-              model: options.model,
-              mode: options.mode,
-              system: contract.effectSystem,
-              user,
-              schema: effectSchema(c.scene),
-              toolName: 'apply_effect',
-              toolDescription: 'Record the one change to the scene the successful action causes.',
-              maxTokens: EFFECT_MAX_TOKENS,
-              inject
-            })
-          : undefined
-      records.push({ caseId: c.id, run, adjudication, ...(effect && { effect }) })
+      records.push({ caseId: c.id, run, ...record })
+      const { adjudication, effect } = record
       const a = adjudication.object as { outcome?: string } | undefined
       const e = effect?.object as Effect | undefined
       options.log?.(
@@ -461,12 +505,67 @@ export async function runCell(options: CellOptions): Promise<CellResult> {
     runs: options.runs,
     temperature: options.temperature,
     think: options.think,
+    ...(options.mode === 'systemone' && { examples: options.examples !== false }),
     ...(options.sampling && { sampling: options.sampling }),
     ...(options.memory && { memory: options.memory }),
     startedAt: new Date().toISOString(),
     ...(wire && { wire }),
     records
   }
+}
+
+type Step = { adjudication: Attempt; effect?: Attempt }
+
+/** One case on a decision model: the v2 contract as typed questions, one request per step. */
+async function decisionCase(c: Case, options: CellOptions): Promise<Step> {
+  const state = sceneState(c.scene, CHARACTER, c.declaration)
+  const adjudication = await requestSystemOne(
+    adjudicationRequest(options.model, state, options.examples !== false),
+    toAdjudication,
+    adjudicationSchema
+  )
+  if (!c.effect || options.effects === false) return { adjudication }
+  const effect = await requestSystemOne(
+    effectRequest(options.model, c.scene, state),
+    (answers) => toEffect(answers.effect.choice),
+    effectSchema(c.scene)
+  )
+  return { adjudication, effect }
+}
+
+async function chatCase(
+  c: Case,
+  options: CellOptions,
+  contract: (typeof CONTRACTS)[ContractId],
+  inject: Record<string, unknown>
+): Promise<Step> {
+  const send = SENDERS[options.mode as Exclude<Mode, 'systemone'>]
+  const user = sceneContext(c.scene, CHARACTER, c.declaration)
+  const adjudication = await send({
+    model: options.model,
+    mode: options.mode,
+    system: contract.adjudicationSystem,
+    user,
+    schema: contract.adjudicationWire,
+    ...(contract.flat && { post: fromFlat }),
+    toolName: 'adjudicate',
+    toolDescription: 'Record how the player’s declaration resolves.',
+    maxTokens: options.maxTokens ?? ADJUDICATION_MAX_TOKENS,
+    inject
+  })
+  if (!c.effect || options.effects === false) return { adjudication }
+  const effect = await send({
+    model: options.model,
+    mode: options.mode,
+    system: contract.effectSystem,
+    user,
+    schema: effectSchema(c.scene),
+    toolName: 'apply_effect',
+    toolDescription: 'Record the one change to the scene the successful action causes.',
+    maxTokens: EFFECT_MAX_TOKENS,
+    inject
+  })
+  return { adjudication, effect }
 }
 
 export function writeResult(result: CellResult, out: string) {
@@ -503,6 +602,7 @@ if (import.meta.main) {
     think: process.argv.includes('--think'),
     ...(arg('max-tokens') && { maxTokens: Number(arg('max-tokens')) }),
     ...(process.argv.includes('--no-effects') && { effects: false }),
+    ...(process.argv.includes('--no-examples') && { examples: false }),
     cases: only ? CASES.filter((c) => only.includes(c.id)) : CASES,
     log: (line) => console.log(line)
   })

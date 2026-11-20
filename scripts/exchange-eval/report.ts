@@ -170,7 +170,7 @@ export function summaryTable(results: CellResult[]): string {
     const vague = s.perCategory.vague ?? { n: 0, correct: 0 }
     const check = s.perCategory.check ?? { n: 0, correct: 0 }
     const skill = skillOnCheckCases(result)
-    return `| ${s.label} | ${s.mode} | ${s.memory ?? 'n/a'} | ${pct(s.schemaValid, s.n)} | ${pct(s.correct, s.n)} | ${pct(s.gateCorrect, s.gateN)} | ${pct(vague.correct, vague.n)} | ${pct(check.correct, check.n)} | ${pct(skill.ok, skill.n)} | ${pct(s.difficultyPresent, s.checksCalled)} | ${pct(s.strayFields, s.schemaValid)} | ${pct(s.effectValid, s.effectN)} | ${pct(s.effectCorrect, s.effectN)} | ${secs(median(s.adjTtft))} / ${secs(p90(s.adjTtft))} | ${secs(median(s.adjTotal))} / ${secs(p90(s.adjTotal))} | ${mean(s.reasoningTokens)} | ${secs(median(s.effTotal))} | ${s.passes ? 'yes' : 'no'} |`
+    return `| ${s.label} | ${s.mode} | ${s.memory ?? 'n/a'} | ${pct(s.schemaValid, s.n)} | ${pct(s.correct, s.n)} | ${pct(s.gateCorrect, s.gateN)} | ${pct(vague.correct, vague.n)} | ${pct(check.correct, check.n)} | ${pct(skill.ok, skill.n)} | ${pct(s.difficultyPresent, s.checksCalled)} | ${s.mode === 'systemone' ? 'n/a' : pct(s.strayFields, s.schemaValid)} | ${pct(s.effectValid, s.effectN)} | ${pct(s.effectCorrect, s.effectN)} | ${secs(median(s.adjTtft))} / ${secs(p90(s.adjTtft))} | ${secs(median(s.adjTotal))} / ${secs(p90(s.adjTotal))} | ${mean(s.reasoningTokens)} | ${secs(median(s.effTotal))} | ${s.passes ? 'yes' : 'no'} |`
   })
   return [head, ...rows].join('\n')
 }
@@ -205,6 +205,79 @@ export function caseTable(results: CellResult[]): string {
   return [head, ...rows].join('\n')
 }
 
+// ---- decision models: confidence vs correctness -------------------------------------------------
+
+const BUCKETS: [string, number, number][] = [
+  ['< 0.5', 0, 0.5],
+  ['0.5–0.8', 0.5, 0.8],
+  ['≥ 0.8', 0.8, Infinity]
+]
+const THRESHOLDS = [0.5, 0.6, 0.7, 0.8, 0.9]
+
+interface Judged {
+  confidence: number
+  correct: boolean
+  /** Expected outcome is `ask`, so turning this answer into an ask would be right. */
+  askIsRight: boolean
+  gate: boolean
+}
+
+/** Every answer of one step with the model's confidence in it (systemone cells only). */
+function judged(result: CellResult, step: 'adjudication' | 'effect'): Judged[] {
+  const out: Judged[] = []
+  for (const r of result.records) {
+    const c = byId.get(r.caseId)
+    const attempt = step === 'adjudication' ? r.adjudication : r.effect
+    const confidence = attempt?.confidence?.[step === 'adjudication' ? 'outcome' : 'effect']
+    if (!c || !attempt || confidence === undefined) continue
+    const correct =
+      step === 'adjudication'
+        ? adjudicationOf(attempt)?.outcome === c.outcome
+        : !!c.effect && effectCorrect(c.effect, attempt)
+    out.push({
+      confidence,
+      correct,
+      askIsRight: step === 'adjudication' && c.outcome === 'ask',
+      gate: GATE.includes(c.category)
+    })
+  }
+  return out
+}
+
+/** Accuracy by confidence bucket, and what a "confidence below X → ask" rule would catch and cost. */
+export function confidenceTables(result: CellResult): string {
+  const parts: string[] = []
+  for (const step of ['adjudication', 'effect'] as const) {
+    const xs = judged(result, step)
+    if (xs.length === 0) continue
+    const errors = xs.filter((x) => !x.correct).length
+    const rights = xs.length - errors
+    parts.push(
+      `**${result.label}: ${step === 'adjudication' ? 'Adjudication outcome' : 'Effect'}** (${xs.length} answers, ${errors} wrong)\n\n` +
+        '| Confidence | Answers | Accuracy |\n| --- | --- | --- |\n' +
+        BUCKETS.map(([name, lo, hi]) => {
+          const b = xs.filter((x) => x.confidence >= lo && x.confidence < hi)
+          return `| ${name} | ${b.length} | ${pct(b.filter((x) => x.correct).length, b.length)} |`
+        }).join('\n')
+    )
+    const gate = xs.filter((x) => x.gate)
+    parts.push(
+      (step === 'adjudication'
+        ? '| Below X → ask | Errors caught | Correct answers turned into asks | Gate after the rule |\n'
+        : '| Below X flagged | Errors caught | Correct answers flagged |\n') +
+        `| --- | --- | --- |${step === 'adjudication' ? ' --- |' : ''}\n` +
+        THRESHOLDS.map((t) => {
+          const low = xs.filter((x) => x.confidence < t)
+          const caught = low.filter((x) => !x.correct).length
+          const lost = low.filter((x) => x.correct && !x.askIsRight).length
+          const after = gate.filter((x) => (x.confidence < t ? x.askIsRight : x.correct)).length
+          return `| ${t} | ${caught} of ${errors} (${pct(caught, errors)}) | ${lost} of ${rights} (${pct(lost, rights)}) |${step === 'adjudication' ? ` ${pct(after, gate.length)} |` : ''}`
+        }).join('\n')
+    )
+  }
+  return parts.join('\n\n')
+}
+
 if (import.meta.main) {
   const dir = join(import.meta.dirname, 'results')
   const files = process.argv.slice(2).length
@@ -220,4 +293,9 @@ if (import.meta.main) {
   console.log(categoryTable(results))
   console.log('\n## Outcomes per case\n')
   console.log(caseTable(results))
+  const decision = results.filter((r) => r.mode === 'systemone')
+  if (decision.length) {
+    console.log('\n## Confidence vs correctness (decision models)\n')
+    console.log(decision.map(confidenceTables).join('\n\n'))
+  }
 }

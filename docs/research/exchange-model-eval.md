@@ -13,7 +13,7 @@ Which local model, quant and wire mode can do both reliably? The pass bar is ≥
 
 ## Answer
 
-**Update (fix round, below): the bar is met.** qwen3.5-9b MLX 4bit with the v2-flat contract, reasoning off, passes through the app's own port: 100% schema-valid, 95% gate, 98% Effect, adjudication p50 1.3s. Round 1's answer follows.
+**Update (fix round, below): the bar is met.** qwen3.5-9b MLX 4bit with the v2-flat contract, reasoning off, passes through the app's own port: 100% schema-valid, 95% gate, 98% Effect, adjudication p50 1.3s. The decision model Clef-Flash was tried as a challenger and does not pass (88% gate, because absent targets are judged `happens`). qwen stays the judge; see "Decision model (Clef)". Round 1's answer follows.
 
 **Round 1: no cell passes.** Every qwen3.5-9b cell with a working wire is 99–100% schema-valid and asks on vague input 95–100% of the time. Gate accuracy, though, sits at 75–79% whatever the quant or format. The misses are judgment, not format:
 
@@ -113,6 +113,96 @@ pnpm eval:exchange --model <loaded-id> --mode schema --contract v2-flat --runs 5
 ```
 
 `--round 1` runs the round-1 grid. `--contract v1|v2-prompt|v2-flat|v2-resists` picks the contract; mode `prompt-json` puts the schema in the prompt instead of on the wire.
+
+## Decision model (Clef)
+
+Challenger: `cloudflare_clef-flash` (bartowski GGUF Q4_K_M, 9.1B, arch `clef`, LM Studio type `decision`). It cannot generate text. It answers typed questions on `POST /v1/systemone` with a choice, a probability for each option, and a confidence.
+
+**Wire (`systemone` mode, `systemone.ts`).** The fix-round v2 contract is mapped onto choice questions, one request per step:
+
+- **Adjudication** is one request with three questions:
+  - `outcome` (happens/impossible/check/ask): the v2 principle is in the instructions, and each option's v2 definition is its criterion description.
+  - `skill` (the 24 CHECKS): the SRD skill mapping is in the instructions, with one SRD-terms line per skill or save.
+  - `difficulty` (easy to very_hard): each criterion is described with its DC.
+  - Skill and difficulty are read only when the outcome is `check`.
+- **Effect** is one `effect` choice. Its criteria are the Scene's own options (`none`, `move:<exitId>`, `talk:<npcId>`, `end_talk`), each described in words, using the final fix-round Effect principle.
+- **State** is the same Scene information the chat prompt gets, as an object: character, location, mode, exits, objects, people_present, recent_events, declaration.
+- **`ask`** is scored on the outcome alone. Clef cannot write the question; in the app, the narration model would write it from the Scene and the declaration.
+
+**Load setting.** At LM Studio's default physical batch size (512), every request fails with `http 500: input (1685 tokens) is too large to process. increase the physical batch size`. The Adjudication request is about 1,700 tokens and the Effect about 600. `lms load` and the SDK cannot set this, but the REST load can: `POST /api/v1/models/load {"model": "cloudflare_clef-flash", "context_length": 8192, "eval_batch_size": 4096, "physical_batch_size": 4096}`. The `physical_batch_size` field is not in the docs, but it is accepted and echoed in `load_config`.
+
+**Run.** 32 cases × 5 runs with Clef loaded alone, once with the fix-round worked examples in the `outcome` instructions and once without. **The answers are fully deterministic.** All 5 runs of every case returned the same choices and identical probabilities (maximum difference 0). Each cell is therefore really 32 distinct answers, repeated.
+
+| Metric                   | `clef-systemone` (examples) | `clef-systemone-no-examples` | `fix-v2-flat-schema` (qwen3.5-9b) |
+| ------------------------ | --------------------------- | ---------------------------- | --------------------------------- |
+| Schema-valid             | 100%                        | 100%                         | 100%                              |
+| Outcome (gate)           | **88%**                     | 88%                          | **95%**                           |
+| impossible               | 40%                         | 40%                          | 84%                               |
+| Other gate categories    | 100%                        | 100%                         | 93–100%                           |
+| Vague→ask                | 100%                        | 100%                         | 100%                              |
+| Check outcome / Skill OK | 100% / 100%                 | 100% / 100%                  | 100% / 97%                        |
+| Stray fields             | n/a                         | n/a                          | 0%                                |
+| Effect correct           | 84%                         | 84%                          | 98%                               |
+| Adjudication p50 / p90   | 4.32 / 4.68s                | 4.15 / 4.37s                 | 1.32 / 2.16s                      |
+| Effect p50               | 1.39s                       | 1.54s                        | 0.83s                             |
+| Memory                   | 6.48 GiB                    | 6.48 GiB                     | 5.57 GiB                          |
+| Pass                     | no                          | no                           | yes                               |
+
+Clef's latency is the full non-streamed request (it has no TTFT).
+
+**Where Clef fails.** Everything ordinary is right: no check on movement or speech, and correct SRD skills on every check. Every Adjudication miss is in `impossible`:
+
+- "I ask the innkeeper for a room" and "I wake the sleeping dragon" in an empty clearing both get `happens`, at confidence 0.36 and 0.23. People present is an empty list in the state.
+- "I fly up over the wall" gets `check:athletics`.
+
+This is not a structural limit: `impossible` is an option, and Clef picks it for "jump to the moon" and "lift the tavern". It is a judgment miss on absent targets, the same weak spot qwen has but worse.
+
+The three Effect misses are `open-door` → `move:exit-north` (the north door is an exit, but opening it is not leaving), `out-front` → `none`, and `hail-guard` → `none`.
+
+**Worked examples did not help.** Every choice is identical with and without them. Only the confidences shift slightly, and the examples add about 0.2s.
+
+### Confidence vs correctness
+
+Because the runs are identical, the counts below are distinct cases. The ×5 tables from `pnpm eval:exchange:report` give the same percentages.
+
+**Adjudication outcome** (examples cell, 32 cases, 3 wrong):
+
+| Confidence | Cases | Accuracy |
+| ---------- | ----- | -------- |
+| < 0.5      | 8     | 75%      |
+| 0.5–0.8    | 14    | 93%      |
+| ≥ 0.8      | 10    | 100%     |
+
+| Rule: below X → ask | Errors caught | Correct answers turned into asks | Gate after the rule |
+| ------------------- | ------------- | -------------------------------- | ------------------- |
+| 0.5                 | 2 of 3        | 3 of 29 (10%)                    | 81%                 |
+| 0.6                 | 2 of 3        | 4 of 29 (14%)                    | 77%                 |
+| 0.7                 | 3 of 3        | 6 of 29 (21%)                    | 73%                 |
+| 0.8                 | 3 of 3        | 15 of 29 (52%)                   | 46%                 |
+
+Confidence is low on the misses, but it is just as low on many right answers. The four vague cases are correct `ask`s at only 0.37–0.52, and "I read the notices" (0.31), "I call out to the guard" (0.30) and "I try to persuade the guard" (0.45) are right but unsure. A rule that turns a low-confidence answer into `ask` therefore never raises the gate: at 0.5 it catches the two absent-person misses, but it asks on three good answers, and `ask` is still the wrong outcome for an absent person. **Do not adopt an "ask when unsure" rule on the outcome.**
+
+**Effect** (19 cases, 3 wrong):
+
+| Confidence | Cases | Accuracy |
+| ---------- | ----- | -------- |
+| < 0.5      | 3     | 0%       |
+| 0.5–0.8    | 8     | 100%     |
+| ≥ 0.8      | 8     | 100%     |
+
+Below 0.5, the rule flags all 3 errors and no correct answer (at 0.6 it also flags one correct answer). On this set, Effect confidence separates right from wrong cleanly. With only three errors, that is suggestive rather than proven.
+
+### Recommendation: qwen3.5-9b stays the judge
+
+- **Accuracy first.** qwen with the v2-flat contract passes the bar: 95% gate, 98% Effect. Clef does not: 88% gate, 84% Effect. Clef's `impossible` accuracy (40%) is the decisive gap, and confidence cannot rescue it.
+- **Latency second.** qwen is also faster: Adjudication p50 1.3s vs 4.3s, Effect 0.8s vs 1.4s. Clef has to process three long question blocks in one non-streamed request.
+- **Clef's advantages are real but secondary:** fully deterministic answers, calibrated probabilities, and no way to emit malformed output. It also needs about 0.9 GiB more memory, plus a non-default load setting.
+- **A narrow future use**, if a second model is ever worth keeping resident: Clef's low Effect confidence could serve as a cross-check on structural changes. That alone does not justify it today.
+
+```sh
+# Load Clef alone with a batch size large enough for the Adjudication request, then:
+pnpm eval:exchange --model cloudflare_clef-flash --mode systemone --runs 5 --label clef-systemone [--no-examples]
+```
 
 ## Wire mechanism (the app's port)
 
