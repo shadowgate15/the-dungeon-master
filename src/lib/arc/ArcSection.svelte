@@ -1,11 +1,20 @@
 <script lang="ts">
+  import { fetchServerSentEvents } from '@tanstack/ai-client'
   import type { Length } from '../campaign/enums.ts'
   import Alert from '../ui/Alert.svelte'
   import Badge from '../ui/Badge.svelte'
   import Button from '../ui/Button.svelte'
   import Textarea from '../ui/Textarea.svelte'
   import TextInput from '../ui/TextInput.svelte'
-  import { ARC_SIZES, arcProblems, sizeText, type ArcViewData } from './arc.ts'
+  import {
+    ARC_CHUNK,
+    ARC_SIZES,
+    arcProblems,
+    sizeText,
+    type ArcStep,
+    type ArcStreamEvent,
+    type ArcViewData
+  } from './arc.ts'
 
   /**
    * The Arc section of the Campaign page: generate, edit inline, accept. The Arc is a draft
@@ -82,6 +91,15 @@
   let error = $state('')
   let confirming = $state(false)
   let controller: AbortController | undefined
+  /** The generation step being written; null until the first progress line. */
+  let step = $state<ArcStep | null>(null)
+  const stepLabel = $derived(
+    step?.kind === 'act'
+      ? `Writing Act ${step.number} of ${step.of}…`
+      : step?.kind === 'skeleton'
+        ? 'Planning the story…'
+        : 'Generating the Arc…'
+  )
 
   const busy = $derived(phase !== 'idle')
   const frozen = $derived(readOnly || busy)
@@ -130,34 +148,75 @@
   }
   const addBeat = (act: EditAct) => act.beats.push(newBeat())
 
+  const GENERIC_FAILURE = 'The Arc could not be generated.'
+
+  /**
+   * Generates over TanStack AI's server-sent-events connection: each progress event updates the
+   * step label, and the final event decides the outcome. A pre-flight rejection (conflict, AI
+   * unavailable) is a plain JSON error response, so its message is read from the body. Resolves
+   * with the failure message, or null on success (a Stop ends the stream quietly).
+   */
+  async function runGeneration(signal: AbortSignal): Promise<string | null> {
+    let rejection: string | undefined
+    const connection = fetchServerSentEvents(`/api/campaigns/${campaignId}/arc`, {
+      fetchClient: async (input, init) => {
+        const response = await fetcher(String(input), init)
+        if (!response.ok) {
+          const body = (await response
+            .clone()
+            .json()
+            .catch(() => null)) as { error?: string; failure?: { message?: string } } | null
+          rejection = body?.failure?.message ?? body?.error ?? GENERIC_FAILURE
+        }
+        return response
+      }
+    })
+    let result: ArcStreamEvent | undefined
+    try {
+      for await (const chunk of connection.connect([], { action: 'generate' }, signal, {
+        threadId: campaignId,
+        runId: crypto.randomUUID()
+      })) {
+        if (chunk.type === 'CUSTOM' && chunk.name === ARC_CHUNK) {
+          const event = chunk.value as ArcStreamEvent
+          if (event.type === 'progress') step = event.step
+          else result = event
+        }
+      }
+    } catch (e) {
+      if (rejection !== undefined) return rejection
+      throw e
+    }
+    if (rejection !== undefined) return rejection
+    // A stream that ends without a final event is a generic failure.
+    if (!result) return GENERIC_FAILURE
+    if (result.type === 'result' && !result.ok) return result.failure.message || GENERIC_FAILURE
+    return null
+  }
+
   async function generate() {
     confirming = false
     failure = ''
     error = ''
     phase = 'generating'
+    step = null
     controller = new AbortController()
     try {
-      const response = await fetcher(`/api/campaigns/${campaignId}/arc`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'generate' }),
-        signal: controller.signal
-      })
-      const body = (await response.json().catch(() => null)) as {
-        ok?: boolean
-        error?: string
-        failure?: { message?: string }
-      } | null
-      if (body?.ok) {
+      const message = await runGeneration(controller.signal)
+      // Stop: the stored Arc is untouched and nothing is shown.
+      if (controller.signal.aborted) {
+        phase = 'idle'
+        return
+      }
+      if (message === null) {
         phase = 'idle'
         onchange()
         return
       }
-      failure = body?.failure?.message ?? body?.error ?? 'The Arc could not be generated.'
+      failure = message
     } catch (e) {
-      // Stop: the stored Arc is untouched and nothing is shown.
-      if (!(e instanceof DOMException && e.name === 'AbortError')) {
-        failure = 'The Arc could not be generated.'
+      if (!controller.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
+        failure = GENERIC_FAILURE
       }
     }
     phase = 'idle'
@@ -242,7 +301,7 @@
       <div class="flex flex-wrap items-center gap-2">
         {#if phase === 'generating'}
           <Button variant="secondary" onclick={stop}>Stop</Button>
-          <span class="text-sm text-muted" role="status">Generating the Arc…</span>
+          <span class="text-sm text-muted" role="status">{stepLabel}</span>
         {:else if arc}
           <Button variant="secondary" onclick={regenerate} disabled={busy || !canGenerate}
             >Regenerate</Button
