@@ -3,6 +3,7 @@
 //
 //   pnpm eval:exchange --model <id> [--mode schema|raw-schema|tools] [--runs 5] [--cases a,b]
 //                      [--label x] [--temperature 0.7] [--think] [--out path]
+//                      [--contract v1|v2-prompt|v2-flat|v2-resists] [--max-tokens n] [--no-effects]
 //
 // Modes:
 // - schema: the app's real port (createChatPort over createChatAdapter) with `outputSchema`, so a
@@ -10,6 +11,10 @@
 //   with `strict: true`, and widens every optional field to required-and-nullable on the way.
 // - raw-schema: `response_format: json_schema` strict sent raw, with optional fields left optional.
 // - tools: the same contract offered as one function tool with `tool_choice: "required"`, sent raw.
+// - prompt-json: no wire constraint; the schema is given in the prompt and the JSON is read from the
+//   final content. The only mode that works with thinking on: with a `response_format`, LM Studio
+//   applies the grammar to the reasoning itself, so the JSON lands in `reasoning_content`.
+// --contract picks the prompt and schema variant (see CONTRACTS in contract.ts).
 // The first adjudication request body of the cell is recorded as `wire`.
 //
 // Every request goes through a fetch wrapper that times the first streamed token, keeps the raw
@@ -22,12 +27,12 @@ import { callModel, createChatPort } from '#lib/server/ai/port.ts'
 import type { z } from 'zod'
 import { CASES, CHARACTER, type Case } from './cases.ts'
 import {
-  ADJUDICATION_SYSTEM,
-  EFFECT_SYSTEM,
-  adjudicationSchema,
+  CONTRACTS,
   effectSchema,
+  fromFlat,
   jsonSchemaOf,
   sceneContext,
+  type ContractId,
   type Effect
 } from './contract.ts'
 
@@ -35,7 +40,7 @@ export const BASE_URL = process.env.LM_STUDIO_BASE_URL ?? 'http://localhost:1234
 const ADJUDICATION_MAX_TOKENS = 200
 const EFFECT_MAX_TOKENS = 80
 
-export type Mode = 'schema' | 'raw-schema' | 'tools'
+export type Mode = 'schema' | 'raw-schema' | 'tools' | 'prompt-json'
 
 export interface Wire {
   request?: Record<string, unknown>
@@ -46,6 +51,7 @@ export interface Wire {
   toolArgs: string
   toolCalls: number
   finishReason?: string
+  usage?: { completion_tokens?: number; completion_tokens_details?: { reasoning_tokens?: number } }
 }
 
 export interface Attempt {
@@ -58,6 +64,8 @@ export interface Attempt {
   reasoning?: string
   ttftMs?: number
   totalMs: number
+  completionTokens?: number
+  reasoningTokens?: number
 }
 
 export interface CaseRecord {
@@ -71,9 +79,12 @@ export interface CellResult {
   label: string
   model: string
   mode: Mode
+  contract?: ContractId
   runs: number
   temperature: number
   think: boolean
+  /** Extra sampling fields sent with every request (e.g. presence_penalty for thinking). */
+  sampling?: Record<string, unknown>
   memory?: string
   startedAt: string
   wire?: Record<string, unknown>
@@ -104,12 +115,14 @@ async function consume(body: ReadableStream<Uint8Array>, wire: Wire) {
         }
         finish_reason?: string
       }[]
+      usage?: Wire['usage']
     }
     try {
       chunk = JSON.parse(json)
     } catch {
       return
     }
+    if (chunk.usage) wire.usage = chunk.usage
     const choice = chunk.choices?.[0]
     const part = choice?.delta ?? choice?.message
     if (!part) return
@@ -208,15 +221,26 @@ interface RequestSpec {
   system: string
   user: string
   schema: z.ZodObject
+  /** Maps a schema-valid object to the one scored (the flat Adjudication's code-side rules). */
+  post?: (object: Record<string, unknown>) => { ok: boolean; object?: unknown; error?: string }
   toolName: string
   toolDescription: string
   maxTokens: number
   inject: Record<string, unknown>
 }
 
+function verdictFor(spec: RequestSpec, parsed: unknown) {
+  const verdict = judge(spec.schema, parsed)
+  return verdict.ok && spec.post ? spec.post(verdict.object as Record<string, unknown>) : verdict
+}
+
 function finish(wire: Wire, verdict: { ok: boolean; object?: unknown; error?: string }): Attempt {
+  const completion = wire.usage?.completion_tokens
+  const reasoning = wire.usage?.completion_tokens_details?.reasoning_tokens
   return {
     ...verdict,
+    ...(completion !== undefined && { completionTokens: completion }),
+    ...(reasoning !== undefined && { reasoningTokens: reasoning }),
     raw: wire.toolArgs || wire.content,
     ...(wire.reasoning && { reasoning: wire.reasoning.slice(0, 400) }),
     ...(wire.firstTokenAt !== undefined && {
@@ -244,33 +268,50 @@ async function requestSchema(spec: RequestSpec): Promise<Attempt> {
   if (!call.ok)
     return finish(wire, { ok: false, error: `${call.failure.kind}: ${call.failure.message}` })
   if (call.object === undefined) return finish(wire, { ok: false, error: 'no object' })
-  return finish(wire, judge(spec.schema, call.object))
+  return finish(wire, verdictFor(spec, call.object))
 }
 
-/** A raw streamed request; `tools` offers the contract as one required tool, else `response_format`. */
-async function requestRaw(spec: RequestSpec, tools: boolean): Promise<Attempt> {
+/** Reads the JSON object out of free content: drops any fence and text around the outermost braces. */
+function extractJson(content: string): string {
+  const start = content.indexOf('{')
+  const end = content.lastIndexOf('}')
+  return start >= 0 && end > start ? content.slice(start, end + 1) : content
+}
+
+type Wiring = 'tools' | 'response_format' | 'prompt'
+
+/** A raw streamed request: the contract as one required tool, as `response_format`, or in the prompt only. */
+async function requestRaw(spec: RequestSpec, wiring: Wiring): Promise<Attempt> {
   const wire = begin(spec.inject)
-  const contract = tools
-    ? {
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: spec.toolName,
-              description: spec.toolDescription,
-              parameters: jsonSchemaOf(spec.schema),
-              strict: true
+  const tools = wiring === 'tools'
+  const system =
+    wiring === 'prompt'
+      ? `${spec.system}\n\nReply with only the JSON object, no other text. It must match this JSON Schema:\n${JSON.stringify(jsonSchemaOf(spec.schema))}`
+      : spec.system
+  const contract =
+    wiring === 'prompt'
+      ? {}
+      : tools
+        ? {
+            tools: [
+              {
+                type: 'function',
+                function: {
+                  name: spec.toolName,
+                  description: spec.toolDescription,
+                  parameters: jsonSchemaOf(spec.schema),
+                  strict: true
+                }
+              }
+            ],
+            tool_choice: 'required'
+          }
+        : {
+            response_format: {
+              type: 'json_schema',
+              json_schema: { name: spec.toolName, strict: true, schema: jsonSchemaOf(spec.schema) }
             }
           }
-        ],
-        tool_choice: 'required'
-      }
-    : {
-        response_format: {
-          type: 'json_schema',
-          json_schema: { name: spec.toolName, strict: true, schema: jsonSchemaOf(spec.schema) }
-        }
-      }
   try {
     const res = await fetch(`${BASE_URL}/chat/completions`, {
       method: 'POST',
@@ -278,7 +319,7 @@ async function requestRaw(spec: RequestSpec, tools: boolean): Promise<Attempt> {
       body: JSON.stringify({
         model: spec.model,
         messages: [
-          { role: 'system', content: spec.system },
+          { role: 'system', content: system },
           { role: 'user', content: spec.user }
         ],
         ...contract,
@@ -286,7 +327,7 @@ async function requestRaw(spec: RequestSpec, tools: boolean): Promise<Attempt> {
         stream: true,
         stream_options: { include_usage: true }
       }),
-      signal: AbortSignal.timeout(120_000)
+      signal: AbortSignal.timeout(600_000)
     })
     if (!res.ok) {
       const text = await res.text()
@@ -303,7 +344,11 @@ async function requestRaw(spec: RequestSpec, tools: boolean): Promise<Attempt> {
   }
   await end()
   lastWire = wire.request
-  const answer = tools ? wire.toolArgs : wire.content
+  const answer = tools
+    ? wire.toolArgs
+    : wiring === 'prompt'
+      ? extractJson(wire.content)
+      : wire.content
   if (!answer) {
     const missing = tools ? 'no tool call' : 'no content'
     return finish(wire, {
@@ -320,15 +365,19 @@ async function requestRaw(spec: RequestSpec, tools: boolean): Promise<Attempt> {
   try {
     parsed = JSON.parse(answer)
   } catch {
-    return finish(wire, { ok: false, error: 'output is not JSON' })
+    return finish(wire, {
+      ok: false,
+      error: wire.finishReason === 'length' ? 'hit max_tokens' : 'output is not JSON'
+    })
   }
-  return finish(wire, judge(spec.schema, parsed))
+  return finish(wire, verdictFor(spec, parsed))
 }
 
 const SENDERS: Record<Mode, (spec: RequestSpec) => Promise<Attempt>> = {
   schema: requestSchema,
-  'raw-schema': (spec) => requestRaw(spec, false),
-  tools: (spec) => requestRaw(spec, true)
+  'raw-schema': (spec) => requestRaw(spec, 'response_format'),
+  tools: (spec) => requestRaw(spec, 'tools'),
+  'prompt-json': (spec) => requestRaw(spec, 'prompt')
 }
 
 // ---- the cell ---------------------------------------------------------------------------------
@@ -337,9 +386,15 @@ export interface CellOptions {
   label: string
   model: string
   mode: Mode
+  contract?: ContractId
   runs: number
   temperature: number
   think: boolean
+  sampling?: Record<string, unknown>
+  /** Adjudication max_tokens; thinking needs far more than the default 200. */
+  maxTokens?: number
+  /** Run the Effect request too (default true). */
+  effects?: boolean
   memory?: string
   cases?: Case[]
   log?: (line: string) => void
@@ -347,8 +402,10 @@ export interface CellOptions {
 
 export async function runCell(options: CellOptions): Promise<CellResult> {
   const cases = options.cases ?? CASES
+  const contract = CONTRACTS[options.contract ?? 'v1']
   const inject = {
     temperature: options.temperature,
+    ...options.sampling,
     ...(!options.think && { reasoning_effort: 'none' })
   }
   const send = SENDERS[options.mode]
@@ -360,28 +417,30 @@ export async function runCell(options: CellOptions): Promise<CellResult> {
       const adjudication = await send({
         model: options.model,
         mode: options.mode,
-        system: ADJUDICATION_SYSTEM,
+        system: contract.adjudicationSystem,
         user,
-        schema: adjudicationSchema,
+        schema: contract.adjudicationWire,
+        ...(contract.flat && { post: fromFlat }),
         toolName: 'adjudicate',
         toolDescription: 'Record how the player’s declaration resolves.',
-        maxTokens: ADJUDICATION_MAX_TOKENS,
+        maxTokens: options.maxTokens ?? ADJUDICATION_MAX_TOKENS,
         inject
       })
       wire ??= lastWire
-      const effect = c.effect
-        ? await send({
-            model: options.model,
-            mode: options.mode,
-            system: EFFECT_SYSTEM,
-            user,
-            schema: effectSchema(c.scene),
-            toolName: 'apply_effect',
-            toolDescription: 'Record the one change to the scene the successful action causes.',
-            maxTokens: EFFECT_MAX_TOKENS,
-            inject
-          })
-        : undefined
+      const effect =
+        c.effect && options.effects !== false
+          ? await send({
+              model: options.model,
+              mode: options.mode,
+              system: contract.effectSystem,
+              user,
+              schema: effectSchema(c.scene),
+              toolName: 'apply_effect',
+              toolDescription: 'Record the one change to the scene the successful action causes.',
+              maxTokens: EFFECT_MAX_TOKENS,
+              inject
+            })
+          : undefined
       records.push({ caseId: c.id, run, adjudication, ...(effect && { effect }) })
       const a = adjudication.object as { outcome?: string } | undefined
       const e = effect?.object as Effect | undefined
@@ -398,9 +457,11 @@ export async function runCell(options: CellOptions): Promise<CellResult> {
     label: options.label,
     model: options.model,
     mode: options.mode,
+    contract: contract.id,
     runs: options.runs,
     temperature: options.temperature,
     think: options.think,
+    ...(options.sampling && { sampling: options.sampling }),
     ...(options.memory && { memory: options.memory }),
     startedAt: new Date().toISOString(),
     ...(wire && { wire }),
@@ -429,15 +490,19 @@ if (import.meta.main) {
     process.exit(1)
   }
   const mode = (arg('mode') ?? 'schema') as Mode
+  const contract = (arg('contract') ?? 'v1') as ContractId
   const only = arg('cases')?.split(',')
   const label = arg('label') ?? `${model}-${mode}`
   const result = await runCell({
     label,
     model,
     mode,
+    contract,
     runs: Number(arg('runs') ?? 5),
     temperature: Number(arg('temperature') ?? 0.7),
     think: process.argv.includes('--think'),
+    ...(arg('max-tokens') && { maxTokens: Number(arg('max-tokens')) }),
+    ...(process.argv.includes('--no-effects') && { effects: false }),
     cases: only ? CASES.filter((c) => only.includes(c.id)) : CASES,
     log: (line) => console.log(line)
   })

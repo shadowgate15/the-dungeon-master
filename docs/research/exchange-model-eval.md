@@ -13,7 +13,9 @@ Which local model, quant and wire mode can do both reliably? The pass bar is ≥
 
 ## Answer
 
-**No cell passes.** Every qwen3.5-9b cell with a working wire is 99–100% schema-valid and asks on vague input 95–100% of the time. Gate accuracy, though, sits at 75–79% whatever the quant or format. The misses are judgment, not format:
+**Update (fix round, below): the bar is met.** qwen3.5-9b MLX 4bit with the v2-flat contract, reasoning off, passes through the app's own port: 100% schema-valid, 95% gate, 98% Effect, adjudication p50 1.3s. Round 1's answer follows.
+
+**Round 1: no cell passes.** Every qwen3.5-9b cell with a working wire is 99–100% schema-valid and asks on vague input 95–100% of the time. Gate accuracy, though, sits at 75–79% whatever the quant or format. The misses are judgment, not format:
 
 - **Ordinary movement gets a check.** "I climb down into the cellar" → `check:stealth` in 5/5 runs on nearly every 9b cell. "I go up to my room" behaves the same way.
 - **Plain speech in dialogue gets a check.** "What do you know about the smugglers?" → `check:insight`. Speech scores 27–67%.
@@ -32,6 +34,85 @@ The prompt already says "never for ordinary walking, talking or handling things"
 - **Baseline qwen3-4b-2507 (MLX 4bit)** is fastest (0.35s total) but has the lowest gate accuracy (69%). It never asks on "I go over there" and calls `investigation` checks on plain questions.
 
 **Recommended default: qwen3.5-9b MLX 4bit, JSON-schema mode, with `reasoning_effort: "none"` added to the request.** It matches the best quality, is the smallest 9b at 5.6 GiB, and has the lowest 9b latency: adjudication 0.9–1.7s total, TTFT 0.35s. Ship it only after the judgment fixes above, since nothing clears the bar today.
+
+## Fix round
+
+Same model (qwen3.5-9b MLX 4bit), same 32 cases, 5 runs, temperature 0.7, `reasoning_effort: "none"` unless noted. No case or expectation was changed. `climb-wall` still accepts only `athletics`; once the prompt states the SRD skill mapping, the model picks it in every run, so widening the case to acrobatics was not needed.
+
+### Before and after
+
+| Cell                                   | Contract and wire                          | Valid | Gate    | Vague→ask | Skill OK | Stray | Effect  | Adj p50 / p90    | Reasoning tokens | Pass    |
+| -------------------------------------- | ------------------------------------------ | ----- | ------- | --------- | -------- | ----- | ------- | ---------------- | ---------------- | ------- |
+| `qwen3.5-9b-mlx4-raw-schema` (round 1) | v1, optional fields, raw `response_format` | 100%  | 76%     | 100%      | 61%      | 8%    | 81%     | 0.91 / 1.59s     | 0                | no      |
+| `qwen3.5-9b-mlx4-schema` (round 1)     | v1, app port                               | 100%  | 78%     | 100%      | 68%      | 94%   | 81%     | 1.71 / 2.27s     | 0                | no      |
+| `fix-v2-prompt-raw-schema`             | (a) principle + examples, optional fields  | 100%  | 89%     | 100%      | 80%      | 6%    | 92%     | 1.01 / 1.76s     | 0                | no      |
+| `fix-v2-flat-raw-schema`               | (a) + (c) flat schema                      | 100%  | 95%     | 100%      | 90%      | 0%    | 88%     | 1.20 / 2.10s     | 0                | yes     |
+| `fix-v2-flat-raw-schema-effect2`       | same, final Effect prompt                  | 100%  | 94%     | 100%      | 100%     | 0%    | 97%     | 1.35 / 1.98s     | 0                | yes     |
+| **`fix-v2-flat-schema`**               | **same, through the app's port**           | 100%  | **95%** | 100%      | 97%      | 0%    | **98%** | **1.32 / 2.16s** | 0                | **yes** |
+| `fix-v2-resists-raw-schema`            | (a) + (c) + (b) `resists` first            | 99%   | 92%     | 70%       | 87%      | 0%    | 93%     | 1.57 / 2.37s     | 0                | yes     |
+| `fix-v2-resists-schema`                | same, app port                             | 100%  | 91%     | 70%       | 87%      | 0%    | 91%     | 1.25 / 2.17s     | 0                | yes     |
+| `fix-thinking-prompt-json` (1 run)     | v2-flat in the prompt, thinking on         | 88%   | 92%     | 100%      | 100%     | 0%    | n/a     | 105 / 182s       | 5,005            | no      |
+
+The three `fix-v2-flat` rows use the same Adjudication prompt, so they are three samples of the winning contract: gate 94–95%.
+
+### What each change contributed
+
+- **(a) Principle plus worked examples: gate 76% → 89%.** The rule moved from a trailing "never for ordinary walking" to the lead: _check only when something in the scene resists AND failure matters_. Each outcome got a definition with the ordinary cases spelled out ("a question in conversation is never a check"), plus a one-line SRD skill mapping. Seven examples sit in other scenes (a mill, a merchant, a cliff), so none restates a test case. Speech went from 67% to 100%, talk from 60% to 100%, and move from 52% to 64%.
+- **(c) Flat schema: gate 89% → 95%, stray fields 6% → 0%.** Every field is required and non-null: `skill` and `difficulty` take `"none"`, `question` takes `""` and `choices` takes `[]` when they do not apply. Code (`fromFlat`) then turns the sentinels into absent fields and rejects a `check` without a skill or difficulty, or an `ask` without a question. Move rose from 64% to 96%. The likely reason is that the model no longer chooses _whether_ to emit `skill`; it emits it every time, with `"none"` as a legitimate value. Because the schema has no optional fields, the app's port sends it unchanged, so the round-1 widening problem (94% stray, +0.8s) disappears without touching the port.
+- **(b) `resists` before `outcome`: net negative.** Gate fell 3–4 points, and vague→ask fell from 100% to 70%. The model writes `"resists": "nothing"` for "I do the thing" and then concludes `happens`. Impossible improved slightly (absent-innkeeper 2/5 instead of 0/5). It also costs about 0.1–0.4s. Not adopted.
+
+Remaining misses on the winning contract are `absent-innkeeper` ("I ask the innkeeper for a room" in an empty clearing → `ask`, in 9 of 10 runs across the two raw cells) and a few `down-cellar` checks. The `Tobin` example already covers the absent-person rule. Adding a closer example would be fitting the test, so the case stays as a known boundary. A code-side guard (a named person who is not in the Scene) could catch it later if it matters in play.
+
+### Winning contract
+
+Wire schema (`flatAdjudicationSchema(false)`), sent as `response_format: json_schema, strict`:
+
+```ts
+z.object({
+  outcome: z.enum(['happens', 'impossible', 'check', 'ask']),
+  skill: z.enum([...CHECKS, 'none']),
+  difficulty: z.enum(['easy', 'medium', 'hard', 'very_hard', 'none']),
+  question: z.string(),
+  choices: z.array(z.string())
+}).strict()
+```
+
+The key prompt lines (full text in `contract.ts`, `JUDGMENT` and `FLAT_FIELDS`):
+
+- "call for a check only when something in the scene resists the action (a person who would object or notice, a lock, a hazard, a hard climb) AND failure would matter. Everything ordinary simply happens."
+- "happens: … Going through a listed exit, up or down stairs or ladders, starting or ending a conversation with someone present, saying or asking anything in a conversation, and handling ordinary objects all happen. A question in conversation is never a check."
+- "impossible: it needs a person or thing that is not in the scene (anyone not listed under People present …)"
+- "Skills follow the SRD: climbing, jumping and swimming are athletics; balancing and tumbling are acrobatics; …"
+- The seven examples, then "Fill every field", with the sentinel for each field.
+
+### Reasoning on or off: off
+
+| Cell                   | Valid   | Gate (correct of all)       | Adj p50 / p90          | Reasoning tokens (mean) |
+| ---------------------- | ------- | --------------------------- | ---------------------- | ----------------------- |
+| Off (v2-flat, 3 cells) | 100%    | 94–95%                      | 1.20–1.35 / 1.98–2.16s | 0                       |
+| Off + `resists`        | 99–100% | 91–92%                      | 1.25–1.57 / 2.17–2.37s | 0                       |
+| Thinking on            | 88%     | 92% (100% of valid answers) | 105 / 182s             | 5,005                   |
+
+**Recommendation: reasoning off (`reasoning_effort: "none"`) for Adjudication.** Thinking makes the judgment better: every one of the 28 answers that arrived was right, and it was the only cell to get `absent-innkeeper` right. It costs about 80× the latency, though, and 4 of 32 requests (12%) never finished within 8,192 tokens. A turn that takes 1–3 minutes, and sometimes fails, is not playable. Reasoning off with the v2 prompt already clears the bar at about 1.3s.
+
+What it took to get thinking to answer at all:
+
+- **With `response_format`**, LM Studio applies the grammar to the reasoning itself. The JSON is emitted in `reasoning_content` after 6 tokens and `content` is empty.
+- **Without a wire schema at temperature 0.7**, the reasoning loops until `max_tokens` (2,999 tokens/54s at a 3,000 cap; 7,999/146s at 8,000). `reasoning_effort: "low"`/`"minimal"` does not bound it.
+- **What worked:** no wire schema, the JSON Schema appended to the system prompt, Qwen's thinking sampling (temperature 1.0, `presence_penalty` 1.5, `top_p` 0.95, `top_k` 20), `max_tokens` 8192, and the JSON read from `content` (outermost braces). One run per case, because of the time.
+
+### Effect step
+
+Round 1's pattern was speech in dialogue → `talk` to the current partner (15 of 95 Effect answers), plus `climb-wall` → `move`. The v2 Effect prompt gives the same principle-and-examples treatment: speech to the current partner is `none`, only a listed exit is `move`, and `talk` means a new conversation. That cleared most of the speech misses (Effect 81% → 88–92%). It also exposed a gap: "I nod goodbye and step away from the bar." went to `none` 5/5, because no line said what ends a conversation. Defining `end_talk` as "a farewell, thanks that close it, or walking away from the person", with one example in another scene, brought Effect to 97% (raw) and 98% (app port). The remaining misses are scattered single runs.
+
+### Re-running the fix round
+
+```sh
+pnpm eval:exchange:grid --round fix     # all fix cells (the default round); thinking takes about 50 min
+pnpm eval:exchange --model <loaded-id> --mode schema --contract v2-flat --runs 5 --label fix-v2-flat-schema
+```
+
+`--round 1` runs the round-1 grid. `--contract v1|v2-prompt|v2-flat|v2-resists` picks the contract; mode `prompt-json` puts the schema in the prompt instead of on the wire.
 
 ## Wire mechanism (the app's port)
 
@@ -137,8 +218,8 @@ Mira Ashdown is a level 1 human rog...
 ## Re-running
 
 ```sh
-pnpm eval:exchange:grid                 # all cells, 5 runs each, one model resident at a time
-pnpm eval:exchange:grid --only qwen3.5-9b-mlx4 --runs 2
+pnpm eval:exchange:grid --round 1       # all round-1 cells, 5 runs each, one model resident at a time
+pnpm eval:exchange:grid --round 1 --only qwen3.5-9b-mlx4 --runs 2
 pnpm eval:exchange --model <loaded-id> --mode schema|raw-schema|tools --runs 5 [--cases a,b] [--think]
 pnpm eval:exchange:report > report.md   # tables from results/*.json
 ```

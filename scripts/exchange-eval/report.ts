@@ -31,6 +31,8 @@ const p90 = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b)
   return s[Math.min(s.length - 1, Math.floor(s.length * 0.9))]
 }
+const mean = (xs: number[]) =>
+  xs.length === 0 ? 'n/a' : String(Math.round(xs.reduce((a, b) => a + b, 0) / xs.length))
 const secs = (ms?: number) => (ms === undefined ? 'n/a' : `${(ms / 1000).toFixed(2)}s`)
 
 const adjudicationOf = (a: Attempt) => (a.ok ? (a.object as Adjudication) : undefined)
@@ -74,6 +76,7 @@ export interface Score {
   adjTtft: number[]
   adjTotal: number[]
   effTotal: number[]
+  reasoningTokens: number[]
   passes: boolean
 }
 
@@ -101,6 +104,7 @@ export function score(result: CellResult): Score {
     adjTtft: [],
     adjTotal: [],
     effTotal: [],
+    reasoningTokens: [],
     passes: false
   }
   for (const r of result.records) {
@@ -130,6 +134,8 @@ export function score(result: CellResult): Score {
     if (a && stray(a)) s.strayFields++
     if (r.adjudication.ttftMs !== undefined) s.adjTtft.push(r.adjudication.ttftMs)
     s.adjTotal.push(r.adjudication.totalMs)
+    if (r.adjudication.reasoningTokens !== undefined)
+      s.reasoningTokens.push(r.adjudication.reasoningTokens)
     if (c.effect && r.effect) {
       s.effectN++
       if (r.effect.ok) s.effectValid++
@@ -157,14 +163,14 @@ function skillOnCheckCases(result: CellResult): { n: number; ok: number } {
 
 export function summaryTable(results: CellResult[]): string {
   const head =
-    '| Cell | Mode | Memory | Schema-valid | Outcome (all) | Outcome (gate) | Vague→ask | Check outcome | Skill OK | Difficulty on check | Stray fields | Effect valid | Effect correct | Adj TTFT p50 / p90 | Adj total p50 | Effect total p50 | Pass |\n' +
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
+    '| Cell | Mode | Memory | Schema-valid | Outcome (all) | Outcome (gate) | Vague→ask | Check outcome | Skill OK | Difficulty on check | Stray fields | Effect valid | Effect correct | Adj TTFT p50 / p90 | Adj total p50 / p90 | Reasoning tokens (mean) | Effect total p50 | Pass |\n' +
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
   const rows = results.map((result) => {
     const s = score(result)
     const vague = s.perCategory.vague ?? { n: 0, correct: 0 }
     const check = s.perCategory.check ?? { n: 0, correct: 0 }
     const skill = skillOnCheckCases(result)
-    return `| ${s.label} | ${s.mode} | ${s.memory ?? 'n/a'} | ${pct(s.schemaValid, s.n)} | ${pct(s.correct, s.n)} | ${pct(s.gateCorrect, s.gateN)} | ${pct(vague.correct, vague.n)} | ${pct(check.correct, check.n)} | ${pct(skill.ok, skill.n)} | ${pct(s.difficultyPresent, s.checksCalled)} | ${pct(s.strayFields, s.schemaValid)} | ${pct(s.effectValid, s.effectN)} | ${pct(s.effectCorrect, s.effectN)} | ${secs(median(s.adjTtft))} / ${secs(p90(s.adjTtft))} | ${secs(median(s.adjTotal))} | ${secs(median(s.effTotal))} | ${s.passes ? 'yes' : 'no'} |`
+    return `| ${s.label} | ${s.mode} | ${s.memory ?? 'n/a'} | ${pct(s.schemaValid, s.n)} | ${pct(s.correct, s.n)} | ${pct(s.gateCorrect, s.gateN)} | ${pct(vague.correct, vague.n)} | ${pct(check.correct, check.n)} | ${pct(skill.ok, skill.n)} | ${pct(s.difficultyPresent, s.checksCalled)} | ${pct(s.strayFields, s.schemaValid)} | ${pct(s.effectValid, s.effectN)} | ${pct(s.effectCorrect, s.effectN)} | ${secs(median(s.adjTtft))} / ${secs(p90(s.adjTtft))} | ${secs(median(s.adjTotal))} / ${secs(p90(s.adjTotal))} | ${mean(s.reasoningTokens)} | ${secs(median(s.effTotal))} | ${s.passes ? 'yes' : 'no'} |`
   })
   return [head, ...rows].join('\n')
 }
