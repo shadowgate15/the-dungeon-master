@@ -7,6 +7,7 @@
   import type { LayoutProps } from './$types'
 
   import ThemeToggle from '#lib/theme/ThemeToggle.svelte'
+  import ReportIssue from '#lib/dev/ReportIssue.svelte'
   import { page } from '$app/state'
   import { resolve } from '$app/paths'
 
@@ -28,6 +29,7 @@
   {@render children()}
 
   {#if dev}
+    <ReportIssue url={page.url.href} route={page.route.id} params={page.params} />
     {#await import('@tanstack/svelte-query-devtools') then { SvelteQueryDevtools }}
       <SvelteQueryDevtools />
     {/await}
