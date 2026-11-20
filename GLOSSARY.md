@@ -105,19 +105,19 @@ One sitting of play within a Campaign, played by one Character. It has a start a
 _Avoid_: Game, run, playthrough
 
 **Scene**:
-Where and how play stands right now, owned by code and stored in the database: the current location (name and description), its exits and notable objects, the NPCs present (each with an attitude and a short knowledge note), the active Mode and any open Prompt. The UI renders it beside the story, so the player never scrolls the log to learn where they are or who is here. Only code changes it, applying choices it has validated; the AI never edits it freely. A Scene is a situation, not a story unit: it is not a Beat.
+Where and how play stands right now, owned by code and stored in the database: the current location (name and description), its exits and notable objects, the NPCs present (each with an attitude and a short knowledge note), the active Mode and any open Call. The UI renders it beside the story, so the player never scrolls the log to learn where they are or who is here. Only code changes it, applying choices it has validated; the AI never edits it freely. A Scene is a situation, not a story unit: it is not a Beat.
 _Avoid_: Room, location, state
 
 **Mode**:
-The kind of play a Scene is in, one of exploration or dialogue. It shapes how a Declaration is read (in dialogue, the player's words are speech to the NPC being spoken to) and who voices the Reply, but never who receives the Declaration: the player always talks to the DM. It sets the layout's emphasis. Code changes it only by applying an Effect. A Prompt is an overlay on any Mode, not a Mode.
+The kind of play a Scene is in, one of exploration or dialogue. It shapes how a Declaration is read (in dialogue, the player's words are speech to the NPC being spoken to) and who voices the Reply, but never who receives the Declaration: the player always talks to the DM. It sets the layout's emphasis. Code changes it only by applying an Effect. A Call is an overlay on any Mode, not a Mode.
 _Avoid_: State, phase, screen
 
 **Declaration**:
-What the player says their Character does or says, in free text or by clicking something in the Scene. Free text is always accepted, even while a Prompt is open.
+What the player says their Character does or says, in free text or by clicking something in the Scene. Free text is always accepted, even while a Call is open.
 _Avoid_: Action, command, input, move
 
 **Exchange**:
-The unit of play: one Declaration, adjudicated, applied and answered, after which the floor returns to the player. Its steps are always Adjudication, then an Effect if the Declaration happened or its Check succeeded, then a Reply. It may pause on a Prompt and resumes when the Prompt is answered.
+The unit of play: one Declaration, adjudicated, applied and answered, after which the floor returns to the player. Its steps are always Adjudication, then an Effect if the Declaration happened or its Check succeeded, then a Reply. It may pause on a Call and resumes when the Call is answered.
 _Avoid_: Turn, run, round
 
 **Adjudication**:
@@ -136,12 +136,12 @@ _Avoid_: Consequence, outcome, state change
 The prose that ends every Exchange, including impossible Declarations and failed Checks. Code picks the voice by Mode: in dialogue the NPC being spoken to answers, otherwise the Narrator.
 _Avoid_: Response, output, narration step
 
-**Prompt**:
+**Call**:
 The DM's open request to the player that pauses an Exchange: a Check to roll, or a question, optionally with choices. It is kept in the Scene, so it survives a reload. Answering it resumes the Exchange; a new Declaration withdraws it.
-_Avoid_: Pending roll, modal, interrupt
+_Avoid_: Prompt, pending roll, modal, interrupt
 
 **Event log**:
-A Session's append-only record of play, replacing a transcript of alternating exchanges. Each entry is a typed event (Declaration, narration, NPC line, Prompt raised, Prompt answered, scene changed, mode changed) tagged with the role that produced it. Streamed text lives inside one event. An event cut short by Stop or a model failure is discarded, never kept as partial text.
+A Session's append-only record of play, replacing a transcript of alternating exchanges. Each entry is a typed event (Declaration, narration, NPC line, Call raised, Call answered, scene changed, mode changed) tagged with the role that produced it. Streamed text lives inside one event. An event cut short by Stop or a model failure is discarded, never kept as partial text.
 _Avoid_: Transcript, history, chat
 
 **Arc**:
