@@ -1,12 +1,12 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { generateTitle as claudeTitle } from './generate-title.ts'
 
 const execFileAsync = promisify(execFile)
 
 export const DEFAULT_REPO = 'shadowgate15/the-dungeon-master'
 
 export type IssueReport = {
-  title: string
   description: string
 }
 
@@ -62,7 +62,11 @@ const describeFailure = (cause: unknown) => {
 export const createIssue = async (
   report: IssueReport,
   context: ReportContext,
-  { gh = runGh, repo = DEFAULT_REPO }: { gh?: GhRunner; repo?: string } = {}
+  {
+    gh = runGh,
+    generateTitle = claudeTitle,
+    repo = DEFAULT_REPO
+  }: { gh?: GhRunner; generateTitle?: (description: string) => Promise<string>; repo?: string } = {}
 ): Promise<CreateIssueResult> => {
   try {
     const stdout = await gh([
@@ -71,7 +75,7 @@ export const createIssue = async (
       '--repo',
       repo,
       '--title',
-      `Fix: ${report.title}`,
+      await generateTitle(report.description),
       '--label',
       'needs-triage',
       '--body',

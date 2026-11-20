@@ -3,7 +3,6 @@ import type { CreateIssueResult, IssueReport, ReportContext } from './create-iss
 import { handleReport } from './handle-report.ts'
 
 const body = {
-  title: 'Roll button does nothing',
   description: 'Clicked it twice.',
   context: {
     url: 'http://localhost:5173/campaigns/7',
@@ -39,7 +38,7 @@ describe('handleReport', () => {
     expect(await response.json()).toEqual({ url: 'https://example.test/issues/1' })
     expect(filed).toEqual([
       {
-        report: { title: 'Roll button does nothing', description: 'Clicked it twice.' },
+        report: { description: 'Clicked it twice.' },
         context: { ...body.context, timestamp: '2026-11-20T10:00:00.000Z', commit: 'abc1234' }
       }
     ])
@@ -56,8 +55,9 @@ describe('handleReport', () => {
 
   it.each([
     ['a missing body', null],
-    ['a blank title', { ...body, title: '   ' }],
-    ['no context', { title: 'x', description: 'y' }]
+    ['a blank description', { ...body, description: '   ' }],
+    ['no description', { context: body.context }],
+    ['no context', { description: 'y' }]
   ])('rejects %s with 400, and files nothing', async (_name, invalid) => {
     const { deps, filed } = setup()
 
@@ -65,6 +65,14 @@ describe('handleReport', () => {
 
     expect(response.status).toBe(400)
     expect(filed).toEqual([])
+  })
+
+  it('ignores a title in the body, since one is generated', async () => {
+    const { deps, filed } = setup()
+
+    await handleReport({ ...body, title: 'Mine' }, deps)
+
+    expect(filed[0].report).toEqual({ description: 'Clicked it twice.' })
   })
 
   it('answers 502 with the reason when the issue could not be filed', async () => {

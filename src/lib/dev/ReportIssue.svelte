@@ -5,7 +5,6 @@
   import Field from '#lib/ui/Field.svelte'
   import Link from '#lib/ui/Link.svelte'
   import Textarea from '#lib/ui/Textarea.svelte'
-  import TextInput from '#lib/ui/TextInput.svelte'
 
   type Props = {
     /** The page the report is filed from. */
@@ -19,9 +18,8 @@
   let { url, route, params, fetcher = fetch }: Props = $props()
 
   let open = $state(false)
-  let title = $state('')
   let description = $state('')
-  let titleError = $state<string>()
+  let descriptionError = $state<string>()
   let sending = $state(false)
   let error = $state<string>()
   let issueUrl = $state<string>()
@@ -31,7 +29,6 @@
   // A report that was sent starts over; one that was only closed is kept as drafted.
   const openDialog = () => {
     if (issueUrl) {
-      title = ''
       description = ''
       issueUrl = undefined
     }
@@ -42,18 +39,17 @@
   const send = async (event: SubmitEvent) => {
     event.preventDefault()
     error = undefined
-    if (!title.trim()) {
-      titleError = 'Add a title'
+    if (!description.trim()) {
+      descriptionError = 'Add a description'
       return
     }
-    titleError = undefined
+    descriptionError = undefined
     sending = true
     try {
       const response = await fetcher('/api/dev/report-issue', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          title,
           description,
           context: {
             url,
@@ -89,12 +85,11 @@
     </Alert>
   {:else}
     <form onsubmit={send} class="space-y-4" novalidate>
-      <Field label="Title" error={titleError}>
-        {#snippet children(id, describedby)}
-          <TextInput {id} bind:value={title} aria-describedby={describedby} />
-        {/snippet}
-      </Field>
-      <Field label="What happened?" hint="The page, viewport and commit are attached for you.">
+      <Field
+        label="What happened?"
+        hint="The page, viewport and commit are attached for you. The title is written for you."
+        error={descriptionError}
+      >
         {#snippet children(id, describedby)}
           <Textarea {id} rows={5} bind:value={description} aria-describedby={describedby} />
         {/snippet}
@@ -102,7 +97,7 @@
       {#if error}
         <Alert variant="danger">{error}</Alert>
       {/if}
-      <Button type="submit" disabled={sending}>Send report</Button>
+      <Button type="submit" disabled={sending}>{sending ? 'Filing…' : 'Send report'}</Button>
     </form>
   {/if}
 </Dialog>

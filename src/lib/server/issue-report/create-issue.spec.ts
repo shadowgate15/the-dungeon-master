@@ -21,17 +21,25 @@ const recordingGh = () => {
   return { gh, calls }
 }
 
+/** A title generator that never reaches `claude`. */
+const generateTitle = async () => 'A title'
+
 const flag = (args: string[], name: string) => args[args.indexOf(name) + 1]
 
 describe('createIssue', () => {
-  it('files a needs-triage issue titled "Fix: …" and returns its URL', async () => {
+  it('files a needs-triage issue with the generated title and returns its URL', async () => {
     const { gh, calls } = recordingGh()
 
-    const result = await createIssue(
-      { title: 'Roll button does nothing', description: 'Clicked it twice.' },
-      context,
-      { gh }
-    )
+    const titled: string[] = []
+    const generateTitle = async (description: string) => {
+      titled.push(description)
+      return 'Roll button does nothing'
+    }
+
+    const result = await createIssue({ description: 'Clicked it twice.' }, context, {
+      gh,
+      generateTitle
+    })
 
     expect(result).toEqual({
       ok: true,
@@ -40,7 +48,8 @@ describe('createIssue', () => {
     expect(calls).toHaveLength(1)
     const [args] = calls
     expect(args.slice(0, 2)).toEqual(['issue', 'create'])
-    expect(flag(args, '--title')).toBe('Fix: Roll button does nothing')
+    expect(titled).toEqual(['Clicked it twice.'])
+    expect(flag(args, '--title')).toBe('Roll button does nothing')
     expect(flag(args, '--label')).toBe('needs-triage')
     expect(flag(args, '--repo')).toBe('shadowgate15/the-dungeon-master')
   })
@@ -48,7 +57,7 @@ describe('createIssue', () => {
   it('puts the description and the captured context in the body', async () => {
     const { gh, calls } = recordingGh()
 
-    await createIssue({ title: 'x', description: 'Clicked it twice.' }, context, { gh })
+    await createIssue({ description: 'Clicked it twice.' }, context, { gh, generateTitle })
 
     const body = flag(calls[0], '--body')
     expect(body).toContain('Clicked it twice.')
@@ -64,7 +73,7 @@ describe('createIssue', () => {
   it('files into the repo it is given', async () => {
     const { gh, calls } = recordingGh()
 
-    await createIssue({ title: 'x', description: '' }, context, { gh, repo: 'someone/else' })
+    await createIssue({ description: '' }, context, { gh, generateTitle, repo: 'someone/else' })
 
     expect(flag(calls[0], '--repo')).toBe('someone/else')
   })
@@ -74,7 +83,7 @@ describe('createIssue', () => {
       throw Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })
     }
 
-    const result = await createIssue({ title: 'x', description: '' }, context, { gh })
+    const result = await createIssue({ description: '' }, context, { gh, generateTitle })
 
     expect(result).toEqual({
       ok: false,
@@ -89,7 +98,7 @@ describe('createIssue', () => {
       })
     }
 
-    const result = await createIssue({ title: 'x', description: '' }, context, { gh })
+    const result = await createIssue({ description: '' }, context, { gh, generateTitle })
 
     expect(result).toEqual({ ok: false, error: expect.stringContaining('gh auth login') })
   })
@@ -99,8 +108,9 @@ describe('createIssue', () => {
       throw new Error('Command failed: gh issue create --body Clicked it twice.')
     }
 
-    const result = await createIssue({ title: 'x', description: 'Clicked it twice.' }, context, {
-      gh
+    const result = await createIssue({ description: 'Clicked it twice.' }, context, {
+      gh,
+      generateTitle
     })
 
     expect(result).toEqual({ ok: false, error: expect.not.stringContaining('Clicked it twice.') })
@@ -113,7 +123,7 @@ describe('createIssue', () => {
       })
     }
 
-    const result = await createIssue({ title: 'x', description: '' }, context, { gh })
+    const result = await createIssue({ description: '' }, context, { gh, generateTitle })
 
     expect(result).toEqual({ ok: false, error: expect.stringContaining('gh auth login') })
   })
