@@ -203,8 +203,11 @@ export interface ArcFailure {
 /** A step of generation: the skeleton, or one Act's Beats (`number` of `of`, from 1). */
 export type ArcStep = { kind: 'skeleton' } | { kind: 'act'; number: number; of: number }
 
-/** One line of the generate stream: progress as each step starts, then exactly one result. */
-export type ArcStreamLine =
+/** The name of the AG-UI `CUSTOM` chunk that carries each `ArcStreamEvent` as its value. */
+export const ARC_CHUNK = 'dm.arc'
+
+/** One event of the generate stream: progress as each step starts, then exactly one result. */
+export type ArcStreamEvent =
   | { type: 'progress'; step: ArcStep }
   | { type: 'result'; ok: true }
   | { type: 'result'; ok: false; failure: ArcFailure }

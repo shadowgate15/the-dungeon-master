@@ -1,7 +1,7 @@
 import { page } from 'vitest/browser'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-svelte'
-import type { ArcViewData } from './arc.ts'
+import { ARC_CHUNK, type ArcStreamEvent, type ArcViewData } from './arc.ts'
 import ArcSection from './ArcSection.svelte'
 
 const arc = (status: 'draft' | 'accepted' = 'draft'): ArcViewData => ({
@@ -28,16 +28,33 @@ const arc = (status: 'draft' | 'accepted' = 'draft'): ArcViewData => ({
 const response = (body: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(body), { status }))
 
-/** A streamed NDJSON response the test feeds line by line, like the endpoint's generate stream. */
-const ndjson = () => {
+/**
+ * A server-sent-events response the test feeds event by event, like the endpoint's generate
+ * stream: each Arc event rides as an AG-UI `CUSTOM` chunk.
+ */
+const sse = () => {
   const encoder = new TextEncoder()
   let controller!: ReadableStreamDefaultController<Uint8Array>
   const body = new ReadableStream<Uint8Array>({ start: (c) => (controller = c) })
+  const chunk = (data: object) =>
+    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
   return {
-    response: new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }),
-    send: (line: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`)),
-    close: () => controller.close()
+    response: new Response(body, { headers: { 'content-type': 'text/event-stream' } }),
+    send: (value: ArcStreamEvent) =>
+      chunk({ type: 'CUSTOM', name: ARC_CHUNK, value, timestamp: Date.now() }),
+    close: () => {
+      chunk({ type: 'RUN_FINISHED', threadId: 'c1', runId: 'r1', timestamp: Date.now() })
+      controller.close()
+    }
   }
+}
+
+/** A finished generate stream that ended in success. */
+const generated = () => {
+  const stream = sse()
+  stream.send({ type: 'result', ok: true })
+  stream.close()
+  return Promise.resolve(stream.response)
 }
 
 const props = (over: Record<string, unknown> = {}) => ({
@@ -104,8 +121,8 @@ describe('ArcSection', () => {
     await expect.element(page.getByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('shows the step label and Stop throughout, and the draft arrives on the final line', async () => {
-    const stream = ndjson()
+  it('shows the step label and Stop throughout, and the draft arrives on the final event', async () => {
+    const stream = sse()
     const onchange = vi.fn()
     await renderOpen(props({ fetcher: vi.fn(() => Promise.resolve(stream.response)), onchange }))
 
@@ -126,8 +143,8 @@ describe('ArcSection', () => {
     await vi.waitFor(() => expect(onchange).toHaveBeenCalledOnce())
   })
 
-  it('shows the failure from a final failure line', async () => {
-    const stream = ndjson()
+  it('shows the failure from a final failure event', async () => {
+    const stream = sse()
     await renderOpen(props({ fetcher: vi.fn(() => Promise.resolve(stream.response)) }))
 
     await page.getByRole('button', { name: 'Generate Arc' }).click()
@@ -138,8 +155,8 @@ describe('ArcSection', () => {
     await expect.element(page.getByRole('alert')).toHaveTextContent(/Too slow/)
   })
 
-  it('treats a stream that ends without a final line as a generic failure', async () => {
-    const stream = ndjson()
+  it('treats a stream that ends without a final event as a generic failure', async () => {
+    const stream = sse()
     const onchange = vi.fn()
     await renderOpen(props({ fetcher: vi.fn(() => Promise.resolve(stream.response)), onchange }))
 
@@ -165,9 +182,9 @@ describe('ArcSection', () => {
     const fetcher = vi
       .fn()
       .mockImplementationOnce(() =>
-        response({ ok: false, failure: { kind: 'invalid-output', message: 'bad' } })
+        response({ ok: false, failure: { kind: 'invalid-output', message: 'bad' } }, 503)
       )
-      .mockImplementationOnce(() => response({ ok: true }))
+      .mockImplementationOnce(generated)
     const onchange = vi.fn()
     await renderOpen(props({ fetcher, onchange, arc: arc() }))
 
@@ -197,17 +214,17 @@ describe('ArcSection', () => {
   })
 
   it('regenerates a draft without asking', async () => {
-    const fetcher = vi.fn(() => response({ ok: true }))
+    const fetcher = vi.fn(generated)
     await renderOpen(props({ fetcher, arc: arc() }))
 
     await page.getByRole('button', { name: 'Regenerate' }).click()
 
     await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
-    expect(bodyOf(fetcher)).toEqual({ action: 'generate' })
+    expect(bodyOf(fetcher).forwardedProps).toEqual({ action: 'generate' })
   })
 
   it('asks before regenerating an accepted Arc', async () => {
-    const fetcher = vi.fn(() => response({ ok: true }))
+    const fetcher = vi.fn(generated)
     await renderOpen(props({ fetcher, arc: arc('accepted') }))
 
     await page.getByRole('button', { name: 'Regenerate' }).click()

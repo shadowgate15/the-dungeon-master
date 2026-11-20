@@ -30,6 +30,7 @@ vi.mock('#lib/server/arc/index.ts', () => ({
 }))
 vi.mock('#lib/server/arc/generate.ts', () => ({ generateArc: mocks.generate }))
 
+import { ARC_CHUNK } from '#lib/arc/arc.ts'
 import { ArcLockedError, ArcValidationError } from '#lib/server/arc/service.ts'
 import { POST } from './+server.ts'
 
@@ -39,11 +40,21 @@ const post = (body: unknown, signal = new AbortController().signal) =>
     params: { id: 'c1' }
   } as never)
 
-const lines = async (response: Response) =>
+/** The generate request as TanStack AI's connection sends it: the action rides in forwardedProps. */
+const GENERATE = { forwardedProps: { action: 'generate' } }
+
+/** Every AG-UI chunk of a server-sent-events response. */
+const chunks = async (response: Response) =>
   (await response.text())
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => JSON.parse(l))
+    .split('\n\n')
+    .filter((frame) => frame.startsWith('data: '))
+    .map((frame) => JSON.parse(frame.slice('data: '.length)))
+
+/** The Arc events of a generate stream: the value of each `ARC_CHUNK` custom chunk. */
+const lines = async (response: Response) =>
+  (await chunks(response))
+    .filter((c) => c.type === 'CUSTOM' && c.name === ARC_CHUNK)
+    .map((c) => c.value)
 
 beforeEach(() => {
   Object.assign(mocks, {
@@ -66,10 +77,15 @@ describe('Arc endpoint generate action', () => {
       return { ok: true, arc: { title: 'T' } }
     })
 
-    const response = await post({ action: 'generate' })
+    const response = await post(GENERATE)
 
-    expect(response.headers.get('content-type')).toBe('application/x-ndjson')
-    expect(await lines(response)).toEqual([
+    expect(response.headers.get('content-type')).toContain('text/event-stream')
+    const sent = await chunks(response)
+    expect(sent[0].type).toBe('RUN_STARTED')
+    expect(sent.at(-1).type).toBe('RUN_FINISHED')
+    expect(
+      sent.filter((c) => c.type === 'CUSTOM' && c.name === ARC_CHUNK).map((c) => c.value)
+    ).toEqual([
       { type: 'progress', step: { kind: 'skeleton' } },
       { type: 'progress', step: { kind: 'act', number: 1, of: 2 } },
       { type: 'progress', step: { kind: 'act', number: 2, of: 2 } },
@@ -85,7 +101,7 @@ describe('Arc endpoint generate action', () => {
       return { ok: false, failure }
     })
 
-    expect(await lines(await post({ action: 'generate' }))).toEqual([
+    expect(await lines(await post(GENERATE))).toEqual([
       { type: 'progress', step: { kind: 'skeleton' } },
       { type: 'result', ok: false, failure }
     ])
@@ -101,7 +117,7 @@ describe('Arc endpoint generate action', () => {
       throw error
     })
 
-    const result = (await lines(await post({ action: 'generate' }))).at(-1)
+    const result = (await lines(await post(GENERATE))).at(-1)
 
     expect(result).toEqual({
       type: 'result',
@@ -116,19 +132,48 @@ describe('Arc endpoint generate action', () => {
       throw new Error('disk')
     })
 
-    expect((await lines(await post({ action: 'generate' }))).at(-1)).toMatchObject({
+    expect((await lines(await post(GENERATE))).at(-1)).toMatchObject({
       ok: false,
       failure: { kind: 'provider-error' }
     })
   })
 
-  it('passes the request signal so Stop cancels generation', async () => {
-    mocks.generate.mockResolvedValue({ ok: true, arc: {} })
-    const signal = new AbortController().signal
+  it('cancels generation when the request is aborted (Stop), and stores nothing', async () => {
+    const request = new AbortController()
+    mocks.generate.mockImplementation(
+      (_p, _s, options) =>
+        new Promise((resolve) =>
+          options.signal.addEventListener('abort', () =>
+            resolve({ ok: false, failure: { kind: 'cancelled', message: 'Stopped' } })
+          )
+        )
+    )
 
-    await (await post({ action: 'generate' }, signal)).text()
+    const response = await post(GENERATE, request.signal)
+    const reading = response.text()
+    await vi.waitFor(() => expect(mocks.generate).toHaveBeenCalled())
+    request.abort()
+    await reading
 
-    expect(mocks.generate.mock.calls[0][2].signal).toBe(signal)
+    expect(mocks.generate.mock.calls[0][2].signal.aborted).toBe(true)
+    expect(mocks.replaceWithDraft).not.toHaveBeenCalled()
+  })
+
+  it('cancels generation when the client drops the response body', async () => {
+    mocks.generate.mockImplementation(
+      (_p, _s, options) =>
+        new Promise((resolve) =>
+          options.signal.addEventListener('abort', () =>
+            resolve({ ok: false, failure: { kind: 'cancelled', message: 'Stopped' } })
+          )
+        )
+    )
+
+    const response = await post(GENERATE)
+    await vi.waitFor(() => expect(mocks.generate).toHaveBeenCalled())
+    await response.body?.cancel()
+
+    expect(mocks.generate.mock.calls[0][2].signal.aborted).toBe(true)
   })
 
   it.each([
@@ -138,7 +183,7 @@ describe('Arc endpoint generate action', () => {
   ])('rejects %s with plain JSON before any stream', async (_n, over, status) => {
     Object.assign(mocks, over)
 
-    const response = await post({ action: 'generate' })
+    const response = await post(GENERATE)
 
     expect(response.status).toBe(status)
     expect(response.headers.get('content-type')).toContain('application/json')
@@ -149,7 +194,7 @@ describe('Arc endpoint generate action', () => {
   it('rejects an unavailable AI with plain JSON', async () => {
     mocks.unavailable = { kind: 'provider-error', message: 'down' }
 
-    const response = await post({ action: 'generate' })
+    const response = await post(GENERATE)
 
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({ ok: false, failure: { message: 'down' } })
