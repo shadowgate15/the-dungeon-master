@@ -28,6 +28,9 @@
   {@render children()}
 
   {#if dev}
+    {#await import('#lib/dev/ReportIssue.svelte') then { default: ReportIssue }}
+      <ReportIssue url={page.url.href} route={page.route.id} params={page.params} />
+    {/await}
     {#await import('@tanstack/svelte-query-devtools') then { SvelteQueryDevtools }}
       <SvelteQueryDevtools />
     {/await}
