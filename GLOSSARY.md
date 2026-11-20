@@ -105,23 +105,47 @@ One sitting of play within a Campaign, played by one Character. It has a start a
 _Avoid_: Game, run, playthrough
 
 **Scene**:
-Where and how play stands right now, owned by code and stored in the database: the current location (name and description), its exits and notable objects, the NPCs present (each with an attitude and a short knowledge note), the active Mode and any pending roll. The UI renders it beside the story, so the player never scrolls the log to learn where they are or who is here. Only code changes it, applying choices it has validated; the AI never edits it freely. A Scene is a situation, not a story unit: it is not a Beat.
+Where and how play stands right now, owned by code and stored in the database: the current location (name and description), its exits and notable objects, the NPCs present (each with an attitude and a short knowledge note), the active Mode and any open Prompt. The UI renders it beside the story, so the player never scrolls the log to learn where they are or who is here. Only code changes it, applying choices it has validated; the AI never edits it freely. A Scene is a situation, not a story unit: it is not a Beat.
 _Avoid_: Room, location, state
 
 **Mode**:
-The kind of exchange a Scene is in, one of exploration or dialogue. It sets the layout's emphasis. Code applies mode changes, from a Director pick or a player affordance. A roll is an overlay on any Mode, not a Mode.
+The kind of play a Scene is in, one of exploration or dialogue. It shapes how a Declaration is read (in dialogue, the player's words are speech to the NPC being spoken to) and who voices the Reply, but never who receives the Declaration: the player always talks to the DM. It sets the layout's emphasis. Code changes it only by applying an Effect. A Prompt is an overlay on any Mode, not a Mode.
 _Avoid_: State, phase, screen
 
-**Director**:
-The narrow model step that picks what happens next in a run. Code builds a short menu of valid options from the Scene (narrate, an NPC speaks, request a roll, move through an exit, begin or end dialogue, yield), the Director answers with one short value, and code validates it. An invalid pick gets one retry, then a code-chosen fallback. It picks and never writes prose or changes state itself; the Narrator and NPC voice steps it selects write the prose. Code owns the loop and ends a run when the Director yields, a roll is requested, or a step cap is hit.
-_Avoid_: Agent, DM, orchestrator
+**Declaration**:
+What the player says their Character does or says, in free text or by clicking something in the Scene. Free text is always accepted, even while a Prompt is open.
+_Avoid_: Action, command, input, move
+
+**Exchange**:
+The unit of play: one Declaration, adjudicated, applied and answered, after which the floor returns to the player. Its steps are always Adjudication, then an Effect if the Declaration happened or its Check succeeded, then a Reply. It may pause on a Prompt and resumes when the Prompt is answered.
+_Avoid_: Turn, run, round
+
+**Adjudication**:
+The DM's ruling on a Declaration, one of: it happens, it is impossible, it is uncertain and needs a Check, or it is unclear and needs a question. The AI rules; code acts on the ruling. An answer to a question is merged into the Declaration, which is adjudicated again.
+_Avoid_: Director, decision, resolution
+
+**Check**:
+A d20 roll plus the Character's modifier for one skill or saving throw, against a DC. Adjudication names the skill or save and a difficulty tier (easy, medium, hard or very hard); code turns the tier into the SRD DC and rolls. The player sees the skill and the reason, never the DC.
+_Avoid_: Roll request, skill roll, test
+
+**Effect**:
+The one change to the Scene that a Declaration causes when it happens or its Check succeeds: none, moving through an exit, or beginning or ending a conversation with a present NPC. The AI picks from the options the current Scene allows, and code validates and applies it. A failed Check has no Effect.
+_Avoid_: Consequence, outcome, state change
+
+**Reply**:
+The prose that ends every Exchange, including impossible Declarations and failed Checks. Code picks the voice by Mode: in dialogue the NPC being spoken to answers, otherwise the Narrator.
+_Avoid_: Response, output, narration step
+
+**Prompt**:
+The DM's open request to the player that pauses an Exchange: a Check to roll, or a question, optionally with choices. It is kept in the Scene, so it survives a reload. Answering it resumes the Exchange; a new Declaration withdraws it.
+_Avoid_: Pending roll, modal, interrupt
 
 **Event log**:
-A Session's append-only record of play, replacing a transcript of alternating exchanges. Each entry is a typed event (player action, narration, NPC line, roll requested, roll resolved, scene changed, mode changed) tagged with the role that produced it. Streamed text lives inside one event. An event cut short by Stop or a model failure is discarded, never kept as partial text.
+A Session's append-only record of play, replacing a transcript of alternating exchanges. Each entry is a typed event (Declaration, narration, NPC line, Prompt raised, Prompt answered, scene changed, mode changed) tagged with the role that produced it. Streamed text lives inside one event. An event cut short by Stop or a model failure is discarded, never kept as partial text.
 _Avoid_: Transcript, history, chat
 
 **Arc**:
-The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It is the player's plan for the story, not a script. The player can review, edit and regenerate it on the Campaign page until the Campaign's first Session is created; the Arc must be accepted before a Session can start, and it is read-only from then on. The Director and Narrator steer by it: the Narrator sees the current Act and its open Beats, the Director only a compact summary.
+The planned shape of a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and regenerating it replaces the old one. How many Acts and Beats it holds scales with the Campaign's Length. It is the player's plan for the story, not a script. The player can review, edit and regenerate it on the Campaign page until the Campaign's first Session is created; the Arc must be accepted before a Session can start, and it is read-only from then on. The Narrator steers by it, seeing the current Act and its open Beats.
 _Avoid_: Plot, storyline, script, outline
 
 **Act**:
@@ -161,11 +185,11 @@ A non-player character the DM has introduced: a name, a short description, a rol
 _Avoid_: Character, monster, contact
 
 **NPC memory**:
-What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the Director and the Journal would show; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character. A Scene's attitude for an NPC is the same stance, shown in the Scene.
+What is remembered about one NPC beyond who they are: their **disposition** toward a Character: a **stance** (hostile, wary, neutral, friendly or allied) plus a short note. "Stance" names that enum, the part the Journal shows; "disposition" names the whole record and the facts they know. Disposition belongs to the pair of NPC and Character; facts stay in World memory and are never copied per Character. A Scene's attitude for an NPC is the same stance, shown in the Scene.
 _Avoid_: Relationship score, reputation
 
 **World memory selection**:
-Choosing which World memory the Narrator sees on a run, within a fixed budget. The **core** is always included: the Scene's NPCs and place, the facts marked as changing the world, and one compact line naming the dead or retired. Everything else is **scored** each run by being named in recent history, being linked to an NPC in the Scene, and having changed recently, and is trimmed lowest score first. It is a pure function of the records, the history text and the budget. The Narrator sees selected facts but never what an individual NPC knows.
+Choosing which World memory the Narrator sees in an Exchange, within a fixed budget. The **core** is always included: the Scene's NPCs and place, the facts marked as changing the world, and one compact line naming the dead or retired. Everything else is **scored** each Exchange by being named in recent history, being linked to an NPC in the Scene, and having changed recently, and is trimmed lowest score first. It is a pure function of the records, the history text and the budget. The Narrator sees selected facts but never what an individual NPC knows.
 _Avoid_: Retrieval, context stuffing, RAG
 
 **Rolling summary**:
