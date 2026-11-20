@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { startFakeLmStudio, type FakeLmStudio } from '#lib/testing/fake-lm-studio/server.ts'
 import { createChatAdapter } from '../ai/adapter.ts'
-import { createChatPort } from '../ai/port.ts'
+import { createChatPort, type ChatPort } from '../ai/port.ts'
 import { generateArc, type ArcSeed } from './generate.ts'
 
 let fake: FakeLmStudio
@@ -23,20 +23,30 @@ const seed = (over: Partial<ArcSeed> = {}): ArcSeed => ({
   ...over
 })
 
-const arcJson = (acts: number, beats: number) => ({
+const skeletonJson = (acts: number) => ({
   title: 'The Ember Crown',
   premise: 'A relic wakes.',
   stakes: 'The valley burns.',
   acts: Array.from({ length: acts }, (_, a) => ({
-    name: `Act ${a}`,
-    purpose: 'Things escalate.',
-    beats: Array.from({ length: beats }, (_, b) => ({
-      title: `Beat ${a}.${b}`,
-      description: 'Something happens.'
-    }))
+    name: `Act name ${a + 1}`,
+    purpose: `Purpose ${a + 1} things escalate.`
   })),
   resolution: 'The relic is destroyed.'
 })
+
+const actJson = (a: number, beats: number) => ({
+  beats: Array.from({ length: beats }, (_, b) => ({
+    title: `Beat ${a}.${b + 1}`,
+    description: 'Something happens.'
+  }))
+})
+
+/** Queues a skeleton and one correct Act answer per Act, using the planned Beat counts. */
+const queueFull = (acts: number, beats: number[]) =>
+  fake.queueAnswers(
+    { content: skeletonJson(acts) },
+    ...beats.map((n, i) => ({ content: actJson(i + 1, n) }))
+  )
 
 const bodies = () =>
   fake.requests
@@ -48,37 +58,184 @@ const prompt = (i: number) =>
     .join('\n')
 
 describe('generateArc', () => {
-  it('returns a validated draft sized by Length, and tells the model the Seed and size', async () => {
-    fake.queueAnswers({ content: arcJson(3, 2) })
+  it.each([
+    ['one-shot', [3]],
+    ['short', [2, 2, 2]],
+    ['medium', [3, 3, 3, 3]],
+    ['long', [3, 4, 4, 3, 3]]
+  ] as const)('writes the planned Acts and Beats for a %s Campaign', async (length, beats) => {
+    queueFull(beats.length, [...beats])
 
-    const result = await generateArc(port(), seed())
+    const result = await generateArc(port(), seed({ length }))
 
     expect(result.ok).toBe(true)
-    if (result.ok) expect(result.arc.acts).toHaveLength(3)
+    if (!result.ok) return
+    expect(result.arc.acts.map((a) => a.beats.length)).toEqual([...beats])
+    expect(result.arc.acts.map((a) => a.name)).toEqual(beats.map((_, i) => `Act name ${i + 1}`))
+    expect(result.arc.title).toBe('The Ember Crown')
+    expect(result.arc.resolution).toBe('The relic is destroyed.')
+    expect(bodies()).toHaveLength(beats.length + 1)
+  })
+
+  it('asks the skeleton for exactly N Acts, with the Seed', async () => {
+    queueFull(3, [2, 2, 2])
+
+    await generateArc(port(), seed())
+
     const p = prompt(0)
+    expect(p).toContain('exactly 3 Acts')
     expect(p).toContain('The Ember Crown')
     expect(p).toContain('dark')
     expect(p).toContain('Eldoria')
-    expect(p).toContain('3 Acts and 5 to 8 Beats')
   })
 
-  it('retries once, naming the problem, and accepts a valid second answer', async () => {
-    fake.queueAnswers({ content: arcJson(2, 2) }, { content: arcJson(3, 2) })
+  it('shows each Act call the skeleton, its position, its Beat count and earlier Beats only', async () => {
+    queueFull(3, [2, 2, 2])
 
-    const result = await generateArc(port(), seed())
+    await generateArc(port(), seed())
 
-    expect(result.ok).toBe(true)
-    expect(bodies()).toHaveLength(2)
-    expect(prompt(1)).toMatch(/rejected.*Acts/s)
+    const second = prompt(2)
+    expect(second).toContain('Act 2 of 3')
+    expect(second).toContain('exactly 2 Beats')
+    for (const n of [1, 2, 3]) expect(second).toContain(`Purpose ${n} things escalate.`)
+    expect(second).toContain('Beat 1.1')
+    expect(second).toContain('Beat 1.2')
+    expect(second).not.toContain('Beat 2.1')
+    expect(prompt(1)).not.toContain('Beat 1.1')
+    expect(prompt(3)).toContain('Beat 2.2')
+    expect(prompt(3)).toMatch(/resolution/i)
+    expect(prompt(3)).toContain('The relic is destroyed.')
   })
 
-  it('fails with invalid-output after two invalid answers', async () => {
-    fake.queueAnswers({ content: arcJson(2, 2) }, { content: arcJson(5, 5) })
+  it('reports progress in order', async () => {
+    queueFull(3, [2, 2, 2])
+    const steps: unknown[] = []
+
+    await generateArc(port(), seed(), { onProgress: (step) => steps.push(step) })
+
+    expect(steps).toEqual([
+      { kind: 'skeleton' },
+      { kind: 'act', number: 1, of: 3 },
+      { kind: 'act', number: 2, of: 3 },
+      { kind: 'act', number: 3, of: 3 }
+    ])
+  })
+
+  it('fails naming the skeleton after three wrong Act counts, without asking for Acts', async () => {
+    fake.queueAnswers({ content: skeletonJson(2), times: 3 })
 
     const result = await generateArc(port(), seed())
 
     expect(result).toMatchObject({ ok: false, failure: { kind: 'invalid-output' } })
-    expect(bodies()).toHaveLength(2)
+    if (!result.ok) expect(result.failure.message).toMatch(/story plan.*exactly 3 Acts/s)
+    expect(bodies()).toHaveLength(3)
+  })
+
+  it('fails naming the Act and the last problem after three wrong Beat counts', async () => {
+    fake.queueAnswers(
+      { content: skeletonJson(3) },
+      { content: actJson(1, 2) },
+      { content: actJson(2, 5), times: 3 }
+    )
+
+    const result = await generateArc(port(), seed())
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'invalid-output' } })
+    if (!result.ok) expect(result.failure.message).toMatch(/Act 2 of 3.*exactly 2 Beats/s)
+    expect(bodies()).toHaveLength(5)
+  })
+
+  it('retries only the failed call, which keeps the earlier Acts fixed', async () => {
+    fake.queueAnswers(
+      { content: skeletonJson(3) },
+      { content: actJson(1, 2) },
+      { content: actJson(2, 3) },
+      { content: actJson(2, 2) },
+      { content: actJson(3, 2) }
+    )
+
+    const result = await generateArc(port(), seed())
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.arc.acts.map((a) => a.beats.length)).toEqual([2, 2, 2])
+    expect(result.arc.acts[0].beats[0].title).toBe('Beat 1.1')
+    expect(bodies()).toHaveLength(5)
+    expect(prompt(1)).not.toContain('rejected')
+  })
+
+  it('shows the retry the rejected answer and the problems', async () => {
+    fake.queueAnswers(
+      { content: skeletonJson(3) },
+      { content: actJson(1, 4) },
+      { content: actJson(1, 2) },
+      { content: actJson(2, 2) },
+      { content: actJson(3, 2) }
+    )
+
+    await generateArc(port(), seed())
+
+    const retry = prompt(2)
+    expect(retry).toContain('Your previous answer was rejected for these problems')
+    expect(retry).toContain('exactly 2 Beats, not 4')
+    expect(retry).toContain('Beat 1.4')
+    expect(retry).toContain('Act 1 of 3')
+  })
+
+  it('retries over-long text', async () => {
+    fake.queueAnswers(
+      { content: { ...skeletonJson(3), title: 'x'.repeat(500) } },
+      { content: skeletonJson(3) },
+      { content: actJson(1, 2) },
+      { content: actJson(2, 2) },
+      { content: actJson(3, 2) }
+    )
+
+    const result = await generateArc(port(), seed())
+
+    expect(result.ok).toBe(true)
+    expect(prompt(1)).toContain('too long')
+  })
+
+  it('retries malformed answers and fails after three', async () => {
+    fake.queueAnswers({ content: { nonsense: true }, times: 3 })
+
+    const result = await generateArc(port(), seed())
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'invalid-output' } })
+    if (!result.ok) expect(result.failure.message).toMatch(/story plan.*could not be written/s)
+    expect(bodies()).toHaveLength(3)
+  })
+
+  it('repairs whitespace without a retry', async () => {
+    const padded = skeletonJson(3)
+    padded.title = '  The Ember Crown \n'
+    padded.acts[0].name = ' Act name 1  '
+    fake.queueAnswers(
+      { content: padded },
+      {
+        content: {
+          beats: [
+            { title: ' Beat 1.1 ', description: ' Something happens.\n' },
+            ...actJson(1, 1).beats
+          ]
+        }
+      },
+      { content: actJson(2, 2) },
+      { content: actJson(3, 2) }
+    )
+
+    const result = await generateArc(port(), seed())
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.arc.title).toBe('The Ember Crown')
+    expect(result.arc.acts[0].name).toBe('Act name 1')
+    expect(result.arc.acts[0].beats[0]).toEqual({
+      title: 'Beat 1.1',
+      description: 'Something happens.'
+    })
+    expect(bodies()).toHaveLength(4)
   })
 
   it('fails with provider-error when the model fails', async () => {
@@ -87,23 +244,147 @@ describe('generateArc', () => {
     const result = await generateArc(port(), seed())
 
     expect(result).toMatchObject({ ok: false, failure: { kind: 'provider-error' } })
+    expect(bodies()).toHaveLength(3) // the client's own transport retries, not ours
   })
 
-  it('is cancelled by Stop', async () => {
-    fake.queueAnswers({ content: arcJson(3, 2), delayMs: 5000 })
-    const controller = new AbortController()
+  it('does not retry a reasoning model', async () => {
+    fake.setScenario('reasoning-model')
 
-    const pending = generateArc(port(), seed(), { signal: controller.signal })
-    setTimeout(() => controller.abort(), 50)
+    const result = await generateArc(port(), seed())
 
-    expect(await pending).toMatchObject({ ok: false, failure: { kind: 'cancelled' } })
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'reasoning-model' } })
+    expect(bodies()).toHaveLength(1)
   })
 
-  it('times out', async () => {
-    fake.queueAnswers({ content: arcJson(3, 2), delayMs: 5000 })
+  it('does not retry a timeout', async () => {
+    fake.queueAnswers({ content: skeletonJson(3), delayMs: 5000 }, { content: skeletonJson(3) })
 
     const result = await generateArc(port(), seed(), { timeoutMs: 50 })
 
     expect(result).toMatchObject({ ok: false, failure: { kind: 'timeout' } })
+    expect(bodies()).toHaveLength(1)
+  })
+
+  it('does not retry a cancelled call', async () => {
+    fake.queueAnswers({ content: skeletonJson(3), delayMs: 5000 }, { content: skeletonJson(3) })
+    const controller = new AbortController()
+
+    const pending = generateArc(port(), seed(), { signal: controller.signal })
+    setTimeout(() => controller.abort(), 100)
+
+    expect(await pending).toMatchObject({ ok: false, failure: { kind: 'cancelled' } })
+    expect(bodies()).toHaveLength(1)
+  })
+
+  it('names why the answer was rejected when a required part is missing', async () => {
+    fake.queueAnswers({ content: skeletonJson(3) }, { content: { notBeats: [] }, times: 3 })
+
+    const result = await generateArc(port(), seed())
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'invalid-output' } })
+    if (!result.ok) {
+      expect(result.failure.message).toMatch(
+        /^Act 1 of 3 could not be written: .*expected array, received undefined/
+      )
+    }
+    expect(prompt(2)).toContain('expected array, received undefined')
+  })
+
+  it('starts no call and reports no progress once stopped between steps', async () => {
+    fake.queueAnswers({ content: skeletonJson(3) }, { content: actJson(1, 2) })
+    const controller = new AbortController()
+    const base = port()
+    const stopAfterFirstCall: ChatPort = async function* (request) {
+      yield* base(request)
+      controller.abort()
+    }
+    const steps: unknown[] = []
+
+    const result = await generateArc(stopAfterFirstCall, seed(), {
+      signal: controller.signal,
+      onProgress: (step) => steps.push(step)
+    })
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'cancelled' } })
+    expect(steps).toEqual([{ kind: 'skeleton' }])
+    expect(bodies()).toHaveLength(1)
+  })
+
+  it('is cancelled by Stop, skipping the remaining calls', async () => {
+    fake.queueAnswers({ content: skeletonJson(3) }, { content: actJson(1, 2), delayMs: 5000 })
+    const controller = new AbortController()
+
+    const pending = generateArc(port(), seed(), { signal: controller.signal })
+    setTimeout(() => controller.abort(), 200)
+
+    expect(await pending).toMatchObject({ ok: false, failure: { kind: 'cancelled' } })
+    expect(bodies().length).toBeLessThanOrEqual(2)
+  })
+
+  it('times out a call that exceeds its deadline, naming the part', async () => {
+    fake.queueAnswers({ content: skeletonJson(3), delayMs: 5000 })
+
+    const result = await generateArc(port(), seed(), { timeoutMs: 50 })
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'timeout' } })
+    if (!result.ok)
+      expect(result.failure.message).toBe('The model took too long to write the story plan')
+  })
+
+  it('names the Act when an Act call times out', async () => {
+    fake.queueAnswers(
+      { content: skeletonJson(3) },
+      { content: actJson(1, 2) },
+      {
+        content: actJson(2, 2),
+        delayMs: 5000
+      }
+    )
+
+    const result = await generateArc(port(), seed(), { timeoutMs: 300 })
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { kind: 'timeout', message: 'The model took too long to write Act 2 of 3' }
+    })
+  })
+
+  it('shares one deadline across the retries of a call', async () => {
+    const wrong = { content: actJson(1, 4), delayMs: 200 }
+    fake.queueAnswers({ content: skeletonJson(3) }, wrong, wrong, wrong)
+
+    const result = await generateArc(port(), seed(), { timeoutMs: 500 })
+
+    expect(result).toMatchObject({ ok: false, failure: { kind: 'timeout' } })
+  })
+
+  it('does not cap the total time, only each call', async () => {
+    const slow = (content: unknown) => ({ content, delayMs: 200 })
+    fake.queueAnswers(
+      slow(skeletonJson(3)),
+      slow(actJson(1, 2)),
+      slow(actJson(2, 2)),
+      slow(actJson(3, 2))
+    )
+
+    const result = await generateArc(port(), seed(), { timeoutMs: 500 })
+
+    expect(result.ok).toBe(true)
+  })
+
+  it('does not hang on a port that ignores the abort signal', async () => {
+    const hung: ChatPort = () => ({
+      [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}) })
+    })
+    const controller = new AbortController()
+
+    const stopped = generateArc(hung, seed(), { signal: controller.signal })
+    setTimeout(() => controller.abort(), 50)
+    expect(await stopped).toMatchObject({ ok: false, failure: { kind: 'cancelled' } })
+
+    expect(await generateArc(hung, seed(), { timeoutMs: 50 })).toMatchObject({
+      ok: false,
+      failure: { kind: 'timeout' }
+    })
   })
 })
