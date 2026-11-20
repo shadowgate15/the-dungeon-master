@@ -13,7 +13,7 @@ describe('AI config', () => {
   })
 
   it('uses a configured base URL and model', () => {
-    expect(resolveAiConfig({ baseUrl: 'http://box:9/v1', model: 'm' })).toEqual({
+    expect(resolveAiConfig({ baseUrl: 'http://box:9/v1', model: 'm' })).toMatchObject({
       baseUrl: 'http://box:9/v1',
       model: 'm',
       contextLimit: DEFAULT_CONTEXT_LIMIT

@@ -38,7 +38,7 @@ export function isReasoningModelLocked() {
 /** The configured chat port for per-field generation, or null when no model is set. */
 export function getChatPort() {
   const adapter = getChatAdapter()
-  return adapter ? createChatPort(adapter) : null
+  return adapter ? createChatPort(adapter, config.sampling) : null
 }
 
 /** The context window to budget a prompt for: the loaded model's, else the configured limit. */

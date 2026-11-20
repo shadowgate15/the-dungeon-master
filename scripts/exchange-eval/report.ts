@@ -4,7 +4,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CASES, type Case, type Category } from './cases.ts'
-import type { Adjudication, Effect } from './contract.ts'
+import type { Effect } from '#lib/server/session/exchange/contract.ts'
 import type { Attempt, CaseRecord, CellResult } from './run.ts'
 
 /** The categories the pass bar covers: every clear-cut one plus vague. Checks are scored on their own. */
@@ -35,6 +35,20 @@ const mean = (xs: number[]) =>
   xs.length === 0 ? 'n/a' : String(Math.round(xs.reduce((a, b) => a + b, 0) / xs.length))
 const secs = (ms?: number) => (ms === undefined ? 'n/a' : `${(ms / 1000).toFixed(2)}s`)
 
+/**
+ * An Adjudication as recorded in a results file. Loose on purpose: older files hold the answers of
+ * contracts that no longer exist (v1 and `resists`), which may carry stray fields.
+ */
+interface Adjudication {
+  outcome: string
+  skill?: string
+  difficulty?: string
+  question?: string
+  choices?: string[]
+}
+/** An Effect as recorded in a results file. */
+type RecordedEffect = { effect: string; exitId?: string; npcId?: string }
+
 const adjudicationOf = (a: Attempt) => (a.ok ? (a.object as Adjudication) : undefined)
 
 /** A field set that does not belong to the outcome (skill on happens, question on check, ...). */
@@ -46,7 +60,7 @@ function stray(a: Adjudication): boolean {
 
 function effectCorrect(expected: Effect, attempt: Attempt): boolean {
   if (!attempt.ok) return false
-  const got = attempt.object as Effect
+  const got = attempt.object as RecordedEffect
   if (got.effect !== expected.effect) return false
   if (expected.effect === 'move') return got.exitId === expected.exitId
   if (expected.effect === 'talk') return got.npcId === expected.npcId
@@ -125,7 +139,7 @@ export function score(result: CellResult): Score {
     if (a?.outcome === 'check') {
       s.checksCalled++
       if (a.difficulty) s.difficultyPresent++
-      if (c.skills && a.skill && c.skills.includes(a.skill)) s.skillOk++
+      if (a.skill && (c.skills as string[] | undefined)?.includes(a.skill)) s.skillOk++
     }
     if (a?.outcome === 'ask') {
       s.asksCalled++
@@ -156,7 +170,7 @@ function skillOnCheckCases(result: CellResult): { n: number; ok: number } {
     const a = adjudicationOf(r.adjudication)
     if (c?.category !== 'check' || a?.outcome !== 'check') continue
     n++
-    if (a.skill && c.skills?.includes(a.skill)) ok++
+    if (a.skill && (c.skills as string[] | undefined)?.includes(a.skill)) ok++
   }
   return { n, ok }
 }

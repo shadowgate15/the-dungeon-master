@@ -5,12 +5,31 @@ export const DEFAULT_CONTEXT_LIMIT = 4096
 
 export const DEFAULT_LM_STUDIO_BASE_URL = 'http://localhost:1234/v1'
 
+/** The model the docs and the example env name: the one the Exchange contract passed the eval on. */
+export const DEFAULT_MODEL = 'qwen/qwen3.5-9b'
+
+/** Sampling settings sent with every chat request. */
+export interface ModelSampling {
+  temperature: number
+  /** Sent as `reasoning_effort`; absent leaves the model's own default. */
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high'
+}
+
+/**
+ * Temperature 0.7, since LM Studio's preset is 1.0 when none is sent. Reasoning off: with it on,
+ * a structured answer lands in the reasoning field, and a turn takes minutes (see
+ * docs/research/exchange-model-eval.md).
+ */
+export const DEFAULT_SAMPLING: ModelSampling = { temperature: 0.7, reasoningEffort: 'none' }
+
 export interface AiConfig {
   baseUrl: string
   /** null means the operator has not configured a model. */
   model: string | null
   /** Context limit used when the loaded model's own length is unknown. */
   contextLimit: number
+  /** Sent with every request; one model and one setting serve every step. */
+  sampling: ModelSampling
 }
 
 /** Normalizes the raw server env values: blanks count as unset. */
@@ -23,7 +42,8 @@ export function resolveAiConfig(raw: {
   return {
     baseUrl: raw.baseUrl?.trim() || DEFAULT_LM_STUDIO_BASE_URL,
     model: raw.model?.trim() || null,
-    contextLimit: Number.isInteger(limit) && limit > 0 ? limit : DEFAULT_CONTEXT_LIMIT
+    contextLimit: Number.isInteger(limit) && limit > 0 ? limit : DEFAULT_CONTEXT_LIMIT,
+    sampling: DEFAULT_SAMPLING
   }
 }
 

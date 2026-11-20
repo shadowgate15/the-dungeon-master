@@ -2,6 +2,7 @@ import { chat, toolDefinition } from '@tanstack/ai'
 import { z } from 'zod'
 import { REASONING_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import type { createChatAdapter } from './adapter.ts'
+import { DEFAULT_SAMPLING, type ModelSampling } from './config.ts'
 
 /**
  * The neutral chat port: provider-neutral request and event types, the usage reader, a
@@ -245,8 +246,14 @@ export async function collectText(
   return call.ok ? call.text : undefined
 }
 
-/** The production port: TanStack AI `chat()` over the configured adapter. */
-export function createChatPort(adapter: ReturnType<typeof createChatAdapter>): ChatPort {
+/**
+ * The production port: TanStack AI `chat()` over the configured adapter. Every request carries
+ * the sampling settings, `DEFAULT_SAMPLING` unless the caller passes the config's.
+ */
+export function createChatPort(
+  adapter: ReturnType<typeof createChatAdapter>,
+  sampling: ModelSampling = DEFAULT_SAMPLING
+): ChatPort {
   return (request) => {
     // chat() takes a controller, not a signal: relay ours so aborting cancels the fetch.
     const abortController = new AbortController()
@@ -268,8 +275,12 @@ export function createChatPort(adapter: ReturnType<typeof createChatAdapter>): C
           }).server(async (input) => t.execute(input))
         )
       }),
-      // The cap goes through the adapter's model options, not the top-level option.
-      modelOptions: { max_tokens: request.maxTokens },
+      // The cap and sampling go through the adapter's model options, which land in the body.
+      modelOptions: {
+        max_tokens: request.maxTokens,
+        temperature: sampling.temperature,
+        ...(sampling.reasoningEffort && { reasoning_effort: sampling.reasoningEffort })
+      },
       stream: true,
       abortController
     }) as AsyncIterable<unknown>

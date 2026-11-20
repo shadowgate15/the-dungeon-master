@@ -8,7 +8,6 @@
 // skipped and the grid carries on.
 import { join } from 'node:path'
 import { LMStudioClient } from '@lmstudio/sdk'
-import type { ContractId } from './contract.ts'
 import { runCell, writeResult, type Mode } from './run.ts'
 
 interface GridCell {
@@ -18,14 +17,16 @@ interface GridCell {
   /** Leave the model's thinking on, as the app's port does today (no `reasoning_effort`). */
   think?: boolean
   runs?: number
-  contract?: ContractId
   temperature?: number
   sampling?: Record<string, unknown>
   maxTokens?: number
   effects?: boolean
 }
 
-/** Round 1: models, quants and wire modes on the first contract. */
+/**
+ * Round 1: models, quants and wire modes. Every cell runs the app's contract; round 1 itself ran
+ * the first contract (v1), whose results are kept in `results/` and the research doc.
+ */
 export const ROUND_1: GridCell[] = [
   { label: 'qwen3-4b-2507-mlx4', variant: 'qwen/qwen3-4b-2507', modes: ['schema', 'raw-schema'] },
   {
@@ -56,16 +57,12 @@ export const ROUND_1: GridCell[] = [
 
 const MLX4 = 'qwen/qwen3.5-9b@4bit'
 
-/** Fix round: contract and prompt variants, and reasoning on vs off, on the chosen default model. */
+/**
+ * Fix round: the app's contract (v2-flat), and reasoning on vs off, on the default model. The
+ * variants that lost (v2-prompt, v2-resists) survive only as recorded results.
+ */
 export const FIX_ROUND: GridCell[] = [
-  { label: 'fix-v2-prompt', variant: MLX4, modes: ['raw-schema'], contract: 'v2-prompt' },
-  { label: 'fix-v2-flat', variant: MLX4, modes: ['raw-schema', 'schema'], contract: 'v2-flat' },
-  {
-    label: 'fix-v2-resists',
-    variant: MLX4,
-    modes: ['raw-schema', 'schema'],
-    contract: 'v2-resists'
-  },
+  { label: 'fix-v2-flat', variant: MLX4, modes: ['raw-schema', 'schema'] },
   // Thinking on. A wire schema would constrain the reasoning itself, so the schema goes in the
   // prompt and the JSON is read from the final content. Qwen's recommended thinking sampling; at
   // 0.7 without a presence penalty the reasoning loops until max_tokens. Slow, so one run.
@@ -73,7 +70,6 @@ export const FIX_ROUND: GridCell[] = [
     label: 'fix-thinking',
     variant: MLX4,
     modes: ['prompt-json'],
-    contract: 'v2-flat',
     think: true,
     runs: 1,
     temperature: 1.0,
@@ -130,7 +126,6 @@ if (import.meta.main) {
         label,
         model: IDENTIFIER,
         mode,
-        contract: cell.contract,
         runs: cell.runs ?? runs,
         temperature: cell.temperature ?? 0.7,
         think: cell.think ?? false,
