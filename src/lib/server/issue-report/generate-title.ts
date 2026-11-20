@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { tmpdir } from 'node:os'
 
 /** Runs `claude` with the given prompt and resolves to its stdout; rejects when `claude` fails. */
 export type ClaudeRunner = (prompt: string) => Promise<string>
@@ -6,7 +7,10 @@ export type ClaudeRunner = (prompt: string) => Promise<string>
 const MAX_TITLE_LENGTH = 72
 const TIMEOUT_MS = 30_000
 
-/** Asks the `claude` CLI, which brings its own authentication, with no tools and no saved session. */
+/**
+ * Asks the `claude` CLI, which brings its own authentication, with no tools and no saved session.
+ * It runs from a temp directory so it does not load this project's CLAUDE.md, hooks or MCP servers.
+ */
 export const runClaude: ClaudeRunner = (prompt) =>
   new Promise((resolve, reject) => {
     const child = spawn(
@@ -22,7 +26,7 @@ export const runClaude: ClaudeRunner = (prompt) =>
         '--output-format',
         'text'
       ],
-      { timeout: TIMEOUT_MS, stdio: ['pipe', 'pipe', 'ignore'] }
+      { cwd: tmpdir(), timeout: TIMEOUT_MS, stdio: ['pipe', 'pipe', 'ignore'] }
     )
     let stdout = ''
     child.stdout.on('data', (chunk) => (stdout += chunk))
