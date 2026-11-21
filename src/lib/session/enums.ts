@@ -6,7 +6,7 @@
 import { STANCES, type Stance } from '#lib/memory/enums.ts'
 import type { Call, CallView } from './call.ts'
 
-/** The kind of exchange a Scene is in. A Call is an overlay on any Mode, never a Mode. */
+/** The kind of play a Scene is in. A Call is an overlay on any Mode, never a Mode. */
 export const MODES = ['exploration', 'dialogue'] as const
 export type Mode = (typeof MODES)[number]
 

@@ -160,7 +160,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   }
 
   /** Whether the Scene still allows a carried Effect: the exit exists, the NPC is present. */
-  function allowed(sessionId: string, effect: CarriedEffect): boolean {
+  function sceneAllows(sessionId: string, effect: CarriedEffect): boolean {
     return validateEffect(effectScene(sessions.scene(sessionId)), effect).ok
   }
 
@@ -248,12 +248,16 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
 
       return start(sessionId, signal, () => {
         const open = sessions.scene(sessionId).openCall
-        const withdrawn = open ? [withdrawCall(sessions, sessionId, open)] : []
+        const withdrawn = open ? [withdrawCall({ sessions, sessionId }, open)] : []
         const saved = sessions.appendEvent(sessionId, { role: 'player', kind: 'declaration', text })
-        const carried = effect && allowed(sessionId, effect) ? effect : undefined
+        const allowedEffect = effect && sceneAllows(sessionId, effect) ? effect : undefined
         return {
           events: [...withdrawn, saved],
-          start: { kind: 'declaration', declaration: saved, ...(carried && { effect: carried }) }
+          start: {
+            kind: 'declaration',
+            declaration: saved,
+            ...(allowedEffect && { effect: allowedEffect })
+          }
         }
       })
     },
@@ -277,17 +281,23 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
         return declaration
       }
       // The Effect a click carried, unless the Scene changed under the open Call since.
-      const carried = () =>
-        call.effect && allowed(sessionId, call.effect) ? { effect: call.effect } : {}
+      const carriedStillAllowed = () =>
+        call.effect && sceneAllows(sessionId, call.effect) ? { effect: call.effect } : {}
 
       if (call.kind === 'check') {
         if (answer.kind !== 'roll') return { ok: false, reason: 'no-open-call' }
         return start(sessionId, signal, () => {
           const roll = rollCheck(call, dice, checkModifier, sessionId)
-          const answered = answerCheck(sessions, sessionId, call, roll)
+          const answered = answerCheck({ sessions, sessionId }, call, roll)
           return {
             events: [answered],
-            start: { kind: 'check', declaration: declarationOf(), call, roll, ...carried() }
+            start: {
+              kind: 'check',
+              declaration: declarationOf(),
+              call,
+              roll,
+              ...carriedStillAllowed()
+            }
           }
         })
       }
@@ -295,10 +305,15 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       const given = questionAnswer(call, answer)
       if (typeof given === 'string') return { ok: false, reason: given }
       return start(sessionId, signal, () => {
-        const { event, history } = answerQuestion(sessions, sessionId, call, given)
+        const { event, history } = answerQuestion({ sessions, sessionId }, call, given)
         return {
           events: [event],
-          start: { kind: 'question', declaration: declarationOf(), history, ...carried() },
+          start: {
+            kind: 'question',
+            declaration: declarationOf(),
+            history,
+            ...carriedStillAllowed()
+          },
           undoOnStop: true
         }
       })

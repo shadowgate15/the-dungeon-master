@@ -1,14 +1,14 @@
 /**
- * Effect: picks the one state change a Declaration that happened causes, from the options code
- * builds from the Scene, then applies it through the Session service, which records the change.
+ * Effect: picks the one Effect a Declaration that happened has, from the options code builds from
+ * the Scene, then applies it through the Session service, which records it in the Event log.
  */
 import type { Clarification } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
-import { buildRulingContext, effectScene } from '../context/ruling.ts'
+import { effectScene } from '../context/ruling.ts'
 import { generateDestination } from '../destination.ts'
-import { askValidated } from './ask.ts'
-import { characterOf, eventsBefore, type ExchangeContext } from './context.ts'
+import { askRuling } from './ask.ts'
+import type { ExchangeContext } from './context.ts'
 import {
   allowedEffects,
   EFFECT_SYSTEM,
@@ -33,38 +33,26 @@ export async function chooseEffect(
   const scene = ctx.sessions.scene(ctx.sessionId)
   const options = effectScene(scene)
   if (allowedEffects(options).length === 1) return { effect: 'none' }
-  const built = buildRulingContext({
+  const asked = await askRuling<Effect>(ctx, {
     role: 'effect',
     system: EFFECT_SYSTEM,
     scene,
-    events: eventsBefore(ctx, declaration),
-    character: characterOf(ctx),
-    declaration: declaration.text ?? '',
-    clarifying
-  })
-  ctx.report?.(built.report)
-  const asked = await askValidated(
-    ctx,
-    {
-      systemPrompts: [EFFECT_SYSTEM],
-      messages: [{ role: 'user', content: built.content }],
-      maxTokens: EFFECT_MAX_TOKENS,
-      outputSchema: effectSchema(options),
-      threadId: ctx.sessionId,
-      signal: ctx.signal
-    },
-    (answer) => {
+    declaration,
+    clarifying,
+    maxTokens: EFFECT_MAX_TOKENS,
+    outputSchema: effectSchema(options),
+    validate: (answer) => {
       const valid = validateEffect(options, answer)
       return valid.ok ? { ok: true, value: valid.effect } : valid
     },
-    { effect: 'none' }
-  )
+    fallback: { effect: 'none' }
+  })
   return asked.value
 }
 
 /**
  * Applies a validated Effect through the Session service, streaming the event it records, and
- * returns the change as a fact for the Reply (null for `none`). Throws when the Effect no longer
+ * returns what it did as a fact for the Reply (null for `none`). Throws when the Effect no longer
  * fits the Scene, so a broken caller never looks like a successful change.
  */
 export async function* applyEffect(

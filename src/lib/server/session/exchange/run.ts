@@ -3,7 +3,7 @@
  * rules how it resolves; a Check or a clarifying question raises a Call, which pauses the Exchange
  * until the player rolls or answers. An answered question is ruled on again, merged with the
  * answers so far, for as many Clarifications as it takes.
- * On happens or a successful Check, Effect picks and code applies the one state change; the Reply
+ * On happens or a successful Check, Effect picks and code applies the one Effect; the Reply
  * streams last, told what was settled. Code owns the order; the model only answers each step.
  */
 import type { CarriedEffect, CheckCall, CheckRoll, Clarification } from '#lib/session/call.ts'
@@ -19,7 +19,7 @@ import type {
 } from '#lib/session/exchange-events.ts'
 import type { ChatPort } from '../../ai/port.ts'
 import { adjudicate } from './adjudicate.ts'
-import { raiseCheck, raiseQuestion } from './call.ts'
+import { raiseCall } from './call.ts'
 import type { ExchangeContext } from './context.ts'
 import type { Adjudication } from './contract.ts'
 import { applyEffect, chooseEffect } from './effect.ts'
@@ -35,8 +35,8 @@ function addReport(context: ContextStats, report: ContextReport) {
   }
 }
 
-/** The Reply's facts for a ruling, its Check result (if rolled) and the change its Effect made. */
-function outcomeFacts(
+/** The Reply's facts for a ruling, its Check result (if rolled) and what its Effect did. */
+function rulingFacts(
   adjudication: Adjudication,
   check: CheckRoll | null,
   change: string | null
@@ -130,26 +130,22 @@ export async function* runExchange(
   }
 
   let adjudication: Adjudication
-  // The Effect the ruling already settled (a defaulted Adjudication settles `none`).
-  let settled: RulingEffect | undefined
+  // A defaulted Adjudication settles Effect `none`.
+  let defaulted = false
   let check: CheckRoll | null = null
   let history: Clarification[] = []
   if (start.kind === 'check') {
     const { skill, difficulty } = start.call
-    adjudication = { outcome: 'check', skill, difficulty } as Adjudication
+    adjudication = { outcome: 'check', skill, difficulty }
     check = start.roll
     history = start.call.history ?? []
   } else {
     if (start.kind === 'question') history = start.history
     yield enter('adjudication')
-    ;({ adjudication, effect: settled } = await adjudicate(run, declaration, history))
+    ;({ adjudication, defaulted } = await adjudicate(run, declaration, history))
     yield snapshot()
     if (adjudication.outcome === 'check' || adjudication.outcome === 'ask') {
-      const { sessions, sessionId } = ctx
-      const event =
-        adjudication.outcome === 'check'
-          ? raiseCheck(sessions, sessionId, declaration, adjudication, history, start.effect)
-          : raiseQuestion(sessions, sessionId, declaration, adjudication, history, start.effect)
+      const event = raiseCall(ctx, declaration, adjudication, history, start.effect)
       yield { type: 'event', event }
       yield { type: 'ruling', adjudication, effect: null }
       return 'call'
@@ -159,9 +155,9 @@ export async function* runExchange(
   let effect: RulingEffect | null = null
   let change: string | null = null
   const happens = adjudication.outcome === 'happens' || (check !== null && check.success)
-  if (happens && settled) {
+  if (happens && defaulted) {
     // A defaulted ruling settles `none`, even over a click's Effect: it never really happened.
-    effect = settled
+    effect = { effect: 'none' }
   } else if (happens && start.effect) {
     // A click already chose the Effect: apply it.
     change = yield* applyEffect(run, start.effect)
@@ -176,7 +172,7 @@ export async function* runExchange(
   yield { type: 'ruling', adjudication, effect }
 
   yield enter('reply')
-  const replied = yield* reply(run, outcomeFacts(adjudication, check, change))
+  const replied = yield* reply(run, rulingFacts(adjudication, check, change))
   yield snapshot()
   return replied ? 'replied' : 'stopped'
 }

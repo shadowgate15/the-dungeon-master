@@ -16,74 +16,77 @@ import {
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type { Dice } from '../../dice.ts'
 import type { CheckModifier } from '../check-modifier.ts'
-import type { SessionService } from '../service.ts'
+import type { ExchangeContext } from './context.ts'
 import { DIFFICULTY_DC, type Adjudication } from './contract.ts'
 
-type CheckRuling = Extract<Adjudication, { outcome: 'check' }>
-type AskRuling = Extract<Adjudication, { outcome: 'ask' }>
+/** The Session a Call lives in. */
+type At = Pick<ExchangeContext, 'sessions' | 'sessionId'>
 
-const callDeclaration = (declaration: SessionEvent) => ({
-  seq: declaration.seq,
-  text: declaration.text ?? ''
-})
+/** A ruling that raises a Call: a Check or a clarifying question. */
+export type CallRuling = Extract<Adjudication, { outcome: 'check' | 'ask' }>
 
-/**
- * Saves a Check Call for the Declaration on the Scene and logs it as `call-raised`. A Check called
- * after clarifying keeps the history, so the Effect after the roll knows what was meant.
- */
-export function raiseCheck(
-  sessions: SessionService,
-  sessionId: string,
-  declaration: SessionEvent,
-  ruling: CheckRuling,
-  history: Clarification[] = [],
-  effect?: CarriedEffect
-): SessionEvent {
-  const call: CheckCall = {
-    kind: 'check',
-    skill: ruling.skill,
-    difficulty: ruling.difficulty,
-    dc: DIFFICULTY_DC[ruling.difficulty],
-    declaration: callDeclaration(declaration),
-    ...(history.length > 0 && { history }),
-    ...(effect && { effect })
-  }
+/** Opens `call` on the Scene, or clears it with null. */
+function setOpenCall({ sessions, sessionId }: At, call: Call | null) {
   sessions.saveScene(sessionId, { ...sessions.scene(sessionId), openCall: call })
-  return sessions.appendEvent(sessionId, {
-    role: 'code',
-    kind: 'call-raised',
-    text: `${checkLabel(call.skill)} check: ${call.declaration.text}`,
-    data: { kind: call.kind, skill: call.skill, difficulty: call.difficulty, dc: call.dc }
-  })
 }
 
-/**
- * Saves a question Call for the Declaration on the Scene, with the Clarifications already answered, and
- * logs it as `call-raised` with the question as its text.
- */
-export function raiseQuestion(
-  sessions: SessionService,
-  sessionId: string,
+/** The Call a ruling raises, and the text and data its `call-raised` event logs (no DC in text). */
+function callFor(
+  ruling: CallRuling,
   declaration: SessionEvent,
-  ruling: AskRuling,
   history: Clarification[],
   effect?: CarriedEffect
-): SessionEvent {
+): { call: Call; text: string; data: Record<string, unknown> } {
+  const shared = {
+    declaration: { seq: declaration.seq, text: declaration.text ?? '' },
+    ...(effect && { effect })
+  }
+  if (ruling.outcome === 'check') {
+    // A Check called after clarifying keeps the history, so the Effect after the roll knows what
+    // was meant.
+    const call: CheckCall = {
+      kind: 'check',
+      skill: ruling.skill,
+      difficulty: ruling.difficulty,
+      dc: DIFFICULTY_DC[ruling.difficulty],
+      ...shared,
+      ...(history.length > 0 && { history })
+    }
+    return {
+      call,
+      text: `${checkLabel(call.skill)} check: ${call.declaration.text}`,
+      data: { kind: call.kind, skill: call.skill, difficulty: call.difficulty, dc: call.dc }
+    }
+  }
   const call: QuestionCall = {
     kind: 'question',
     question: ruling.question,
     ...(ruling.choices && { choices: ruling.choices }),
-    declaration: callDeclaration(declaration),
-    history,
-    ...(effect && { effect })
+    ...shared,
+    history
   }
-  sessions.saveScene(sessionId, { ...sessions.scene(sessionId), openCall: call })
-  return sessions.appendEvent(sessionId, {
-    role: 'code',
-    kind: 'call-raised',
+  return {
+    call,
     text: call.question,
     data: { kind: call.kind, question: call.question, choices: call.choices ?? [] }
-  })
+  }
+}
+
+/**
+ * Saves the Call a Check or ask ruling raises for the Declaration on the Scene, with the
+ * Clarifications already answered and any carried Effect, and logs it as `call-raised`: a Check
+ * by its skill, a question by its text.
+ */
+export function raiseCall(
+  ctx: At,
+  declaration: SessionEvent,
+  ruling: CallRuling,
+  history: Clarification[],
+  effect?: CarriedEffect
+): SessionEvent {
+  const { call, text, data } = callFor(ruling, declaration, history, effect)
+  setOpenCall(ctx, call)
+  return ctx.sessions.appendEvent(ctx.sessionId, { role: 'code', kind: 'call-raised', text, data })
 }
 
 /**
@@ -91,13 +94,12 @@ export function raiseQuestion(
  * Returns the event and the history with this Clarification added.
  */
 export function answerQuestion(
-  sessions: SessionService,
-  sessionId: string,
+  ctx: At,
   call: QuestionCall,
   answer: { answer: string; chosen: boolean }
 ): { event: SessionEvent; history: Clarification[] } {
-  sessions.saveScene(sessionId, { ...sessions.scene(sessionId), openCall: null })
-  const event = sessions.appendEvent(sessionId, {
+  setOpenCall(ctx, null)
+  const event = ctx.sessions.appendEvent(ctx.sessionId, {
     role: 'player',
     kind: 'call-answered',
     text: answer.answer,
@@ -120,14 +122,9 @@ export function rollCheck(
 }
 
 /** Clears the open Call and logs its rolled result as `call-answered`. */
-export function answerCheck(
-  sessions: SessionService,
-  sessionId: string,
-  call: CheckCall,
-  roll: CheckRoll
-): SessionEvent {
-  sessions.saveScene(sessionId, { ...sessions.scene(sessionId), openCall: null })
-  return sessions.appendEvent(sessionId, {
+export function answerCheck(ctx: At, call: CheckCall, roll: CheckRoll): SessionEvent {
+  setOpenCall(ctx, null)
+  return ctx.sessions.appendEvent(ctx.sessionId, {
     role: 'code',
     kind: 'call-answered',
     text: rollLine(call.skill, roll),
@@ -135,21 +132,25 @@ export function answerCheck(
   })
 }
 
+/** The text and data a withdrawn Call logs: a Check by its skill, a question by its text. */
+function withdrawn(call: Call): { text: string; data: Record<string, unknown> } {
+  return call.kind === 'check'
+    ? {
+        text: `${checkLabel(call.skill)} check withdrawn`,
+        data: { kind: call.kind, skill: call.skill, withdrawn: true }
+      }
+    : {
+        text: 'Question withdrawn',
+        data: { kind: call.kind, question: call.question, withdrawn: true }
+      }
+}
+
 /** Clears the open Call unanswered and logs it as a withdrawn `call-answered`. */
-export function withdrawCall(
-  sessions: SessionService,
-  sessionId: string,
-  call: Call
-): SessionEvent {
-  sessions.saveScene(sessionId, { ...sessions.scene(sessionId), openCall: null })
-  return sessions.appendEvent(sessionId, {
+export function withdrawCall(ctx: At, call: Call): SessionEvent {
+  setOpenCall(ctx, null)
+  return ctx.sessions.appendEvent(ctx.sessionId, {
     role: 'code',
     kind: 'call-answered',
-    text:
-      call.kind === 'check' ? `${checkLabel(call.skill)} check withdrawn` : 'Question withdrawn',
-    data:
-      call.kind === 'check'
-        ? { kind: call.kind, skill: call.skill, withdrawn: true }
-        : { kind: call.kind, question: call.question, withdrawn: true }
+    ...withdrawn(call)
   })
 }

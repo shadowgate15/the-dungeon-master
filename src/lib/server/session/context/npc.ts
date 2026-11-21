@@ -23,7 +23,7 @@ export interface NpcContextInput {
   /** The Event log (recent part); only the player's Declarations and this NPC's own lines are used. */
   events: SessionEvent[]
   /** What this Exchange settled, stated as facts for the Reply (never trimmed). */
-  outcome?: string
+  facts?: string
   budgets?: ContextBudgets
 }
 
@@ -45,7 +45,7 @@ export function buildNpcContext(input: NpcContextInput): {
     `Attitude toward the player: ${npc.attitude}`,
     `What ${npc.name} knows: ${npc.knowledge}`
   ].join('\n')
-  const content = () => [lines.join('\n'), ...(input.outcome ? [input.outcome] : [])].join('\n\n')
+  const content = () => [lines.join('\n'), ...(input.facts ? [input.facts] : [])].join('\n\n')
   const used = () => estimateTokens(`${system}\n${content()}`)
 
   let dropped = 0

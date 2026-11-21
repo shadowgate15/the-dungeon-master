@@ -1,9 +1,9 @@
 /**
  * The Narrator's context: the fullest of the roles. Scene, Arc block, Seed, Character and the
- * Exchange's outcome are never trimmed. History is the Rolling summary plus every event after its watermark verbatim,
+ * Exchange's facts are never trimmed. History is the Rolling summary plus every event after its watermark verbatim,
  * with the last `verbatimFloor` events verbatim even when covered. World memory is selected into
  * its sub-budget. Over the cap, trim in order: World memory (lowest score first), then the oldest
- * events down to the trim floor, then the summary's tail. A run never fails over memory: if every
+ * events down to the trim floor, then the summary's tail. An Exchange never fails over memory: if every
  * trim is spent and the context is still over, it goes out as it is.
  */
 import type { SceneState, SessionEvent } from '#lib/session/enums.ts'
@@ -37,7 +37,7 @@ export interface NarratorContextInput {
   /** Never-trimmed Campaign Seed and Character sheet text, when the caller has them. */
   fixed?: { seed?: string; character?: string }
   /** What this Exchange settled, stated as facts for the Reply (never trimmed). */
-  outcome?: string
+  facts?: string
   budgets?: ContextBudgets
   /** Where the dropped-uncovered-events line goes. Defaults to the console. */
   log?: (message: string) => void
@@ -102,7 +102,7 @@ export function buildNarratorContext(input: NarratorContextInput): BuiltContext 
     [
       ...(summaryText ? [`Story so far: ${summaryText}`] : []),
       ...(shown.length ? [`Recent events:\n${historyText()}`] : []),
-      ...(input.outcome ? [input.outcome] : [])
+      ...(input.facts ? [input.facts] : [])
     ].join('\n\n')
   const used = () => estimateTokens(`${system()}\n${content()}`)
 

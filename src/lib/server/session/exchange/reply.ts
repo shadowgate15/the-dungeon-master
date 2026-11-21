@@ -18,7 +18,7 @@ const NPC_MAX_TOKENS = 200
  */
 export async function* reply(
   ctx: ExchangeContext,
-  outcome: string
+  facts: string
 ): AsyncGenerator<ExchangeEvent, boolean> {
   const { sessions, sessionId } = ctx
   const scene = sessions.scene(sessionId)
@@ -27,7 +27,7 @@ export async function* reply(
     scene.mode === 'dialogue' ? scene.npcs.find((n) => n.id === scene.dialogueNpcId) : undefined
 
   if (partner) {
-    const built = buildNpcContext({ npc: partner, events, outcome })
+    const built = buildNpcContext({ npc: partner, events, facts })
     ctx.report?.(built.report)
     const line = yield* streamLine(ctx, {
       system: built.system,
@@ -56,7 +56,7 @@ export async function* reply(
     world: ctx.context?.world(sessionId) ?? null,
     fixed: ctx.context?.fixed?.(sessionId),
     arcBlock: ctx.steering?.()?.arcBlock,
-    outcome
+    facts
   })
   ctx.report?.(built.report)
   const prose = yield* streamLine(ctx, {

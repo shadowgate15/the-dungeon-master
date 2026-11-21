@@ -1,20 +1,8 @@
 import { error } from '@sveltejs/kit'
-import type { CarriedEffect } from '#lib/session/call.ts'
+import { parseCarriedEffect } from '#lib/server/session/exchange/contract.ts'
 import { sceneRunner } from '#lib/server/session/index.ts'
 import { refusalResponse, runResponse } from '#lib/server/session/run-response.ts'
 import type { RequestHandler } from './$types'
-
-/**
- * Reads a clicked exit's or NPC's Effect. Anything malformed is dropped, so the Declaration runs
- * as if typed; the runner checks the rest (that the Scene still allows it).
- */
-function parseEffect(value: unknown): CarriedEffect | undefined {
-  if (!value || typeof value !== 'object') return undefined
-  const { effect, exitId, npcId } = value as Record<string, unknown>
-  if (effect === 'move' && typeof exitId === 'string') return { effect, exitId }
-  if (effect === 'talk' && typeof npcId === 'string') return { effect, npcId }
-  return undefined
-}
 
 /**
  * Plays one Declaration. The player's text arrives as `forwardedProps.text` of the AG-UI run
@@ -29,7 +17,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
   if (typeof text !== 'string') error(400, 'A Declaration is required')
 
   const controller = new AbortController()
-  const effect = parseEffect(body?.forwardedProps?.effect)
+  const effect = parseCarriedEffect(body?.forwardedProps?.effect)
   const result = sceneRunner.begin(params.id, text, controller.signal, effect)
   if (!result.ok) return refusalResponse(result.reason)
   return runResponse(params.id, result.events, controller)

@@ -133,6 +133,27 @@ export type Effect =
   | { effect: 'talk'; npcId: string }
   | { effect: 'end_talk' }
 
+/**
+ * An Effect decided before the Exchange (a clicked exit or NPC, #274), applied instead of asking
+ * the Effect step once the Declaration happens, and carried on any Call raised meanwhile.
+ */
+export type CarriedEffect = Extract<Effect, { effect: 'move' | 'talk' }>
+
+const carriedEffectSchema = z.discriminatedUnion('effect', [
+  z.object({ effect: z.literal('move'), exitId: z.string().min(1) }),
+  z.object({ effect: z.literal('talk'), npcId: z.string().min(1) })
+])
+
+/**
+ * Reads a clicked exit's or NPC's Effect from a request: a `move` with an exit id or a `talk` with
+ * an NPC id. Anything malformed is dropped, so the Declaration runs as if typed; whether the Scene
+ * still allows it is checked when the Exchange starts.
+ */
+export function parseCarriedEffect(value: unknown): CarriedEffect | undefined {
+  const parsed = carriedEffectSchema.safeParse(value)
+  return parsed.success ? parsed.data : undefined
+}
+
 /** NPCs a conversation can start with: everyone present except the one already being talked to. */
 export const talkableNpcs = <S extends EffectScene>(scene: S): S['npcs'] =>
   scene.npcs.filter((n) => n.id !== scene.dialogueNpcId)

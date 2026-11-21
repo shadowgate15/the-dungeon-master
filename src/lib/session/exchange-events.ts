@@ -2,6 +2,7 @@
  * What one Exchange streams from the server to the browser (see GLOSSARY.md and ADR 0005), and the
  * per-Exchange stats the dev inspector shows. Shared by the server and the UI.
  */
+import type { Adjudication, Effect } from '#lib/server/session/exchange/contract.ts'
 import type { EventKind, Role, SessionEvent } from './enums.ts'
 
 /** The fixed steps of an Exchange, in order. */
@@ -65,20 +66,10 @@ export interface RunStats {
 }
 
 /** A validated Adjudication, as the inspector shows it. Never carries a DC. */
-export interface RulingAdjudication {
-  outcome: 'happens' | 'impossible' | 'check' | 'ask'
-  skill?: string
-  difficulty?: string
-  question?: string
-  choices?: string[]
-}
+export type RulingAdjudication = Adjudication
 
 /** A validated Effect, as the inspector shows it. */
-export interface RulingEffect {
-  effect: 'none' | 'move' | 'talk' | 'end_talk'
-  exitId?: string
-  npcId?: string
-}
+export type RulingEffect = Effect
 
 /** Inspector: how this Exchange was ruled, before the Reply streams. */
 export interface RulingMessage {

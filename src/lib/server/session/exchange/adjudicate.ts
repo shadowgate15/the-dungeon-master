@@ -4,24 +4,25 @@
  */
 import type { Clarification } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
-import { buildRulingContext } from '../context/ruling.ts'
-import { askValidated } from './ask.ts'
-import { characterOf, eventsBefore, type ExchangeContext } from './context.ts'
+import { askRuling } from './ask.ts'
+import type { ExchangeContext } from './context.ts'
 import {
   ADJUDICATION_SYSTEM,
   adjudicationSchema,
   validateAdjudication,
-  type Adjudication,
-  type Effect
+  type Adjudication
 } from './contract.ts'
 
 /** Room for the flat answer, as the eval sent it. */
 const ADJUDICATION_MAX_TOKENS = 200
 
-/** A ruling, and the Effect it already settles (the default's `none`), which skips Effect. */
+/**
+ * A ruling. `defaulted` marks the stand-in `happens` after two invalid answers: it settles Effect
+ * `none`, so no Effect is asked for or applied (not even a clicked one).
+ */
 export interface Ruled {
   adjudication: Adjudication
-  effect?: Effect
+  defaulted: boolean
 }
 
 /**
@@ -34,33 +35,19 @@ export async function adjudicate(
   declaration: SessionEvent,
   clarifying: Clarification[] = []
 ): Promise<Ruled> {
-  const built = buildRulingContext({
+  const asked = await askRuling<Adjudication>(ctx, {
     role: 'adjudication',
     system: ADJUDICATION_SYSTEM,
     scene: ctx.sessions.scene(ctx.sessionId),
-    events: eventsBefore(ctx, declaration),
-    character: characterOf(ctx),
-    declaration: declaration.text ?? '',
-    clarifying
-  })
-  ctx.report?.(built.report)
-  const asked = await askValidated(
-    ctx,
-    {
-      systemPrompts: [ADJUDICATION_SYSTEM],
-      messages: [{ role: 'user', content: built.content }],
-      maxTokens: ADJUDICATION_MAX_TOKENS,
-      outputSchema: adjudicationSchema,
-      threadId: ctx.sessionId,
-      signal: ctx.signal
-    },
-    (answer) => {
+    declaration,
+    clarifying,
+    maxTokens: ADJUDICATION_MAX_TOKENS,
+    outputSchema: adjudicationSchema,
+    validate: (answer) => {
       const valid = validateAdjudication(answer)
       return valid.ok ? { ok: true, value: valid.adjudication } : valid
     },
-    { outcome: 'happens' }
-  )
-  return asked.defaulted
-    ? { adjudication: asked.value, effect: { effect: 'none' } }
-    : { adjudication: asked.value }
+    fallback: { outcome: 'happens' }
+  })
+  return { adjudication: asked.value, defaulted: asked.defaulted }
 }

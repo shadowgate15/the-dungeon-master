@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   allowedEffects,
+  parseCarriedEffect,
   validateAdjudication,
   validateEffect,
   type EffectScene
@@ -202,5 +203,25 @@ describe('Effect answer validation', () => {
       validateEffect(scene({ exits: [] }), { effect: 'move', exitId: 'exit-street' })
     ).toMatchObject({ ok: false })
     expect(validateEffect(scene(), { effect: 'teleport' })).toMatchObject({ ok: false })
+  })
+})
+
+describe('a clicked Effect from a request', () => {
+  it('keeps a move with an exit and a talk with an NPC', () => {
+    expect(parseCarriedEffect({ effect: 'move', exitId: 'exit-street' })).toEqual({
+      effect: 'move',
+      exitId: 'exit-street'
+    })
+    expect(parseCarriedEffect({ effect: 'talk', npcId: 'npc-1' })).toEqual({
+      effect: 'talk',
+      npcId: 'npc-1'
+    })
+  })
+
+  it('drops anything else, so the Declaration runs as if typed', () => {
+    expect(parseCarriedEffect(undefined)).toBeUndefined()
+    expect(parseCarriedEffect({ effect: 'move' })).toBeUndefined()
+    expect(parseCarriedEffect({ effect: 'talk', npcId: 3 })).toBeUndefined()
+    expect(parseCarriedEffect({ effect: 'end_talk' })).toBeUndefined()
   })
 })

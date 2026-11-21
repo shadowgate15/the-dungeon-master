@@ -6,6 +6,9 @@
  * A Call is a Check the player rolls, or a clarifying question the player answers with a choice
  * or free text.
  */
+import type { CarriedEffect, CheckName, Difficulty } from '#lib/server/session/exchange/contract.ts'
+
+export type { CarriedEffect }
 
 /** The Declaration a Call belongs to: the event that started the Exchange it paused. */
 export interface CallDeclaration {
@@ -13,17 +16,11 @@ export interface CallDeclaration {
   text: string
 }
 
-/**
- * An Effect decided before the Call was raised (a clicked exit or NPC, #274), applied instead of
- * asking the Effect step once the Call resolves in the player's favour.
- */
-export type CarriedEffect = { effect: 'move'; exitId: string } | { effect: 'talk'; npcId: string }
-
 /** A Check the player rolls: a skill or save slug (`athletics`, `constitution_save`). */
 export interface CheckCall {
   kind: 'check'
-  skill: string
-  difficulty: string
+  skill: CheckName
+  difficulty: Difficulty
   /** From the difficulty map; server-side only. */
   dc: number
   declaration: CallDeclaration
