@@ -19,6 +19,8 @@ export interface ExchangeContext {
   context?: ContextSources
   /** Reports a built context's usage, so the run can add it to its stats. */
   report?: (report: ContextReport) => void
+  /** Counts a retried answer or an applied default against the running step. */
+  tally?: (what: 'retry' | 'default') => void
 }
 
 /** Used when the Character cannot be read (a test without context sources). */

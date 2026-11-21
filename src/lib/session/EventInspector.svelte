@@ -1,6 +1,11 @@
 <script lang="ts">
   import type { MemoryInspector, MemoryRunSummary } from '#lib/memory/inspector.ts'
-  import { EXCHANGE_STEPS, type RulingMessage, type RunStats } from './exchange-events.ts'
+  import {
+    EXCHANGE_STEPS,
+    type ExchangeStep,
+    type RulingMessage,
+    type RunStats
+  } from './exchange-events.ts'
 
   let {
     ruling = null,
@@ -18,7 +23,18 @@
   } = $props()
   const roles = $derived(Object.values(stats?.context?.roles ?? {}))
   const reasons = (r: MemoryRunSummary) => r.droppedItems.map((d) => `${d.kind}: ${d.reason}`)
-  const requests = (step: (typeof EXCHANGE_STEPS)[number]) => stats?.steps[step]?.requests ?? 0
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+  /** One step's cost: requests, retries, whether a default stood in, and latency. */
+  const cost = (step: ExchangeStep) => {
+    const s = stats?.steps[step]
+    if (!s) return 'not run'
+    return [
+      count(s.requests, 'request', 'requests'),
+      count(s.retries, 'retry', 'retries'),
+      ...(s.defaults > 0 ? ['default applied'] : []),
+      `${s.latencyMs} ms`
+    ].join(', ')
+  }
   /** The Adjudication's details beyond its outcome, as `key: value` pairs. */
   const details = (r: RulingMessage) =>
     Object.entries({ ...r.adjudication, ...(r.effect ?? {}) })
@@ -32,12 +48,11 @@
 >
   <section aria-label="This Exchange">
     <h2 class="text-xs font-semibold text-muted uppercase">This Exchange</h2>
-    <dl class="grid grid-cols-2 gap-x-2">
+    <ul>
       {#each EXCHANGE_STEPS as step (step)}
-        <dt>{step} requests</dt>
-        <dd>{requests(step)}</dd>
+        <li class={stats?.steps[step]?.defaults ? 'text-warning' : ''}>{step}: {cost(step)}</li>
       {/each}
-    </dl>
+    </ul>
   </section>
 
   <section aria-label="Ruling">

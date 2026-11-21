@@ -283,7 +283,7 @@ describe('a Check or a question (until their own tickets)', () => {
 })
 
 describe('the inspector stream', () => {
-  it('shows each step thinking and counts its requests', async () => {
+  it('shows each step thinking, and counts its requests and latency', async () => {
     model.enqueue(happens(), effect({ effect: 'none' }), says('Rain.'))
     const events = await play('I wait')
     expect(events.flatMap((e) => (e.type === 'thinking' ? [e.step] : []))).toEqual([
@@ -292,10 +292,11 @@ describe('the inspector stream', () => {
       'reply'
     ])
     const last = events.findLast((e) => e.type === 'stats')
+    const once = { requests: 1, retries: 0, defaults: 0, latencyMs: expect.any(Number) }
     expect(last?.type === 'stats' && last.stats.steps).toEqual({
-      adjudication: { requests: 1 },
-      effect: { requests: 1 },
-      reply: { requests: 1 }
+      adjudication: once,
+      effect: once,
+      reply: once
     })
   })
 })
@@ -324,11 +325,103 @@ describe('a stopped or failed Exchange', () => {
     expect(done(events)).toMatchObject({ type: 'done', reason: 'error' })
     expect(log()).toEqual(['player:declaration:I wait'])
   })
+})
 
-  it('ends with an error on an invalid Adjudication answer', async () => {
-    model.enqueue(answers({ outcome: 'maybe' }))
+describe('a bad model answer', () => {
+  const invalid = () => answers({ outcome: 'maybe' })
+  const lastStats = (events: ExchangeEvent[]) => {
+    const last = events.findLast((e) => e.type === 'stats')
+    return last?.type === 'stats' ? last.stats : undefined
+  }
+
+  it('retries an invalid Adjudication answer once and goes on with the valid one', async () => {
+    model.enqueue(invalid(), impossible(), says('The wall does not yield.'))
+
+    const events = await play('I walk through the wall')
+
+    expect(events.find((e) => e.type === 'ruling')).toMatchObject({
+      adjudication: { outcome: 'impossible' },
+      effect: null
+    })
+    expect(log()).toEqual([
+      'player:declaration:I walk through the wall',
+      'narrator:narration:The wall does not yield.'
+    ])
+    expect(lastStats(events)?.steps.adjudication).toMatchObject({
+      requests: 2,
+      retries: 1,
+      defaults: 0
+    })
+    expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('defaults an Adjudication invalid twice to happens with Effect none, and still replies', async () => {
+    model.enqueue(invalid(), invalid(), says('You wait.'))
+
     const events = await play('I wait')
+
+    expect(events.find((e) => e.type === 'ruling')).toEqual({
+      type: 'ruling',
+      adjudication: { outcome: 'happens' },
+      effect: { effect: 'none' }
+    })
+    expect(log()).toEqual(['player:declaration:I wait', 'narrator:narration:You wait.'])
+    expect(model.requests).toHaveLength(3)
+    expect(lastStats(events)?.steps.adjudication).toMatchObject({
+      requests: 2,
+      retries: 1,
+      defaults: 1
+    })
+    expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('defaults an Effect invalid twice to none, so nothing changes but the Reply', async () => {
+    const before = sessions.scene(sessionId)
+    model.enqueue(
+      happens(),
+      effect({ effect: 'move', exitId: 'nowhere' }),
+      answers({ effect: 'fly' }),
+      says('You stay put.')
+    )
+
+    const events = await play('I go somewhere')
+
+    expect(events.find((e) => e.type === 'ruling')).toMatchObject({ effect: { effect: 'none' } })
+    expect(log()).toEqual(['player:declaration:I go somewhere', 'narrator:narration:You stay put.'])
+    expect(sessions.scene(sessionId)).toEqual(before)
+    expect(lastStats(events)?.steps.effect).toMatchObject({
+      requests: 2,
+      retries: 1,
+      defaults: 1
+    })
+    expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('does not retry a model error', async () => {
+    model.enqueue(fails, says('never'))
+    const events = await play('I wait')
+    expect(model.requests).toHaveLength(1)
     expect(done(events)).toMatchObject({ type: 'done', reason: 'error' })
+  })
+})
+
+describe('a model error mid-Exchange', () => {
+  it('ends with error, keeps the Declaration and leaves the Scene as it was', async () => {
+    const before = sessions.scene(sessionId)
+    model.enqueue(
+      happens(),
+      effect({ effect: 'move', exitId: 'cellar-stairs' }),
+      answers(cellar),
+      answers(cellarNpcs),
+      fails
+    )
+
+    const events = await play('I go down the cellar stairs')
+
+    expect(done(events)).toMatchObject({ type: 'done', reason: 'error' })
+    expect(sessions.scene(sessionId)).toEqual(before)
+    expect(createSessionService(db).scene(sessionId)).toEqual(before)
+    expect(log()).toEqual(['player:declaration:I go down the cellar stairs'])
   })
 })
 

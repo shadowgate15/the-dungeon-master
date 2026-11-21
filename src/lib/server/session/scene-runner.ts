@@ -6,7 +6,7 @@
  * Exchange over the chat port and the database-backed Scene and Event log. The stream ends with
  * exactly one `done` event saying why the floor went back to the player.
  */
-import type { SessionEvent } from '#lib/session/enums.ts'
+import type { SceneState, SessionEvent } from '#lib/session/enums.ts'
 import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
 import type { ChatPort } from '../ai/port.ts'
 import type { BeatProgress } from '../arc/beat-progress.ts'
@@ -63,7 +63,8 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   async function* run(
     sessionId: string,
     signal: AbortSignal,
-    declaration: SessionEvent
+    declaration: SessionEvent,
+    before: SceneState
   ): AsyncGenerator<ExchangeEvent> {
     try {
       const steering = deps.beatProgress && (() => deps.beatProgress!.steering(sessionId))
@@ -81,7 +82,9 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       if (signal.aborted) {
         yield { type: 'done', reason: 'stopped' }
       } else {
-        // #275 adds retries and safe defaults; until then a failed step ends the Exchange here.
+        // A model or transport error: the Exchange never finished, so the Scene goes back to how it
+        // was and what it recorded after the Declaration is dropped. The Declaration stays.
+        sessions.rollBack(sessionId, before, declaration.seq)
         yield {
           type: 'done',
           reason: 'error',
@@ -115,10 +118,12 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
     signal.addEventListener('abort', () => !started && free(), { once: true })
 
     let first: SessionEvent
+    let before: SceneState
     try {
       // The run boundary: NPCs that died, left or were retired since the last run drop out of the
       // stored Scene (they never resolve in the meantime), ending a dialogue with them.
       sessions.pruneScene(sessionId)
+      before = sessions.scene(sessionId)
       first = record()
     } catch (error) {
       free()
@@ -130,7 +135,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       started = true
       try {
         yield { type: 'event', event: first }
-        yield* run(sessionId, signal, first)
+        yield* run(sessionId, signal, first, before)
       } finally {
         free()
       }

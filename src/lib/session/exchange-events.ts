@@ -47,8 +47,14 @@ export interface ContextStats {
 
 /** What one step of the Exchange cost. */
 export interface StepStats {
-  /** Model requests the step made. */
+  /** Model requests the step made, retries included. */
   requests: number
+  /** Invalid answers asked again. */
+  retries: number
+  /** Safe defaults applied after the retry also failed validation. */
+  defaults: number
+  /** Wall time the step took so far, in milliseconds. */
+  latencyMs: number
 }
 
 /** Per-Exchange counters shown in the event inspector, by step. */

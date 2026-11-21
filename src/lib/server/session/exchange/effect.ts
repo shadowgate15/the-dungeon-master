@@ -4,9 +4,9 @@
  */
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
-import { callModel } from '../../ai/port.ts'
 import { buildRulingContext, effectScene } from '../context/ruling.ts'
 import { generateDestination } from '../destination.ts'
+import { askValidated } from './ask.ts'
 import { characterOf, eventsBefore, type ExchangeContext } from './context.ts'
 import {
   allowedEffects,
@@ -21,8 +21,8 @@ const EFFECT_MAX_TOKENS = 80
 
 /**
  * Asks the model which Effect the Declaration has and returns it, validated against the Scene's
- * options. Makes no request when the Scene allows nothing but `none`. Throws on a model error or
- * an answer that fails validation.
+ * options. Makes no request when the Scene allows nothing but `none`. An invalid answer is retried
+ * once, then defaults to `none`. Throws on a model error.
  */
 export async function chooseEffect(
   ctx: ExchangeContext,
@@ -40,19 +40,23 @@ export async function chooseEffect(
     declaration: declaration.text ?? ''
   })
   ctx.report?.(built.report)
-  const call = await callModel(ctx.port, {
-    systemPrompts: [EFFECT_SYSTEM],
-    messages: [{ role: 'user', content: built.content }],
-    maxTokens: EFFECT_MAX_TOKENS,
-    outputSchema: effectSchema(options),
-    threadId: ctx.sessionId,
-    signal: ctx.signal
-  })
-  if (!call.ok) throw new Error(call.failure.message)
-  // #275 retries an invalid answer once, then defaults to none.
-  const valid = validateEffect(options, call.object)
-  if (!valid.ok) throw new Error(`The Effect answer was invalid: ${valid.error}`)
-  return valid.effect
+  const asked = await askValidated(
+    ctx,
+    {
+      systemPrompts: [EFFECT_SYSTEM],
+      messages: [{ role: 'user', content: built.content }],
+      maxTokens: EFFECT_MAX_TOKENS,
+      outputSchema: effectSchema(options),
+      threadId: ctx.sessionId,
+      signal: ctx.signal
+    },
+    (answer) => {
+      const valid = validateEffect(options, answer)
+      return valid.ok ? { ok: true, value: valid.effect } : valid
+    },
+    { effect: 'none' }
+  )
+  return asked.value
 }
 
 /**

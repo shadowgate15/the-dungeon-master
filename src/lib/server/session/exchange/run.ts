@@ -49,17 +49,29 @@ export async function* runExchange(
   const context: ContextStats = { roles: {}, trims: noTrims() }
   const stats: RunStats = { steps: {}, context }
   let step: ExchangeStep = 'adjudication'
-  const snapshot = (): ExchangeEvent => ({
-    type: 'stats',
-    stats: {
-      steps: Object.fromEntries(Object.entries(stats.steps).map(([k, v]) => [k, { ...v }])),
-      context: { roles: { ...context.roles }, trims: { ...context.trims } }
+  let startedAt = performance.now()
+  const current = () =>
+    (stats.steps[step] ??= { requests: 0, retries: 0, defaults: 0, latencyMs: 0 })
+  /** Starts timing a step; its latency covers every request and retry it makes. */
+  const enter = (next: ExchangeStep): ExchangeEvent => {
+    step = next
+    startedAt = performance.now()
+    current()
+    return { type: 'thinking', step }
+  }
+  const snapshot = (): ExchangeEvent => {
+    current().latencyMs = Math.round(performance.now() - startedAt)
+    return {
+      type: 'stats',
+      stats: {
+        steps: Object.fromEntries(Object.entries(stats.steps).map(([k, v]) => [k, { ...v }])),
+        context: { roles: { ...context.roles }, trims: { ...context.trims } }
+      }
     }
-  })
-  // Every model request is counted against the step that made it (retries included, for #275).
+  }
+  // Every model request is counted against the step that made it, retries included.
   const counted: ChatPort = (request) => {
-    const current = (stats.steps[step] ??= { requests: 0 })
-    current.requests++
+    current().requests++
     return ctx.port(request)
   }
   const run: ExchangeContext = {
@@ -68,11 +80,12 @@ export async function* runExchange(
     report: (report) => {
       addReport(context, report)
       ctx.report?.(report)
-    }
+    },
+    tally: (what) => void (what === 'retry' ? current().retries++ : current().defaults++)
   }
 
-  yield { type: 'thinking', step }
-  const adjudication = await adjudicate(run, declaration)
+  yield enter('adjudication')
+  const { adjudication, effect: settled } = await adjudicate(run, declaration)
   yield snapshot()
 
   let effect: RulingEffect | null = null
@@ -80,9 +93,10 @@ export async function* runExchange(
   // TEMPORARY: a Check or a question resolves as happens until #272 (Checks as Calls) and #273
   // (questions) give them their own paths. Remove this fallback with those tickets.
   const happens = adjudication.outcome !== 'impossible'
-  if (happens) {
-    step = 'effect'
-    yield { type: 'thinking', step }
+  if (happens && settled) {
+    effect = settled
+  } else if (happens) {
+    yield enter('effect')
     const chosen = await chooseEffect(run, declaration)
     change = yield* applyEffect(run, chosen)
     effect = chosen
@@ -90,8 +104,7 @@ export async function* runExchange(
   }
   yield { type: 'ruling', adjudication, effect }
 
-  step = 'reply'
-  yield { type: 'thinking', step }
+  yield enter('reply')
   const replied = yield* reply(run, outcomeFacts(adjudication, change))
   yield snapshot()
   return replied
