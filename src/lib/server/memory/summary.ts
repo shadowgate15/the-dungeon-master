@@ -25,7 +25,7 @@ export const SUMMARY_EVENT_TEXT_BUDGET = 6000
 const MAX_CATCH_UP_CALLS = 3
 const TIMEOUT_MS = 90_000
 const CHARS_PER_TOKEN = 4
-const KINDS_SHOWN = ['player-action', 'narration', 'npc-line', 'roll-resolved'] as const
+const KINDS_SHOWN = ['declaration', 'narration', 'npc-line'] as const
 
 const SYSTEM = [
   `${SUMMARY_MARKER}. You keep the running summary of a tabletop role-playing game.`,

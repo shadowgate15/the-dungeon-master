@@ -1,6 +1,7 @@
 import type { EventKind, Role } from '#lib/session/enums.ts'
-import { streamText } from '../../../ai/port.ts'
-import type { PipelineContext, PipelineEvent } from '../../scene-runner.ts'
+import { streamText } from '../../ai/port.ts'
+import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
+import type { ExchangeContext } from './context.ts'
 
 interface StreamLineRequest {
   system: string
@@ -22,9 +23,9 @@ interface StreamLineRequest {
  * `discard` and throws, so the log never gets an in-flight event.
  */
 export async function* streamLine(
-  ctx: PipelineContext,
+  ctx: ExchangeContext,
   request: StreamLineRequest
-): AsyncGenerator<PipelineEvent, string | undefined> {
+): AsyncGenerator<ExchangeEvent, string | undefined> {
   let text = ''
   let failure: string | undefined
   let finished = false

@@ -1,6 +1,11 @@
 // Scripted Exchange cases: a fixture Scene, a declaration, the expected Adjudication outcome
 // (plus acceptable skills for checks) and, where the case has one, the expected Effect.
-import type { Check, Effect, FixtureScene, Outcome } from './contract.ts'
+import type {
+  CheckName as Check,
+  Effect,
+  ExchangeScene as FixtureScene,
+  Outcome
+} from '#lib/server/session/exchange/contract.ts'
 
 export const CHARACTER = { name: 'Mira Ashdown', summary: 'a level 1 human rogue' }
 

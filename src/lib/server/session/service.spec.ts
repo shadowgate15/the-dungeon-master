@@ -8,6 +8,7 @@ import {
   firstSceneScripts,
   playableCampaign,
   sessionServiceWith,
+  setSceneNpcs,
   updateNpc
 } from './fixture'
 import {
@@ -18,6 +19,15 @@ import {
 } from './service'
 import { eq } from 'drizzle-orm'
 import type { Database } from '../db/connect'
+import type { CheckCall } from '#lib/session/call.ts'
+
+const openCheck: CheckCall = {
+  kind: 'check',
+  skill: 'perception',
+  difficulty: 'medium',
+  dc: 15,
+  declaration: { seq: 1, text: 'I look around' }
+}
 
 let db: Database
 let sessions: SessionService
@@ -46,7 +56,7 @@ describe('starting a Session', () => {
     expect(scene.objects.length).toBeGreaterThan(0)
     expect(scene.npcs.length).toBeGreaterThan(0)
     expect(scene.mode).toBe('exploration')
-    expect(scene.pendingRoll).toBeNull()
+    expect(scene.openCall).toBeNull()
     expect(sessions.events(session.id)).toEqual([])
   })
 
@@ -87,7 +97,7 @@ describe('the Event log', () => {
   it('appends events in sequence, each with its producing role', async () => {
     const { id } = await sessions.start(campaignId)
 
-    const a = sessions.appendEvent(id, { role: 'player', kind: 'player-action', text: 'I look' })
+    const a = sessions.appendEvent(id, { role: 'player', kind: 'declaration', text: 'I look' })
     const b = sessions.appendEvent(id, {
       role: 'narrator',
       kind: 'narration',
@@ -96,7 +106,7 @@ describe('the Event log', () => {
 
     expect([a.seq, b.seq]).toEqual([1, 2])
     expect(sessions.events(id).map((e) => [e.seq, e.role, e.kind, e.text])).toEqual([
-      [1, 'player', 'player-action', 'I look'],
+      [1, 'player', 'declaration', 'I look'],
       [2, 'narrator', 'narration', 'You see a hearth.']
     ])
   })
@@ -127,14 +137,40 @@ describe('the Event log', () => {
     expect(db.select().from(sessionEvent).where(eq(sessionEvent.sessionId, id)).all()).toEqual([])
   })
 
+  it('names the speaker of every NPC line, whether or not the NPC is still in the Scene', async () => {
+    const { id } = await sessions.start(campaignId)
+    const [brenna, hob] = sessions.scene(id).npcs
+    const line = (npcId: string) =>
+      sessions.appendEvent(id, { role: 'npc', kind: 'npc-line', text: 'Hm.', npcId })
+    line(brenna.id)
+    line(hob.id)
+    line(brenna.id)
+    setSceneNpcs({ db, campaignId, characterId }, id, [])
+    updateNpc({ db, campaignId, characterId }, hob.id, { status: 'dead' })
+
+    expect(sessions.speakers(id)).toEqual(
+      expect.arrayContaining([
+        { id: brenna.id, name: 'Brenna' },
+        { id: hob.id, name: 'Old Hob' }
+      ])
+    )
+    expect(sessions.speakers(id)).toHaveLength(2)
+  })
+
+  it('names no speakers before any NPC has spoken', async () => {
+    const { id } = await sessions.start(campaignId)
+    sessions.appendEvent(id, { role: 'player', kind: 'declaration', text: 'I look' })
+    expect(sessions.speakers(id)).toEqual([])
+  })
+
   it('refuses to append to an ended or unknown Session', async () => {
     const { id } = await sessions.start(campaignId)
     sessions.end(id)
     expect(() =>
-      sessions.appendEvent(id, { role: 'player', kind: 'player-action', text: 'x' })
+      sessions.appendEvent(id, { role: 'player', kind: 'declaration', text: 'x' })
     ).toThrow(SessionValidationError)
     expect(() =>
-      sessions.appendEvent('nope', { role: 'player', kind: 'player-action', text: 'x' })
+      sessions.appendEvent('nope', { role: 'player', kind: 'declaration', text: 'x' })
     ).toThrow(SessionNotFoundError)
   })
 })
@@ -143,18 +179,19 @@ describe('the Scene', () => {
   it('persists code-applied changes', async () => {
     const { id } = await sessions.start(campaignId)
     const scene = sessions.scene(id)
+    const call = openCheck
 
     sessions.saveScene(id, {
       ...scene,
       mode: 'dialogue',
       dialogueNpcId: scene.npcs[0].id,
-      pendingRoll: { check: 'perception', dc: 12, reason: 'looking around' }
+      openCall: call
     })
 
     expect(sessions.scene(id)).toMatchObject({
       mode: 'dialogue',
       dialogueNpcId: scene.npcs[0].id,
-      pendingRoll: { check: 'perception', dc: 12 }
+      openCall: call
     })
   })
 })
@@ -282,7 +319,7 @@ describe('Scene NPCs resolve live from World memory', () => {
 
   it('stamps an attitude change with the Session and last Event seq', async () => {
     const { id } = await sessions.start(campaignId)
-    sessions.appendEvent(id, { role: 'player', kind: 'player-action', text: 'hi' })
+    sessions.appendEvent(id, { role: 'player', kind: 'declaration', text: 'hi' })
     const hob = sessions.scene(id).npcs[1]
     sessions.changeAttitude(id, hob.id, { stance: 'hostile' })
 
@@ -292,15 +329,15 @@ describe('Scene NPCs resolve live from World memory', () => {
 })
 
 describe('Scene carry-over and the Character lock', () => {
-  it('opens a later Session on a clone of the previous Scene with an empty Event log', async () => {
+  it('opens a later Session on a clone of the previous Scene, without its open Call, with an empty Event log', async () => {
     const first = await sessions.start(campaignId)
     const npcId = sessions.scene(first.id).npcs[0].id
-    const roll = { check: 'Persuasion', dc: 12, reason: 'win her trust' }
+    const call = { ...openCheck, declaration: { seq: 1, text: 'I look' } }
     db.update(sessionScene)
-      .set({ mode: 'dialogue', dialogueNpcId: npcId, pendingRoll: roll })
+      .set({ mode: 'dialogue', dialogueNpcId: npcId, openCall: call })
       .where(eq(sessionScene.sessionId, first.id))
       .run()
-    sessions.appendEvent(first.id, { role: 'player', kind: 'player-action', text: 'I look' })
+    sessions.appendEvent(first.id, { role: 'player', kind: 'declaration', text: 'I look' })
     sessions.end(first.id)
 
     const second = await sessions.start(campaignId)
@@ -312,7 +349,8 @@ describe('Scene carry-over and the Character lock', () => {
     expect(after.npcs.map((n) => n.id)).toEqual(before.npcs.map((n) => n.id))
     expect(after.mode).toBe('dialogue')
     expect(after.dialogueNpcId).toBe(npcId)
-    expect(after.pendingRoll).toEqual(roll)
+    expect(before.openCall).toEqual(call)
+    expect(after.openCall).toBeNull()
     expect(sessions.events(second.id)).toEqual([])
   })
 

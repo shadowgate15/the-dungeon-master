@@ -1,6 +1,14 @@
 import { and, eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { answers, createScriptedPort, fails } from '../../testing/scripted-chat-port'
+import { effect, happens } from '../../testing/exchange-scripts'
+import {
+  answers,
+  createScriptedPort,
+  fails,
+  hangsAfter,
+  says
+} from '../../testing/scripted-chat-port'
+import type { ChatPort, ChatRequest } from '../ai/port'
 import type { Database } from '../db/connect'
 import { disposition, fact, memoryRun, npc, npcFact, place, session } from '../db/schema'
 import {
@@ -9,7 +17,9 @@ import {
   sessionServiceWith,
   type PlayableCampaign
 } from '../session/fixture'
-import { createSceneRunner, type Pipeline } from '../session/scene-runner.ts'
+import { NARRATOR_SYSTEM } from '../session/context/narrator.ts'
+import { ADJUDICATION_SYSTEM, EFFECT_SYSTEM } from '../session/exchange/contract.ts'
+import { createSceneRunner } from '../session/scene-runner.ts'
 import type { SessionService } from '../session/service'
 import { createMemoryExtraction, type MemoryExtraction } from './extraction.ts'
 
@@ -35,7 +45,7 @@ beforeEach(async () => {
 function recordPlay(extra: () => void = () => {}) {
   sessions.appendEvent(sessionId, {
     role: 'player',
-    kind: 'player-action',
+    kind: 'declaration',
     text: 'I ask the room who is here.'
   })
   sessions.appendEvent(sessionId, {
@@ -179,7 +189,7 @@ describe('replaying a recorded Event log through extraction', () => {
     expect(await memory.extract(sessionId, model.port)).toBe('idle')
     expect(model.requests).toHaveLength(1)
 
-    sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text: 'I leave.' })
+    sessions.appendEvent(sessionId, { role: 'player', kind: 'declaration', text: 'I leave.' })
     model.enqueue(proposal({}))
     await memory.extract(sessionId, model.port)
     const prompt = JSON.stringify(model.requests[1])
@@ -336,7 +346,7 @@ describe('failures', () => {
     recordPlay()
     model.enqueue(fails, fails, proposal({}), fails, fails)
     for (let i = 0; i < 3; i++) await memory.extract(sessionId, model.port)
-    sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text: 'More.' })
+    sessions.appendEvent(sessionId, { role: 'player', kind: 'declaration', text: 'More.' })
     for (let i = 0; i < 2; i++) await memory.extract(sessionId, model.port)
     expect(memory.paused(sessionId)).toBe(false)
   })
@@ -390,7 +400,7 @@ describe('one extraction at a time per Session', () => {
     const second = memory.trigger(sessionId, model.port)
     const third = memory.trigger(sessionId, model.port)
     expect(model.requests).toHaveLength(1)
-    sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text: 'Next.' })
+    sessions.appendEvent(sessionId, { role: 'player', kind: 'declaration', text: 'Next.' })
 
     release()
     await Promise.all([first, second, third])
@@ -414,37 +424,40 @@ describe('one extraction at a time per Session', () => {
   })
 })
 
-describe('after a run', () => {
-  const yields: Pipeline = async function* () {
-    yield { type: 'done', reason: 'yield' }
-  }
-  const rolls: Pipeline = async function* () {
-    yield { type: 'done', reason: 'roll' }
-  }
-  const errors: Pipeline = async function* () {
-    yield { type: 'done', reason: 'error', message: 'boom' }
-  }
-  const stops: Pipeline = async function* () {
-    yield { type: 'done', reason: 'stopped' }
-  }
+describe('after an Exchange', () => {
+  // The Exchange's own requests get their own scripts, so `model` sees only extraction.
+  let play: ReturnType<typeof createScriptedPort>
+  const exchangeSteps = [ADJUDICATION_SYSTEM, EFFECT_SYSTEM]
+  const isExchange = (request: ChatRequest) =>
+    exchangeSteps.includes(request.systemPrompts[0]) ||
+    request.systemPrompts[0].startsWith(NARRATOR_SYSTEM)
+  const port: ChatPort = (request) => (isExchange(request) ? play : model).port(request)
 
-  async function play(pipeline: Pipeline, signal = new AbortController().signal) {
-    const runner = createSceneRunner({ sessions, port: model.port, pipeline, memory })
-    const result = runner.begin(sessionId, 'I look around.', signal)
+  beforeEach(() => {
+    play = createScriptedPort()
+  })
+
+  const replies = () => play.enqueue(happens(), effect({ effect: 'none' }), says('Rain.'))
+  const runner = () => createSceneRunner({ sessions, port, memory })
+
+  async function declare(text = 'I look around.', using = runner(), signal?: AbortSignal) {
+    const result = using.begin(sessionId, text, signal ?? new AbortController().signal)
     if (!result.ok) throw new Error(result.reason)
     const seen = []
     for await (const e of result.events) seen.push(e)
-    await runner.settled()
+    await using.settled()
     return seen
   }
 
-  it('extracts in the background after a yield and after a roll request', async () => {
+  it('extracts in the background after each Exchange that replied', async () => {
+    replies()
     model.enqueue(proposal({ facts: [{ title: 'First', detail: 'One thing.' }] }))
-    await play(yields)
-    expect(memory.watermark(sessionId)).toBe(1)
+    await declare()
+    expect(memory.watermark(sessionId)).toBe(2)
 
+    replies()
     model.enqueue(proposal({ facts: [{ title: 'Second', detail: 'Another thing.' }] }))
-    await play(rolls)
+    await declare()
     expect(
       db
         .select()
@@ -454,22 +467,32 @@ describe('after a run', () => {
     ).toEqual(['First', 'Second'])
   })
 
-  it('triggers nothing after an errored or stopped run', async () => {
-    await play(errors)
-    await play(stops)
+  it('triggers nothing after an errored or stopped Exchange', async () => {
+    play.enqueue(fails)
+    await declare()
+
+    const controller = new AbortController()
+    play.enqueue(happens(), effect({ effect: 'none' }), hangsAfter('The '))
+    const using = runner()
+    const result = using.begin(sessionId, 'I wait', controller.signal)
+    if (!result.ok) throw new Error(result.reason)
+    for await (const e of result.events) if (e.type === 'delta') controller.abort()
+    await using.settled()
+
     expect(model.requests).toHaveLength(0)
     expect(memory.watermark(sessionId)).toBe(0)
   })
 
-  it('never fails the run because of memory', async () => {
+  it('never fails the Exchange because of memory', async () => {
+    replies()
     model.enqueue(fails)
-    const seen = await play(yields)
-    expect(seen.at(-1)).toEqual({ type: 'done', reason: 'yield' })
+    const seen = await declare()
+    expect(seen.at(-1)).toEqual({ type: 'done', reason: 'replied' })
     expect(memory.watermark(sessionId)).toBe(0)
     expect(log).toHaveBeenCalledOnce()
   })
 
-  it('does not make the next action wait for a running extraction', async () => {
+  it('does not make the next Declaration wait for a running extraction', async () => {
     let release!: () => void
     const gate = new Promise<void>((resolve) => (release = resolve))
     model.enqueue(async function* () {
@@ -477,19 +500,21 @@ describe('after a run', () => {
       yield { type: 'CUSTOM', name: 'structured-output.complete', value: { object: empty } }
       yield { type: 'RUN_FINISHED' }
     })
-    const runner = createSceneRunner({ sessions, port: model.port, pipeline: yields, memory })
-    const drain = async (r: ReturnType<typeof runner.begin>) => {
+    const using = runner()
+    const drain = async (r: ReturnType<typeof using.begin>) => {
       if (!r.ok) throw new Error(r.reason)
       for await (const e of r.events) void e
     }
-    await drain(runner.begin(sessionId, 'one', new AbortController().signal))
-    await drain(runner.begin(sessionId, 'two', new AbortController().signal))
+    replies()
+    await drain(using.begin(sessionId, 'one', new AbortController().signal))
+    replies()
+    await drain(using.begin(sessionId, 'two', new AbortController().signal))
     expect(memory.running(sessionId)).toBe(true)
-    expect(sessions.events(sessionId)).toHaveLength(2)
+    expect(sessions.events(sessionId)).toHaveLength(4)
 
     model.enqueue(proposal({}))
     release()
-    await runner.settled()
-    expect(memory.watermark(sessionId)).toBe(2)
+    await using.settled()
+    expect(memory.watermark(sessionId)).toBe(4)
   })
 })

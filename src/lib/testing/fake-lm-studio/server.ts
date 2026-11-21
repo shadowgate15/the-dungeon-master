@@ -13,12 +13,12 @@ import type { AddressInfo } from 'node:net'
  * `/__control/answers`, `"replace": true` clears it first), then a canned object set by POSTing
  * JSON to `/__control/chat-content` (the old chat's control), then a schema-aware default derived
  * from the request's `response_format` (first enum slug, a short string for text, minimum-length
- * arrays). An answer can also script `toolCalls` (a `request_roll`, or an invalid call with raw
+ * arrays). An answer can also script `toolCalls` (a tool call, or an invalid one with raw
  * `arguments`), `status` (an HTTP failure) or `abortAfterChunks` (the connection drops mid-stream).
  * The silent Arc Beat check (recognised by its system prompt) also never touches that queue: it
  * always gets a schema-aware default (no transitions).
  * Memory extraction calls (recognised by their system prompt marker) never touch that queue, so a
- * scripted DM scenario is not disturbed by the silent call after each turn. They take the next
+ * scripted DM scenario is not disturbed by the silent call after each Exchange. They take the next
  * entry of their own queue (POST the same answer shape to `/__control/extractions`, `"replace":
  * true` clears it first), or else the schema default: no changes.
  * POSTing `{ "ms": n }` to `/__control/delay` delays every response that has no delay of

@@ -1,15 +1,15 @@
 /**
- * The Narrator's context: the fullest of the three roles. Scene, Arc block, Seed and Character are
- * never trimmed. History is the Rolling summary plus every event after its watermark verbatim,
+ * The Narrator's context: the fullest of the roles. Scene, Arc block, Seed, Character and the
+ * Exchange's facts are never trimmed. History is the Rolling summary plus every event after its watermark verbatim,
  * with the last `verbatimFloor` events verbatim even when covered. World memory is selected into
  * its sub-budget. Over the cap, trim in order: World memory (lowest score first), then the oldest
- * events down to the trim floor, then the summary's tail. A run never fails over memory: if every
+ * events down to the trim floor, then the summary's tail. An Exchange never fails over memory: if every
  * trim is spent and the context is still over, it goes out as it is.
  */
 import type { SceneState, SessionEvent } from '#lib/session/enums.ts'
-import type { ContextReport, TrimCounts } from '#lib/session/pipeline-events.ts'
+import type { ContextReport, TrimCounts } from '#lib/session/exchange-events.ts'
 import { estimateTokens } from '../../ai/tokens.ts'
-import { eventLine } from '../scene-director/prompt.ts'
+import { eventLine } from './event-line.ts'
 import { DEFAULT_BUDGETS, type ContextBudgets } from './budgets.ts'
 import {
   degradeWorldMemory,
@@ -36,6 +36,8 @@ export interface NarratorContextInput {
   arcBlock?: string
   /** Never-trimmed Campaign Seed and Character sheet text, when the caller has them. */
   fixed?: { seed?: string; character?: string }
+  /** What this Exchange settled, stated as facts for the Reply (never trimmed). */
+  facts?: string
   budgets?: ContextBudgets
   /** Where the dropped-uncovered-events line goes. Defaults to the console. */
   log?: (message: string) => void
@@ -99,7 +101,8 @@ export function buildNarratorContext(input: NarratorContextInput): BuiltContext 
   const content = () =>
     [
       ...(summaryText ? [`Story so far: ${summaryText}`] : []),
-      ...(shown.length ? [`Recent events:\n${historyText()}`] : [])
+      ...(shown.length ? [`Recent events:\n${historyText()}`] : []),
+      ...(input.facts ? [input.facts] : [])
     ].join('\n\n')
   const used = () => estimateTokens(`${system()}\n${content()}`)
 

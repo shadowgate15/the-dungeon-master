@@ -1,10 +1,13 @@
 // Runs the Exchange cases against the model LM Studio has loaded, in one mode, and writes the raw
 // records to a JSON file. Not part of `pnpm test`: it needs a real LM Studio.
 //
-//   pnpm eval:exchange --model <id> [--mode schema|raw-schema|tools] [--runs 5] [--cases a,b]
+//   pnpm eval:exchange [--model <id>] [--mode schema|raw-schema|tools] [--runs 5] [--cases a,b]
 //                      [--label x] [--temperature 0.7] [--think] [--out path]
-//                      [--contract v1|v2-prompt|v2-flat|v2-resists] [--max-tokens n] [--no-effects]
-//                      [--mode systemone [--no-examples]]
+//                      [--max-tokens n] [--no-effects] [--mode systemone [--no-examples]]
+//
+// The contract is the app's own (`src/lib/server/session/exchange/contract.ts`): its prompts, wire
+// schemas and validation, so the gate always tests what ships. The contract variants that lost
+// (v1, v2-prompt and `resists`) survive only as recorded results and in the research doc.
 //
 // Modes:
 // - schema: the app's real port (createChatPort over createChatAdapter) with `outputSchema`, so a
@@ -17,18 +20,29 @@
 //   applies the grammar to the reasoning itself, so the JSON lands in `reasoning_content`.
 // - systemone: a decision model (LM Studio's /v1/systemone) answering the v2 contract as typed
 //   choice questions, one request per step (see systemone.ts). --no-examples drops the worked
-//   examples from the outcome instructions. Temperature and --contract do not apply.
-// --contract picks the prompt and schema variant (see CONTRACTS in contract.ts).
+//   examples from the outcome instructions. Temperature does not apply.
 // The first adjudication request body of the cell is recorded as `wire`.
 //
 // Every request goes through a fetch wrapper that times the first streamed token, keeps the raw
 // streamed content (so failures can be quoted), and adds `temperature` and, unless --think,
-// `reasoning_effort: "none"` to the body: the same as adding them to the port's `modelOptions`.
+// `reasoning_effort: "none"` to the body. In schema mode the port sends the same settings itself
+// (the app's `DEFAULT_SAMPLING` unless --temperature or --think say otherwise).
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { createChatAdapter } from '#lib/server/ai/adapter.ts'
 import { callModel, createChatPort } from '#lib/server/ai/port.ts'
-import type { z } from 'zod'
+import { DEFAULT_MODEL, DEFAULT_SAMPLING, type ModelSampling } from '#lib/server/ai/config.ts'
+import {
+  ADJUDICATION_SYSTEM,
+  EFFECT_SYSTEM,
+  adjudicationSchema,
+  effectSchema,
+  sceneContext,
+  validateAdjudication,
+  validateEffect,
+  type ExchangeScene
+} from '#lib/server/session/exchange/contract.ts'
+import { z } from 'zod'
 import { CASES, CHARACTER, type Case } from './cases.ts'
 import {
   adjudicationRequest,
@@ -39,16 +53,6 @@ import {
   type ChoiceAnswer,
   type SystemOneRequest
 } from './systemone.ts'
-import {
-  CONTRACTS,
-  adjudicationSchema,
-  effectSchema,
-  fromFlat,
-  jsonSchemaOf,
-  sceneContext,
-  type ContractId,
-  type Effect
-} from './contract.ts'
 
 export const BASE_URL = process.env.LM_STUDIO_BASE_URL ?? 'http://localhost:1234/v1'
 const ADJUDICATION_MAX_TOKENS = 200
@@ -96,7 +100,8 @@ export interface CellResult {
   label: string
   model: string
   mode: Mode
-  contract?: ContractId
+  /** The contract variant, in results recorded before the contract moved into the app. */
+  contract?: string
   runs: number
   temperature: number
   think: boolean
@@ -213,26 +218,32 @@ async function end(): Promise<void> {
 
 // ---- one request in each mode -----------------------------------------------------------------
 
-/** Drops `null` fields: strict OpenAI-style schemas send optional fields as required-nullable. */
-function dropNulls(value: unknown): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
-  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== null))
+/** JSON Schema for the raw-wire modes (native tools, raw `response_format`, in the prompt). */
+function jsonSchemaOf(schema: z.ZodType): Record<string, unknown> {
+  const json = z.toJSONSchema(schema) as Record<string, unknown>
+  delete json.$schema
+  return json
 }
 
-function judge(
-  schema: z.ZodType,
-  parsed: unknown
-): { ok: boolean; object?: unknown; error?: string } {
-  const object = dropNulls(parsed)
-  const result = schema.safeParse(object)
-  return result.success
-    ? { ok: true, object }
-    : {
-        ok: false,
-        object,
-        error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
-      }
+type Verdict = { ok: boolean; object?: unknown; error?: string }
+
+/** The app's Adjudication validation; a valid answer is recorded as the validated Adjudication. */
+function judgeAdjudication(parsed: unknown): Verdict {
+  const result = validateAdjudication(parsed)
+  return result.ok
+    ? { ok: true, object: result.adjudication }
+    : { ok: false, object: parsed, error: result.error }
 }
+
+/** The app's Effect validation against the case's Scene. */
+const judgeEffect =
+  (scene: ExchangeScene) =>
+  (parsed: unknown): Verdict => {
+    const result = validateEffect(scene, parsed)
+    return result.ok
+      ? { ok: true, object: result.effect }
+      : { ok: false, object: parsed, error: result.error }
+  }
 
 interface RequestSpec {
   model: string
@@ -240,18 +251,17 @@ interface RequestSpec {
   system: string
   user: string
   schema: z.ZodObject
-  /** Maps a schema-valid object to the one scored (the flat Adjudication's code-side rules). */
-  post?: (object: Record<string, unknown>) => { ok: boolean; object?: unknown; error?: string }
+  /** The app's code-side validation of the parsed answer. */
+  validate: (parsed: unknown) => Verdict
   toolName: string
   toolDescription: string
   maxTokens: number
+  /** Sent by the port in schema mode. */
+  sampling: ModelSampling
   inject: Record<string, unknown>
 }
 
-function verdictFor(spec: RequestSpec, parsed: unknown) {
-  const verdict = judge(spec.schema, parsed)
-  return verdict.ok && spec.post ? spec.post(verdict.object as Record<string, unknown>) : verdict
-}
+const verdictFor = (spec: RequestSpec, parsed: unknown) => spec.validate(parsed)
 
 function finish(wire: Wire, verdict: { ok: boolean; object?: unknown; error?: string }): Attempt {
   const completion = wire.usage?.completion_tokens
@@ -272,7 +282,10 @@ function finish(wire: Wire, verdict: { ok: boolean; object?: unknown; error?: st
 let lastWire: Record<string, unknown> | undefined
 
 async function requestSchema(spec: RequestSpec): Promise<Attempt> {
-  const port = createChatPort(createChatAdapter({ baseUrl: BASE_URL, model: spec.model }))
+  const port = createChatPort(
+    createChatAdapter({ baseUrl: BASE_URL, model: spec.model }),
+    spec.sampling
+  )
   const wire = begin(spec.inject)
   const call = await callModel(port, {
     systemPrompts: [spec.system],
@@ -401,12 +414,12 @@ const SENDERS: Record<Exclude<Mode, 'systemone'>, (spec: RequestSpec) => Promise
 
 /**
  * One decision-model request (see systemone.ts). Not streamed, so there is no TTFT. The answer is
- * valid when every choice is one of its criteria and the mapped object passes the contract schema.
+ * valid when every choice is one of its criteria and the mapped object passes the app's validation.
  */
 async function requestSystemOne(
   body: SystemOneRequest,
   toObject: (answers: Record<string, ChoiceAnswer>) => unknown,
-  schema: z.ZodType
+  validate: (parsed: unknown) => Verdict
 ): Promise<Attempt> {
   const startedAt = performance.now()
   const totalMs = () => Math.round(performance.now() - startedAt)
@@ -442,7 +455,7 @@ async function requestSystemOne(
     if (choice === undefined || !(choice in question.criteria))
       return { ok: false, error: `${id}: no valid choice (${choice})`, ...meta }
   }
-  return { ...judge(schema, toObject(answers)), ...meta }
+  return { ...validate(toObject(answers)), ...meta }
 }
 
 // ---- the cell ---------------------------------------------------------------------------------
@@ -451,7 +464,6 @@ export interface CellOptions {
   label: string
   model: string
   mode: Mode
-  contract?: ContractId
   runs: number
   temperature: number
   think: boolean
@@ -469,7 +481,10 @@ export interface CellOptions {
 
 export async function runCell(options: CellOptions): Promise<CellResult> {
   const cases = options.cases ?? CASES
-  const contract = CONTRACTS[options.contract ?? 'v1']
+  const sampling: ModelSampling = {
+    temperature: options.temperature,
+    ...(!options.think && { reasoningEffort: 'none' })
+  }
   const inject = {
     temperature: options.temperature,
     ...options.sampling,
@@ -482,12 +497,12 @@ export async function runCell(options: CellOptions): Promise<CellResult> {
       const record =
         options.mode === 'systemone'
           ? await decisionCase(c, options)
-          : await chatCase(c, options, contract, inject)
+          : await chatCase(c, options, sampling, inject)
       wire ??= lastWire
       records.push({ caseId: c.id, run, ...record })
       const { adjudication, effect } = record
       const a = adjudication.object as { outcome?: string } | undefined
-      const e = effect?.object as Effect | undefined
+      const e = effect?.object as { effect?: string; exitId?: string; npcId?: string } | undefined
       options.log?.(
         `[${options.label}] run ${run} ${c.id}: ${adjudication.ok ? a?.outcome : `INVALID (${adjudication.error})`}` +
           (effect
@@ -501,7 +516,6 @@ export async function runCell(options: CellOptions): Promise<CellResult> {
     label: options.label,
     model: options.model,
     mode: options.mode,
-    contract: contract.id,
     runs: options.runs,
     temperature: options.temperature,
     think: options.think,
@@ -522,13 +536,13 @@ async function decisionCase(c: Case, options: CellOptions): Promise<Step> {
   const adjudication = await requestSystemOne(
     adjudicationRequest(options.model, state, options.examples !== false),
     toAdjudication,
-    adjudicationSchema
+    judgeAdjudication
   )
   if (!c.effect || options.effects === false) return { adjudication }
   const effect = await requestSystemOne(
     effectRequest(options.model, c.scene, state),
     (answers) => toEffect(answers.effect.choice),
-    effectSchema(c.scene)
+    judgeEffect(c.scene)
   )
   return { adjudication, effect }
 }
@@ -536,7 +550,7 @@ async function decisionCase(c: Case, options: CellOptions): Promise<Step> {
 async function chatCase(
   c: Case,
   options: CellOptions,
-  contract: (typeof CONTRACTS)[ContractId],
+  sampling: ModelSampling,
   inject: Record<string, unknown>
 ): Promise<Step> {
   const send = SENDERS[options.mode as Exclude<Mode, 'systemone'>]
@@ -544,25 +558,28 @@ async function chatCase(
   const adjudication = await send({
     model: options.model,
     mode: options.mode,
-    system: contract.adjudicationSystem,
+    system: ADJUDICATION_SYSTEM,
     user,
-    schema: contract.adjudicationWire,
-    ...(contract.flat && { post: fromFlat }),
+    schema: adjudicationSchema,
+    validate: judgeAdjudication,
     toolName: 'adjudicate',
     toolDescription: 'Record how the player’s declaration resolves.',
     maxTokens: options.maxTokens ?? ADJUDICATION_MAX_TOKENS,
+    sampling,
     inject
   })
   if (!c.effect || options.effects === false) return { adjudication }
   const effect = await send({
     model: options.model,
     mode: options.mode,
-    system: contract.effectSystem,
+    system: EFFECT_SYSTEM,
     user,
     schema: effectSchema(c.scene),
+    validate: judgeEffect(c.scene),
     toolName: 'apply_effect',
     toolDescription: 'Record the one change to the scene the successful action causes.',
     maxTokens: EFFECT_MAX_TOKENS,
+    sampling,
     inject
   })
   return { adjudication, effect }
@@ -581,24 +598,16 @@ const arg = (name: string) => {
 }
 
 if (import.meta.main) {
-  const model = arg('model')
-  if (!model) {
-    console.error(
-      'Usage: pnpm eval:exchange --model <loaded model id> [--mode schema|tools] [--runs 5]'
-    )
-    process.exit(1)
-  }
+  const model = arg('model') ?? process.env.LM_STUDIO_MODEL ?? DEFAULT_MODEL
   const mode = (arg('mode') ?? 'schema') as Mode
-  const contract = (arg('contract') ?? 'v1') as ContractId
   const only = arg('cases')?.split(',')
   const label = arg('label') ?? `${model}-${mode}`
   const result = await runCell({
     label,
     model,
     mode,
-    contract,
     runs: Number(arg('runs') ?? 5),
-    temperature: Number(arg('temperature') ?? 0.7),
+    temperature: Number(arg('temperature') ?? DEFAULT_SAMPLING.temperature),
     think: process.argv.includes('--think'),
     ...(arg('max-tokens') && { maxTokens: Number(arg('max-tokens')) }),
     ...(process.argv.includes('--no-effects') && { effects: false }),

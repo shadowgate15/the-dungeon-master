@@ -1,14 +1,20 @@
 <script lang="ts">
   import type { MemoryInspector, MemoryRunSummary } from '#lib/memory/inspector.ts'
-  import type { RunStats, StepMessage } from './pipeline-events.ts'
+  import {
+    EXCHANGE_STEPS,
+    type ExchangeStep,
+    type RulingMessage,
+    type RunStats
+  } from './exchange-events.ts'
 
   let {
-    steps,
+    ruling = null,
     stats,
     memory = null,
     onrefresh
   }: {
-    steps: StepMessage[]
+    /** How the latest Exchange was ruled; null before the first ruling. */
+    ruling?: RulingMessage | null
     stats: RunStats | null
     /** Memory state from the page load; null hides the section. */
     memory?: MemoryInspector | null
@@ -17,29 +23,49 @@
   } = $props()
   const roles = $derived(Object.values(stats?.context?.roles ?? {}))
   const reasons = (r: MemoryRunSummary) => r.droppedItems.map((d) => `${d.kind}: ${d.reason}`)
-  const counts = $derived(
-    stats ?? { steps: 0, directorCalls: 0, retries: 0, fallbacks: 0, capHits: 0 }
-  )
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+  /** One step's cost: requests, retries, whether a default stood in, and latency. */
+  const cost = (step: ExchangeStep) => {
+    const s = stats?.steps[step]
+    if (!s) return 'not run'
+    return [
+      count(s.requests, 'request', 'requests'),
+      count(s.retries, 'retry', 'retries'),
+      ...(s.defaults > 0 ? ['default applied'] : []),
+      `${s.latencyMs} ms`
+    ].join(', ')
+  }
+  /** The Adjudication's details beyond its outcome, as `key: value` pairs. */
+  const details = (r: RulingMessage) =>
+    Object.entries({ ...r.adjudication, ...(r.effect ?? {}) })
+      .filter(([key]) => key !== 'outcome' && key !== 'effect')
+      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
 </script>
 
 <aside
   aria-label="Event inspector"
   class="space-y-4 overflow-y-auto rounded-panel border border-border bg-surface p-3 text-sm"
 >
-  <section aria-label="This run">
-    <h2 class="text-xs font-semibold text-muted uppercase">This run</h2>
-    <dl class="grid grid-cols-2 gap-x-2">
-      <dt>Steps</dt>
-      <dd>{counts.steps}</dd>
-      <dt>Director calls</dt>
-      <dd>{counts.directorCalls}</dd>
-      <dt>Retries</dt>
-      <dd>{counts.retries}</dd>
-      <dt>Fallbacks</dt>
-      <dd>{counts.fallbacks}</dd>
-      <dt>Step cap hits</dt>
-      <dd>{counts.capHits}</dd>
-    </dl>
+  <section aria-label="This Exchange">
+    <h2 class="text-xs font-semibold text-muted uppercase">This Exchange</h2>
+    <ul>
+      {#each EXCHANGE_STEPS as step (step)}
+        <li class={stats?.steps[step]?.defaults ? 'text-warning' : ''}>{step}: {cost(step)}</li>
+      {/each}
+    </ul>
+  </section>
+
+  <section aria-label="Ruling">
+    <h2 class="text-xs font-semibold text-muted uppercase">Ruling</h2>
+    {#if ruling}
+      <p>Adjudication: <strong>{ruling.adjudication.outcome}</strong></p>
+      <p>Effect: <strong>{ruling.effect?.effect ?? 'not applied'}</strong></p>
+      {#each details(ruling) as detail (detail)}
+        <p class="text-xs text-muted">{detail}</p>
+      {/each}
+    {:else}
+      <p class="text-muted">No Exchange yet.</p>
+    {/if}
   </section>
 
   {#snippet runLine(r: MemoryRunSummary)}
@@ -121,28 +147,4 @@
       </div>
     </section>
   {/if}
-
-  <section aria-label="Steps">
-    <h2 class="text-xs font-semibold text-muted uppercase">Steps</h2>
-    {#if steps.length === 0}
-      <p class="text-muted">No run yet.</p>
-    {:else}
-      <ol class="space-y-2">
-        {#each steps as s (s.step)}
-          <li>
-            <p>
-              <span class="text-muted">{s.step}. {s.role}</span>
-              <strong>{s.pick}</strong>
-              {#if s.retried}<span class="text-warning"> retried</span>{/if}
-              {#if s.fallback}<span class="text-danger"> fallback</span>{/if}
-            </p>
-            <p class="text-xs text-muted">menu: {s.menu.join(', ')}</p>
-            <p class="text-xs text-muted">
-              said: {s.raw.map((r) => JSON.stringify(r)).join(' then ')}
-            </p>
-          </li>
-        {/each}
-      </ol>
-    {/if}
-  </section>
 </aside>

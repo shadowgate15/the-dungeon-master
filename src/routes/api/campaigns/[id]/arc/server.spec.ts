@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   campaign: undefined as Record<string, unknown> | undefined,
   canGenerate: true,
-  port: {} as object | null,
+  port: {} as object,
   locked: false,
   unavailable: null as unknown,
   generate: vi.fn(),
@@ -178,7 +178,6 @@ describe('Arc endpoint generate action', () => {
 
   it.each([
     ['conflict', { canGenerate: false }, 409],
-    ['AI not configured', { port: null }, 503],
     ['reasoning model locked', { locked: true }, 503]
   ])('rejects %s with plain JSON before any stream', async (_n, over, status) => {
     Object.assign(mocks, over)

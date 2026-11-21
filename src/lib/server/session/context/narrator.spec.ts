@@ -20,7 +20,7 @@ const scene = (over: Partial<SceneState> = {}): SceneState => ({
   ],
   mode: 'exploration',
   dialogueNpcId: null,
-  pendingRoll: null,
+  openCall: null,
   ...over
 })
 

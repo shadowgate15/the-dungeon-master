@@ -141,7 +141,7 @@ The DM's open request to the player that pauses an Exchange: a Check to roll, or
 _Avoid_: Prompt, pending roll, modal, interrupt
 
 **Event log**:
-A Session's append-only record of play, replacing a transcript of alternating exchanges. Each entry is a typed event (Declaration, narration, NPC line, Call raised, Call answered, scene changed, mode changed) tagged with the role that produced it. Streamed text lives inside one event. An event cut short by Stop or a model failure is discarded, never kept as partial text.
+A Session's append-only record of play, replacing a transcript of alternating exchanges. Each entry is a typed event (Declaration, narration, NPC line, Call raised, Call answered, scene changed, mode changed) tagged with the role that produced it. Streamed text lives inside one event. An event cut short by Stop or a model failure is discarded, never kept as partial text. An Exchange that ends in a model error is undone: the Scene goes back to how it was and the log back to before the Exchange's first event, so its Declaration goes too (the player's text stays in the input) and a Call it withdrew or answered is open again. Stopping an answered question before its Reply starts undoes it the same way, so the question stays open.
 _Avoid_: Transcript, history, chat
 
 **Arc**:

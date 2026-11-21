@@ -10,7 +10,7 @@ export const variables = defineEnvVars({
     schema: optional
   },
   LM_STUDIO_MODEL: {
-    description: 'The model id to use. When unset, the AI is treated as not configured.',
+    description: 'The model id to use. Defaults to qwen/qwen3.5-9b.',
     schema: optional
   },
   LM_STUDIO_CONTEXT_LIMIT: {

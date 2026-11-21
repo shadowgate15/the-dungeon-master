@@ -77,11 +77,11 @@ describe('free-text streaming through the port', () => {
   it('runs a scripted tool call on a server tool and continues with its result', async () => {
     const calls: unknown[] = []
     fake.queueAnswers(
-      { toolCalls: [{ name: 'request_roll', arguments: { kind: 'skill', key: 'stealth' } }] },
+      { toolCalls: [{ name: 'look_up_rule', arguments: { kind: 'skill', key: 'stealth' } }] },
       { content: 'You slip past.' }
     )
     const tool = {
-      name: 'request_roll',
+      name: 'look_up_rule',
       description: 'Ask for a roll',
       inputSchema: {
         type: 'object',
@@ -103,11 +103,11 @@ describe('free-text streaming through the port', () => {
   it('does not run a tool for an invalid tool call', async () => {
     const calls: unknown[] = []
     fake.queueAnswers(
-      { toolCalls: [{ name: 'request_roll', arguments: '{not json' }] },
+      { toolCalls: [{ name: 'look_up_rule', arguments: '{not json' }] },
       { content: 'Carry on.' }
     )
     const tool = {
-      name: 'request_roll',
+      name: 'look_up_rule',
       description: 'Ask for a roll',
       inputSchema: { type: 'object', properties: {} },
       execute: (input: unknown) => calls.push(input)
@@ -121,7 +121,7 @@ describe('free-text streaming through the port', () => {
 
   describe('a tool that needs approval', () => {
     const approvalTool = (calls: unknown[]) => ({
-      name: 'request_roll',
+      name: 'look_up_rule',
       description: 'Ask for a roll',
       needsApproval: true,
       inputSchema: {
@@ -137,7 +137,7 @@ describe('free-text streaming through the port', () => {
       const calls: unknown[] = []
       fake.queueAnswers({
         content: 'A guard turns.',
-        toolCalls: [{ name: 'request_roll', arguments: { dc: 12 } }]
+        toolCalls: [{ name: 'look_up_rule', arguments: { dc: 12 } }]
       })
 
       const events = await collect(streamText(port(), request({ tools: [approvalTool(calls)] })))
@@ -145,7 +145,7 @@ describe('free-text streaming through the port', () => {
       expect(calls).toEqual([])
       expect(events).toContainEqual({
         type: 'approval-requested',
-        toolName: 'request_roll',
+        toolName: 'look_up_rule',
         input: { dc: 12 }
       })
       expect(events.at(-1)).toMatchObject({ type: 'done' })
@@ -155,8 +155,8 @@ describe('free-text streaming through the port', () => {
     it('rejects invalid input to the model before any pause, and the model may retry', async () => {
       const calls: unknown[] = []
       fake.queueAnswers(
-        { toolCalls: [{ name: 'request_roll', arguments: { dc: 99 } }] },
-        { toolCalls: [{ name: 'request_roll', arguments: { dc: 14 } }] }
+        { toolCalls: [{ name: 'look_up_rule', arguments: { dc: 99 } }] },
+        { toolCalls: [{ name: 'look_up_rule', arguments: { dc: 14 } }] }
       )
 
       const events = await collect(streamText(port(), request({ tools: [approvalTool(calls)] })))
@@ -165,18 +165,18 @@ describe('free-text streaming through the port', () => {
       expect(types.indexOf('tool-rejected')).toBeGreaterThanOrEqual(0)
       expect(types.indexOf('tool-rejected')).toBeLessThan(types.indexOf('approval-requested'))
       expect(events.find((e) => e.type === 'tool-rejected')).toMatchObject({
-        toolName: 'request_roll'
+        toolName: 'look_up_rule'
       })
       expect(events).toContainEqual({
         type: 'approval-requested',
-        toolName: 'request_roll',
+        toolName: 'look_up_rule',
         input: { dc: 14 }
       })
     })
 
     it('reports unparseable arguments as a rejection too', async () => {
       fake.queueAnswers(
-        { toolCalls: [{ name: 'request_roll', arguments: '{not json' }] },
+        { toolCalls: [{ name: 'look_up_rule', arguments: '{not json' }] },
         { content: 'Carry on.' }
       )
 

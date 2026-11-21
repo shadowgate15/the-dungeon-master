@@ -11,13 +11,13 @@ export type AiStatus =
       /** The configured limit to use (with a character estimate) when `contextLength` is null. */
       fallbackContextLength?: number
     }
-  /** A turn showed the model returns no answer content; controls stay off until re-probe. */
+  /** A model request showed the model returns no answer content; controls stay off until re-probe. */
   | { state: 'reasoning-model'; model: string }
 
 /** Shown in the chat and the AI panel when the model returns no answer content. */
 export const REASONING_MODEL_MESSAGE =
   'The model returned no answer. This usually means a reasoning model. Switch to a non-reasoning model such as qwen3-4b-2507, restart the server, then check the connection.'
 
-/** Shown when a session is played with no model configured (LM_STUDIO_MODEL unset). */
+/** Shown when a Session is started with no chat port (only in tests: the app always has a model). */
 export const NO_MODEL_MESSAGE =
   'No AI model is configured, so the Dungeon Master cannot respond. Set LM_STUDIO_MODEL, then restart the server.'

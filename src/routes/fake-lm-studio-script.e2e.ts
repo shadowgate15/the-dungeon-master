@@ -37,20 +37,6 @@ test('streams a scripted narration over SSE, in pieces', async ({ request }) => 
   expect(text).toContain('[DONE]')
 })
 
-test('scripts a request_roll tool call, then the follow-up narration', async ({ request }) => {
-  await script(request, [
-    { toolCalls: [{ name: 'request_roll', arguments: { kind: 'skill', key: 'stealth', dc: 12 } }] },
-    { content: 'You slip by.' }
-  ])
-
-  const first = await chat(request)
-  const second = await chat(request)
-
-  expect(first.text).toContain('"name":"request_roll"')
-  expect(first.text).toContain('"finish_reason":"tool_calls"')
-  expect(contentOf(second.text)).toBe('You slip by.')
-})
-
 test('scripts a failure', async ({ request }) => {
   await script(request, [{ status: 503 }])
 

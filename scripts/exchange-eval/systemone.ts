@@ -9,16 +9,17 @@
 //   (`none`, `move:<exitId>`, `talk:<npcId>`, `end_talk`), each described in words.
 //
 // The state is the same Scene information the chat prompt gets, as a structured object.
-import type { CharacterLine } from './contract.ts'
 import {
   DIFFICULTY_DC,
   talkableNpcs,
-  type Adjudication,
-  type Check,
-  type Effect,
-  type FixtureScene,
-  type Outcome
-} from './contract.ts'
+  type CharacterLine,
+  type CheckName as Check,
+  type Difficulty,
+  type ExchangeScene as FixtureScene,
+  type Outcome,
+  type adjudicationSchema
+} from '#lib/server/session/exchange/contract.ts'
+import type { z } from 'zod'
 
 export interface ChoiceQuestion {
   type: 'choice'
@@ -65,7 +66,7 @@ const PRINCIPLE =
   'You are the referee of a Dungeons & Dragons 5e game. The player declares what their character does. Decide how the declaration resolves. ' +
   'The principle: call for a check only when something in the scene resists the action (a person who would object or notice, a lock, a hazard, a hard climb) AND failure would matter. Everything ordinary simply happens.'
 
-/** The fix-round examples, in other scenes than the eval cases (see JUDGMENT in contract.ts). */
+/** The fix-round examples, in other scenes than the eval cases (see ADJUDICATION_SYSTEM in the app's contract). */
 const EXAMPLES =
   ' Examples (not from this scene): in a mill with an exit "Ladder up to the loft", "I climb up to the loft." -> happens. ' +
   'Talking with a merchant, "So what brings you to town?" -> happens. ' +
@@ -193,21 +194,28 @@ export function effectRequest(
   }
 }
 
-/** Reads the Adjudication: skill and difficulty count only when the outcome is a check. */
-export function toAdjudication(answers: Record<string, ChoiceAnswer>): Adjudication {
+/**
+ * Reads the answers as the app's flat Adjudication answer, so it goes through the same validation:
+ * skill and difficulty count only when the outcome is a check. A decision model writes no text, so
+ * an ask gets a placeholder question (the narration model would write it).
+ */
+export function toAdjudication(
+  answers: Record<string, ChoiceAnswer>
+): z.infer<typeof adjudicationSchema> {
   const outcome = answers.outcome.choice as Outcome
-  return outcome === 'check'
-    ? {
-        outcome,
-        skill: answers.skill.choice as Check,
-        difficulty: answers.difficulty.choice as Adjudication['difficulty']
-      }
-    : { outcome }
+  return {
+    outcome,
+    skill: outcome === 'check' ? (answers.skill.choice as Check) : 'none',
+    difficulty: outcome === 'check' ? (answers.difficulty.choice as Difficulty) : 'none',
+    question: outcome === 'ask' ? '(written by the narration model)' : '',
+    choices: []
+  }
 }
 
-export function toEffect(choice: string): Effect {
+/** Reads an Effect criteria key (`move:<exitId>`, `talk:<npcId>`) as an Effect answer. */
+export function toEffect(choice: string): Record<string, string> {
   const [kind, id] = choice.split(':')
   if (kind === 'move') return { effect: 'move', exitId: id }
   if (kind === 'talk') return { effect: 'talk', npcId: id }
-  return { effect: kind as Effect['effect'] }
+  return { effect: kind }
 }

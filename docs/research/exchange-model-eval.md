@@ -58,14 +58,16 @@ The three `fix-v2-flat` rows use the same Adjudication prompt, so they are three
 ### What each change contributed
 
 - **(a) Principle plus worked examples: gate 76% → 89%.** The rule moved from a trailing "never for ordinary walking" to the lead: _check only when something in the scene resists AND failure matters_. Each outcome got a definition with the ordinary cases spelled out ("a question in conversation is never a check"), plus a one-line SRD skill mapping. Seven examples sit in other scenes (a mill, a merchant, a cliff), so none restates a test case. Speech went from 67% to 100%, talk from 60% to 100%, and move from 52% to 64%.
-- **(c) Flat schema: gate 89% → 95%, stray fields 6% → 0%.** Every field is required and non-null: `skill` and `difficulty` take `"none"`, `question` takes `""` and `choices` takes `[]` when they do not apply. Code (`fromFlat`) then turns the sentinels into absent fields and rejects a `check` without a skill or difficulty, or an `ask` without a question. Move rose from 64% to 96%. The likely reason is that the model no longer chooses _whether_ to emit `skill`; it emits it every time, with `"none"` as a legitimate value. Because the schema has no optional fields, the app's port sends it unchanged, so the round-1 widening problem (94% stray, +0.8s) disappears without touching the port.
+- **(c) Flat schema: gate 89% → 95%, stray fields 6% → 0%.** Every field is required and non-null: `skill` and `difficulty` take `"none"`, `question` takes `""` and `choices` takes `[]` when they do not apply. Code (`validateAdjudication`) then turns the sentinels into absent fields and rejects a `check` without a skill or difficulty, or an `ask` without a question. Move rose from 64% to 96%. The likely reason is that the model no longer chooses _whether_ to emit `skill`; it emits it every time, with `"none"` as a legitimate value. Because the schema has no optional fields, the app's port sends it unchanged, so the round-1 widening problem (94% stray, +0.8s) disappears without touching the port.
 - **(b) `resists` before `outcome`: net negative.** Gate fell 3–4 points, and vague→ask fell from 100% to 70%. The model writes `"resists": "nothing"` for "I do the thing" and then concludes `happens`. Impossible improved slightly (absent-innkeeper 2/5 instead of 0/5). It also costs about 0.1–0.4s. Not adopted.
 
 Remaining misses on the winning contract are `absent-innkeeper` ("I ask the innkeeper for a room" in an empty clearing → `ask`, in 9 of 10 runs across the two raw cells) and a few `down-cellar` checks. The `Tobin` example already covers the absent-person rule. Adding a closer example would be fitting the test, so the case stays as a known boundary. A code-side guard (a named person who is not in the Scene) could catch it later if it matters in play.
 
 ### Winning contract
 
-Wire schema (`flatAdjudicationSchema(false)`), sent as `response_format: json_schema, strict`:
+The contract now lives in the app, in `src/lib/server/session/exchange/contract.ts`, and the harness imports it, so the eval always scores what the app sends. Its prompts and wire JSON Schema were checked to be identical to the fix round's v2-flat, so the 94–95% gate result above carries over. **A live re-run on the app's contract is still owed** (#270): on 2026-11-20 LM Studio listed the MLX 4bit model, but it stayed in `loading` and did not answer even a 5-token request, so the run was stopped after its first case timed out. Re-run with `pnpm eval:exchange --mode schema --runs 5 --label app-contract-schema` and record the result here. The losing variants (v1, v2-prompt, v2-resists) are no longer runnable; they survive only as the recorded results in this doc and `results/`.
+
+Wire schema (`adjudicationSchema`), sent as `response_format: json_schema, strict`:
 
 ```ts
 z.object({
@@ -77,7 +79,7 @@ z.object({
 }).strict()
 ```
 
-The key prompt lines (full text in `contract.ts`, `JUDGMENT` and `FLAT_FIELDS`):
+The key prompt lines (full text in the app's `contract.ts`, `ADJUDICATION_SYSTEM`):
 
 - "call for a check only when something in the scene resists the action (a person who would object or notice, a lock, a hazard, a hard climb) AND failure would matter. Everything ordinary simply happens."
 - "happens: … Going through a listed exit, up or down stairs or ladders, starting or ending a conversation with someone present, saying or asking anything in a conversation, and handling ordinary objects all happen. A question in conversation is never a check."
@@ -108,11 +110,11 @@ Round 1's pattern was speech in dialogue → `talk` to the current partner (15 o
 ### Re-running the fix round
 
 ```sh
-pnpm eval:exchange:grid --round fix     # all fix cells (the default round); thinking takes about 50 min
-pnpm eval:exchange --model <loaded-id> --mode schema --contract v2-flat --runs 5 --label fix-v2-flat-schema
+pnpm eval:exchange:grid --round fix     # fix-v2-flat and fix-thinking; thinking takes about 50 min
+pnpm eval:exchange --model <loaded-id> --mode schema --runs 5 --label fix-v2-flat-schema
 ```
 
-`--round 1` runs the round-1 grid. `--contract v1|v2-prompt|v2-flat|v2-resists` picks the contract; mode `prompt-json` puts the schema in the prompt instead of on the wire.
+`--round 1` runs the round-1 models and modes, now on the app's contract. There is no `--contract` flag: every cell runs the app's contract. Mode `prompt-json` puts the schema in the prompt instead of on the wire. `--model` defaults to `LM_STUDIO_MODEL`, then `qwen/qwen3.5-9b`.
 
 ## Decision model (Clef)
 
@@ -238,20 +240,20 @@ reasoning_content: {"outcome": "happens", "skill": "history", "difficulty": "eas
 content: ""
 ```
 
-`reasoning_effort: "none"` in the body fixes it. These do not work in LM Studio: `chat_template_kwargs.enable_thinking: false`, `reasoning: {effort: "none"}`, and `/no_think` in the prompt. **The app's port must send `modelOptions: {reasoning_effort: 'none'}`** (harmless for qwen3-4b-2507) before qwen3.5-9b can be used. Every other 9b cell here sends it.
+`reasoning_effort: "none"` in the body fixes it. These do not work in LM Studio: `chat_template_kwargs.enable_thinking: false`, `reasoning: {effort: "none"}`, and `/no_think` in the prompt. **The app's port must send `modelOptions: {reasoning_effort: 'none'}`** (harmless for qwen3-4b-2507) before qwen3.5-9b can be used. Every other 9b cell here sends it. The port now does: `createChatPort` sends the config's sampling (`DEFAULT_SAMPLING` in `src/lib/server/ai/config.ts`: temperature 0.7, `reasoning_effort: "none"`) on every request.
 
 ## Method
 
 - **Cases** (`cases.ts`): 32 cases on four fixture Scenes (a tavern, the same tavern in dialogue with the barkeep, a rainy harbor wall with a gate guard, an empty forest clearing).
   - Categories: trivial ×4, move ×5 (some loosely named: "go up to my room" → the stairs exit), talk ×3, end_talk ×2, speech ×3, impossible ×5, check ×6 (each with acceptable skills), vague ×4.
   - The character is Mira Ashdown, a level 1 human rogue.
-- **Requests** (`contract.ts`): the Adjudication runs on every case. The Effect runs on cases with an expected Effect and assumes the declaration succeeded. Both see the same compact Scene context: character, location, mode, exits with ids, objects, people present with ids, recent events, declaration. The Effect enum leaves out `talk` toward the NPC already in dialogue.
+- **Requests** (the app's `src/lib/server/session/exchange/contract.ts`): the Adjudication runs on every case. The Effect runs on cases with an expected Effect and assumes the declaration succeeded. Both see the same compact Scene context: character, location, mode, exits with ids, objects, people present with ids, recent events, declaration. The Effect enum leaves out `talk` toward the NPC already in dialogue.
 - **Modes** (`run.ts`):
   - `schema`: the app's `createChatPort` + `callModel` with a Zod `outputSchema`.
   - `raw-schema`: direct streamed `response_format: json_schema` with true optional fields.
   - `tools`: one strict function tool with `tool_choice: "required"`; an answer with no tool call counts as invalid.
-- **Settings:** temperature 0.7 on every cell (the port sends none, so LM Studio would apply the model preset, 1.0 for qwen3.5-9b). `reasoning_effort: "none"` everywhere except the thinking cell. Max tokens 200 (Adjudication) and 80 (Effect). Context 8192. 5 runs per case per cell.
-- **Validation:** strict Zod on the parsed object after dropping `null`s. Schema-valid means it parsed and matched the schema.
+- **Settings:** temperature 0.7 on every cell (at the time the port sent none, so LM Studio would apply the model preset, 1.0 for qwen3.5-9b; the port now sends 0.7 from config). `reasoning_effort: "none"` everywhere except the thinking cell. Max tokens 200 (Adjudication) and 80 (Effect). Context 8192. 5 runs per case per cell.
+- **Validation:** the app's own `validateAdjudication` and `validateEffect`. Schema-valid means the answer parsed and the app would accept it. Rounds 1 and fix used strict Zod after dropping `null`s, which let a `move` without an `exitId` count as valid; the app rejects it, so later runs are slightly stricter on Effect.
 - **Models:** one at a time, via the LM Studio SDK (`grid.ts`), because `lms load` cannot pick a variant. Memory is the loaded model's size reported by LM Studio.
 - **Hardware:** this Mac (Apple Silicon), LM Studio 0.4.21. TTFT and latency are recorded only, not gated.
 - **MLX 8bit:** LM Studio had downloaded only the first of its two weight shards but reported the variant as complete. The missing shard was fetched from Hugging Face (`lmstudio-community/Qwen3.5-9B-MLX-8bit`) and its sha256 checked before the run.

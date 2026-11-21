@@ -1,6 +1,6 @@
 /**
  * What the Narrator's context reads beyond the Event log and Scene: the Rolling summary and the
- * Campaign's World memory records. A port with a database-backed reader, so pipeline tests can
+ * Campaign's World memory records. A port with a database-backed reader, so runner tests can
  * leave it out and the Narrator then sees history and Scene only.
  */
 import { and, eq, inArray, isNull, max } from 'drizzle-orm'
@@ -9,7 +9,8 @@ import { createCharacterService } from '../../character/service.ts'
 import { loadWizardRules } from '../../character/wizard-rules.ts'
 import type { Database } from '../../db/connect'
 import { campaign, fact, npc, npcFact, place, session, sessionEvent } from '../../db/schema'
-import { renderCharacter, renderSeed } from './fixed.ts'
+import type { CharacterLine } from '../exchange/contract.ts'
+import { characterLine, renderCharacter, renderSeed } from './fixed.ts'
 import type { WorldRecords } from './world-selection.ts'
 
 /** A record changed within this many events of the Session's latest counts as recent. Tunable. */
@@ -22,6 +23,8 @@ export interface ContextSources {
   world(sessionId: string): WorldRecords | null
   /** The Narrator's never-trimmed Campaign Seed and Character sheet text; absent when unreadable. */
   fixed?(sessionId: string): { seed?: string; character?: string }
+  /** The playing Character as the ruling steps see it; absent when unreadable. */
+  character?(sessionId: string): CharacterLine | undefined
 }
 
 /** Reads the Session's Campaign Seed and playing Character, rendered compactly for the Narrator. */
@@ -36,6 +39,16 @@ export function createFixedReader(db: Database) {
       seed: camp && renderSeed(camp),
       character: hero && renderCharacter(buildSummary(loadWizardRules(), detailToSummaryData(hero)))
     }
+  }
+}
+
+/** Reads the Session's playing Character as one line for Adjudication and Effect. */
+export function createCharacterLineReader(db: Database) {
+  const characters = createCharacterService(db)
+  return (sessionId: string): CharacterLine | undefined => {
+    const owner = db.select().from(session).where(eq(session.id, sessionId)).get()
+    const hero = owner && characters.get(owner.characterId)
+    return hero && characterLine(buildSummary(loadWizardRules(), detailToSummaryData(hero)))
   }
 }
 
