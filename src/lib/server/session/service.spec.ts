@@ -8,6 +8,7 @@ import {
   firstSceneScripts,
   playableCampaign,
   sessionServiceWith,
+  setSceneNpcs,
   updateNpc
 } from './fixture'
 import {
@@ -134,6 +135,32 @@ describe('the Event log', () => {
         .run()
     ).toThrow()
     expect(db.select().from(sessionEvent).where(eq(sessionEvent.sessionId, id)).all()).toEqual([])
+  })
+
+  it('names the speaker of every NPC line, whether or not the NPC is still in the Scene', async () => {
+    const { id } = await sessions.start(campaignId)
+    const [brenna, hob] = sessions.scene(id).npcs
+    const line = (npcId: string) =>
+      sessions.appendEvent(id, { role: 'npc', kind: 'npc-line', text: 'Hm.', npcId })
+    line(brenna.id)
+    line(hob.id)
+    line(brenna.id)
+    setSceneNpcs({ db, campaignId, characterId }, id, [])
+    updateNpc({ db, campaignId, characterId }, hob.id, { status: 'dead' })
+
+    expect(sessions.speakers(id)).toEqual(
+      expect.arrayContaining([
+        { id: brenna.id, name: 'Brenna' },
+        { id: hob.id, name: 'Old Hob' }
+      ])
+    )
+    expect(sessions.speakers(id)).toHaveLength(2)
+  })
+
+  it('names no speakers before any NPC has spoken', async () => {
+    const { id } = await sessions.start(campaignId)
+    sessions.appendEvent(id, { role: 'player', kind: 'declaration', text: 'I look' })
+    expect(sessions.speakers(id)).toEqual([])
   })
 
   it('refuses to append to an ended or unknown Session', async () => {

@@ -15,7 +15,8 @@
     onanswer
   }: {
     events: SessionEvent[]
-    npcs: SceneNpc[]
+    /** Who can speak a line: the Scene's NPCs and every NPC already heard in the log. */
+    npcs: Pick<SceneNpc, 'id' | 'name'>[]
     /** Narration still streaming in; not in the log until it is saved. */
     live?: string
     /** The speaking NPC while the streaming line is an NPC line, else null. */

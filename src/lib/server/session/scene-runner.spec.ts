@@ -787,6 +787,27 @@ describe('the inspector stream', () => {
       reply: once
     })
   })
+
+  it('counts a clicked move generating its new place under effect, not adjudication', async () => {
+    model.enqueue(happens(), answers(cellar), answers(cellarNpcs), says('Cold air rises.'))
+    const events = await drain(
+      runner().begin(sessionId, 'I go through the Cellar stairs.', new AbortController().signal, {
+        effect: 'move',
+        exitId: 'cellar-stairs'
+      })
+    )
+    expect(events.flatMap((e) => (e.type === 'thinking' ? [e.step] : []))).toEqual([
+      'adjudication',
+      'effect',
+      'reply'
+    ])
+    const last = events.findLast((e) => e.type === 'stats')
+    expect(last?.type === 'stats' && last.stats.steps).toMatchObject({
+      adjudication: { requests: 1 },
+      effect: { requests: 2 },
+      reply: { requests: 1 }
+    })
+  })
 })
 
 describe('a stopped or failed Exchange', () => {

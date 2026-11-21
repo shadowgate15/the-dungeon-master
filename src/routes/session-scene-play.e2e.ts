@@ -139,6 +139,8 @@ test('plays a scene: a Declaration gets a Reply, an NPC answers, and clicking an
   await expect(scene.getByRole('region', { name: 'Location' })).toContainText('The Rain-Slick Yard')
   await expect(scene.getByRole('region', { name: 'Mode' })).toContainText('exploration')
   await expect(scene.getByRole('region', { name: 'Exits' })).toContainText('The Gilded Stag')
+  // Orla stayed behind, but her line keeps her name.
+  await expect(log.getByRole('blockquote')).toContainText('Orla')
 })
 
 /**

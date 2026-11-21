@@ -193,7 +193,7 @@
         {:else}
           <StoryLog
             {events}
-            npcs={data.scene.npcs}
+            npcs={[...data.scene.npcs, ...data.speakers]}
             {live}
             {liveNpcId}
             {thinking}

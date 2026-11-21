@@ -159,9 +159,12 @@ export async function* runExchange(
     // A defaulted ruling settles `none`, even over a click's Effect: it never really happened.
     effect = { effect: 'none' }
   } else if (happens && start.effect) {
-    // A click already chose the Effect: apply it.
+    // A click already chose the Effect: apply it, with no chooseEffect request. Applying it is
+    // still the effect step, so a first-visit move's place generation is counted there.
+    yield enter('effect')
     change = yield* applyEffect(run, start.effect)
     effect = start.effect
+    yield snapshot()
   } else if (happens) {
     yield enter('effect')
     const chosen = await chooseEffect(run, declaration, history)

@@ -39,6 +39,8 @@ export const load: PageServerLoad = ({ params, cookies }) => {
       number: sessions.listNumbered(campaign.id).find((s) => s.id === found.id)?.number ?? 0
     },
     scene: clientScene(sessions.scene(found.id)),
+    // Names for every NPC line in the log, including NPCs no longer in the Scene.
+    speakers: sessions.speakers(found.id),
     events,
     recap: recap ?? null,
     journal: journal.read(campaign.id, found.characterId),

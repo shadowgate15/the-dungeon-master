@@ -502,6 +502,19 @@ export function createSessionService(
     },
 
     /**
+     * The current name of every NPC with a line in the Session's log, whatever became of them
+     * since, so a line keeps its speaker after the Scene moves on.
+     */
+    speakers(sessionId: string): { id: string; name: string }[] {
+      return db
+        .selectDistinct({ id: npc.id, name: npc.name })
+        .from(sessionEvent)
+        .innerJoin(npc, eq(npc.id, sessionEvent.npcId))
+        .where(and(eq(sessionEvent.sessionId, sessionId), eq(sessionEvent.kind, 'npc-line')))
+        .all()
+    },
+
+    /**
      * Undoes a failed Exchange: puts the Scene back as it was before it and drops the events it
      * recorded after `throughSeq` (its Declaration), in one transaction. Only the scene runner
      * calls this, for an Exchange that never finished, so the committed log stays append-only.
