@@ -23,7 +23,7 @@ export const load: PageServerLoad = ({ params, cookies }) => {
   if (!found || !campaign || found.campaignId !== campaign.id) error(404, 'Session not found')
   // The DC of a Check never reaches the client.
   const events = sessions.events(found.id).map(clientEvent)
-  // "Previously" is for a new Session's first view only: open, before the first action, and not
+  // "Previously" is for a new Session's first view only: open, before the first Declaration, and not
   // seen before (a cookie marks the view, so resuming the Session later does not repeat it).
   const seenKey = `previously-${found.id}`
   const firstView = found.endedAt === null && events.length === 0 && !cookies.get(seenKey)

@@ -2,7 +2,7 @@
  * Adjudication: one non-streaming structured request that rules how the Declaration resolves.
  * Code validates the answer before anything changes state.
  */
-import type { ClarifyingRound } from '#lib/session/call.ts'
+import type { Clarification } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
 import { buildRulingContext } from '../context/ruling.ts'
 import { askValidated } from './ask.ts'
@@ -25,14 +25,14 @@ export interface Ruled {
 }
 
 /**
- * Asks the model to rule on the Declaration, merged with any clarifying rounds so far, and returns
+ * Asks the model to rule on the Declaration, merged with any Clarifications so far, and returns
  * the validated Adjudication. An invalid answer is retried once, then defaults to `happens` with
  * Effect `none`, so the Reply still runs. Throws on a model error.
  */
 export async function adjudicate(
   ctx: ExchangeContext,
   declaration: SessionEvent,
-  clarifying: ClarifyingRound[] = []
+  clarifying: Clarification[] = []
 ): Promise<Ruled> {
   const built = buildRulingContext({
     role: 'adjudication',

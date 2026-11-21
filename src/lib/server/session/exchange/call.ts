@@ -10,7 +10,7 @@ import {
   type CarriedEffect,
   type CheckCall,
   type CheckRoll,
-  type ClarifyingRound,
+  type Clarification,
   type QuestionCall
 } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
@@ -36,7 +36,7 @@ export function raiseCheck(
   sessionId: string,
   declaration: SessionEvent,
   ruling: CheckRuling,
-  history: ClarifyingRound[] = [],
+  history: Clarification[] = [],
   effect?: CarriedEffect
 ): SessionEvent {
   const call: CheckCall = {
@@ -58,7 +58,7 @@ export function raiseCheck(
 }
 
 /**
- * Saves a question Call for the Declaration on the Scene, with the rounds already answered, and
+ * Saves a question Call for the Declaration on the Scene, with the Clarifications already answered, and
  * logs it as `call-raised` with the question as its text.
  */
 export function raiseQuestion(
@@ -66,7 +66,7 @@ export function raiseQuestion(
   sessionId: string,
   declaration: SessionEvent,
   ruling: AskRuling,
-  history: ClarifyingRound[],
+  history: Clarification[],
   effect?: CarriedEffect
 ): SessionEvent {
   const call: QuestionCall = {
@@ -88,14 +88,14 @@ export function raiseQuestion(
 
 /**
  * Clears the open question Call and logs the player's answer as their `call-answered` line.
- * Returns the event and the history with this round added.
+ * Returns the event and the history with this Clarification added.
  */
 export function answerQuestion(
   sessions: SessionService,
   sessionId: string,
   call: QuestionCall,
   answer: { answer: string; chosen: boolean }
-): { event: SessionEvent; history: ClarifyingRound[] } {
+): { event: SessionEvent; history: Clarification[] } {
   sessions.saveScene(sessionId, { ...sessions.scene(sessionId), openCall: null })
   const event = sessions.appendEvent(sessionId, {
     role: 'player',

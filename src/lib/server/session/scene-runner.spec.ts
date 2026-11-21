@@ -623,7 +623,7 @@ describe('a clarifying question', () => {
     })
     expect(using.answerCall(sessionId, { kind: 'text', text: '  ' }, signal)).toEqual({
       ok: false,
-      reason: 'empty-action'
+      reason: 'empty-declaration'
     })
   })
 
@@ -947,7 +947,10 @@ describe('refusals', () => {
     const using = runner()
     const signal = new AbortController().signal
     expect(using.begin('nope', 'hi', signal)).toEqual({ ok: false, reason: 'not-found' })
-    expect(using.begin(sessionId, '   ', signal)).toEqual({ ok: false, reason: 'empty-action' })
+    expect(using.begin(sessionId, '   ', signal)).toEqual({
+      ok: false,
+      reason: 'empty-declaration'
+    })
     sessions.end(sessionId)
     expect(using.begin(sessionId, 'hi', signal)).toEqual({ ok: false, reason: 'ended' })
     expect(log()).toEqual([])

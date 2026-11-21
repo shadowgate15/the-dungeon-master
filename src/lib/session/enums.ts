@@ -82,7 +82,7 @@ export interface SessionEvent {
   seq: number
   role: Role
   kind: EventKind
-  /** The prose, action or line; null for kinds that carry only `data`. */
+  /** The prose, Declaration or line; null for kinds that carry only `data`. */
   text: string | null
   /** The speaking NPC, for `npc-line`. */
   npcId: string | null

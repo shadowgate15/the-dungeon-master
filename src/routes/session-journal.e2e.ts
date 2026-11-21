@@ -106,7 +106,7 @@ test('next Session carries the Scene, shows Previously once, and the Journal', a
     .or(journal.getByRole('link', { name: 'Close' }))
     .click()
 
-  // The first action hides it.
+  // The first Declaration hides it.
   await script(request, [HAPPENS, { effect: 'none' }, 'Orla nods and slides a mug over.'])
   await page.getByLabel('Your action').fill('I thank her')
   await page.getByRole('button', { name: 'Send' }).click()

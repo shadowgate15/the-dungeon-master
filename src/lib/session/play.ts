@@ -1,29 +1,29 @@
 import { fetchServerSentEvents } from '@tanstack/ai-client'
 import type { CallAnswer, CarriedEffect } from './call.ts'
-import { EXCHANGE_CHUNK, type ExchangeEvent, type RunRefusal } from './exchange-events.ts'
+import { EXCHANGE_CHUNK, type ExchangeEvent, type ExchangeRefusal } from './exchange-events.ts'
 
 /** What to tell the player when the server refused to start an Exchange, by the reason it gave. */
-const REFUSAL_MESSAGE: Record<RunRefusal, string> = {
+const REFUSAL_MESSAGE: Record<ExchangeRefusal, string> = {
   'not-found': 'This Session no longer exists.',
   ended: 'This Session has ended.',
   'in-flight': 'The previous Declaration is still being answered.',
   'no-open-call': 'There is nothing to answer right now.',
   'invalid-answer': 'That is not one of the choices offered.',
-  'empty-action': 'Type an answer first.'
+  'empty-declaration': 'Type something first.'
 }
 
 /**
  * Sends a Declaration and reports each Exchange event. Resolves with an error text or null. A
  * clicked exit or NPC passes the Effect it carries.
  */
-export function sendAction(
+export function sendDeclaration(
   sessionId: string,
   text: string,
   onEvent: (event: ExchangeEvent) => void,
   signal?: AbortSignal,
   effect?: CarriedEffect
 ): Promise<string | null> {
-  return postRun(sessionId, 'action', effect ? { text, effect } : { text }, onEvent, signal)
+  return postRun(sessionId, 'declaration', effect ? { text, effect } : { text }, onEvent, signal)
 }
 
 /**
@@ -46,14 +46,14 @@ export function answerCall(
  */
 async function postRun(
   sessionId: string,
-  route: 'action' | 'answer',
+  route: 'declaration' | 'answer',
   data: Record<string, unknown>,
   onEvent: (event: ExchangeEvent) => void,
   signal?: AbortSignal
 ): Promise<string | null> {
   // Set once the server refused; the reason is absent when its body could not be read.
   let refused = false
-  let refusal: RunRefusal | undefined
+  let refusal: ExchangeRefusal | undefined
   const connection = fetchServerSentEvents(`/api/sessions/${sessionId}/${route}`, {
     // The connection only reports the status of a refusal; the reason is in the JSON body.
     fetchClient: async (input, init) => {
@@ -63,7 +63,7 @@ async function postRun(
         const body = (await response
           .clone()
           .json()
-          .catch(() => null)) as { reason?: RunRefusal } | null
+          .catch(() => null)) as { reason?: ExchangeRefusal } | null
         refusal = body?.reason
       }
       return response

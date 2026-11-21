@@ -8,7 +8,7 @@
   import Journal from '#lib/session/Journal.svelte'
   import Previously from '#lib/session/Previously.svelte'
   import type { ExchangeEvent, RulingMessage, RunStats } from '#lib/session/exchange-events.ts'
-  import { answerCall, sendAction } from '#lib/session/play.ts'
+  import { answerCall, sendDeclaration } from '#lib/session/play.ts'
   import DeclarationForm from '#lib/session/DeclarationForm.svelte'
   import type { CallAnswer, CarriedEffect } from '#lib/session/call.ts'
   import type { SessionEvent } from '#lib/session/enums.ts'
@@ -55,7 +55,7 @@
       thinking = false
       live = ''
       streamed.push(message.event)
-      // Code changed the Scene: reload it now so the panel updates before the run ends.
+      // Code changed the Scene: reload it now so the panel updates before the Exchange ends.
       if (message.event.kind === 'scene-changed') void invalidateAll()
     } else if (message.type === 'done') {
       thinking = false
@@ -95,13 +95,14 @@
   // Sending while a Call is open withdraws it (the runner does that) and starts a new Exchange.
   async function send(text: string) {
     if (busy) return
-    if (await stream((signal) => sendAction(data.session.id, text, onMessage, signal))) draft = ''
+    if (await stream((signal) => sendDeclaration(data.session.id, text, onMessage, signal)))
+      draft = ''
   }
 
   // A clicked exit or NPC declares at once, carrying its Effect; the draft is left as it was.
   function declare(text: string, effect: CarriedEffect) {
     if (busy) return
-    void stream((signal) => sendAction(data.session.id, text, onMessage, signal, effect))
+    void stream((signal) => sendDeclaration(data.session.id, text, onMessage, signal, effect))
   }
 
   function answer(given: CallAnswer): Promise<boolean> {

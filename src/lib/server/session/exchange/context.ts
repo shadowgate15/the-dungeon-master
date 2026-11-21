@@ -17,7 +17,7 @@ export interface ExchangeContext {
   steering?: () => Steering | null
   /** The Rolling summary, World memory and Character for the prompts; absent in some tests. */
   context?: ContextSources
-  /** Reports a built context's usage, so the run can add it to its stats. */
+  /** Reports a built context's usage, so the Exchange can add it to its stats. */
   report?: (report: ContextReport) => void
   /** Counts a retried answer or an applied default against the running step. */
   tally?: (what: 'retry' | 'default') => void

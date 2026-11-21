@@ -115,8 +115,8 @@ export function createBeatProgress(db: Database, options: BeatProgressOptions = 
   }
 
   /**
-   * Runs since the latest Beat transition, across the Campaign's Sessions. A run starts with a
-   * player action or a resolved roll; every one after the transition's last covered event counts.
+   * Exchanges since the latest Beat transition, across the Campaign's Sessions. One starts with a
+   * Declaration or a resolved roll; every one after the transition's last covered event counts.
    */
   function runsSinceTransition(campaignId: string, beatIds: string[]): number {
     const stamped = beatIds.length

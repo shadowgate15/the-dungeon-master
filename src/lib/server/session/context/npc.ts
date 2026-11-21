@@ -1,7 +1,7 @@
 /**
  * The NPC voice's context. Isolation is structural: the builder takes ONE resolved NPC as its only
  * memory input, so there is no place, other NPC, summary, World fact or other note for it to
- * include, and nothing is filtered on the way out. The conversation is the player's actions and
+ * include, and nothing is filtered on the way out. The conversation is the player's Declarations and
  * this NPC's own earlier lines. Over the cap the oldest conversation lines go, down to the trim
  * floor.
  */
@@ -20,7 +20,7 @@ export const NPC_SYSTEM = [
 export interface NpcContextInput {
   /** The only memory input: the NPC being voiced, as resolved live from World memory. */
   npc: SceneNpc
-  /** The Event log (recent part); only the player's actions and this NPC's own lines are used. */
+  /** The Event log (recent part); only the player's Declarations and this NPC's own lines are used. */
   events: SessionEvent[]
   /** What this Exchange settled, stated as facts for the Reply (never trimmed). */
   outcome?: string

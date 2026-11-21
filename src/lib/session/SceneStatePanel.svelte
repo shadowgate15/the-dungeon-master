@@ -11,10 +11,10 @@
   }: {
     scene: SceneView
     log?: SessionEvent[]
-    /** When set, objects are clickable and call this with the action text to pre-fill. */
+    /** When set, objects are clickable and call this with the Declaration text to pre-fill. */
     onpick?: (text: string) => void
     /**
-     * When set, exits and NPCs are clickable and declare at once: the action text and the Effect
+     * When set, exits and NPCs are clickable and declare at once: the Declaration text and the Effect
      * it carries (move through that exit, talk to that NPC).
      */
     ondeclare?: (text: string, effect: CarriedEffect) => void

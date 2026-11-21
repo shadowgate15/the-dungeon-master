@@ -20,7 +20,7 @@ async function openCampaign(page: Page, name: string, world: string) {
   await expect(page.getByRole('heading', { name })).toBeVisible()
 }
 
-test('starts a Session, shows its Scene, saves an action and restores both on reload', async ({
+test('starts a Session, shows its Scene, saves a Declaration and restores both on reload', async ({
   page,
   request
 }) => {

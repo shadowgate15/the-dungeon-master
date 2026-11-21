@@ -28,27 +28,27 @@ export interface CheckCall {
   dc: number
   declaration: CallDeclaration
   /** What the player clarified before the Check was called, if anything. */
-  history?: ClarifyingRound[]
+  history?: Clarification[]
   effect?: CarriedEffect
 }
 
-/** One round of clarifying a Declaration: what the DM asked and what the player answered. */
-export interface ClarifyingRound {
+/** One Clarification of a Declaration: what the DM asked and what the player answered. */
+export interface Clarification {
   question: string
   answer: string
 }
 
 /**
  * A clarifying question about an unclear Declaration, with any one-click choices. Answering it
- * appends a round to `history` and rules on the Declaration again.
+ * appends a Clarification to `history` and rules on the Declaration again.
  */
 export interface QuestionCall {
   kind: 'question'
   question: string
   choices?: string[]
   declaration: CallDeclaration
-  /** The rounds already answered for this Declaration, oldest first. */
-  history: ClarifyingRound[]
+  /** The Clarifications already answered for this Declaration, oldest first. */
+  history: Clarification[]
   effect?: CarriedEffect
 }
 

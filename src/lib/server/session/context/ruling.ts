@@ -4,7 +4,7 @@
  * summary and no NPC knowledge, so a ruling never sees a secret. The Scene and the Declaration are
  * never trimmed; over the cap the oldest events go, down to the trim floor.
  */
-import type { ClarifyingRound } from '#lib/session/call.ts'
+import type { Clarification } from '#lib/session/call.ts'
 import type { SceneState, SessionEvent } from '#lib/session/enums.ts'
 import type { ContextReport } from '#lib/session/exchange-events.ts'
 import { estimateTokens } from '../../ai/tokens.ts'
@@ -26,8 +26,8 @@ export interface RulingContextInput {
   events: SessionEvent[]
   character: CharacterLine
   declaration: string
-  /** The clarifying rounds so far, while the Declaration is being clarified. */
-  clarifying?: ClarifyingRound[]
+  /** The Clarifications so far, while the Declaration is being clarified. */
+  clarifying?: Clarification[]
   budgets?: ContextBudgets
 }
 

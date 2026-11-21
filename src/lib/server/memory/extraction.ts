@@ -5,7 +5,7 @@
  * proposes; code validates each item on its own, drops what is invalid (recording kind and
  * reason, never text) and writes the rest. A call that fails leaves the watermark, three failures
  * in a row pause extraction for the Session until `resume`, and nothing here ever throws into a
- * run. One extraction runs per Session at a time, and the next action never waits on it.
+ * run. One extraction runs per Session at a time, and the next Declaration never waits on it.
  *
  * Code, not the model, puts a newcomer into the Scene (`placeNpc`) and writes a place when a move
  * lands somewhere World memory does not know.
@@ -596,7 +596,7 @@ export function createMemoryExtraction(
 
     /**
      * Fire and forget: extracts in the background after a run. Calls made while one is running
-     * coalesce into one follow-up, so an extraction never waits on the next action or piles up.
+     * coalesce into one follow-up, so an extraction never waits on the next Declaration or piles up.
      * Never rejects.
      */
     trigger(sessionId: string, port: ChatPort): Promise<void> {

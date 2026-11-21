@@ -25,22 +25,22 @@ import { validateEffect } from './exchange/contract.ts'
 import { runExchange, type ExchangeStart } from './exchange/run.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
-import type { AnswerRefusal, BeginRefusal, RunRefusal } from '#lib/session/exchange-events.ts'
+import type { AnswerRefusal, BeginRefusal, ExchangeRefusal } from '#lib/session/exchange-events.ts'
 
 export type {
   AnswerRefusal,
   BeginRefusal,
   DoneReason,
   ExchangeEvent,
-  RunRefusal,
+  ExchangeRefusal,
   RunStats
 } from '#lib/session/exchange-events.ts'
 export type { ExchangeContext } from './exchange/context.ts'
 
-export type RunResult<R extends RunRefusal> =
+export type ExchangeResult<R extends ExchangeRefusal> =
   { ok: true; events: AsyncGenerator<ExchangeEvent> } | { ok: false; reason: R }
-export type BeginResult = RunResult<BeginRefusal>
-export type AnswerResult = RunResult<AnswerRefusal>
+export type BeginResult = ExchangeResult<BeginRefusal>
+export type AnswerResult = ExchangeResult<AnswerRefusal>
 
 export interface SceneRunnerDeps {
   sessions: SessionService
@@ -59,7 +59,7 @@ export interface SceneRunnerDeps {
   checkModifier?: CheckModifier
 }
 
-/** What a run saves before any model call, and where its Exchange then starts. */
+/** What an Exchange saves before any model call, and where it then starts. */
 interface Recorded {
   /** The saved events, streamed first, in order. */
   events: SessionEvent[]
@@ -78,7 +78,7 @@ interface Recorded {
 function questionAnswer(
   call: QuestionCall,
   answer: CallAnswer
-): { answer: string; chosen: boolean } | 'no-open-call' | 'invalid-answer' | 'empty-action' {
+): { answer: string; chosen: boolean } | 'no-open-call' | 'invalid-answer' | 'empty-declaration' {
   if (answer.kind === 'roll') return 'no-open-call'
   if (answer.kind === 'choice') {
     return call.choices?.includes(answer.choice)
@@ -86,14 +86,14 @@ function questionAnswer(
       : 'invalid-answer'
   }
   const text = answer.text.trim()
-  return text ? { answer: text, chosen: false } : 'empty-action'
+  return text ? { answer: text, chosen: false } : 'empty-declaration'
 }
 
 export function createSceneRunner(deps: SceneRunnerDeps) {
   const { sessions, port } = deps
   const dice = deps.dice ?? createDice()
   const checkModifier = deps.checkModifier ?? (() => 0)
-  // Sessions with a run in flight. Claimed synchronously when a run starts, so two quick requests
+  // Sessions with an Exchange in flight. Claimed synchronously when one starts, so two quick requests
   // cannot both pass the check.
   const inFlight = new Set<string>()
   // Background Beat checks, so a test (or shutdown) can wait for them.
@@ -106,7 +106,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
 
   /**
    * Fires the silent background work over a finished Exchange (the Beat check over its events,
-   * memory extraction over the log past its watermark); never awaited by the run, never throws.
+   * memory extraction over the log past its watermark); never awaited by the Exchange, never throws.
    */
   function checkBeats(sessionId: string, fromSeq: number) {
     if (deps.beatProgress) inBackground(deps.beatProgress.check(sessionId, fromSeq, port))
@@ -164,7 +164,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
     return validateEffect(effectScene(sessions.scene(sessionId)), effect).ok
   }
 
-  /** The refusals every run shares: the Session must exist and not have ended. */
+  /** The refusals every Exchange shares: the Session must exist and not have ended. */
   function refusal(sessionId: string): 'not-found' | 'ended' | null {
     const current = sessions.get(sessionId)
     if (!current) return 'not-found'
@@ -172,16 +172,16 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   }
 
   /**
-   * Starts a run: claims the Session, saves the run's first events (`record`) before any model
-   * call, then streams those events and the Exchange's, each without its DC. The claim is held
-   * until the stream actually finishes, so a stopped run cannot overlap the next one while the
-   * Exchange winds down. A stream nobody ever reads is released when the caller aborts.
+   * Starts an Exchange: claims the Session, saves its first events (`record`) before any model
+   * call, then streams those events and the rest, each without its DC. The claim is held until the
+   * stream actually finishes, so a stopped Exchange cannot overlap the next one while it winds
+   * down. A stream nobody ever reads is released when the caller aborts.
    */
   function start(
     sessionId: string,
     signal: AbortSignal,
     record: () => Recorded
-  ): RunResult<'ended'> {
+  ): ExchangeResult<'ended'> {
     inFlight.add(sessionId)
     const free = () => void inFlight.delete(sessionId)
     let started = false
@@ -190,7 +190,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
     let recorded: Recorded
     let before: SceneState
     try {
-      // The run boundary: NPCs that died, left or were retired since the last run drop out of the
+      // The Exchange boundary: NPCs that died, left or were retired since the last one drop out of the
       // stored Scene (they never resolve in the meantime), ending a dialogue with them.
       sessions.pruneScene(sessionId)
       before = sessions.scene(sessionId)
@@ -243,7 +243,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       const refused = refusal(sessionId)
       if (refused) return { ok: false, reason: refused }
       const text = declaration.trim()
-      if (!text) return { ok: false, reason: 'empty-action' }
+      if (!text) return { ok: false, reason: 'empty-declaration' }
       if (inFlight.has(sessionId)) return { ok: false, reason: 'in-flight' }
 
       return start(sessionId, signal, () => {

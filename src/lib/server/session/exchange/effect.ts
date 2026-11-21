@@ -2,7 +2,7 @@
  * Effect: picks the one state change a Declaration that happened causes, from the options code
  * builds from the Scene, then applies it through the Session service, which records the change.
  */
-import type { ClarifyingRound } from '#lib/session/call.ts'
+import type { Clarification } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
 import { buildRulingContext, effectScene } from '../context/ruling.ts'
@@ -28,7 +28,7 @@ const EFFECT_MAX_TOKENS = 80
 export async function chooseEffect(
   ctx: ExchangeContext,
   declaration: SessionEvent,
-  clarifying: ClarifyingRound[] = []
+  clarifying: Clarification[] = []
 ): Promise<Effect> {
   const scene = ctx.sessions.scene(ctx.sessionId)
   const options = effectScene(scene)

@@ -6,7 +6,7 @@
  * what ships. Change a prompt or schema here, then re-run the eval. See GLOSSARY.md and ADR 0005.
  */
 import { z } from 'zod'
-import type { ClarifyingRound } from '#lib/session/call.ts'
+import type { Clarification } from '#lib/session/call.ts'
 import type { Mode } from '#lib/session/enums.ts'
 
 export const OUTCOMES = ['happens', 'impossible', 'check', 'ask'] as const
@@ -267,7 +267,7 @@ export function sceneContext(
   scene: ExchangeScene,
   character: CharacterLine,
   declaration: string,
-  clarifying: ClarifyingRound[] = []
+  clarifying: Clarification[] = []
 ): string {
   const talkingTo = scene.npcs.find((n) => n.id === scene.dialogueNpcId)
   return [

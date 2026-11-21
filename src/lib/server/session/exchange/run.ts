@@ -2,11 +2,11 @@
  * One Exchange (ADR 0005): a fixed sequence of steps over a recorded Declaration. Adjudication
  * rules how it resolves; a Check or a clarifying question raises a Call, which pauses the Exchange
  * until the player rolls or answers. An answered question is ruled on again, merged with the
- * answers so far, for as many rounds as it takes.
+ * answers so far, for as many Clarifications as it takes.
  * On happens or a successful Check, Effect picks and code applies the one state change; the Reply
  * streams last, told what was settled. Code owns the order; the model only answers each step.
  */
-import type { CarriedEffect, CheckCall, CheckRoll, ClarifyingRound } from '#lib/session/call.ts'
+import type { CarriedEffect, CheckCall, CheckRoll, Clarification } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type {
   ContextReport,
@@ -27,7 +27,7 @@ import { reply } from './reply.ts'
 
 const noTrims = (): TrimCounts => ({ memory: 0, events: 0, summary: 0, uncovered: 0 })
 
-/** Folds one built context's report into the run's context stats (latest per role; trims summed). */
+/** Folds one built context's report into the Exchange's context stats (latest per role; trims summed). */
 function addReport(context: ContextStats, report: ContextReport) {
   context.roles[report.role] = report
   for (const key of Object.keys(context.trims) as (keyof TrimCounts)[]) {
@@ -73,7 +73,7 @@ export type ExchangeStart =
   | {
       kind: 'question'
       declaration: SessionEvent
-      history: ClarifyingRound[]
+      history: Clarification[]
       effect?: CarriedEffect
     }
 
@@ -133,7 +133,7 @@ export async function* runExchange(
   // The Effect the ruling already settled (a defaulted Adjudication settles `none`).
   let settled: RulingEffect | undefined
   let check: CheckRoll | null = null
-  let history: ClarifyingRound[] = []
+  let history: Clarification[] = []
   if (start.kind === 'check') {
     const { skill, difficulty } = start.call
     adjudication = { outcome: 'check', skill, difficulty } as Adjudication

@@ -19,7 +19,7 @@ function parseAnswer(value: unknown): CallAnswer | null {
 
 /**
  * Answers the Session's open Call. The answer arrives as `forwardedProps.answer` of the AG-UI run
- * input; the rest of the Exchange streams back like the action route.
+ * input; the rest of the Exchange streams back like the declaration route.
  */
 export const POST: RequestHandler = async ({ params, request }) => {
   const body = (await request.json().catch(() => null)) as {
