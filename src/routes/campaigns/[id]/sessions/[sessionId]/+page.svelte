@@ -10,8 +10,8 @@
   import type { ExchangeEvent, RulingMessage, RunStats } from '#lib/session/exchange-events.ts'
   import { answerCall, sendAction } from '#lib/session/play.ts'
   import DeclarationForm from '#lib/session/DeclarationForm.svelte'
+  import type { CallAnswer, CarriedEffect } from '#lib/session/call.ts'
   import type { SessionEvent } from '#lib/session/enums.ts'
-  import type { CallAnswer } from '#lib/session/call.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Dialog from '#lib/ui/Dialog.svelte'
@@ -96,6 +96,12 @@
     if (await stream((signal) => sendAction(data.session.id, text, onMessage, signal))) draft = ''
   }
 
+  // A clicked exit or NPC declares at once, carrying its Effect; the draft is left as it was.
+  function declare(text: string, effect: CarriedEffect) {
+    if (busy) return
+    void stream((signal) => sendAction(data.session.id, text, onMessage, signal, effect))
+  }
+
   function answer(given: CallAnswer): Promise<boolean> {
     if (busy) return Promise.resolve(false)
     return stream((signal) => answerCall(data.session.id, given, onMessage, signal))
@@ -162,6 +168,7 @@
       scene={data.scene}
       log={events}
       onpick={!ended && !busy ? (text) => (draft = text) : undefined}
+      ondeclare={!ended && !busy ? declare : undefined}
     />
 
     <section aria-label="Story" class="flex min-h-96 flex-col gap-3">

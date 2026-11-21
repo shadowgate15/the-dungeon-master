@@ -6,7 +6,7 @@
  * On happens or a successful Check, Effect picks and code applies the one state change; the Reply
  * streams last, told what was settled. Code owns the order; the model only answers each step.
  */
-import type { CheckCall, CheckRoll, ClarifyingRound } from '#lib/session/call.ts'
+import type { CarriedEffect, CheckCall, CheckRoll, ClarifyingRound } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type {
   ContextReport,
@@ -57,12 +57,25 @@ function outcomeFacts(
 /**
  * Where an Exchange starts: a new Declaration, a Check Call the player has just rolled, or a
  * question Call the player has just answered (either Call is already cleared and its answer
- * logged). An answered question carries the clarifying history, this answer included.
+ * logged). An answered question carries the clarifying history, this answer included. `effect`
+ * is a clicked exit's or NPC's Effect, already checked against the Scene: it replaces the Effect
+ * step once the Declaration happens or its Check succeeds, and rides on any Call raised meanwhile.
  */
 export type ExchangeStart =
-  | { kind: 'declaration'; declaration: SessionEvent }
-  | { kind: 'check'; declaration: SessionEvent; call: CheckCall; roll: CheckRoll }
-  | { kind: 'question'; declaration: SessionEvent; history: ClarifyingRound[] }
+  | { kind: 'declaration'; declaration: SessionEvent; effect?: CarriedEffect }
+  | {
+      kind: 'check'
+      declaration: SessionEvent
+      call: CheckCall
+      roll: CheckRoll
+      effect?: CarriedEffect
+    }
+  | {
+      kind: 'question'
+      declaration: SessionEvent
+      history: ClarifyingRound[]
+      effect?: CarriedEffect
+    }
 
 /** How an Exchange handed the floor back: a saved Reply, a stopped one, or an open Call. */
 export type ExchangeEnd = 'replied' | 'stopped' | 'call'
@@ -131,10 +144,11 @@ export async function* runExchange(
     ;({ adjudication, effect: settled } = await adjudicate(run, declaration, history))
     yield snapshot()
     if (adjudication.outcome === 'check' || adjudication.outcome === 'ask') {
+      const { sessions, sessionId } = ctx
       const event =
         adjudication.outcome === 'check'
-          ? raiseCheck(ctx.sessions, ctx.sessionId, declaration, adjudication, history)
-          : raiseQuestion(ctx.sessions, ctx.sessionId, declaration, adjudication, history)
+          ? raiseCheck(sessions, sessionId, declaration, adjudication, history, start.effect)
+          : raiseQuestion(sessions, sessionId, declaration, adjudication, history, start.effect)
       yield { type: 'event', event }
       yield { type: 'ruling', adjudication, effect: null }
       return 'call'
@@ -144,7 +158,11 @@ export async function* runExchange(
   let effect: RulingEffect | null = null
   let change: string | null = null
   const happens = adjudication.outcome === 'happens' || (check !== null && check.success)
-  if (happens && settled) {
+  if (happens && start.effect) {
+    // A click already chose the Effect (over a defaulted ruling's `none`, too): apply it.
+    change = yield* applyEffect(run, start.effect)
+    effect = start.effect
+  } else if (happens && settled) {
     effect = settled
   } else if (happens) {
     yield enter('effect')
