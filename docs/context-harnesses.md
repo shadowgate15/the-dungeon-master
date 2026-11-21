@@ -14,3 +14,7 @@ Two model-based harnesses, kept on the unmerged branch `research/context-caps-re
 - The latency and quality harness: latency, Director valid-pick rate and NPC isolation at several prompt sizes.
 
 Re-run them only when a budget constant or the target model changes. They are not wired into `pnpm test`.
+
+## Exchange model eval (manual, committed)
+
+`scripts/exchange-eval/` scores Adjudication and Effect requests for local models in LM Studio across quants and wire modes. Run it with `pnpm eval:exchange:grid` and `pnpm eval:exchange:report`. Findings and how to re-run are in `docs/research/exchange-model-eval.md`. It is not wired into `pnpm test`.
