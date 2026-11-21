@@ -25,12 +25,17 @@ import { validateEffect } from './exchange/contract.ts'
 import { runExchange, type ExchangeStart } from './exchange/run.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
-export type { DoneReason, ExchangeEvent, RunStats } from '#lib/session/exchange-events.ts'
-export type { ExchangeContext } from './exchange/context.ts'
+import type { AnswerRefusal, BeginRefusal, RunRefusal } from '#lib/session/exchange-events.ts'
 
-export type BeginRefusal = 'not-found' | 'ended' | 'empty-action' | 'in-flight'
-export type AnswerRefusal = 'not-found' | 'ended' | 'empty-action' | 'in-flight' | 'no-open-call'
-export type RunRefusal = BeginRefusal | AnswerRefusal
+export type {
+  AnswerRefusal,
+  BeginRefusal,
+  DoneReason,
+  ExchangeEvent,
+  RunRefusal,
+  RunStats
+} from '#lib/session/exchange-events.ts'
+export type { ExchangeContext } from './exchange/context.ts'
 
 export type RunResult<R extends RunRefusal> =
   { ok: true; events: AsyncGenerator<ExchangeEvent> } | { ok: false; reason: R }
@@ -59,8 +64,11 @@ interface Recorded {
   /** The saved events, streamed first, in order. */
   events: SessionEvent[]
   start: ExchangeStart
-  /** The last event a model error keeps: the log is cut back to it and the Scene restored. */
-  keepThrough: number
+  /**
+   * Whether a stop before the Reply starts undoes the Exchange like a model error does. An
+   * answered question does, so a stopped re-adjudication leaves the question open.
+   */
+  undoOnStop?: boolean
 }
 
 /**
@@ -70,12 +78,12 @@ interface Recorded {
 function questionAnswer(
   call: QuestionCall,
   answer: CallAnswer
-): { answer: string; chosen: boolean } | 'no-open-call' | 'empty-action' {
+): { answer: string; chosen: boolean } | 'no-open-call' | 'invalid-answer' | 'empty-action' {
   if (answer.kind === 'roll') return 'no-open-call'
   if (answer.kind === 'choice') {
     return call.choices?.includes(answer.choice)
       ? { answer: answer.choice, chosen: true }
-      : 'no-open-call'
+      : 'invalid-answer'
   }
   const text = answer.text.trim()
   return text ? { answer: text, chosen: false } : 'empty-action'
@@ -109,27 +117,39 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   async function* run(
     sessionId: string,
     signal: AbortSignal,
-    start: ExchangeStart,
-    before: SceneState,
-    keepThrough: number
+    recorded: Recorded,
+    before: SceneState
   ): AsyncGenerator<ExchangeEvent> {
+    const { start } = recorded
+    // The Exchange is undone back to before its first event: a new Declaration is dropped (the
+    // client keeps its text), and a withdrawn or answered Call is open again as it was.
+    const undo = () => sessions.rollBack(sessionId, before, recorded.events[0].seq - 1)
+    let replying = false
     try {
       const steering = deps.beatProgress && (() => deps.beatProgress!.steering(sessionId))
       const end = yield* runExchange(
-        { sessionId, sessions, port, signal, steering, context: deps.contextSources },
+        {
+          sessionId,
+          sessions,
+          port,
+          signal,
+          steering,
+          context: deps.contextSources,
+          entered: (step) => void (replying ||= step === 'reply')
+        },
         start
       )
       // Only an Exchange that replied is complete: one waiting on a Call runs no background work.
       if (end === 'replied') checkBeats(sessionId, start.declaration.seq)
+      if (end === 'stopped' && recorded.undoOnStop && !replying) undo()
       yield { type: 'done', reason: end }
     } catch (error) {
       if (signal.aborted) {
+        if (recorded.undoOnStop && !replying) undo()
         yield { type: 'done', reason: 'stopped' }
       } else {
-        // A model or transport error: the Exchange never finished, so the Scene goes back to how it
-        // was and the log back to `keepThrough`. A new Declaration stays; a withdrawn or answered
-        // Call is restored, with its withdrawal or roll (and anything after) dropped.
-        sessions.rollBack(sessionId, before, keepThrough)
+        // A model or transport error: the Exchange never finished, so it is undone.
+        undo()
         yield {
           type: 'done',
           reason: 'error',
@@ -185,7 +205,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       started = true
       try {
         for (const event of recorded.events) yield { type: 'event', event }
-        yield* run(sessionId, signal, recorded.start, before, recorded.keepThrough)
+        yield* run(sessionId, signal, recorded, before)
       } finally {
         free()
       }
@@ -206,8 +226,9 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
 
     /**
      * Starts an Exchange for the player's Declaration. Refusals are decided synchronously, before
-     * anything is saved. The Declaration is saved before any model call, so a stopped or failed
-     * Exchange keeps it. An open Call is withdrawn first: the player chose to do something else.
+     * anything is saved. The Declaration is saved before any model call, so a stopped Exchange
+     * keeps it; a model error undoes the whole Exchange, dropping the Declaration and reopening
+     * any Call it withdrew. An open Call is withdrawn first: the player chose to do something else.
      *
      * A clicked exit or NPC carries its Effect, which is applied instead of asking the Effect step
      * (still only once the Declaration happens or its Check succeeds). A carried Effect the Scene
@@ -232,9 +253,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
         const carried = effect && allowed(sessionId, effect) ? effect : undefined
         return {
           events: [...withdrawn, saved],
-          start: { kind: 'declaration', declaration: saved, ...(carried && { effect: carried }) },
-          // Failing after a withdrawal undoes it too, so the Call is open again as it was.
-          keepThrough: withdrawn.length ? withdrawn[0].seq - 1 : saved.seq
+          start: { kind: 'declaration', declaration: saved, ...(carried && { effect: carried }) }
         }
       })
     },
@@ -268,9 +287,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
           const answered = answerCheck(sessions, sessionId, call, roll)
           return {
             events: [answered],
-            start: { kind: 'check', declaration: declarationOf(), call, roll, ...carried() },
-            // Failing after the roll reopens the Call, so the player can roll it again.
-            keepThrough: answered.seq - 1
+            start: { kind: 'check', declaration: declarationOf(), call, roll, ...carried() }
           }
         })
       }
@@ -282,8 +299,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
         return {
           events: [event],
           start: { kind: 'question', declaration: declarationOf(), history, ...carried() },
-          // Failing after the answer reopens the question, so the player can answer it again.
-          keepThrough: event.seq - 1
+          undoOnStop: true
         }
       })
     }

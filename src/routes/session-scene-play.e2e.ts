@@ -85,6 +85,16 @@ test('plays a scene: a Declaration gets a Reply, an NPC answers, and clicking an
     await page.getByRole('button', { name: 'Send' }).click()
   }
 
+  // A model error undoes the Exchange: the Declaration leaves the log, but its text stays typed.
+  const broken = await request.post(`${FAKE_LM_STUDIO}/__control/answers`, {
+    data: { answers: [{ status: 400 }], replace: true }
+  })
+  expect(broken.ok()).toBe(true)
+  await declare('I push open the door and step inside')
+  await expect(page.getByRole('alert')).toBeVisible()
+  await expect(page.getByLabel('Your action')).toHaveValue('I push open the door and step inside')
+  await expect(page.getByText('Nothing has happened yet. What do you do?')).toBeVisible()
+
   // Exchange 1: the Declaration happens, and nothing changes; the Narrator replies.
   await script(request, [
     HAPPENS,

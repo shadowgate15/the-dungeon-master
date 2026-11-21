@@ -73,7 +73,9 @@
     stats = null
     let ok = false
     try {
-      problem = await start(controller.signal)
+      // A refusal comes back here; an Exchange that ended in error has already set `problem`.
+      const refused = await start(controller.signal)
+      if (refused) problem = refused
       ok = !problem
     } catch {
       // Stop aborts the request; anything else is a failed send.

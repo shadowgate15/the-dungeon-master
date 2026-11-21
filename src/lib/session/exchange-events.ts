@@ -108,5 +108,11 @@ export type ExchangeEvent =
   | { type: 'stats'; stats: RunStats }
   | { type: 'done'; reason: DoneReason; message?: string }
 
+/** Why the runner refused to start an Exchange for a Declaration. */
+export type BeginRefusal = 'not-found' | 'ended' | 'empty-action' | 'in-flight'
+/** Why the runner refused an answer to the open Call. */
+export type AnswerRefusal = BeginRefusal | 'no-open-call' | 'invalid-answer'
+export type RunRefusal = AnswerRefusal
+
 /** The `name` of the AG-UI `CUSTOM` chunk that carries one `ExchangeEvent` as its `value`. */
 export const EXCHANGE_CHUNK = 'dm.exchange'

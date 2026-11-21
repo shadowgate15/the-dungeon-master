@@ -1,11 +1,14 @@
 import { fetchServerSentEvents } from '@tanstack/ai-client'
 import type { CallAnswer, CarriedEffect } from './call.ts'
-import { EXCHANGE_CHUNK, type ExchangeEvent } from './exchange-events.ts'
+import { EXCHANGE_CHUNK, type ExchangeEvent, type RunRefusal } from './exchange-events.ts'
 
 /** What to tell the player when the server refused to start an Exchange, by the reason it gave. */
-const REFUSAL_MESSAGE: Record<string, string> = {
+const REFUSAL_MESSAGE: Record<RunRefusal, string> = {
+  'not-found': 'This Session no longer exists.',
+  ended: 'This Session has ended.',
   'in-flight': 'The previous Declaration is still being answered.',
   'no-open-call': 'There is nothing to answer right now.',
+  'invalid-answer': 'That is not one of the choices offered.',
   'empty-action': 'Type an answer first.'
 }
 
@@ -48,17 +51,20 @@ async function postRun(
   onEvent: (event: ExchangeEvent) => void,
   signal?: AbortSignal
 ): Promise<string | null> {
-  let refusal: string | undefined
+  // Set once the server refused; the reason is absent when its body could not be read.
+  let refused = false
+  let refusal: RunRefusal | undefined
   const connection = fetchServerSentEvents(`/api/sessions/${sessionId}/${route}`, {
     // The connection only reports the status of a refusal; the reason is in the JSON body.
     fetchClient: async (input, init) => {
       const response = await fetch(input, init)
       if (!response.ok) {
+        refused = true
         const body = (await response
           .clone()
           .json()
-          .catch(() => null)) as { reason?: string } | null
-        refusal = body?.reason ?? ''
+          .catch(() => null)) as { reason?: RunRefusal } | null
+        refusal = body?.reason
       }
       return response
     }
@@ -75,8 +81,8 @@ async function postRun(
       }
     }
   } catch (error) {
-    if (refusal !== undefined)
-      return REFUSAL_MESSAGE[refusal] ?? 'That Declaration could not be sent.'
+    if (refused)
+      return (refusal && REFUSAL_MESSAGE[refusal]) ?? 'That Declaration could not be sent.'
     throw error
   }
   return null

@@ -101,6 +101,7 @@ export async function* runExchange(
     step = next
     startedAt = performance.now()
     current()
+    ctx.entered?.(next)
     return { type: 'thinking', step }
   }
   const snapshot = (): ExchangeEvent => {
@@ -158,12 +159,13 @@ export async function* runExchange(
   let effect: RulingEffect | null = null
   let change: string | null = null
   const happens = adjudication.outcome === 'happens' || (check !== null && check.success)
-  if (happens && start.effect) {
-    // A click already chose the Effect (over a defaulted ruling's `none`, too): apply it.
+  if (happens && settled) {
+    // A defaulted ruling settles `none`, even over a click's Effect: it never really happened.
+    effect = settled
+  } else if (happens && start.effect) {
+    // A click already chose the Effect: apply it.
     change = yield* applyEffect(run, start.effect)
     effect = start.effect
-  } else if (happens && settled) {
-    effect = settled
   } else if (happens) {
     yield enter('effect')
     const chosen = await chooseEffect(run, declaration, history)

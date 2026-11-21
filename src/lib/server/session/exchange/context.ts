@@ -1,5 +1,5 @@
 import type { SessionEvent } from '#lib/session/enums.ts'
-import type { ContextReport } from '#lib/session/exchange-events.ts'
+import type { ContextReport, ExchangeStep } from '#lib/session/exchange-events.ts'
 import type { ChatPort } from '../../ai/port.ts'
 import type { Steering } from '../../arc/beat-progress.ts'
 import type { ContextSources } from '../context/sources.ts'
@@ -21,6 +21,8 @@ export interface ExchangeContext {
   report?: (report: ContextReport) => void
   /** Counts a retried answer or an applied default against the running step. */
   tally?: (what: 'retry' | 'default') => void
+  /** Told as each step starts, so the runner knows whether the Reply has begun. */
+  entered?: (step: ExchangeStep) => void
 }
 
 /** Used when the Character cannot be read (a test without context sources). */

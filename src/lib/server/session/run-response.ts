@@ -9,7 +9,8 @@ const REFUSAL_STATUS: Record<RunRefusal, number> = {
   ended: 409,
   'in-flight': 409,
   'empty-action': 400,
-  'no-open-call': 409
+  'no-open-call': 409,
+  'invalid-answer': 400
 }
 
 /** A refused run: the status for the reason, and the reason as JSON for the client to show. */

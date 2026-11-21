@@ -582,6 +582,31 @@ describe('a clarifying question', () => {
     expect(log()).toEqual(logged)
   })
 
+  it('keeps the question when the player stops its re-adjudication before the Reply', async () => {
+    model.enqueue(which())
+    await play('I leave')
+    const before = sessions.scene(sessionId)
+    const logged = log()
+
+    const controller = new AbortController()
+    model.enqueue(hangsAfter(''))
+    const result = runner().answerCall(
+      sessionId,
+      { kind: 'text', text: 'The front door' },
+      controller.signal
+    )
+    if (!result.ok) throw new Error(result.reason)
+    const events: ExchangeEvent[] = []
+    for await (const e of result.events) {
+      events.push(e)
+      if (e.type === 'thinking') controller.abort()
+    }
+
+    expect(done(events)).toEqual({ type: 'done', reason: 'stopped' })
+    expect(sessions.scene(sessionId)).toEqual(before)
+    expect(log()).toEqual(logged)
+  })
+
   it('refuses a roll, a choice it did not offer and an empty answer', async () => {
     model.enqueue(which())
     await play('I leave')
@@ -594,7 +619,7 @@ describe('a clarifying question', () => {
     })
     expect(using.answerCall(sessionId, { kind: 'choice', choice: 'The roof' }, signal)).toEqual({
       ok: false,
-      reason: 'no-open-call'
+      reason: 'invalid-answer'
     })
     expect(using.answerCall(sessionId, { kind: 'text', text: '  ' }, signal)).toEqual({
       ok: false,
@@ -703,6 +728,21 @@ describe('a clicked exit or NPC', () => {
     expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
   })
 
+  it('whose Adjudication is invalid twice gets a Reply and applies no Effect', async () => {
+    const before = sessions.scene(sessionId)
+    model.enqueue(answers({ outcome: 'maybe' }), answers({ outcome: 'maybe' }), says('You pause.'))
+
+    const events = await click('I go through the Cellar stairs.', cellarStairs)
+
+    expect(events.find((e) => e.type === 'ruling')).toMatchObject({ effect: { effect: 'none' } })
+    expect(sessions.scene(sessionId)).toEqual(before)
+    expect(log()).toEqual([
+      'player:declaration:I go through the Cellar stairs.',
+      'narrator:narration:You pause.'
+    ])
+    expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
   it('ruled ask carries its Effect through the question, and applies it once ruled happens', async () => {
     model.enqueue(asks('Openly, or creeping?', ['Openly', 'Creeping']))
     await click('I go through the Cellar stairs.', cellarStairs)
@@ -767,11 +807,11 @@ describe('a stopped or failed Exchange', () => {
     expect(log()).toEqual(['player:declaration:I wait'])
   })
 
-  it('ends with an error when a step fails, keeping the Declaration', async () => {
+  it('ends with an error when a step fails, dropping the Declaration', async () => {
     model.enqueue(fails)
     const events = await play('I wait')
     expect(done(events)).toMatchObject({ type: 'done', reason: 'error' })
-    expect(log()).toEqual(['player:declaration:I wait'])
+    expect(log()).toEqual([])
   })
 })
 
@@ -854,7 +894,7 @@ describe('a bad model answer', () => {
 })
 
 describe('a model error mid-Exchange', () => {
-  it('ends with error, keeps the Declaration and leaves the Scene as it was', async () => {
+  it('ends with error, drops the Declaration and leaves the Scene as it was', async () => {
     const before = sessions.scene(sessionId)
     model.enqueue(
       happens(),
@@ -869,7 +909,7 @@ describe('a model error mid-Exchange', () => {
     expect(done(events)).toMatchObject({ type: 'done', reason: 'error' })
     expect(sessions.scene(sessionId)).toEqual(before)
     expect(createSessionService(db).scene(sessionId)).toEqual(before)
-    expect(log()).toEqual(['player:declaration:I go down the cellar stairs'])
+    expect(log()).toEqual([])
   })
 
   it('leaves an open Call as it was when the Declaration that withdraws it fails', async () => {
