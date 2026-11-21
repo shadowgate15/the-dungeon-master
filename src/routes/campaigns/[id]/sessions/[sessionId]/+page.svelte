@@ -7,9 +7,8 @@
   import EventInspector from '#lib/session/EventInspector.svelte'
   import Journal from '#lib/session/Journal.svelte'
   import Previously from '#lib/session/Previously.svelte'
-  import RollOverlay from '#lib/session/RollOverlay.svelte'
-  import type { PipelineEvent, RunStats, StepMessage } from '#lib/session/pipeline-events.ts'
-  import { resolveRoll, sendAction } from '#lib/session/play.ts'
+  import type { ExchangeEvent, RulingMessage, RunStats } from '#lib/session/exchange-events.ts'
+  import { sendAction } from '#lib/session/play.ts'
   import type { SessionEvent } from '#lib/session/enums.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
@@ -32,8 +31,8 @@
   let live = $state('')
   let liveNpcId = $state<string | null>(null)
   let thinking = $state(false)
-  // Event inspector data for the latest run (development only).
-  let steps = $state<StepMessage[]>([])
+  // Event inspector data for the latest Exchange (development only).
+  let ruling = $state<RulingMessage | null>(null)
   let stats = $state<RunStats | null>(null)
   let controller: AbortController | null = null
 
@@ -41,15 +40,14 @@
     data.events.concat(streamed.filter((s) => !data.events.some((e) => e.id === s.id)))
   )
   const ended = $derived(data.session.endedAt !== null)
-  const rollPending = $derived(data.scene.pendingRoll !== null)
 
-  function onMessage(message: PipelineEvent) {
+  function onMessage(message: ExchangeEvent) {
     if (message.type === 'thinking') thinking = true
     else if (message.type === 'delta') {
       thinking = false
       live += message.text
       liveNpcId = message.npcId ?? null
-    } else if (message.type === 'step') steps.push(message)
+    } else if (message.type === 'ruling') ruling = message
     else if (message.type === 'stats') stats = message.stats
     else if (message.type === 'discard') live = ''
     else if (message.type === 'event') {
@@ -65,12 +63,12 @@
     }
   }
 
-  /** Runs one streamed request (an action or a roll) and refreshes the page data after it. */
+  /** Runs one Exchange and refreshes the page data after it. */
   async function stream(start: (signal: AbortSignal) => Promise<string | null>): Promise<boolean> {
     busy = true
     problem = null
     controller = new AbortController()
-    steps = []
+    ruling = null
     stats = null
     let ok = false
     try {
@@ -78,7 +76,7 @@
       ok = !problem
     } catch {
       // Stop aborts the request; anything else is a failed send.
-      if (!controller.signal.aborted) problem = 'That action could not be sent.'
+      if (!controller.signal.aborted) problem = 'That Declaration could not be sent.'
       else ok = true
     } finally {
       busy = false
@@ -97,18 +95,9 @@
     if (!text || busy) return
     if (await stream((signal) => sendAction(data.session.id, text, onMessage, signal))) draft = ''
   }
-
-  async function roll() {
-    if (busy) return
-    await stream((signal) => resolveRoll(data.session.id, onMessage, signal))
-  }
 </script>
 
 <svelte:head><title>Session {data.session.number} · {data.campaign.name}</title></svelte:head>
-
-{#if data.scene.pendingRoll && !ended}
-  <RollOverlay roll={data.scene.pendingRoll} {busy} onroll={roll} />
-{/if}
 
 <main class="mx-auto flex max-w-6xl flex-col gap-3 p-4">
   <header class="flex flex-wrap items-baseline justify-between gap-2">
@@ -160,7 +149,7 @@
     <SceneStatePanel
       scene={data.scene}
       log={events}
-      onpick={!ended && !busy && !rollPending ? (text) => (draft = text) : undefined}
+      onpick={!ended && !busy ? (text) => (draft = text) : undefined}
     />
 
     <section aria-label="Story" class="flex min-h-96 flex-col gap-3">
@@ -186,26 +175,26 @@
         <form onsubmit={send} class="flex items-end gap-2">
           <label class="flex-1 text-sm">
             Your action
-            <Textarea
-              bind:value={draft}
-              rows={2}
-              disabled={busy || rollPending}
-              placeholder={rollPending ? 'Roll first.' : 'What do you do?'}
-            />
+            <Textarea bind:value={draft} rows={2} disabled={busy} placeholder="What do you do?" />
           </label>
           {#if busy}
             <Button type="button" variant="secondary" onclick={() => controller?.abort()}
               >Stop</Button
             >
           {:else}
-            <Button type="submit" disabled={rollPending || !draft.trim()}>Send</Button>
+            <Button type="submit" disabled={!draft.trim()}>Send</Button>
           {/if}
         </form>
       {/if}
     </section>
 
     {#if dev}
-      <EventInspector {steps} {stats} memory={data.memory} onrefresh={() => void invalidateAll()} />
+      <EventInspector
+        {ruling}
+        {stats}
+        memory={data.memory}
+        onrefresh={() => void invalidateAll()}
+      />
     {/if}
   </div>
 </main>

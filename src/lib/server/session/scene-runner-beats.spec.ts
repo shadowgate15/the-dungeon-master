@@ -4,15 +4,22 @@ import { createBeatProgress, type BeatProgress } from '../arc/beat-progress.ts'
 import { ArcLockedError, createArcService } from '../arc/service.ts'
 import type { Database } from '../db/connect'
 import { arc, arcAct, arcBeat } from '../db/schema'
-import { answers, createScriptedPort, fails, says } from '../../testing/scripted-chat-port'
+import { effect, happens } from '../../testing/exchange-scripts'
+import {
+  answers,
+  createScriptedPort,
+  fails,
+  hangsAfter,
+  says,
+  type Script
+} from '../../testing/scripted-chat-port'
 import {
   firstSceneScripts,
   playableCampaign,
   sessionServiceWith,
   type PlayableCampaign
 } from './fixture'
-import { createDirectorPipeline } from './scene-director/pipeline.ts'
-import { createSceneRunner, type Pipeline } from './scene-runner.ts'
+import { createSceneRunner } from './scene-runner.ts'
 import type { SessionService } from './service'
 
 let fixture: PlayableCampaign
@@ -77,18 +84,33 @@ beforeEach(async () => {
   log = vi.fn<(message: string) => void>()
 })
 
-const yieldsAtOnce: Pipeline = async function* () {
-  yield { type: 'done', reason: 'yield' }
+function runnerWith(progress: BeatProgress = createBeatProgress(db, { log })) {
+  return createSceneRunner({ sessions, port: model.port, beatProgress: progress })
 }
 
-function runnerWith(
-  pipeline: Pipeline = yieldsAtOnce,
-  progress: BeatProgress = createBeatProgress(db, { log })
-) {
-  return createSceneRunner({ sessions, port: model.port, pipeline, beatProgress: progress })
+/** One Exchange's model answers: a ruling of happens, no Effect, and the Narrator's Reply. */
+const exchange = (reply = 'Time passes.') => [happens(), effect({ effect: 'none' }), says(reply)]
+const EXCHANGE_REQUESTS = 3
+
+interface Play {
+  /** The Beat check's answer, after the Exchange's own; none when no check should run. */
+  check?: Script
+  runner?: ReturnType<typeof runnerWith>
+  id?: string
+  text?: string
+  /** The Exchange's model answers; defaults to one that replies. */
+  scripts?: Script[]
 }
 
-async function play(runner: ReturnType<typeof runnerWith>, id = sessionId, text = 'I act') {
+/** Plays one Declaration through the runner and waits for the background Beat check. */
+async function play({
+  check,
+  runner = runnerWith(),
+  id = sessionId,
+  text = 'I act',
+  scripts
+}: Play = {}) {
+  model.enqueue(...(scripts ?? exchange()), ...(check ? [check] : []))
   const result = runner.begin(id, text, new AbortController().signal)
   if (!result.ok) throw new Error(result.reason)
   for await (const e of result.events) void e
@@ -96,12 +118,17 @@ async function play(runner: ReturnType<typeof runnerWith>, id = sessionId, text 
 }
 
 const propose = (...transitions: { beatId: string; to: string }[]) => answers({ transitions })
-const director = (...picks: string[]) => picks.map((p) => says(p))
 
-describe('Beat check after a run', () => {
+/** The Beat check requests the model was sent. */
+const checks = () =>
+  model.requests.filter((r) => r.systemPrompts.join('\n').includes('track which story beats'))
+/** The Narrator's Reply requests the model was sent. */
+const narrations = () =>
+  model.requests.filter((r) => r.systemPrompts.join('\n').includes('You are the narrator'))
+
+describe('Beat check after an Exchange', () => {
   it('moves a proposed Beat once, stamped with the Session and the last event id', async () => {
-    model.enqueue(propose({ beatId: beats.a, to: 'reached' }))
-    await play(runnerWith())
+    await play({ check: propose({ beatId: beats.a, to: 'reached' }) })
 
     const lastEvent = sessions.events(sessionId).at(-1)!
     expect(stateOf(beats.a)).toMatchObject({
@@ -111,14 +138,12 @@ describe('Beat check after a run', () => {
     })
     expect(stateOf(beats.b).state).toBe('pending')
 
-    model.enqueue(propose({ beatId: beats.a, to: 'abandoned' }))
-    await play(runnerWith())
+    await play({ check: propose({ beatId: beats.a, to: 'abandoned' }) })
     expect(stateOf(beats.a).state).toBe('reached')
   })
 
   it('abandons pending Beats of earlier Acts when a later-Act Beat is reached', async () => {
-    model.enqueue(propose({ beatId: beats.c, to: 'reached' }))
-    await play(runnerWith())
+    await play({ check: propose({ beatId: beats.c, to: 'reached' }) })
 
     expect(stateOf(beats.c).state).toBe('reached')
     expect(stateOf(beats.a).state).toBe('abandoned')
@@ -128,83 +153,84 @@ describe('Beat check after a run', () => {
   })
 
   it('keeps at most 3 proposals and drops unknown and duplicate ids', async () => {
-    model.enqueue(
-      propose(
+    await play({
+      check: propose(
         { beatId: 'nope', to: 'reached' },
         { beatId: beats.a, to: 'reached' },
         { beatId: beats.a, to: 'abandoned' },
         { beatId: beats.b, to: 'abandoned' }
       )
-    )
-    await play(runnerWith())
+    })
 
     expect(stateOf(beats.a).state).toBe('reached')
     expect(stateOf(beats.b).state).toBe('pending')
   })
 
   it('shows the model only pending Beats of the current and next Act', async () => {
-    model.enqueue(propose({ beatId: beats.a, to: 'reached' }))
-    await play(runnerWith())
-    model.enqueue(propose())
-    await play(runnerWith())
+    await play({ check: propose({ beatId: beats.a, to: 'reached' }) })
+    await play({ check: propose() })
 
-    const prompt = JSON.stringify(model.requests.at(-1))
+    const prompt = JSON.stringify(checks().at(-1))
     expect(prompt).not.toContain(beats.a)
     expect(prompt).toContain(beats.b)
     expect(prompt).toContain(beats.c)
   })
 
-  it('logs a failed check and drops it without retry or changing the run', async () => {
-    model.enqueue(fails)
-    await play(runnerWith())
+  it('logs a failed check and drops it without retry or changing the Exchange', async () => {
+    await play({ check: fails })
 
-    expect(model.requests).toHaveLength(1)
+    expect(checks()).toHaveLength(1)
     expect(log).toHaveBeenCalledOnce()
     expect(stateOf(beats.a).state).toBe('pending')
-    expect(sessions.events(sessionId)).toHaveLength(1)
+    expect(sessions.events(sessionId).map((e) => e.kind)).toEqual(['declaration', 'narration'])
   })
 
   it('drops invalid output without retry', async () => {
-    model.enqueue(answers({ transitions: 'lots' }))
-    await play(runnerWith())
+    await play({ check: answers({ transitions: 'lots' }) })
 
-    expect(model.requests).toHaveLength(1)
+    expect(checks()).toHaveLength(1)
     expect(log).toHaveBeenCalledOnce()
     expect(stateOf(beats.a).state).toBe('pending')
   })
 
   it('skips the check when the Arc has no pending Beats', async () => {
-    model.enqueue(
-      propose(
+    await play({
+      check: propose(
         { beatId: beats.a, to: 'reached' },
         { beatId: beats.b, to: 'reached' },
         { beatId: beats.c, to: 'reached' }
       )
-    )
-    await play(runnerWith())
-    model.enqueue(propose({ beatId: beats.d, to: 'reached' }))
-    await play(runnerWith())
+    })
+    await play({ check: propose({ beatId: beats.d, to: 'reached' }) })
     const calls = model.requests.length
 
-    await play(runnerWith())
-    expect(model.requests).toHaveLength(calls)
+    await play()
+    expect(model.requests).toHaveLength(calls + EXCHANGE_REQUESTS)
   })
 
-  it('does not run after a failed run', async () => {
-    const errors: Pipeline = async function* () {
-      yield { type: 'done', reason: 'error', message: 'boom' }
-    }
-    await play(runnerWith(errors))
-    expect(model.requests).toHaveLength(0)
+  it('does not run after a failed Exchange', async () => {
+    await play({ scripts: [fails] })
+    expect(model.requests).toHaveLength(1)
+    expect(checks()).toHaveLength(0)
   })
 
-  it('only sees the events of its own run', async () => {
-    model.enqueue(propose(), propose())
+  it('does not run after a stopped Reply', async () => {
     const runner = runnerWith()
-    await play(runner, sessionId, 'first action')
-    await play(runner, sessionId, 'second action')
+    const controller = new AbortController()
+    model.enqueue(happens(), effect({ effect: 'none' }), hangsAfter('The door '))
+    const result = runner.begin(sessionId, 'I wait', controller.signal)
+    if (!result.ok) throw new Error(result.reason)
+    for await (const e of result.events) if (e.type === 'delta') controller.abort()
+    await runner.settled()
+    expect(checks()).toHaveLength(0)
+  })
 
-    const second = JSON.stringify(model.requests[1].messages)
+  it('only sees the events of its own Exchange', async () => {
+    const runner = runnerWith()
+    await play({ runner, text: 'first action', check: propose() })
+    await play({ runner, text: 'second action', check: propose() })
+
+    const second = JSON.stringify(checks()[1].messages)
     expect(second).toContain('second action')
     expect(second).not.toContain('first action')
   })
@@ -218,73 +244,53 @@ describe('the Arc is read-only to the player', () => {
   })
 })
 
-describe('steering in the prompts', () => {
-  it('gives the Director a compact Arc line and the Narrator the full Arc block', async () => {
-    model.enqueue(...director('narrate'), says('The door creaks.'), ...director('yield'))
-    model.enqueue(propose())
-    await play(runnerWith(createDirectorPipeline()))
+describe('steering in the Reply', () => {
+  it('gives the Narrator the full Arc block, and the ruling steps no Arc', async () => {
+    await play({ scripts: exchange('The door creaks.'), check: propose() })
 
-    const directorPrompt = model.requests[0].messages[0].content
-    expect(directorPrompt).toContain('Setup')
-    expect(directorPrompt).toContain('2 open Beats')
-    expect(directorPrompt).not.toContain('Strangers gather.')
-
-    const narratorSystem = model.requests[1].systemPrompts.join('\n')
+    const narratorSystem = narrations()[0].systemPrompts.join('\n')
     expect(narratorSystem).toContain('Strangers gather.')
     expect(narratorSystem).toContain('Beat a: Do a.')
     expect(narratorSystem).toContain('Beat c')
     expect(narratorSystem.toLowerCase()).toContain('never announce')
+
+    const adjudication = JSON.stringify(model.requests[0])
+    expect(adjudication).not.toContain('Strangers gather.')
   })
 
-  it('adds a drift hook once runs since the last transition reach the threshold, across Sessions', async () => {
-    const progress = createBeatProgress(db, { log, driftRuns: 3 })
-    const runner = runnerWith(createDirectorPipeline(), progress)
+  it('adds a drift hook once Exchanges since the last transition reach the threshold, across Sessions', async () => {
+    const runner = runnerWith(createBeatProgress(db, { log, driftRuns: 3 }))
 
-    for (let i = 0; i < 2; i++) {
-      model.enqueue(...director('yield'), propose())
-      await play(runner)
-    }
-    expect(model.requests[2].messages[0].content).not.toContain('drifting')
+    for (let i = 0; i < 2; i++) await play({ runner, check: propose() })
+    expect(narrations().at(-1)!.systemPrompts.join('\n')).not.toContain('drifted')
 
     sessions.end(sessionId)
     serviceModel.enqueue(...firstSceneScripts())
     const next = (await sessions.start(fixture.campaignId)).id
-    const before = model.requests.length
 
-    model.enqueue(...director('narrate'), says('Time passes.'), ...director('yield'), propose())
-    await play(runner, next)
-
-    expect(model.requests[before].messages[0].content).toContain('drifting')
-    expect(model.requests[before + 1].systemPrompts.join('\n')).toContain('drifted')
+    await play({ runner, id: next, check: propose() })
+    expect(narrations().at(-1)!.systemPrompts.join('\n')).toContain('drifted')
   })
 
   it('resets drift when a Beat transitions', async () => {
-    const progress = createBeatProgress(db, { log, driftRuns: 2 })
-    const runner = runnerWith(createDirectorPipeline(), progress)
-    model.enqueue(...director('yield'), propose({ beatId: beats.a, to: 'reached' }))
-    await play(runner)
-    model.enqueue(...director('yield'), propose())
-    await play(runner)
+    const runner = runnerWith(createBeatProgress(db, { log, driftRuns: 2 }))
+    await play({ runner, check: propose({ beatId: beats.a, to: 'reached' }) })
+    await play({ runner, check: propose() })
 
-    expect(model.requests[2].messages[0].content).not.toContain('drifting')
+    expect(narrations().at(-1)!.systemPrompts.join('\n')).not.toContain('drifted')
   })
 
   it('says the Arc is complete and play continues when no Beats are pending', async () => {
-    model.enqueue(
-      propose(
+    await play({
+      check: propose(
         { beatId: beats.a, to: 'reached' },
         { beatId: beats.b, to: 'reached' },
         { beatId: beats.c, to: 'reached' }
       )
-    )
-    await play(runnerWith())
-    model.enqueue(propose({ beatId: beats.d, to: 'reached' }))
-    await play(runnerWith())
+    })
+    await play({ check: propose({ beatId: beats.d, to: 'reached' }) })
 
-    const before = model.requests.length
-    model.enqueue(...director('narrate'), says('An epilogue.'), ...director('yield'))
-    await play(runnerWith(createDirectorPipeline()))
-    expect(model.requests[before].messages[0].content).toContain('complete')
-    expect(model.requests[before + 1].systemPrompts.join('\n')).toContain('The relic is destroyed.')
+    await play({ scripts: exchange('An epilogue.') })
+    expect(narrations().at(-1)!.systemPrompts.join('\n')).toContain('The relic is destroyed.')
   })
 })

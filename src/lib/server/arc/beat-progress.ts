@@ -12,7 +12,6 @@ import {
   checkableBeats,
   currentActIndex,
   DEFAULT_DRIFT_RUNS,
-  directorArcLine,
   DRIFT_HOOK,
   isDrifting,
   type SteeringArc
@@ -26,8 +25,8 @@ import { arc, arcAct, arcBeat, session, sessionEvent } from '../db/schema'
 export const MAX_TRANSITIONS = 3
 const CHECK_MAX_TOKENS = 300
 const CHECK_TIMEOUT_MS = 60_000
-/** Events that start a run: the player's action, or a resolved roll. */
-const RUN_START_KINDS = ['player-action', 'roll-resolved'] as const
+/** Events that start an Exchange: the player's Declaration. */
+const RUN_START_KINDS = ['declaration'] as const
 
 const proposalSchema = z.object({
   transitions: z.array(z.object({ beatId: z.string(), to: z.enum(['reached', 'abandoned']) }))
@@ -41,12 +40,10 @@ const CHECK_SYSTEM = [
   `Propose at most ${MAX_TRANSITIONS} transitions, using only the beat ids listed. Propose none when nothing is settled.`
 ].join(' ')
 
-/** What the Narrator and Director are given for a Session. */
+/** What the Narrator is given for a Session. */
 export interface Steering {
   /** The Narrator's full Arc block, with the drift hook appended when the story has drifted. */
   arcBlock: string
-  /** The Director's compact Arc line. */
-  directorLine: string
 }
 
 export interface BeatProgressOptions {
@@ -170,8 +167,7 @@ export function createBeatProgress(db: Database, options: BeatProgressOptions = 
       )
     const block = arcBlock(loaded.arc)
     return {
-      arcBlock: drifting ? `${block}\n${DRIFT_HOOK}` : block,
-      directorLine: directorArcLine(loaded.arc, drifting)
+      arcBlock: drifting ? `${block}\n${DRIFT_HOOK}` : block
     }
   }
 
@@ -228,9 +224,7 @@ export function createBeatProgress(db: Database, options: BeatProgressOptions = 
     const prompt = [
       `Pending beats:\n${offered.map((b) => `${b.id}: ${b.title} - ${b.description}`).join('\n')}`,
       `Events of this run:\n${events
-        .map((e) =>
-          e.kind === 'player-action' ? `Player: ${e.text}` : `${e.role}: ${e.text ?? ''}`
-        )
+        .map((e) => (e.kind === 'declaration' ? `Player: ${e.text}` : `${e.role}: ${e.text ?? ''}`))
         .join('\n')}`
     ].join('\n\n')
     const call = await callModel(port, {

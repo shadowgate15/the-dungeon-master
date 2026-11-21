@@ -1,73 +1,44 @@
 /**
- * The scene runner: one player action in, a stream of pipeline events out. Code owns the loop;
- * the model is only ever a narrow step inside it (see GLOSSARY.md and docs/adr/0003).
+ * The scene runner: one Declaration in, a stream of Exchange events out. Code owns the loop; the
+ * model only answers each step inside it (see GLOSSARY.md and docs/adr/0005).
  *
- * `begin` claims the Session, saves the player's action as a `player-action` event, then hands
- * control to a `Pipeline` over the chat port and the database-backed Scene and Event log (the
- * Director pipeline in production). `resolveRoll` does the same after code resolves a pending
- * roll. The stream ends with exactly one `done` event saying why control returned to the player.
+ * `begin` claims the Session, saves the Declaration as a `declaration` event, then runs one
+ * Exchange over the chat port and the database-backed Scene and Event log. The stream ends with
+ * exactly one `done` event saying why the floor went back to the player.
  */
 import type { SessionEvent } from '#lib/session/enums.ts'
-import type { ContextReport, PipelineEvent } from '#lib/session/pipeline-events.ts'
+import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
 import type { ChatPort } from '../ai/port.ts'
-import type { BeatProgress, Steering } from '../arc/beat-progress.ts'
+import type { BeatProgress } from '../arc/beat-progress.ts'
 import type { MemoryExtraction } from '../memory/extraction.ts'
 import type { RollingSummary } from '../memory/summary.ts'
-import { dice as defaultDice, type Dice } from '../dice.ts'
 import type { ContextSources } from './context/sources.ts'
+import { runExchange } from './exchange/run.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
-export type { DoneReason, PipelineEvent, RunStats } from '#lib/session/pipeline-events.ts'
+export type { DoneReason, ExchangeEvent, RunStats } from '#lib/session/exchange-events.ts'
+export type { ExchangeContext } from './exchange/context.ts'
 
-/** Everything a pipeline step may use. State lives in the database, never in the pipeline. */
-export interface PipelineContext {
-  sessionId: string
-  sessions: SessionService
-  port: ChatPort
-  /** Aborted when the player presses Stop or disconnects. */
-  signal: AbortSignal
-  /** The Arc steering for the prompts, read fresh per call; null (or absent) when there is none. */
-  steering?: () => Steering | null
-  /** The Rolling summary and World memory for the Narrator's context; absent in some tests. */
-  context?: ContextSources
-  /** Reports a built context's usage, so the pipeline can add it to the run's stats. */
-  report?: (report: ContextReport) => void
-}
-
-/** One run after the player's action: yields pipeline events, ending with a `done`. */
-export type Pipeline = (context: PipelineContext) => AsyncGenerator<PipelineEvent>
-
-export type BeginRefusal = 'not-found' | 'ended' | 'empty-action' | 'roll-pending' | 'in-flight'
-
-export type ResolveRefusal = 'not-found' | 'ended' | 'no-pending-roll' | 'in-flight'
-
-export type ResolveResult =
-  { ok: true; events: AsyncGenerator<PipelineEvent> } | { ok: false; reason: ResolveRefusal }
+export type BeginRefusal = 'not-found' | 'ended' | 'empty-action' | 'in-flight'
 
 export type BeginResult =
-  { ok: true; events: AsyncGenerator<PipelineEvent> } | { ok: false; reason: BeginRefusal }
+  { ok: true; events: AsyncGenerator<ExchangeEvent> } | { ok: false; reason: BeginRefusal }
 
 export interface SceneRunnerDeps {
   sessions: SessionService
   port: ChatPort
-  pipeline: Pipeline
-  /** The roller for roll resolution. Defaults to the process-wide dice. */
-  dice?: Dice
-  /** The Character's modifier for a pending roll's check. Defaults to 0. */
-  rollModifier?: (sessionId: string, check: string) => number
-  /** Arc Beat-progress: steering for the prompts and the silent Beat check after each run. */
+  /** Arc Beat-progress: steering for the Reply and the silent Beat check after each Exchange. */
   beatProgress?: BeatProgress
-  /** World memory extraction, fired in the background after each run that yields or rolls. */
+  /** World memory extraction, fired in the background after each Exchange that replied. */
   memory?: MemoryExtraction
   /** The Rolling summary, fired in the background alongside extraction. */
   summary?: RollingSummary
-  /** What the Narrator's context reads beyond the log and Scene (summary, World memory). */
+  /** What the prompts read beyond the log and Scene (summary, World memory, Character). */
   contextSources?: ContextSources
 }
 
 export function createSceneRunner(deps: SceneRunnerDeps) {
-  const { sessions, port, pipeline, dice = defaultDice } = deps
-  const rollModifier = deps.rollModifier ?? (() => 0)
+  const { sessions, port } = deps
   // Sessions with a run in flight. Claimed synchronously when a run starts, so two quick requests
   // cannot both pass the check.
   const inFlight = new Set<string>()
@@ -80,7 +51,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   }
 
   /**
-   * Fires the silent background work over a finished run (the Beat check over this run's events,
+   * Fires the silent background work over a finished Exchange (the Beat check over its events,
    * memory extraction over the log past its watermark); never awaited by the run, never throws.
    */
   function checkBeats(sessionId: string, fromSeq: number) {
@@ -92,41 +63,31 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   async function* run(
     sessionId: string,
     signal: AbortSignal,
-    fromSeq: number
-  ): AsyncGenerator<PipelineEvent> {
-    let finished = false
+    declaration: SessionEvent
+  ): AsyncGenerator<ExchangeEvent> {
     try {
       const steering = deps.beatProgress && (() => deps.beatProgress!.steering(sessionId))
-      for await (const step of pipeline({
-        sessionId,
-        sessions,
-        port,
-        signal,
-        steering,
-        context: deps.contextSources
-      })) {
-        yield step
-        if (step.type === 'done') {
-          finished = true
-          if (step.reason === 'yield' || step.reason === 'roll') checkBeats(sessionId, fromSeq)
-          break
-        }
+      const replied = yield* runExchange(
+        { sessionId, sessions, port, signal, steering, context: deps.contextSources },
+        declaration
+      )
+      if (replied) {
+        checkBeats(sessionId, declaration.seq)
+        yield { type: 'done', reason: 'replied' }
+      } else {
+        yield { type: 'done', reason: 'stopped' }
       }
     } catch (error) {
       if (signal.aborted) {
         yield { type: 'done', reason: 'stopped' }
       } else {
+        // #275 adds retries and safe defaults; until then a failed step ends the Exchange here.
         yield {
           type: 'done',
           reason: 'error',
           message: error instanceof Error ? error.message : String(error)
         }
       }
-      return
-    }
-    if (!finished) {
-      if (!signal.aborted) checkBeats(sessionId, fromSeq)
-      yield { type: 'done', reason: signal.aborted ? 'stopped' : 'yield' }
     }
   }
 
@@ -139,15 +100,15 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
 
   /**
    * Starts a run: claims the Session, saves the run's first event (`record`) before any model
-   * call, then streams that event and the pipeline's. The claim is held until the stream actually
-   * finishes, so a stopped run cannot overlap the next one while the pipeline winds down. A stream
+   * call, then streams that event and the Exchange's. The claim is held until the stream actually
+   * finishes, so a stopped run cannot overlap the next one while the Exchange winds down. A stream
    * nobody ever reads is released when the caller aborts.
    */
   function start(
     sessionId: string,
     signal: AbortSignal,
     record: () => SessionEvent
-  ): { ok: true; events: AsyncGenerator<PipelineEvent> } | { ok: false; reason: 'ended' } {
+  ): { ok: true; events: AsyncGenerator<ExchangeEvent> } | { ok: false; reason: 'ended' } {
     inFlight.add(sessionId)
     const free = () => void inFlight.delete(sessionId)
     let started = false
@@ -165,11 +126,11 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       throw error
     }
 
-    async function* events(): AsyncGenerator<PipelineEvent> {
+    async function* events(): AsyncGenerator<ExchangeEvent> {
       started = true
       try {
         yield { type: 'event', event: first }
-        yield* run(sessionId, signal, first.seq)
+        yield* run(sessionId, signal, first)
       } finally {
         free()
       }
@@ -184,49 +145,20 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
     },
 
     /**
-     * Starts a run for the player's action. Refusals are decided synchronously, before anything
-     * is saved. The action is saved before any model call, so a stopped or failed run keeps it.
+     * Starts an Exchange for the player's Declaration. Refusals are decided synchronously, before
+     * anything is saved. The Declaration is saved before any model call, so a stopped or failed
+     * Exchange keeps it.
      */
-    begin(sessionId: string, input: string, signal: AbortSignal): BeginResult {
+    begin(sessionId: string, declaration: string, signal: AbortSignal): BeginResult {
       const refused = refusal(sessionId)
       if (refused) return { ok: false, reason: refused }
-      const text = input.trim()
+      const text = declaration.trim()
       if (!text) return { ok: false, reason: 'empty-action' }
-      if (sessions.scene(sessionId).pendingRoll) return { ok: false, reason: 'roll-pending' }
       if (inFlight.has(sessionId)) return { ok: false, reason: 'in-flight' }
 
       return start(sessionId, signal, () =>
-        sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text })
+        sessions.appendEvent(sessionId, { role: 'player', kind: 'declaration', text })
       )
-    },
-
-    /**
-     * Resolves the pending roll: code rolls the d20, adds the Character's modifier, clears the
-     * pending roll and logs a `roll-resolved` event, then runs the pipeline so the outcome is
-     * narrated. The model never sees a die before code has rolled it.
-     */
-    resolveRoll(sessionId: string, signal: AbortSignal): ResolveResult {
-      const refused = refusal(sessionId)
-      if (refused) return { ok: false, reason: refused }
-      const scene = sessions.scene(sessionId)
-      const pending = scene.pendingRoll
-      if (!pending) return { ok: false, reason: 'no-pending-roll' }
-      if (inFlight.has(sessionId)) return { ok: false, reason: 'in-flight' }
-
-      return start(sessionId, signal, () => {
-        const die = dice.d20()
-        const modifier = rollModifier(sessionId, pending.check)
-        const total = die + modifier
-        const success = total >= pending.dc
-        sessions.saveScene(sessionId, { ...scene, pendingRoll: null })
-        const sign = modifier < 0 ? '-' : '+'
-        return sessions.appendEvent(sessionId, {
-          role: 'code',
-          kind: 'roll-resolved',
-          text: `${pending.check} check: ${die} ${sign} ${Math.abs(modifier)} = ${total} against DC ${pending.dc}: ${success ? 'success' : 'failure'}`,
-          data: { check: pending.check, dc: pending.dc, die, modifier, total, success }
-        })
-      })
     }
   }
 }

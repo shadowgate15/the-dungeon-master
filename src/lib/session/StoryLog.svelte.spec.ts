@@ -12,7 +12,7 @@ const event = (seq: number, kind: SessionEvent['kind'], text: string): SessionEv
   id: `e${seq}`,
   sessionId: 's',
   seq,
-  role: kind === 'npc-line' ? 'npc' : 'narrator',
+  role: kind === 'npc-line' ? 'npc' : kind === 'declaration' ? 'player' : 'narrator',
   kind,
   text,
   npcId: kind === 'npc-line' ? 'mira' : null,
@@ -38,5 +38,28 @@ describe('StoryLog', () => {
     render(StoryLog, { props: { events, npcs, mode: 'exploration' } })
 
     await expect.element(page.getByText('Mira looks up.')).not.toHaveAttribute('data-aside')
+  })
+
+  it("shows the Declaration as the player's line and a Call as a subdued note", async () => {
+    const log = [
+      event(1, 'declaration', 'I pick the lock.'),
+      event(2, 'call-raised', 'Roll Sleight of Hand.'),
+      event(3, 'call-answered', 'Rolled 14.'),
+      event(4, 'narration', 'The lock clicks.')
+    ]
+    render(StoryLog, { props: { events: log, npcs } })
+
+    await expect.element(page.getByText('I pick the lock.')).toHaveClass(/italic/)
+    await expect.element(page.getByText('Roll Sleight of Hand.')).toHaveAttribute('data-call')
+    await expect.element(page.getByText('Rolled 14.')).toHaveAttribute('data-call')
+  })
+
+  it('shows the thinking indicator until the Reply streams', async () => {
+    const { rerender } = render(StoryLog, { props: { events: [], npcs, thinking: true } })
+    await expect.element(page.getByRole('status')).toHaveTextContent('thinking')
+
+    await rerender({ events: [], npcs, thinking: true, live: 'The door' })
+    await expect.element(page.getByRole('status')).not.toBeInTheDocument()
+    await expect.element(page.getByLabelText('Narration in progress')).toHaveTextContent('The door')
   })
 })

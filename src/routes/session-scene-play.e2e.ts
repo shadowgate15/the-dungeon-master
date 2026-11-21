@@ -8,12 +8,34 @@ const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
 // The fake's answer queue is process-wide state: this file must not overlap with others.
 test.describe.configure({ mode: 'serial' })
 
-/** Scripts the model's answers in order: Director picks (menu ids) and Narrator/NPC prose. */
-async function script(request: APIRequestContext, answers: string[]) {
+/** An Adjudication of happens, in the flat wire shape (the unused fields hold their sentinels). */
+const HAPPENS = { outcome: 'happens', skill: 'none', difficulty: 'none', question: '', choices: [] }
+
+/**
+ * Scripts the model's answers in order. An Exchange asks for its Adjudication, then its Effect
+ * (both structured), then streams the Reply as prose; a move to a new place first generates it.
+ */
+async function script(request: APIRequestContext, answers: unknown[]) {
   const response = await request.post(`${FAKE_LM_STUDIO}/__control/answers`, {
     data: { answers: answers.map((content) => ({ content })), replace: true }
   })
   expect(response.ok()).toBe(true)
+}
+
+/**
+ * The row id of an NPC in the Scene. The UI never shows it, so it is read from the last Effect
+ * schema the model was sent, where the NPC ids are the `npcId` enum.
+ */
+async function npcId(request: APIRequestContext): Promise<string> {
+  const sent = (await (await request.get(`${FAKE_LM_STUDIO}/__control/requests`)).json()) as {
+    body: { response_format?: { json_schema?: { schema?: unknown } } }
+  }[]
+  const schemas = sent.map((r) => r.body?.response_format?.json_schema?.schema)
+  const effect = schemas.findLast(
+    (s) => (s as { properties?: { npcId?: unknown } } | undefined)?.properties?.npcId
+  ) as { properties: { npcId: { enum: string[] } } } | undefined
+  if (!effect) throw new Error('No Effect schema with NPC ids was sent')
+  return effect.properties.npcId.enum[0]
 }
 
 /** Creates a World, a Character and a Campaign, links them and starts a Session. */
@@ -51,57 +73,59 @@ async function startSession(page: Page, request: APIRequestContext) {
   await page.waitForLoadState('networkidle')
 }
 
-test('plays a scene: narration, an NPC line, dialogue, a roll and the story continues', async ({
+test('plays a scene: a Declaration gets a Reply, an NPC answers, and the Character moves through an exit', async ({
   page,
   request
 }) => {
   await startSession(page, request)
   const log = page.getByRole('list', { name: 'Story log' })
   const scene = page.getByRole('complementary', { name: 'Scene' })
-  const act = async (text: string) => {
+  const declare = async (text: string) => {
     await page.getByLabel('Your action').fill(text)
     await page.getByRole('button', { name: 'Send' }).click()
   }
 
-  // Action 1: the Director narrates, lets Orla speak, opens dialogue, then yields.
+  // Exchange 1: the Declaration happens, and nothing changes; the Narrator replies.
   await script(request, [
-    'narrate',
-    'The hearth crackles as the room turns to look at you.',
-    'npc-speaks:orla',
-    'Welcome in, traveller. Sit and warm yourself.',
-    'begin-dialogue:orla',
-    'yield'
+    HAPPENS,
+    { effect: 'none' },
+    'The hearth crackles as the room turns to look at you.'
   ])
-  await act('I push open the door and step inside')
+  await declare('I push open the door and step inside')
   await expect(log).toContainText('I push open the door and step inside')
   await expect(log).toContainText('The hearth crackles as the room turns to look at you.')
+  await expect(page.getByLabel('Your action')).toBeEnabled()
+
+  // Exchange 2: talking to Orla opens dialogue, and she voices the Reply.
+  await script(request, [
+    HAPPENS,
+    { effect: 'talk', npcId: await npcId(request) },
+    'Welcome in, traveller. Sit and warm yourself.'
+  ])
+  await declare('I greet the innkeeper')
+  await expect(log).toContainText('Dialogue with Orla')
   await expect(log.getByRole('blockquote')).toContainText('Orla')
   await expect(log).toContainText('Welcome in, traveller. Sit and warm yourself.')
-  await expect(log).toContainText('Dialogue with Orla')
   await expect(scene.getByRole('region', { name: 'Mode' })).toContainText('dialogue')
-
-  // Action 2: the Director asks for a roll, and the player must answer it.
-  await script(request, [
-    'roll:persuasion',
-    'narrate',
-    'Orla weighs your words, then nods slowly.',
-    'yield'
-  ])
-  await act('I ask Orla for a discount on a room')
-  const prompt = page.getByRole('alertdialog')
-  await expect(prompt).toContainText('persuasion check')
-  await expect(prompt).toContainText('DC 13')
-  await expect(scene.getByRole('region', { name: 'Pending roll' })).not.toContainText('None')
-
-  // The prompt comes back after a reload: there is no way to skip it.
-  await page.reload()
-  await expect(page.getByRole('alertdialog')).toContainText('persuasion check')
-
-  // Rolling resolves it, and the story continues.
-  await page.waitForLoadState('networkidle')
-  await page.getByRole('button', { name: 'Roll d20' }).click()
-  await expect(page.getByRole('alertdialog')).toBeHidden()
-  await expect(log).toContainText('Orla weighs your words, then nods slowly.')
-  await expect(scene.getByRole('region', { name: 'Pending roll' })).toContainText('None')
   await expect(page.getByLabel('Your action')).toBeEnabled()
+
+  // Exchange 3: the Character goes through the front door; the new place is generated first.
+  await script(request, [
+    HAPPENS,
+    { effect: 'move', exitId: 'front-door' },
+    {
+      name: 'The Rain-Slick Yard',
+      description: 'A muddy yard behind the inn.',
+      exits: ['The stables'],
+      objects: ['A water trough']
+    },
+    { npcs: [] },
+    'Rain needles your face as the door bangs shut behind you.'
+  ])
+  await declare('I step back out into the rain')
+  await expect(log).toContainText('You go through: Front door.')
+  await expect(log).toContainText('Rain needles your face as the door bangs shut behind you.')
+  await expect(scene.getByRole('region', { name: 'Location' })).toContainText('The Rain-Slick Yard')
+  await expect(scene.getByRole('region', { name: 'Mode' })).toContainText('exploration')
+  await expect(scene.getByRole('region', { name: 'Exits' })).toContainText('The Gilded Stag')
 })

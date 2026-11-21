@@ -17,7 +17,7 @@ export interface ModelSampling {
 
 /**
  * Temperature 0.7, since LM Studio's preset is 1.0 when none is sent. Reasoning off: with it on,
- * a structured answer lands in the reasoning field, and a turn takes minutes (see
+ * a structured answer lands in the reasoning field, and an Exchange takes minutes (see
  * docs/research/exchange-model-eval.md).
  */
 export const DEFAULT_SAMPLING: ModelSampling = { temperature: 0.7, reasoningEffort: 'none' }

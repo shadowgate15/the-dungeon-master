@@ -50,14 +50,7 @@ const MAX_CATCH_UP_CALLS = 5
 const MAX_TOKENS = 1200
 const TIMEOUT_MS = 90_000
 const KNOWN_LISTED = 40
-const KINDS_SHOWN = [
-  'player-action',
-  'narration',
-  'npc-line',
-  'roll-requested',
-  'roll-resolved',
-  'scene-changed'
-] as const
+const KINDS_SHOWN = ['declaration', 'narration', 'npc-line', 'scene-changed'] as const
 
 const text = z.string().optional()
 const proposalSchema = z.object({
@@ -100,7 +93,6 @@ const SYSTEM = [
 const ROLE_LABEL: Record<string, string> = {
   player: 'Player',
   narrator: 'Narrator',
-  director: 'Director',
   code: 'Game'
 }
 

@@ -11,7 +11,7 @@ export type AiStatus =
       /** The configured limit to use (with a character estimate) when `contextLength` is null. */
       fallbackContextLength?: number
     }
-  /** A turn showed the model returns no answer content; controls stay off until re-probe. */
+  /** A model request showed the model returns no answer content; controls stay off until re-probe. */
   | { state: 'reasoning-model'; model: string }
 
 /** Shown in the chat and the AI panel when the model returns no answer content. */

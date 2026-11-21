@@ -23,7 +23,7 @@ export interface ChatMessage {
 }
 
 /**
- * A tool the model may call during a turn. `execute` is server code with no arguments from the
+ * A tool the model may call while it answers a request. `execute` is server code with no arguments from the
  * model; its return value goes back to the model. Provider-neutral: the port adapts it.
  */
 export interface ChatTool {

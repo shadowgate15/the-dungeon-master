@@ -1,42 +1,31 @@
 import { fetchServerSentEvents } from '@tanstack/ai-client'
-import { PIPELINE_CHUNK, type PipelineEvent } from './pipeline-events.ts'
+import { EXCHANGE_CHUNK, type ExchangeEvent } from './exchange-events.ts'
 
-/** What to tell the player when the server refused to start a run, by the reason it gave. */
+/** What to tell the player when the server refused to start an Exchange, by the reason it gave. */
 const REFUSAL_MESSAGE: Record<string, string> = {
-  'roll-pending': 'Roll first.',
-  'no-pending-roll': 'There is no roll to make.',
-  'in-flight': 'The previous action is still running.'
+  'in-flight': 'The previous Declaration is still being answered.'
 }
 
-/** Sends a player action and reports each pipeline event. Resolves with an error text or null. */
+/** Sends a Declaration and reports each Exchange event. Resolves with an error text or null. */
 export function sendAction(
   sessionId: string,
   text: string,
-  onEvent: (event: PipelineEvent) => void,
+  onEvent: (event: ExchangeEvent) => void,
   signal?: AbortSignal
 ): Promise<string | null> {
   return postRun(sessionId, 'action', { text }, onEvent, signal)
 }
 
-/** Clicks Roll: code rolls, then the run continues and streams like an action. */
-export function resolveRoll(
-  sessionId: string,
-  onEvent: (event: PipelineEvent) => void,
-  signal?: AbortSignal
-): Promise<string | null> {
-  return postRun(sessionId, 'roll', {}, onEvent, signal)
-}
-
 /**
- * Starts a run over TanStack AI's server-sent-events connection and passes each pipeline event
- * (the value of a `PIPELINE_CHUNK` custom chunk) to `onEvent`. A refused start comes back as a
+ * Starts an Exchange over TanStack AI's server-sent-events connection and passes each event
+ * (the value of an `EXCHANGE_CHUNK` custom chunk) to `onEvent`. A refused start comes back as a
  * message; a dropped connection or an abort throws.
  */
 async function postRun(
   sessionId: string,
-  route: 'action' | 'roll',
+  route: 'action',
   data: Record<string, unknown>,
-  onEvent: (event: PipelineEvent) => void,
+  onEvent: (event: ExchangeEvent) => void,
   signal?: AbortSignal
 ): Promise<string | null> {
   let refusal: string | undefined
@@ -59,14 +48,15 @@ async function postRun(
       threadId: sessionId,
       runId: crypto.randomUUID()
     })) {
-      if (chunk.type === 'CUSTOM' && chunk.name === PIPELINE_CHUNK) {
-        onEvent(chunk.value as PipelineEvent)
+      if (chunk.type === 'CUSTOM' && chunk.name === EXCHANGE_CHUNK) {
+        onEvent(chunk.value as ExchangeEvent)
       } else if (chunk.type === 'RUN_ERROR') {
         return chunk.message
       }
     }
   } catch (error) {
-    if (refusal !== undefined) return REFUSAL_MESSAGE[refusal] ?? 'That action could not be sent.'
+    if (refusal !== undefined)
+      return REFUSAL_MESSAGE[refusal] ?? 'That Declaration could not be sent.'
     throw error
   }
   return null

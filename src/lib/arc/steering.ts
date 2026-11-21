@@ -1,6 +1,6 @@
 /**
  * Arc steering: pure functions over an Arc's Beat state. The current Act is derived (the Act of
- * the first pending Beat), the Narrator gets the full Arc block, the Director a compact line, and
+ * the first pending Beat), the Narrator gets the full Arc block, and
  * drift (runs since the latest Beat transition) adds an advisory hook. See GLOSSARY.md (Beat
  * state) and the Arc Beat-progress decisions in spec #235.
  */
@@ -71,14 +71,6 @@ export function arcBlock(arc: SteeringArc): string {
     'Steer the story toward the open beats without announcing the plot. Never announce beats, acts or the arc to the player, and let the player stay free to improvise.'
   )
   return lines.join('\n')
-}
-
-/** The Director's compact line: Act name, open Beat count, drift flag. Advisory. */
-export function directorArcLine(arc: SteeringArc, drifting: boolean): string {
-  const current = currentActIndex(arc)
-  if (current < 0) return 'Arc: complete, play continues.'
-  const open = pending(arc.acts[current]).length
-  return `Arc: act "${arc.acts[current].name}", ${open} open ${open === 1 ? 'Beat' : 'Beats'}${drifting ? ', drifting' : ''}.`
 }
 
 /** The advisory hook added to the Narrator's Arc block when the story has drifted. */

@@ -87,7 +87,7 @@ describe('the Event log', () => {
   it('appends events in sequence, each with its producing role', async () => {
     const { id } = await sessions.start(campaignId)
 
-    const a = sessions.appendEvent(id, { role: 'player', kind: 'player-action', text: 'I look' })
+    const a = sessions.appendEvent(id, { role: 'player', kind: 'declaration', text: 'I look' })
     const b = sessions.appendEvent(id, {
       role: 'narrator',
       kind: 'narration',
@@ -96,7 +96,7 @@ describe('the Event log', () => {
 
     expect([a.seq, b.seq]).toEqual([1, 2])
     expect(sessions.events(id).map((e) => [e.seq, e.role, e.kind, e.text])).toEqual([
-      [1, 'player', 'player-action', 'I look'],
+      [1, 'player', 'declaration', 'I look'],
       [2, 'narrator', 'narration', 'You see a hearth.']
     ])
   })
@@ -131,10 +131,10 @@ describe('the Event log', () => {
     const { id } = await sessions.start(campaignId)
     sessions.end(id)
     expect(() =>
-      sessions.appendEvent(id, { role: 'player', kind: 'player-action', text: 'x' })
+      sessions.appendEvent(id, { role: 'player', kind: 'declaration', text: 'x' })
     ).toThrow(SessionValidationError)
     expect(() =>
-      sessions.appendEvent('nope', { role: 'player', kind: 'player-action', text: 'x' })
+      sessions.appendEvent('nope', { role: 'player', kind: 'declaration', text: 'x' })
     ).toThrow(SessionNotFoundError)
   })
 })
@@ -282,7 +282,7 @@ describe('Scene NPCs resolve live from World memory', () => {
 
   it('stamps an attitude change with the Session and last Event seq', async () => {
     const { id } = await sessions.start(campaignId)
-    sessions.appendEvent(id, { role: 'player', kind: 'player-action', text: 'hi' })
+    sessions.appendEvent(id, { role: 'player', kind: 'declaration', text: 'hi' })
     const hob = sessions.scene(id).npcs[1]
     sessions.changeAttitude(id, hob.id, { stance: 'hostile' })
 
@@ -300,7 +300,7 @@ describe('Scene carry-over and the Character lock', () => {
       .set({ mode: 'dialogue', dialogueNpcId: npcId, pendingRoll: roll })
       .where(eq(sessionScene.sessionId, first.id))
       .run()
-    sessions.appendEvent(first.id, { role: 'player', kind: 'player-action', text: 'I look' })
+    sessions.appendEvent(first.id, { role: 'player', kind: 'declaration', text: 'I look' })
     sessions.end(first.id)
 
     const second = await sessions.start(campaignId)

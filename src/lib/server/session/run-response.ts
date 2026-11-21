@@ -1,36 +1,34 @@
 import { EventType, toServerSentEventsResponse, type StreamChunk } from '@tanstack/ai'
 import { json } from '@sveltejs/kit'
-import { PIPELINE_CHUNK, type PipelineEvent } from '#lib/session/pipeline-events.ts'
-import type { BeginRefusal, ResolveRefusal } from './scene-runner.ts'
+import { EXCHANGE_CHUNK, type ExchangeEvent } from '#lib/session/exchange-events.ts'
+import type { BeginRefusal } from './scene-runner.ts'
 
-/** The HTTP status for each reason the runner can refuse to start a run. */
-const REFUSAL_STATUS: Record<BeginRefusal | ResolveRefusal, number> = {
+/** The HTTP status for each reason the runner can refuse to start an Exchange. */
+const REFUSAL_STATUS: Record<BeginRefusal, number> = {
   'not-found': 404,
   ended: 409,
   'in-flight': 409,
-  'roll-pending': 409,
-  'no-pending-roll': 409,
   'empty-action': 400
 }
 
 /** A refused run: the status for the reason, and the reason as JSON for the client to show. */
-export function refusalResponse(reason: BeginRefusal | ResolveRefusal): Response {
+export function refusalResponse(reason: BeginRefusal): Response {
   return json({ reason }, { status: REFUSAL_STATUS[reason] })
 }
 
 /**
- * One run as an AG-UI stream: `RUN_STARTED`, then each pipeline event as a `CUSTOM` chunk named
- * `PIPELINE_CHUNK` with the event as its value (the `done` event ends the run), then
+ * One run as an AG-UI stream: `RUN_STARTED`, then each Exchange event as a `CUSTOM` chunk named
+ * `EXCHANGE_CHUNK` with the event as its value (the `done` event ends the run), then
  * `RUN_FINISHED`.
  */
 async function* runChunks(
   threadId: string,
-  events: AsyncIterable<PipelineEvent>
+  events: AsyncIterable<ExchangeEvent>
 ): AsyncGenerator<StreamChunk> {
   const runId = crypto.randomUUID()
   yield { type: EventType.RUN_STARTED, threadId, runId, timestamp: Date.now() }
   for await (const event of events) {
-    yield { type: EventType.CUSTOM, name: PIPELINE_CHUNK, value: event, timestamp: Date.now() }
+    yield { type: EventType.CUSTOM, name: EXCHANGE_CHUNK, value: event, timestamp: Date.now() }
   }
   yield { type: EventType.RUN_FINISHED, threadId, runId, timestamp: Date.now() }
 }
@@ -41,7 +39,7 @@ async function* runChunks(
  */
 export function runResponse(
   sessionId: string,
-  events: AsyncIterable<PipelineEvent>,
+  events: AsyncIterable<ExchangeEvent>,
   controller: AbortController
 ): Response {
   return toServerSentEventsResponse(runChunks(sessionId, events), { abortController: controller })

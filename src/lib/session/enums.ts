@@ -1,6 +1,6 @@
 /**
  * The Scene and Event log vocabulary shared by the database schema (CHECK constraints), the server
- * and the UI. See GLOSSARY.md (Scene, Mode, Director, Event log) and docs/adr/0003.
+ * and the UI. See GLOSSARY.md (Scene, Mode, Exchange, Event log) and docs/adr/0003 and 0005.
  */
 
 import { STANCES, type Stance } from '#lib/memory/enums.ts'
@@ -9,17 +9,20 @@ import { STANCES, type Stance } from '#lib/memory/enums.ts'
 export const MODES = ['exploration', 'dialogue'] as const
 export type Mode = (typeof MODES)[number]
 
-/** Who produced an Event: the player, a pipeline role, or deterministic code. */
-export const ROLES = ['player', 'director', 'narrator', 'npc', 'code'] as const
+/** Who produced an Event: the player, a voice of the Reply, or deterministic code. */
+export const ROLES = ['player', 'narrator', 'npc', 'code'] as const
 export type Role = (typeof ROLES)[number]
 
-/** The typed events of the Event log. */
+/**
+ * The typed events of the Event log. A `declaration` starts each Exchange; `call-raised` and
+ * `call-answered` record a Call (a withdrawn Call is a `call-answered` with a withdrawn flag).
+ */
 export const EVENT_KINDS = [
-  'player-action',
+  'declaration',
   'narration',
   'npc-line',
-  'roll-requested',
-  'roll-resolved',
+  'call-raised',
+  'call-answered',
   'scene-changed',
   'mode-changed'
 ] as const
@@ -30,7 +33,7 @@ export const ATTITUDES = STANCES
 export type Attitude = Stance
 
 export interface SceneExit {
-  /** Stable id; the Director's `move:<id>` menu option names it. */
+  /** Stable id; a `move` Effect names it. */
   id: string
   name: string
 }
@@ -42,7 +45,7 @@ export interface SceneExit {
 export interface SceneNpc {
   /** The NPC row id: what the Scene stores and what Events and `dialogueNpcId` refer to. */
   id: string
-  /** The NPC's unique name key, hyphenated; the Director's `npc-speaks:<key>` menu option names it. */
+  /** The NPC's unique name key, hyphenated. */
   key: string
   name: string
   /** The `(npc, character)` stance, neutral when none is recorded. */

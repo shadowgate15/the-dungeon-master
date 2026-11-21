@@ -44,3 +44,13 @@ export function renderCharacter(summary: SummaryModel): string {
     .map(([label, text]) => `${label}: ${text.trim()}.`)
   return [head, ...(scores.length ? [`Abilities: ${scores.join(', ')}.`] : []), ...traits].join(' ')
 }
+
+/** The Character as one line for the ruling steps: name, and level, race and class. */
+export function characterLine(summary: SummaryModel): { name: string; summary: string } {
+  const { data, names } = summary
+  const identity = [names.subrace ?? names.race, names.class].filter(Boolean).join(' ')
+  return {
+    name: data.name,
+    summary: `a level ${data.level} ${identity.toLowerCase() || 'adventurer'}`
+  }
+}

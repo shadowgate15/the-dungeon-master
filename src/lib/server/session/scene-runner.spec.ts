@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { collectText } from '../ai/port.ts'
-import type { Database } from '../db/connect'
-import { createScriptedPort, says } from '../../testing/scripted-chat-port'
 import { eq } from 'drizzle-orm'
-import { sessionScene } from '../db/schema'
+import type { Database } from '../db/connect'
+import { place, sessionScene } from '../db/schema'
+import {
+  answers,
+  createScriptedPort,
+  fails,
+  hangsAfter,
+  says
+} from '../../testing/scripted-chat-port'
+import { effect, happens, impossible, rules } from '../../testing/exchange-scripts'
 import { playableCampaign, sessionServiceWith, updateNpc } from './fixture'
 import {
   createSceneRunner,
   type BeginResult,
-  type Pipeline,
-  type PipelineEvent,
+  type ExchangeEvent,
   type SceneRunner
 } from './scene-runner.ts'
 import { createSessionService, type SessionService } from './service'
@@ -28,185 +33,59 @@ beforeEach(async () => {
   model = createScriptedPort()
 })
 
-const yieldsAtOnce: Pipeline = async function* () {
-  yield { type: 'done', reason: 'yield' }
-}
-
-const runnerWith = (pipeline: Pipeline = yieldsAtOnce): SceneRunner =>
-  createSceneRunner({ sessions, port: model.port, pipeline })
+const runner = (): SceneRunner => createSceneRunner({ sessions, port: model.port })
 
 async function drain(result: BeginResult) {
   if (!result.ok) throw new Error(`refused: ${result.reason}`)
-  const events: PipelineEvent[] = []
+  const events: ExchangeEvent[] = []
   for await (const e of result.events) events.push(e)
   return events
 }
 
+const play = (text: string, using = runner()) =>
+  drain(using.begin(sessionId, text, new AbortController().signal))
+
 const log = () => sessions.events(sessionId).map((e) => `${e.role}:${e.kind}:${e.text}`)
+const done = (events: ExchangeEvent[]) => events.at(-1)
 
-describe('a player action', () => {
-  it('is saved as a player-action event, then the pipeline yields', async () => {
-    const events = await drain(
-      runnerWith().begin(sessionId, 'I look around', new AbortController().signal)
-    )
+describe('a Declaration that happens with no Effect', () => {
+  it('is saved, ruled, and always gets a Reply from the Narrator', async () => {
+    model.enqueue(happens(), effect({ effect: 'none' }), says('The hearth ', 'crackles.'))
 
-    expect(
-      events.map((e) =>
-        e.type === 'event' ? e.event.kind : e.type === 'done' ? `done:${e.reason}` : e.type
-      )
-    ).toEqual(['player-action', 'done:yield'])
-    expect(log()).toEqual(['player:player-action:I look around'])
-  })
+    const events = await play('I warm my hands')
 
-  it('survives a reload: a fresh runner and service see the same scene and log', async () => {
-    await drain(runnerWith().begin(sessionId, 'I look around', new AbortController().signal))
-
-    const reloaded = createSessionService(db)
-    expect(reloaded.events(sessionId).map((e) => e.text)).toEqual(['I look around'])
-    expect(reloaded.scene(sessionId).location.name).toBe(sessions.scene(sessionId).location.name)
-  })
-
-  it('trims the text and refuses an empty one', () => {
-    const runner = runnerWith()
-    expect(runner.begin(sessionId, '   ', new AbortController().signal)).toEqual({
-      ok: false,
-      reason: 'empty-action'
-    })
-    expect(sessions.events(sessionId)).toEqual([])
-  })
-
-  it('is refused on an unknown or ended Session', () => {
-    const runner = runnerWith()
-    expect(runner.begin('nope', 'hi', new AbortController().signal)).toEqual({
-      ok: false,
-      reason: 'not-found'
-    })
-    sessions.end(sessionId)
-    expect(runner.begin(sessionId, 'hi', new AbortController().signal)).toEqual({
-      ok: false,
-      reason: 'ended'
-    })
-  })
-
-  it('is refused while a roll is pending', () => {
-    const scene = sessions.scene(sessionId)
-    sessions.saveScene(sessionId, {
-      ...scene,
-      pendingRoll: { check: 'perception', dc: 12, reason: 'listening' }
-    })
-    expect(runnerWith().begin(sessionId, 'hi', new AbortController().signal)).toEqual({
-      ok: false,
-      reason: 'roll-pending'
-    })
-  })
-
-  it('is refused while another run is in flight, and allowed once it finishes', async () => {
-    const runner = runnerWith()
-    const first = runner.begin(sessionId, 'one', new AbortController().signal)
-    expect(runner.begin(sessionId, 'two', new AbortController().signal)).toEqual({
-      ok: false,
-      reason: 'in-flight'
-    })
-    await drain(first)
-    await drain(runner.begin(sessionId, 'two', new AbortController().signal))
-    expect(log()).toEqual(['player:player-action:one', 'player:player-action:two'])
-  })
-
-  it('releases the Session when the caller aborts before reading the stream', () => {
-    const runner = runnerWith()
-    const controller = new AbortController()
-    runner.begin(sessionId, 'one', controller.signal)
-    controller.abort()
-    expect(runner.begin(sessionId, 'two', new AbortController().signal).ok).toBe(true)
-  })
-})
-
-describe('the in-flight claim', () => {
-  it('is held until the pipeline actually finishes, even after the caller aborts', async () => {
-    let finish = () => {}
-    const slow: Pipeline = async function* () {
-      await new Promise<void>((resolve) => (finish = resolve)) // ignores the abort until told
-      yield { type: 'done', reason: 'yield' }
-    }
-    const runner = runnerWith(slow)
-    const controller = new AbortController()
-    const result = runner.begin(sessionId, 'one', controller.signal)
-    if (!result.ok) throw new Error(result.reason)
-    const reading = (async () => {
-      for await (const e of result.events) void e
-    })()
-    await new Promise((resolve) => setTimeout(resolve, 0)) // the stream is running
-    controller.abort()
-
-    expect(runner.begin(sessionId, 'two', new AbortController().signal)).toEqual({
-      ok: false,
-      reason: 'in-flight'
-    })
-    finish()
-    await reading
-    expect(runner.begin(sessionId, 'two', new AbortController().signal).ok).toBe(true)
-  })
-})
-
-describe('the pipeline seam', () => {
-  it('runs a pluggable pipeline over the chat port and database-backed state', async () => {
-    model.enqueue(says('The hearth ', 'crackles.'))
-    const narrate: Pipeline = async function* (ctx) {
-      const text = await collectText(ctx.port, {
-        systemPrompts: ['Narrate.'],
-        messages: [{ role: 'user', content: 'go' }],
-        maxTokens: 50,
-        threadId: ctx.sessionId,
-        signal: ctx.signal
-      })
-      const event = ctx.sessions.appendEvent(ctx.sessionId, {
-        role: 'narrator',
-        kind: 'narration',
-        text
-      })
-      yield { type: 'event', event }
-      yield { type: 'done', reason: 'yield' }
-    }
-
-    const events = await drain(
-      runnerWith(narrate).begin(sessionId, 'I wait', new AbortController().signal)
-    )
-
-    expect(events.at(-1)).toEqual({ type: 'done', reason: 'yield' })
     expect(log()).toEqual([
-      'player:player-action:I wait',
+      'player:declaration:I warm my hands',
       'narrator:narration:The hearth crackles.'
     ])
+    expect(events.filter((e) => e.type === 'delta').map((e) => e.text)).toEqual([
+      'The hearth ',
+      'crackles.'
+    ])
+    expect(events.find((e) => e.type === 'ruling')).toEqual({
+      type: 'ruling',
+      adjudication: { outcome: 'happens' },
+      effect: { effect: 'none' }
+    })
+    expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
+    expect(sessions.scene(sessionId).location.name).toBe('The Gilded Stag')
   })
 
-  it('ends a run as stopped when the caller aborts, keeping the player action', async () => {
-    const controller = new AbortController()
-    const waits: Pipeline = async function* () {
-      yield* []
-      controller.abort() // the player presses Stop mid-run; the pipeline just stops
-    }
-    const events = await drain(runnerWith(waits).begin(sessionId, 'hmm', controller.signal))
-    expect(events.at(-1)).toEqual({ type: 'done', reason: 'stopped' })
-    expect(log()).toEqual(['player:player-action:hmm'])
-  })
-
-  it('reports a pipeline failure as an error and frees the Session', async () => {
-    const broken: Pipeline = async function* () {
-      yield* []
-      throw new Error('boom')
-    }
-    const runner = runnerWith(broken)
-    const events = await drain(runner.begin(sessionId, 'hmm', new AbortController().signal))
-    expect(events.at(-1)).toEqual({ type: 'done', reason: 'error', message: 'boom' })
-    expect(runner.begin(sessionId, 'again', new AbortController().signal).ok).toBe(true)
+  it('survives a reload: a fresh service sees the same log', async () => {
+    model.enqueue(happens(), effect({ effect: 'none' }), says('Rain.'))
+    await play('I look around')
+    expect(
+      createSessionService(db)
+        .events(sessionId)
+        .map((e) => e.text)
+    ).toEqual(['I look around', 'Rain.'])
   })
 })
 
 describe('NPCs that no longer resolve', () => {
-  const stored = () =>
-    db.select().from(sessionScene).where(eq(sessionScene.sessionId, sessionId)).get()!
-
-  it('are pruned from the stored Scene at the next run boundary, ending their dialogue', async () => {
+  it('are pruned from the stored Scene at the next Exchange, ending their dialogue', async () => {
+    const stored = () =>
+      db.select().from(sessionScene).where(eq(sessionScene.sessionId, sessionId)).get()!
     const [brenna, hob] = sessions.scene(sessionId).npcs
     sessions.saveScene(sessionId, {
       ...sessions.scene(sessionId),
@@ -214,25 +93,276 @@ describe('NPCs that no longer resolve', () => {
       dialogueNpcId: hob.id
     })
     updateNpc(fixture, hob.id, { status: 'dead' })
-    expect(stored().npcs).toEqual([brenna.id, hob.id])
 
-    await drain(runnerWith().begin(sessionId, 'I look around', new AbortController().signal))
+    model.enqueue(happens(), effect({ effect: 'none' }), says('Quiet.'))
+    await play('I look around')
 
     expect(stored()).toMatchObject({ npcs: [brenna.id], mode: 'exploration', dialogueNpcId: null })
   })
+})
 
-  it('are also pruned when a roll is resolved', async () => {
-    const [brenna, hob] = sessions.scene(sessionId).npcs
-    sessions.saveScene(sessionId, {
-      ...sessions.scene(sessionId),
-      pendingRoll: { check: 'perception', dc: 10, reason: 'listening' }
+const cellar = {
+  name: 'The Damp Cellar',
+  description: 'Barrels sweat in the cold dark beneath the inn.',
+  exits: ['Tunnel mouth'],
+  objects: ['A cracked barrel']
+}
+const cellarNpcs = {
+  npcs: [
+    {
+      name: 'Pip',
+      description: 'A nervous cellar boy.',
+      role: 'Cellar hand',
+      attitude: 'wary',
+      knowledge: 'Heard scratching in the walls.'
+    }
+  ]
+}
+
+describe('a move', () => {
+  const places = () => fixture.db.select().from(place).all()
+  const goDown = () =>
+    model.enqueue(
+      happens(),
+      effect({ effect: 'move', exitId: 'cellar-stairs' }),
+      answers(cellar),
+      answers(cellarNpcs),
+      says('Cold air rises.')
+    )
+
+  it('generates the destination the first time, changes the Scene, and is narrated', async () => {
+    goDown()
+    const events = await play('I go down the cellar stairs')
+
+    const scene = sessions.scene(sessionId)
+    expect(scene.location).toEqual({ name: 'The Damp Cellar', description: cellar.description })
+    expect(scene.exits).toEqual([
+      { id: 'tunnel-mouth', name: 'Tunnel mouth' },
+      { id: 'back-to-the-gilded-stag', name: 'Back to The Gilded Stag' }
+    ])
+    expect(scene.npcs.map((n) => n.name)).toEqual(['Pip'])
+    expect(log()).toEqual([
+      'player:declaration:I go down the cellar stairs',
+      'code:scene-changed:You go through: Cellar stairs. You are now at The Damp Cellar.',
+      'narrator:narration:Cold air rises.'
+    ])
+    expect(events.find((e) => e.type === 'ruling')).toMatchObject({
+      effect: { effect: 'move', exitId: 'cellar-stairs' }
     })
-    updateNpc(fixture, hob.id, { retiredAt: 9, retiredReason: 'gone' })
+    expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
+  })
 
-    const result = runnerWith().resolveRoll(sessionId, new AbortController().signal)
+  it('tells the Reply about the move it narrates', async () => {
+    goDown()
+    await play('I go down the cellar stairs')
+    const narrator = model.requests.at(-1)!
+    expect(narrator.messages.map((m) => m.content).join('\n')).toContain(
+      'went through Cellar stairs and is now at The Damp Cellar'
+    )
+  })
+
+  it('returns to the same stored place instead of regenerating', async () => {
+    goDown()
+    await play('I go down the cellar stairs')
+    const count = places().length
+
+    model.enqueue(
+      happens(),
+      effect({ effect: 'move', exitId: 'back-to-the-gilded-stag' }),
+      says('Up.')
+    )
+    await play('I go back up')
+    model.enqueue(happens(), effect({ effect: 'move', exitId: 'cellar-stairs' }), says('Down.'))
+    await play('I go down again')
+
+    expect(sessions.scene(sessionId).location.name).toBe('The Damp Cellar')
+    expect(places()).toHaveLength(count)
+  })
+
+  it('falls back to a bare place with a way back when generation fails', async () => {
+    model.enqueue(
+      happens(),
+      effect({ effect: 'move', exitId: 'cellar-stairs' }),
+      fails,
+      says('Dark.')
+    )
+    await play('I go down the cellar stairs')
+    const scene = sessions.scene(sessionId)
+    expect(scene.location.name).toBe('Cellar stairs')
+    expect(scene.exits.map((e) => e.name)).toEqual(['Back to The Gilded Stag'])
+  })
+})
+
+describe('a conversation', () => {
+  it('starts with talk, and the NPC voices the Reply', async () => {
+    const [brenna] = sessions.scene(sessionId).npcs
+    model.enqueue(
+      happens(),
+      effect({ effect: 'talk', npcId: brenna.id }),
+      says('Welcome, ', 'traveller.')
+    )
+
+    const events = await play('I greet Brenna')
+
+    expect(sessions.scene(sessionId)).toMatchObject({ mode: 'dialogue', dialogueNpcId: brenna.id })
+    expect(log()).toEqual([
+      'player:declaration:I greet Brenna',
+      'code:mode-changed:Dialogue with Brenna',
+      'npc:npc-line:Welcome, traveller.'
+    ])
+    const deltas = events.flatMap((e) => (e.type === 'delta' ? [e] : []))
+    expect(deltas.map((d) => [d.role, d.kind, d.npcId])).toEqual([
+      ['npc', 'npc-line', brenna.id],
+      ['npc', 'npc-line', brenna.id]
+    ])
+  })
+
+  it("gives the NPC's voice only that NPC's own data", async () => {
+    const [brenna] = sessions.scene(sessionId).npcs
+    model.enqueue(happens(), effect({ effect: 'talk', npcId: brenna.id }), says('Hello.'))
+    await play('I greet Brenna')
+
+    const voice = model.requests.at(-1)!
+    const prompt = [...voice.systemPrompts, ...voice.messages.map((m) => m.content)].join('\n')
+    expect(prompt).toContain('Knows who has been asking after travellers.')
+    expect(prompt).not.toContain('Old Hob')
+    expect(prompt).not.toContain('Saw lights on the north road.')
+  })
+
+  it('ends with end_talk, and the Narrator voices the Reply again', async () => {
+    const scene = sessions.scene(sessionId)
+    sessions.saveScene(sessionId, { ...scene, mode: 'dialogue', dialogueNpcId: scene.npcs[0].id })
+    model.enqueue(happens(), effect({ effect: 'end_talk' }), says('Brenna turns away.'))
+
+    await play('Goodbye')
+
+    expect(sessions.scene(sessionId)).toMatchObject({ mode: 'exploration', dialogueNpcId: null })
+    expect(log().slice(-2)).toEqual([
+      'code:mode-changed:Dialogue ends',
+      'narrator:narration:Brenna turns away.'
+    ])
+  })
+})
+
+describe('an impossible Declaration', () => {
+  it('gets a Reply and no Effect: nothing is asked of Effect and nothing changes', async () => {
+    model.enqueue(impossible(), says('The wall does not yield.'))
+    const before = sessions.scene(sessionId)
+
+    const events = await play('I walk through the wall')
+
+    expect(model.requests).toHaveLength(2)
+    expect(events.find((e) => e.type === 'ruling')).toEqual({
+      type: 'ruling',
+      adjudication: { outcome: 'impossible' },
+      effect: null
+    })
+    expect(log()).toEqual([
+      'player:declaration:I walk through the wall',
+      'narrator:narration:The wall does not yield.'
+    ])
+    expect(sessions.scene(sessionId)).toEqual(before)
+  })
+})
+
+describe('a Check or a question (until their own tickets)', () => {
+  it('resolves as happens for now, while the ruling shows what the model said', async () => {
+    model.enqueue(
+      rules({ outcome: 'check', skill: 'athletics', difficulty: 'hard' }),
+      effect({ effect: 'none' }),
+      says('You heave the door open.')
+    )
+    const events = await play('I force the door')
+    expect(events.find((e) => e.type === 'ruling')).toEqual({
+      type: 'ruling',
+      adjudication: { outcome: 'check', skill: 'athletics', difficulty: 'hard' },
+      effect: { effect: 'none' }
+    })
+    expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
+  })
+})
+
+describe('the inspector stream', () => {
+  it('shows each step thinking and counts its requests', async () => {
+    model.enqueue(happens(), effect({ effect: 'none' }), says('Rain.'))
+    const events = await play('I wait')
+    expect(events.flatMap((e) => (e.type === 'thinking' ? [e.step] : []))).toEqual([
+      'adjudication',
+      'effect',
+      'reply'
+    ])
+    const last = events.findLast((e) => e.type === 'stats')
+    expect(last?.type === 'stats' && last.stats.steps).toEqual({
+      adjudication: { requests: 1 },
+      effect: { requests: 1 },
+      reply: { requests: 1 }
+    })
+  })
+})
+
+describe('a stopped or failed Exchange', () => {
+  it('discards a stopped Reply, saves nothing more, and ends stopped', async () => {
+    const controller = new AbortController()
+    model.enqueue(happens(), effect({ effect: 'none' }), hangsAfter('The door '))
+    const result = runner().begin(sessionId, 'I wait', controller.signal)
     if (!result.ok) throw new Error(result.reason)
-    for await (const e of result.events) void e
 
-    expect(stored().npcs).toEqual([brenna.id])
+    const events: ExchangeEvent[] = []
+    for await (const e of result.events) {
+      events.push(e)
+      if (e.type === 'delta') controller.abort()
+    }
+
+    const tail = events.filter((e) => e.type !== 'stats').slice(-2)
+    expect(tail).toEqual([{ type: 'discard' }, { type: 'done', reason: 'stopped' }])
+    expect(log()).toEqual(['player:declaration:I wait'])
+  })
+
+  it('ends with an error when a step fails, keeping the Declaration', async () => {
+    model.enqueue(fails)
+    const events = await play('I wait')
+    expect(done(events)).toMatchObject({ type: 'done', reason: 'error' })
+    expect(log()).toEqual(['player:declaration:I wait'])
+  })
+
+  it('ends with an error on an invalid Adjudication answer', async () => {
+    model.enqueue(answers({ outcome: 'maybe' }))
+    const events = await play('I wait')
+    expect(done(events)).toMatchObject({ type: 'done', reason: 'error' })
+  })
+})
+
+describe('refusals', () => {
+  it('refuses an unknown Session, an ended one and an empty Declaration', () => {
+    const using = runner()
+    const signal = new AbortController().signal
+    expect(using.begin('nope', 'hi', signal)).toEqual({ ok: false, reason: 'not-found' })
+    expect(using.begin(sessionId, '   ', signal)).toEqual({ ok: false, reason: 'empty-action' })
+    sessions.end(sessionId)
+    expect(using.begin(sessionId, 'hi', signal)).toEqual({ ok: false, reason: 'ended' })
+    expect(log()).toEqual([])
+  })
+
+  it('refuses a second Declaration while an Exchange is in flight, then accepts one after', async () => {
+    const using = runner()
+    model.enqueue(happens(), effect({ effect: 'none' }), says('Rain.'))
+    const first = using.begin(sessionId, 'I wait', new AbortController().signal)
+
+    expect(using.begin(sessionId, 'I wait again', new AbortController().signal)).toEqual({
+      ok: false,
+      reason: 'in-flight'
+    })
+    await drain(first)
+
+    model.enqueue(happens(), effect({ effect: 'none' }), says('More rain.'))
+    expect(done(await play('I wait again', using))).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('releases the claim when a stream nobody reads is aborted', () => {
+    const using = runner()
+    const controller = new AbortController()
+    expect(using.begin(sessionId, 'I wait', controller.signal).ok).toBe(true)
+    controller.abort()
+    expect(using.begin(sessionId, 'again', new AbortController().signal).ok).toBe(true)
   })
 })

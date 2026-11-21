@@ -15,7 +15,7 @@
     live?: string
     /** The speaking NPC while the streaming line is an NPC line, else null. */
     liveNpcId?: string | null
-    /** The Director is choosing. */
+    /** A step of the Exchange is running and no Reply text has streamed yet. */
     thinking?: boolean
     /** In dialogue, narration reads as a stage direction between spoken lines. */
     mode?: Mode
@@ -28,7 +28,7 @@
 <ol aria-label="Story log" class="space-y-3">
   {#each events as event (event.id)}
     <li>
-      {#if event.kind === 'player-action'}
+      {#if event.kind === 'declaration'}
         <p class="text-accent italic">{event.text}</p>
       {:else if event.kind === 'narration'}
         {#if mode === 'dialogue'}
@@ -43,14 +43,8 @@
           </p>
           <p class="whitespace-pre-wrap">&ldquo;{event.text}&rdquo;</p>
         </blockquote>
-      {:else if event.kind === 'roll-requested'}
-        <p class="inline-block rounded-full bg-warning-bg px-3 py-0.5 text-sm text-warning">
-          {event.text}
-        </p>
-      {:else if event.kind === 'roll-resolved'}
-        <p class="inline-block rounded-full bg-info-bg px-3 py-0.5 text-sm text-info">
-          {event.text}
-        </p>
+      {:else if event.kind === 'call-raised' || event.kind === 'call-answered'}
+        <p data-call class="text-sm text-muted">{event.text}</p>
       {:else}
         <p class="text-center text-xs tracking-wide text-muted uppercase">{event.text}</p>
       {/if}

@@ -8,8 +8,11 @@ const FAKE_LM_STUDIO = 'http://127.0.0.1:1235'
 // The fake's answer queue is process-wide state: this file must not overlap with others.
 test.describe.configure({ mode: 'serial' })
 
-/** Scripts the model's answers in order: Director picks (menu ids) and Narrator/NPC prose. */
-async function script(request: APIRequestContext, answers: string[]) {
+/** An Adjudication of happens, in the flat wire shape (the unused fields hold their sentinels). */
+const HAPPENS = { outcome: 'happens', skill: 'none', difficulty: 'none', question: '', choices: [] }
+
+/** Scripts the model's answers in order: the Adjudication, the Effect, then the Reply's prose. */
+async function script(request: APIRequestContext, answers: unknown[]) {
   const response = await request.post(`${FAKE_LM_STUDIO}/__control/answers`, {
     data: { answers: answers.map((content) => ({ content })), replace: true }
   })
@@ -59,7 +62,11 @@ test('next Session carries the Scene, shows Previously once, and the Journal', a
 }) => {
   const campaign = await startSession(page, request)
 
-  await script(request, ['narrate', 'Rain hammers the shutters as Orla pours a drink.', 'yield'])
+  await script(request, [
+    HAPPENS,
+    { effect: 'none' },
+    'Rain hammers the shutters as Orla pours a drink.'
+  ])
   await page.getByLabel('Your action').fill('I take a seat by the fire')
   await page.getByRole('button', { name: 'Send' }).click()
   await expect(page.getByRole('list', { name: 'Story log' })).toContainText(
@@ -100,7 +107,7 @@ test('next Session carries the Scene, shows Previously once, and the Journal', a
     .click()
 
   // The first action hides it.
-  await script(request, ['narrate', 'Orla nods and slides a mug over.', 'yield'])
+  await script(request, [HAPPENS, { effect: 'none' }, 'Orla nods and slides a mug over.'])
   await page.getByLabel('Your action').fill('I thank her')
   await page.getByRole('button', { name: 'Send' }).click()
   await expect(page.getByRole('list', { name: 'Story log' })).toContainText('slides a mug over')

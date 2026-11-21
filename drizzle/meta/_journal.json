@@ -120,6 +120,13 @@
       "when": 1795101400176,
       "tag": "0016_session_rolling_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1795217032023,
+      "tag": "0017_exchange_event_log",
+      "breakpoints": true
     }
   ]
 }

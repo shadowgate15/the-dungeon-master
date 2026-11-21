@@ -6,7 +6,7 @@
  * floor.
  */
 import type { SceneNpc, SessionEvent } from '#lib/session/enums.ts'
-import type { ContextReport } from '#lib/session/pipeline-events.ts'
+import type { ContextReport } from '#lib/session/exchange-events.ts'
 import { estimateTokens } from '../../ai/tokens.ts'
 import { DEFAULT_BUDGETS, type ContextBudgets } from './budgets.ts'
 
@@ -22,6 +22,8 @@ export interface NpcContextInput {
   npc: SceneNpc
   /** The Event log (recent part); only the player's actions and this NPC's own lines are used. */
   events: SessionEvent[]
+  /** What this Exchange settled, stated as facts for the Reply (never trimmed). */
+  outcome?: string
   budgets?: ContextBudgets
 }
 
@@ -33,7 +35,7 @@ export function buildNpcContext(input: NpcContextInput): {
   const { npc } = input
   const budgets = input.budgets ?? DEFAULT_BUDGETS
   let lines = input.events.flatMap((e) => {
-    if (e.kind === 'player-action') return [`Player: ${e.text}`]
+    if (e.kind === 'declaration') return [`Player: ${e.text}`]
     if (e.kind === 'npc-line' && e.npcId === npc.id) return [`${npc.name}: ${e.text ?? ''}`]
     return []
   })
@@ -43,7 +45,8 @@ export function buildNpcContext(input: NpcContextInput): {
     `Attitude toward the player: ${npc.attitude}`,
     `What ${npc.name} knows: ${npc.knowledge}`
   ].join('\n')
-  const used = () => estimateTokens(`${system}\n${lines.join('\n')}`)
+  const content = () => [lines.join('\n'), ...(input.outcome ? [input.outcome] : [])].join('\n\n')
+  const used = () => estimateTokens(`${system}\n${content()}`)
 
   let dropped = 0
   while (used() > budgets.npc && lines.length > budgets.trimFloor) {
@@ -52,7 +55,7 @@ export function buildNpcContext(input: NpcContextInput): {
   }
   return {
     system,
-    content: lines.join('\n'),
+    content: content(),
     report: {
       role: 'npc',
       used: used(),
