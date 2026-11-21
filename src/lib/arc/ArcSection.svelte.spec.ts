@@ -170,12 +170,14 @@ describe('ArcSection', () => {
   })
 
   it('shows a plain JSON pre-flight rejection as a failure', async () => {
-    const fetcher = vi.fn(() => response({ error: 'AI is not configured' }, 503))
+    const fetcher = vi.fn(() =>
+      response({ error: 'AI is disabled until the connection is checked' }, 503)
+    )
     await renderOpen(props({ fetcher }))
 
     await page.getByRole('button', { name: 'Generate Arc' }).click()
 
-    await expect.element(page.getByRole('alert')).toHaveTextContent(/AI is not configured/)
+    await expect.element(page.getByRole('alert')).toHaveTextContent(/AI is disabled/)
   })
 
   it('shows a danger alert with Try again on failure, and tries again', async () => {

@@ -1,0 +1,3951 @@
+{
+  "label": "qwen3.5-9b-gguf-q8-schema",
+  "model": "exchange-eval",
+  "mode": "schema",
+  "runs": 5,
+  "temperature": 0.7,
+  "think": false,
+  "memory": "9.73 GiB (gguf, Q8_0)",
+  "startedAt": "2026-11-20T19:10:51.436Z",
+  "wire": {
+    "max_tokens": 200,
+    "model": "exchange-eval",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the referee of a Dungeons & Dragons 5e game. The player declares what their character does.\nDecide how the declaration resolves. Do not narrate. Answer only with the JSON object.\noutcome is one of:\n- \"happens\": it simply works, with no real chance of failure: speaking, asking a question, looking around, picking up or using an ordinary object, going through an exit, starting or ending a conversation with someone present.\n- \"impossible\": it cannot happen here: physically absurd, or the person or thing it needs is not in the scene.\n- \"check\": it could plausibly work but might fail, and failure would matter. Set skill to the one skill or saving throw that fits best and difficulty to easy, medium, hard or very_hard.\n- \"ask\": the declaration is too vague to resolve, for example it does not say what, where, who or with what. Set question to one short question for the player, and optionally choices to two to four short answers.\nOnly set skill and difficulty for \"check\", and question and choices for \"ask\".\nMost declarations simply happen. Call for a check only when something in the scene stands in the way (an obstacle, a hazard, or someone who would resist), never for ordinary walking, talking or handling things."
+      },
+      {
+        "role": "user",
+        "content": "Character: Mira Ashdown, a level 1 human rogue\n\nLocation: The Drowned Lantern. A low, smoky harbor tavern. Rain drums on the shutters.\n\nMode: exploration\n\nExits:\n- exit-street: Front door out to Harbor Street\n- exit-cellar: Trapdoor down to the cellar\n- exit-stairs: Stairs up to the rented rooms\n\nObjects:\n- a half-full mug of ale on your table\n- a notice board by the door\n- a cold hearth\n- a locked iron-bound chest behind the bar\n\nPeople present:\n- npc-maren: Maren Holt, the barkeep, friendly\n- npc-voss: Sergeant Voss, an off-duty city watchman, suspicious\n\nRecent events:\nnarrator: You shake the rain from your cloak as the door bangs shut behind you.\nnarrator: Maren wipes down the bar. Sergeant Voss watches you over his tankard.\nPlayer: I sit at a corner table and order an ale.\nnarrator: Maren sets a mug in front of you and returns to the bar.\n\nThe player declares: \"I pick up my mug of ale and take a sip.\""
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "structured_output",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": ["happens", "impossible", "check", "ask"]
+            },
+            "skill": {
+              "type": ["string", "null"],
+              "enum": [
+                "acrobatics",
+                "animal_handling",
+                "arcana",
+                "athletics",
+                "deception",
+                "history",
+                "insight",
+                "intimidation",
+                "investigation",
+                "medicine",
+                "nature",
+                "perception",
+                "performance",
+                "persuasion",
+                "religion",
+                "sleight_of_hand",
+                "stealth",
+                "survival",
+                "strength_save",
+                "dexterity_save",
+                "constitution_save",
+                "intelligence_save",
+                "wisdom_save",
+                "charisma_save"
+              ]
+            },
+            "difficulty": {
+              "type": ["string", "null"],
+              "enum": ["easy", "medium", "hard", "very_hard"]
+            },
+            "question": {
+              "type": ["string", "null"]
+            },
+            "choices": {
+              "type": ["array", "null"],
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["outcome", "skill", "difficulty", "question", "choices"],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    },
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    },
+    "temperature": 0.7,
+    "reasoning_effort": "none"
+  },
+  "records": [
+    {
+      "caseId": "sip-ale",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"easy\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 1328,
+        "totalMs": 2853
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 960,
+        "totalMs": 2138
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": null, \"choices\": null}",
+        "ttftMs": 701,
+        "totalMs": 1897
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-north"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-north\"\n}",
+        "ttftMs": 565,
+        "totalMs": 1392
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "intimidation",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"intimidation\",\n  \"difficulty\": \"easy\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 728,
+        "totalMs": 2214
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 687,
+        "totalMs": 1783
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "stealth",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"stealth\", \"difficulty\": \"easy\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 612,
+        "totalMs": 1737
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 592,
+        "totalMs": 1732
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 734,
+        "totalMs": 2330
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 820,
+        "totalMs": 2025
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 753,
+        "totalMs": 2086
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-cellar",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-cellar\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 695,
+        "totalMs": 1809
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "medium",
+          "question": "Do you want to sneak up the stairs quietly to avoid detection, or walk openly?",
+          "choices": [
+            "Sneak up the stairs.",
+            "Walk openly up the stairs.",
+            "Ask Maren for directions."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Do you want to sneak up the stairs quietly to avoid detection, or walk openly?\",\n  \"choices\": [\n    \"Sneak up the stairs.\",\n    \"Walk openly up the stairs.\",\n    \"Ask Maren for directions.\"\n  ]\n}",
+        "ttftMs": 718,
+        "totalMs": 3645
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-stairs\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 923,
+        "totalMs": 2184
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "athletics",
+          "difficulty": "easy",
+          "question": "Where do you go?",
+          "choices": ["Into the alley", "To the docks"]
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"athletics\", \"difficulty\": \"easy\", \"question\": \"Where do you go?\", \"choices\": [\"Into the alley\", \"To the docks\"]}",
+        "ttftMs": 603,
+        "totalMs": 2014
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-docks\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 519,
+        "totalMs": 1614
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"strength_save\",\"difficulty\": \"easy\",\"question\": null,\"choices\": null}",
+        "ttftMs": 498,
+        "totalMs": 1499
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-north\"\n}",
+        "ttftMs": 521,
+        "totalMs": 1224
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "persuasion",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"persuasion\", \"difficulty\": \"easy\",\"question\": null, \"choices\": null}",
+        "ttftMs": 777,
+        "totalMs": 1885
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 738,
+        "totalMs": 1823
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "easy",
+          "question": "Do you want to try to be charming and friendly, or act aloof and distant?",
+          "choices": [
+            "charm him",
+            "act aloof",
+            "ask about the watchman's duties here",
+            "ask if he knows the owner"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"easy\",\n  \"question\": \"Do you want to try to be charming and friendly, or act aloof and distant?\",\n  \"choices\": [\n    \"charm him\",\n    \"act aloof\",\n    \"ask about the watchman's duties here\",\n    \"ask if he knows the owner\"\n  ]\n}",
+        "ttftMs": 717,
+        "totalMs": 3799
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 837,
+        "totalMs": 2017
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "performance",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"performance\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 623,
+        "totalMs": 2094
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 581,
+        "totalMs": 1685
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "persuasion",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"persuasion\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 761,
+        "totalMs": 2356
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"end_talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 712,
+        "totalMs": 1912
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "stealth",
+          "difficulty": "easy",
+          "question": "Do you want to move quietly without alerting Sergeant Voss?",
+          "choices": ["Move normally", "Move silently"]
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"stealth\", \"difficulty\": \"easy\", \"question\": \"Do you want to move quietly without alerting Sergeant Voss?\", \"choices\": [\"Move normally\", \"Move silently\"]}",
+        "ttftMs": 711,
+        "totalMs": 2386
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 714,
+        "totalMs": 1873
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "charisma_save",
+          "difficulty": "easy",
+          "question": "Do you want to ask Maren 'Where were you last night?' or do you want to ask something else?",
+          "choices": [
+            "'Where were you last night?'",
+            "'Did you see anything suspicious?'",
+            "'Is Sergeant Voss involved with the smugglers?'"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"charisma_save\",\n  \"difficulty\": \"easy\",\n  \"question\": \"Do you want to ask Maren 'Where were you last night?' or do you want to ask something else?\",\n  \"choices\": [\n    \"'Where were you last night?'\",\n    \"'Did you see anything suspicious?'\",\n    \"'Is Sergeant Voss involved with the smugglers?'\"\n  ]\n}",
+        "ttftMs": 858,
+        "totalMs": 4444
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 748,
+        "totalMs": 1919
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "insight",
+          "difficulty": "medium",
+          "question": "Who specifically do you want to know about?",
+          "choices": ["Sergeant Voss", "The barkeep (Maren)", "A specific rumor heard earlier"]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"insight\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Who specifically do you want to know about?\",\n  \"choices\": [\n    \"Sergeant Voss\",\n    \"The barkeep (Maren)\",\n    \"A specific rumor heard earlier\"\n  ]\n}",
+        "ttftMs": 815,
+        "totalMs": 3443
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 753,
+        "totalMs": 1941
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "Do you want to order a specific type of ale?",
+          "choices": ["Light Ale", "Dark Ale", "Whatever's left on tap"]
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"Do you want to order a specific type of ale?\", \"choices\": [\"Light Ale\", \"Dark Ale\", \"Whatever's left on tap\"]}",
+        "ttftMs": 812,
+        "totalMs": 2632
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 672,
+        "totalMs": 1785
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "strength_save",
+          "difficulty": "very_hard",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"very_hard\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 498,
+        "totalMs": 2075
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "nature",
+          "difficulty": "medium",
+          "question": "Who is this innkeeper?",
+          "choices": [
+            "Look around for signs of a building or people",
+            "Ask the bird if it knows anyone",
+            "Head to the ruined tower to find help"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"nature\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Who is this innkeeper?\",\n  \"choices\": [\n    \"Look around for signs of a building or people\",\n    \"Ask the bird if it knows anyone\",\n    \"Head to the ruined tower to find help\"\n  ]\n}",
+        "ttftMs": 506,
+        "totalMs": 3524
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "perception",
+          "difficulty": "very_hard",
+          "question": "Where is the dragon?",
+          "choices": [
+            "Look near the ceiling beams",
+            "Check under the long table",
+            "Ask Maren if he saw a beast",
+            "Search the corner where the smoke thickest"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"very_hard\",\n  \"question\": \"Where is the dragon?\",\n  \"choices\": [\n    \"Look near the ceiling beams\",\n    \"Check under the long table\",\n    \"Ask Maren if he saw a beast\",\n    \"Search the corner where the smoke thickest\"\n  ]\n}",
+        "ttftMs": 852,
+        "totalMs": 3869
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "acrobatics",
+          "difficulty": "very_hard"
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"very_hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 570,
+        "totalMs": 2123
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "strength_save",
+          "difficulty": "very_hard"
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"very_hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 764,
+        "totalMs": 2347
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 599,
+        "totalMs": 2017
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-docks\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 574,
+        "totalMs": 1714
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 575,
+        "totalMs": 1935
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 580,
+        "totalMs": 1703
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "hard",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"hard\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 596,
+        "totalMs": 1968
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "hard",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"hard\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 758,
+        "totalMs": 2156
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "dexterity_save",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"dexterity_save\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 749,
+        "totalMs": 2217
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 487,
+        "totalMs": 1813
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "perception",
+          "difficulty": "medium",
+          "question": "What specific action are you taking in the corner table?",
+          "choices": [
+            "Scan the notice board for clues.",
+            "Eavesdrop on Voss and Maren.",
+            "Examine your ale closely.",
+            "Look for a hidden entrance."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"medium\",\n  \"question\": \"What specific action are you taking in the corner table?\",\n  \"choices\": [\n    \"Scan the notice board for clues.\",\n    \"Eavesdrop on Voss and Maren.\",\n    \"Examine your ale closely.\",\n    \"Look for a hidden entrance.\"\n  ]\n}",
+        "ttftMs": 645,
+        "totalMs": 3738
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "stealth",
+          "difficulty": "medium",
+          "question": "Where exactly do you go? Over to Brannoc, through the crates, or toward the alley?",
+          "choices": [
+            "Move closer to Brannoc",
+            "Hide behind the stack of wet crates",
+            "Head toward the narrow alley east",
+            "Climb over the seawall"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Where exactly do you go? Over to Brannoc, through the crates, or toward the alley?\",\n  \"choices\": [\n    \"Move closer to Brannoc\",\n    \"Hide behind the stack of wet crates\",\n    \"Head toward the narrow alley east\",\n    \"Climb over the seawall\"\n  ]\n}",
+        "ttftMs": 700,
+        "totalMs": 4244
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "What are you using, and what effect does it have?",
+          "choices": [
+            "Use the old wooden door to investigate.",
+            "Use the fallen log to cross the stream.",
+            "Use a piece of equipment from your inventory."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": \"What are you using, and what effect does it have?\",\n  \"choices\": [\n    \"Use the old wooden door to investigate.\",\n    \"Use the fallen log to cross the stream.\",\n    \"Use a piece of equipment from your inventory.\"\n  ]\n}",
+        "ttftMs": 525,
+        "totalMs": 3444
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 1,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "stealth",
+          "difficulty": "easy",
+          "question": "What are you trying to do?",
+          "choices": [
+            "Sneak past Sergeant Voss",
+            "Pick the lock on the chest",
+            "Steal something from the table",
+            "Eavesdrop on a conversation"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"easy\",\n  \"question\": \"What are you trying to do?\",\n  \"choices\": [\n    \"Sneak past Sergeant Voss\",\n    \"Pick the lock on the chest\",\n    \"Steal something from the table\",\n    \"Eavesdrop on a conversation\"\n  ]\n}",
+        "ttftMs": 710,
+        "totalMs": 3801
+      }
+    },
+    {
+      "caseId": "sip-ale",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "Do you want to notice anything unusual about the ale, or simply drink it?",
+          "choices": ["drink it normally", "check the liquid for tricks"]
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"Do you want to notice anything unusual about the ale, or simply drink it?\", \"choices\": [\"drink it normally\", \"check the liquid for tricks\"]}",
+        "ttftMs": 855,
+        "totalMs": 2764
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 682,
+        "totalMs": 1819
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 485,
+        "totalMs": 1567
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-north"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-north\"\n}",
+        "ttftMs": 485,
+        "totalMs": 1267
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "investigation",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"investigation\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 721,
+        "totalMs": 2197
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 811,
+        "totalMs": 1987
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "dexterity_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"dexterity_save\", \"difficulty\": \"easy\", \"question\": null, \"choices\": null}",
+        "ttftMs": 602,
+        "totalMs": 1863
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 524,
+        "totalMs": 1690
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "What do you want to observe as you step outside?",
+          "choices": [
+            "Look for other patrons",
+            "Scan the street corners",
+            "Check your surroundings"
+          ]
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"What do you want to observe as you step outside?\", \"choices\": [\"Look for other patrons\", \"Scan the street corners\", \"Check your surroundings\"]}",
+        "ttftMs": 670,
+        "totalMs": 2498
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 746,
+        "totalMs": 1959
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 827,
+        "totalMs": 2228
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-cellar",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-cellar\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 683,
+        "totalMs": 1767
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "medium",
+          "question": "Do you want to slip away unseen, or simply walk out openly?",
+          "choices": ["slip away in shadows", "walk out openly"]
+        },
+        "raw": "{\"outcome\":\"check\",\"skill\":\"stealth\",\"difficulty\":\"medium\",\"question\":\"Do you want to slip away unseen, or simply walk out openly?\",\"choices\":[\"slip away in shadows\",\"walk out openly\"]}",
+        "ttftMs": 673,
+        "totalMs": 2026
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-stairs\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 725,
+        "totalMs": 1858
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy",
+          "question": "Do you want to climb down the wet stone steps to the docks, or slip along the seawall to avoid detection?",
+          "choices": ["climb_down_steps", "slip_along_wall"]
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"strength_save\", \"difficulty\": \"easy\", \"question\": \"Do you want to climb down the wet stone steps to the docks, or slip along the seawall to avoid detection?\",\"choices\":[\"climb_down_steps\",\"slip_along_wall\"]}",
+        "ttftMs": 623,
+        "totalMs": 2901
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-docks\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 608,
+        "totalMs": 1748
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 533,
+        "totalMs": 2172
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-north\"\n}",
+        "ttftMs": 484,
+        "totalMs": 1163
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "charisma_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"charisma_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 734,
+        "totalMs": 2421
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 721,
+        "totalMs": 1840
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 799,
+        "totalMs": 2220
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 719,
+        "totalMs": 1798
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"perception\",\"difficulty\": \"easy\",\"question\": null,\"choices\": null}",
+        "ttftMs": 564,
+        "totalMs": 1608
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 548,
+        "totalMs": 1665
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "nature",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"nature\",\n  \"difficulty\": \"easy\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 767,
+        "totalMs": 2430
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"end_talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 815,
+        "totalMs": 2047
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "nature",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"nature\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 717,
+        "totalMs": 2267
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"end_talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 670,
+        "totalMs": 1919
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "performance",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"performance\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 734,
+        "totalMs": 2211
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 766,
+        "totalMs": 1936
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "stealth",
+          "difficulty": "easy",
+          "question": "Do you want to ask Maren directly, or try to eavesdrop on Voss and Maren's conversation?",
+          "choices": [
+            "Ask Maren again more pointedly",
+            "Signal Voss to step closer",
+            "Listen from the shadows at the bar",
+            "Leave the tavern to investigate"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"easy\",\n  \"question\": \"Do you want to ask Maren directly, or try to eavesdrop on Voss and Maren's conversation?\",\n  \"choices\": [\n    \"Ask Maren again more pointedly\",\n    \"Signal Voss to step closer\",\n    \"Listen from the shadows at the bar\",\n    \"Leave the tavern to investigate\"\n  ]\n}",
+        "ttftMs": 785,
+        "totalMs": 4231
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 786,
+        "totalMs": 1969
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "persuasion",
+          "difficulty": "easy",
+          "question": "Do you want to order an ale or ask about the current events?",
+          "choices": ["Order an ale", "Ask about smugglers"]
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"persuasion\", \"difficulty\": \"easy\", \"question\": \"Do you want to order an ale or ask about the current events?\", \"choices\": [\"Order an ale\", \"Ask about smugglers\"]}",
+        "ttftMs": 776,
+        "totalMs": 2533
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 691,
+        "totalMs": 1829
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "acrobatics",
+          "difficulty": "very_hard",
+          "question": "What do you want to jump to?",
+          "choices": [
+            "The moon (as stated)",
+            "Across the stream using the log",
+            "Into the standing stones",
+            "Up the hillside door"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"very_hard\",\n  \"question\": \"What do you want to jump to?\",\n  \"choices\": [\n    \"The moon (as stated)\",\n    \"Across the stream using the log\",\n    \"Into the standing stones\",\n    \"Up the hillside door\"\n  ]\n}",
+        "ttftMs": 533,
+        "totalMs": 3558
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "intimidation",
+          "difficulty": "medium",
+          "question": "Which innkeeper are you asking about?",
+          "choices": [
+            "The one at the ruined tower",
+            "The one in the village to the east",
+            "A ghostly innkeeper here in the clearing"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"intimidation\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Which innkeeper are you asking about?\",\n  \"choices\": [\n    \"The one at the ruined tower\",\n    \"The one in the village to the east\",\n    \"A ghostly innkeeper here in the clearing\"\n  ]\n}",
+        "ttftMs": 537,
+        "totalMs": 3453
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "perception",
+          "difficulty": "medium",
+          "question": "Do you see a dragon here?",
+          "choices": [
+            "Look around carefully",
+            "Ask Maren if they've seen one",
+            "Check the cellar entrance",
+            "Scan the roof through the window"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Do you see a dragon here?\",\n  \"choices\": [\n    \"Look around carefully\",\n    \"Ask Maren if they've seen one\",\n    \"Check the cellar entrance\",\n    \"Scan the roof through the window\"\n  ]\n}",
+        "ttftMs": 801,
+        "totalMs": 3806
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "very_hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"very_hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 639,
+        "totalMs": 2081
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "strength_save",
+          "difficulty": "very_hard"
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"very_hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 747,
+        "totalMs": 2213
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "athletics",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"athletics\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 564,
+        "totalMs": 1934
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-docks",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-docks\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 578,
+        "totalMs": 1749
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 666,
+        "totalMs": 2063
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 608,
+        "totalMs": 1731
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 570,
+        "totalMs": 1890
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 711,
+        "totalMs": 2099
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "sleight_of_hand",
+          "difficulty": "hard",
+          "question": "What does she try to distract or delay while picking the lock?",
+          "choices": [
+            "Distract Maren with a comment about her ale.",
+            "Feint at Sergeant Voss's tankard.",
+            "Whisper a quick excuse to Maren.",
+            "Use a stolen coin as a prop for misdirection."
+          ]
+        },
+        "raw": "{\"outcome\":\"check\",\"skill\":\"sleight_of_hand\",\"difficulty\":\"hard\",\"question\":\"What does she try to distract or delay while picking the lock?\",\"choices\":[\"Distract Maren with a comment about her ale.\",\"Feint at Sergeant Voss's tankard.\",\"Whisper a quick excuse to Maren.\",\"Use a stolen coin as a prop for misdirection.\"]}",
+        "ttftMs": 738,
+        "totalMs": 3344
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 605,
+        "totalMs": 2053
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "What exactly are you doing?",
+          "choices": [
+            "Look around the tavern for clues.",
+            "Listen to the conversation at the bar.",
+            "Inspect your ale closely.",
+            "Check under the table."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": \"What exactly are you doing?\",\n  \"choices\": [\n    \"Look around the tavern for clues.\",\n    \"Listen to the conversation at the bar.\",\n    \"Inspect your ale closely.\",\n    \"Check under the table.\"\n  ]\n}",
+        "ttftMs": 680,
+        "totalMs": 3420
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "acrobatics",
+          "difficulty": "medium",
+          "question": "Where exactly do you go over there?",
+          "choices": [
+            "go over the seawall to the city gate",
+            "climb down the steps to the docks",
+            "squeeze into the narrow alley east of the crates",
+            "try to scale the lantern post on the wall"
+          ]
+        },
+        "raw": "{\n\"outcome\": \"ask\",\n\"skill\": \"acrobatics\",\n\"difficulty\": \"medium\",\n\"question\": \"Where exactly do you go over there?\",\n\"choices\": [\n\"go over the seawall to the city gate\",\n\"climb down the steps to the docks\",\n\"squeeze into the narrow alley east of the crates\",\n\"try to scale the lantern post on the wall\"\n]\n}",
+        "ttftMs": 602,
+        "totalMs": 3823
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "What item or object are you referring to?",
+          "choices": [
+            "The old wooden door",
+            "The moss-covered log",
+            "A ring of standing stones",
+            "Nothing specific"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": \"What item or object are you referring to?\",\n  \"choices\": [\n    \"The old wooden door\",\n    \"The moss-covered log\",\n    \"A ring of standing stones\",\n    \"Nothing specific\"\n  ]\n}",
+        "ttftMs": 641,
+        "totalMs": 3393
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 2,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "deception",
+          "difficulty": "medium",
+          "question": "What specifically are you trying to do, and who or what is the target?",
+          "choices": [
+            "Pickpocket Sergeant Voss.",
+            "Steal Maren's keys from the bar.",
+            "Convince Voss to let me past without a search.",
+            "Hide in the shadows near the cellar."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"medium\",\n  \"question\": \"What specifically are you trying to do, and who or what is the target?\",\n  \"choices\": [\n    \"Pickpocket Sergeant Voss.\",\n    \"Steal Maren's keys from the bar.\",\n    \"Convince Voss to let me past without a search.\",\n    \"Hide in the shadows near the cellar.\"\n  ]\n}",
+        "ttftMs": 653,
+        "totalMs": 4192
+      }
+    },
+    {
+      "caseId": "sip-ale",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "dexterity_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"dexterity_save\", \"difficulty\": \"easy\", \"question\": null, \"choices\": null}",
+        "ttftMs": 897,
+        "totalMs": 2168
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 761,
+        "totalMs": 1886
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "choices": []
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"perception\", \"difficulty\": \"easy\",\"question\":null,\"choices\":[]}",
+        "ttftMs": 485,
+        "totalMs": 1487
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-north\"\n}",
+        "ttftMs": 457,
+        "totalMs": 1119
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 697,
+        "totalMs": 2256
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 744,
+        "totalMs": 1953
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "dexterity_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"dexterity_save\", \"difficulty\": \"easy\", \"question\": null, \"choices\": null}",
+        "ttftMs": 607,
+        "totalMs": 1746
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 593,
+        "totalMs": 1738
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 732,
+        "totalMs": 2232
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 702,
+        "totalMs": 1813
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "medium",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 734,
+        "totalMs": 2113
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-cellar",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-cellar\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 743,
+        "totalMs": 1926
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "stealth",
+          "difficulty": "medium",
+          "question": "Which exit are you using to get to your room?",
+          "choices": ["The stairs up to the rented rooms", "Go through Maren's bar area first"]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Which exit are you using to get to your room?\",\n  \"choices\": [\"The stairs up to the rented rooms\", \"Go through Maren's bar area first\"]\n}",
+        "ttftMs": 801,
+        "totalMs": 3073
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-stairs\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 713,
+        "totalMs": 1833
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 605,
+        "totalMs": 2270
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-docks\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 575,
+        "totalMs": 1723
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": null, \"choices\": null}",
+        "ttftMs": 549,
+        "totalMs": 1677
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-north\"\n}",
+        "ttftMs": 536,
+        "totalMs": 1229
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "charisma_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"charisma_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 748,
+        "totalMs": 2377
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 677,
+        "totalMs": 1796
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "medium",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"medium\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 733,
+        "totalMs": 2115
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 786,
+        "totalMs": 1946
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 643,
+        "totalMs": 2132
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 574,
+        "totalMs": 1682
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "charisma_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"charisma_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 724,
+        "totalMs": 2341
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"end_talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 724,
+        "totalMs": 1994
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "Where do you go next, Mira?",
+          "choices": [
+            "Towards the notice board",
+            "Down to the cellar trapdoor",
+            "Out the front door to Harbor Street"
+          ]
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"Where do you go next, Mira?\", \"choices\": [\"Towards the notice board\", \"Down to the cellar trapdoor\", \"Out the front door to Harbor Street\"]}",
+        "ttftMs": 750,
+        "totalMs": 2712
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 780,
+        "totalMs": 1964
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "charisma_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"charisma_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 742,
+        "totalMs": 2418
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 676,
+        "totalMs": 1769
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "insight",
+          "difficulty": "medium",
+          "question": "Who exactly are these smugglers, and what is Maren's specific knowledge regarding them?",
+          "choices": [
+            "Ask about their typical methods or routes.",
+            "Ask if they have been seen inside the tavern.",
+            "Ask about any specific names or faces associated with them."
+          ]
+        },
+        "raw": "{\n\"outcome\": \"ask\",\n\"skill\": \"insight\",\n\"difficulty\": \"medium\",\n\"question\": \"Who exactly are these smugglers, and what is Maren's specific knowledge regarding them?\",\n\"choices\": [\n\"Ask about their typical methods or routes.\",\n\"Ask if they have been seen inside the tavern.\",\n\"Ask about any specific names or faces associated with them.\"\n]\n}",
+        "ttftMs": 734,
+        "totalMs": 3918
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 901,
+        "totalMs": 2048
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "Do you want to pay for it?",
+          "choices": ["Pay with coins", "Offer a favor instead"]
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"Do you want to pay for it?\", \"choices\": [\"Pay with coins\", \"Offer a favor instead\"]}",
+        "ttftMs": 721,
+        "totalMs": 2284
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 656,
+        "totalMs": 1743
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "strength_save",
+          "difficulty": "easy",
+          "question": "Did you mean to jump over the stream, or perhaps climb the standing stones?",
+          "choices": ["Jump across the stream", "Climb the standing stones"]
+        },
+        "raw": "{\"outcome\":\"impossible\",\"skill\": \"strength_save\", \"difficulty\": \"easy\", \"question\": \"Did you mean to jump over the stream, or perhaps climb the standing stones?\", \"choices\": [\"Jump across the stream\", \"Climb the standing stones\"]}",
+        "ttftMs": 522,
+        "totalMs": 2471
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "persuasion",
+          "difficulty": "easy",
+          "question": "Who is this innkeeper, and where exactly can I find them?",
+          "choices": [
+            "Look for a sign or building nearby.",
+            "Ask the NPC in the clearing (if any).",
+            "Follow a sound of laughter or conversation.",
+            "Head toward the ruined tower to ask."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"persuasion\",\n  \"difficulty\": \"easy\",\n  \"question\": \"Who is this innkeeper, and where exactly can I find them?\",\n  \"choices\": [\n    \"Look for a sign or building nearby.\",\n    \"Ask the NPC in the clearing (if any).\",\n    \"Follow a sound of laughter or conversation.\",\n    \"Head toward the ruined tower to ask.\"\n  ]\n}",
+        "ttftMs": 611,
+        "totalMs": 4101
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "What dragon?",
+          "choices": ["A large red one", "A small green one", "A tiny blue one"]
+        },
+        "raw": "{\"outcome\":\"ask\",\"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"What dragon?\", \"choices\": [\"A large red one\", \"A small green one\", \"A tiny blue one\"]}",
+        "ttftMs": 790,
+        "totalMs": 2348
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "strength_save",
+          "difficulty": "very_hard",
+          "question": "Do you attempt to use a specific spell or ability to achieve this, or do you simply flap your arms as if it were natural?",
+          "choices": [
+            "Mira tries to cast Fly (requires spell slot)",
+            "Mira attempts to jump up and grab the lantern hook",
+            "Mira runs along the ground instead of flying"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"very_hard\",\n  \"question\": \"Do you attempt to use a specific spell or ability to achieve this, or do you simply flap your arms as if it were natural?\",\n  \"choices\": [\n    \"Mira tries to cast Fly (requires spell slot)\",\n    \"Mira attempts to jump up and grab the lantern hook\",\n    \"Mira runs along the ground instead of flying\"\n  ]\n}",
+        "ttftMs": 596,
+        "totalMs": 4491
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "strength_save",
+          "difficulty": "very_hard",
+          "question": "Do you mean to attempt to lift a person-sized object like the bar or a table?",
+          "choices": [
+            "Lift the bar",
+            "Lift the notice board",
+            "Attempt to throw the mug across the room"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"very_hard\",\n  \"question\": \"Do you mean to attempt to lift a person-sized object like the bar or a table?\",\n  \"choices\": [\n    \"Lift the bar\",\n    \"Lift the notice board\",\n    \"Attempt to throw the mug across the room\"\n  ]\n}",
+        "ttftMs": 1014,
+        "totalMs": 4079
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 568,
+        "totalMs": 1998
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-docks\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 664,
+        "totalMs": 1891
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 661,
+        "totalMs": 2090
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 608,
+        "totalMs": 1737
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "persuasion",
+          "difficulty": "hard",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"persuasion\",\n  \"difficulty\": \"hard\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 592,
+        "totalMs": 1955
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 727,
+        "totalMs": 2115
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "sleight_of_hand",
+          "difficulty": "hard",
+          "question": "What are you trying to pick?",
+          "choices": ["the iron-bound chest behind the bar"]
+        },
+        "raw": "{\"outcome\":\"check\",\"skill\":\"sleight_of_hand\",\"difficulty\":\"hard\",\"question\":\"What are you trying to pick?\",\"choices\":[\"the iron-bound chest behind the bar\"]}",
+        "ttftMs": 735,
+        "totalMs": 1996
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "raw": "{\"outcome\": \"check\", \"skill\": \"acrobatics\", \"difficulty\": \"medium\", \"question\": null, \"choices\": null}",
+        "ttftMs": 518,
+        "totalMs": 1514
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "What exactly do you want to do?",
+          "choices": [
+            "Inspect Sergeant Voss for weapons",
+            "Listen to the conversation at the bar",
+            "Search your pockets for a coin purse"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": \"What exactly do you want to do?\",\n  \"choices\": [\n    \"Inspect Sergeant Voss for weapons\",\n    \"Listen to the conversation at the bar\",\n    \"Search your pockets for a coin purse\"\n  ]\n}",
+        "ttftMs": 762,
+        "totalMs": 3522
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "strength_save",
+          "difficulty": "medium",
+          "question": "Go where? Over the seawall, through the gate, or into the alley?",
+          "choices": [
+            "Climb over the rain-slicked seawall",
+            "Sneak past Brannoc at the gate",
+            "Move into the narrow alley east"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Go where? Over the seawall, through the gate, or into the alley?\",\n  \"choices\": [\n    \"Climb over the rain-slicked seawall\",\n    \"Sneak past Brannoc at the gate\",\n    \"Move into the narrow alley east\"\n  ]\n}",
+        "ttftMs": 605,
+        "totalMs": 3953
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "stealth",
+          "difficulty": "easy",
+          "question": "What item are you using, and what do you intend to do with it?",
+          "choices": [
+            "Hide behind the log",
+            "Open the door",
+            "Cast a spell from my pouch",
+            "Drink from my waterskin"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"easy\",\n  \"question\": \"What item are you using, and what do you intend to do with it?\",\n  \"choices\": [\n    \"Hide behind the log\",\n    \"Open the door\",\n    \"Cast a spell from my pouch\",\n    \"Drink from my waterskin\"\n  ]\n}",
+        "ttftMs": 585,
+        "totalMs": 3896
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 3,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "stealth",
+          "difficulty": "medium",
+          "question": "What do you try?",
+          "choices": [
+            "Try to sneak past Sergeant Voss to the door.",
+            "Attempt to pick the lock on the chest behind the bar.",
+            "Try to eavesdrop on Maren and Voss at the bar.",
+            "Attempt to slip out through the cellar trapdoor."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": \"What do you try?\",\n  \"choices\": [\n    \"Try to sneak past Sergeant Voss to the door.\",\n    \"Attempt to pick the lock on the chest behind the bar.\",\n    \"Try to eavesdrop on Maren and Voss at the bar.\",\n    \"Attempt to slip out through the cellar trapdoor.\"\n  ]\n}",
+        "ttftMs": 759,
+        "totalMs": 4242
+      }
+    },
+    {
+      "caseId": "sip-ale",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "Do you want to check for poison or just drink normally?",
+          "choices": ["Drink normally", "Sniff the ale first", "Check the bottom of the mug"]
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"perception\",\"difficulty\": \"easy\", \"question\": \"Do you want to check for poison or just drink normally?\", \"choices\": [\"Drink normally\", \"Sniff the ale first\", \"Check the bottom of the mug\"]}",
+        "ttftMs": 809,
+        "totalMs": 2830
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 785,
+        "totalMs": 1998
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 561,
+        "totalMs": 2128
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-north"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-north\"\n}",
+        "ttftMs": 503,
+        "totalMs": 1300
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 717,
+        "totalMs": 2271
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 708,
+        "totalMs": 1847
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "stealth",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 603,
+        "totalMs": 2194
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-docks",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-docks\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 661,
+        "totalMs": 1855
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "dexterity_save",
+          "difficulty": "easy",
+          "question": "Do you want to leave the tavern immediately or wait a moment?",
+          "choices": ["leave now", "wait for ale"]
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"dexterity_save\", \"difficulty\": \"easy\",\"question\": \"Do you want to leave the tavern immediately or wait a moment?\",\"choices\": [\"leave now\",\"wait for ale\"]}",
+        "ttftMs": 754,
+        "totalMs": 2454
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 674,
+        "totalMs": 1762
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "medium",
+          "question": "Do you use stealth to enter quietly, or do you step down normally?",
+          "choices": ["Drop down silently", "Step down loudly", "Look for a hidden lever first"]
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Do you use stealth to enter quietly, or do you step down normally?\",\n  \"choices\": [\n    \"Drop down silently\",\n    \"Step down loudly\",\n    \"Look for a hidden lever first\"\n  ]\n}",
+        "ttftMs": 739,
+        "totalMs": 3523
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-cellar",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-cellar\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 911,
+        "totalMs": 2150
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "medium",
+          "question": "Do you mean to sneak up the stairs while Voss is watching, or walk openly?",
+          "choices": [
+            "Sneak quietly past Voss to avoid suspicion",
+            "Walk openly and try to act nonchalant"
+          ]
+        },
+        "raw": "{\n\"outcome\": \"check\",\n\"skill\": \"stealth\",\n\"difficulty\": \"medium\",\n\"question\": \"Do you mean to sneak up the stairs while Voss is watching, or walk openly?\",\n\"choices\": [\"Sneak quietly past Voss to avoid suspicion\", \"Walk openly and try to act nonchalant\"]\n}",
+        "ttftMs": 741,
+        "totalMs": 3066
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-stairs\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 724,
+        "totalMs": 1896
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"easy\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 643,
+        "totalMs": 2322
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-docks\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 591,
+        "totalMs": 1747
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "Which direction do you move?",
+          "choices": [
+            "Follow the path north toward the ruined tower",
+            "Walk along the moss-covered log across the stream to the west"
+          ]
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"Which direction do you move?\", \"choices\": [\"Follow the path north toward the ruined tower\", \"Walk along the moss-covered log across the stream to the west\"]}",
+        "ttftMs": 546,
+        "totalMs": 2453
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-north\"\n}",
+        "ttftMs": 520,
+        "totalMs": 1213
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "charisma_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"charisma_save\",\"difficulty\":\"easy\",\"question\": null,\"choices\": null}",
+        "ttftMs": 766,
+        "totalMs": 1854
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 702,
+        "totalMs": 1783
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "medium",
+          "question": "How do you want to approach him?",
+          "choices": [
+            "act casual and friendly",
+            "make eye contact and smile",
+            "look nervous and apologize"
+          ]
+        },
+        "raw": "{\"outcome\":\"check\",\"skill\":\"deception\",\"difficulty\":\"medium\",\"question\":\"How do you want to approach him?\",\"choices\":[\"act casual and friendly\",\"make eye contact and smile\",\"look nervous and apologize\"]}",
+        "ttftMs": 702,
+        "totalMs": 2129
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 838,
+        "totalMs": 1995
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "dexterity_save",
+          "difficulty": "medium",
+          "question": "What do you say?",
+          "choices": [
+            "I ask if he's seen anyone around here.",
+            "I tell him I'm looking for a lost friend.",
+            "I threaten him with my dagger."
+          ]
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"dexterity_save\", \"difficulty\": \"medium\", \"question\": \"What do you say?\", \"choices\": [\"I ask if he's seen anyone around here.\", \"I tell him I'm looking for a lost friend.\", \"I threaten him with my dagger.\"]}",
+        "ttftMs": 611,
+        "totalMs": 2871
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 559,
+        "totalMs": 1686
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "charisma_save",
+          "difficulty": "easy",
+          "question": "What exactly do you want Maren to do regarding her leaving you to your work?",
+          "choices": [
+            "She waves and goes back to wiping glasses.",
+            "She sighs deeply but keeps working.",
+            "She asks if you need anything else before she leaves."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"charisma_save\",\n  \"difficulty\": \"easy\",\n  \"question\": \"What exactly do you want Maren to do regarding her leaving you to your work?\",\n  \"choices\": [\n    \"She waves and goes back to wiping glasses.\",\n    \"She sighs deeply but keeps working.\",\n    \"She asks if you need anything else before she leaves.\"\n  ]\n}",
+        "ttftMs": 821,
+        "totalMs": 4409
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"end_talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 857,
+        "totalMs": 2121
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "charisma_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"charisma_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 726,
+        "totalMs": 2368
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-stairs\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 670,
+        "totalMs": 1774
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "insight",
+          "difficulty": "easy",
+          "question": "Who are you asking?",
+          "choices": ["Maren Holt", "Sergeant Voss"]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"insight\",\n  \"difficulty\": \"easy\",\n  \"question\": \"Who are you asking?\",\n  \"choices\": [\n    \"Maren Holt\",\n    \"Sergeant Voss\"\n  ]\n}",
+        "ttftMs": 764,
+        "totalMs": 3075
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 855,
+        "totalMs": 2102
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "perception",
+          "difficulty": "medium",
+          "question": "Do you want to ask Maren directly, or try to eavesdrop on Sergeant Voss?",
+          "choices": [
+            "Ask Maren Holt about the smugglers",
+            "Question Sergeant Voss about his patrol route"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Do you want to ask Maren directly, or try to eavesdrop on Sergeant Voss?\",\n  \"choices\": [\n    \"Ask Maren Holt about the smugglers\",\n    \"Question Sergeant Voss about his patrol route\"\n  ]\n}",
+        "ttftMs": 705,
+        "totalMs": 3461
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 778,
+        "totalMs": 2075
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "What do you want to know about the ale?",
+          "choices": [
+            "Is it strong?",
+            "How much does it cost?",
+            "Does Maren know anything about the smugglers?"
+          ]
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"What do you want to know about the ale?\", \"choices\": [\"Is it strong?\", \"How much does it cost?\", \"Does Maren know anything about the smugglers?\"]}",
+        "ttftMs": 854,
+        "totalMs": 2970
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 722,
+        "totalMs": 1842
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "strength_save",
+          "difficulty": "easy",
+          "question": "You try to leap toward the moon as if it were a nearby target. Do you attempt to jump up into the air, or do you mean something else?",
+          "choices": [
+            "Attempt to jump high into the air.",
+            "Interact with an object in the clearing."
+          ]
+        },
+        "raw": "{\n\"outcome\": \"impossible\",\n\"skill\": \"strength_save\",\n\"difficulty\": \"easy\",\n\"question\": \"You try to leap toward the moon as if it were a nearby target. Do you attempt to jump up into the air, or do you mean something else?\",\n\"choices\": [\n\"Attempt to jump high into the air.\",\n\"Interact with an object in the clearing.\"\n]\n}",
+        "ttftMs": 527,
+        "totalMs": 3644
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "charisma_save",
+          "difficulty": "medium",
+          "question": "Who is the innkeeper?",
+          "choices": [
+            "Look for an inn near the ruined tower to the north.",
+            "Check if there are any buildings on the far bank of the stream.",
+            "Search among the standing stones or the hillside door."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"charisma_save\",\n  \"difficulty\": \"medium\",\n  \"question\": \"Who is the innkeeper?\",\n  \"choices\": [\n    \"Look for an inn near the ruined tower to the north.\",\n    \"Check if there are any buildings on the far bank of the stream.\",\n    \"Search among the standing stones or the hillside door.\"\n  ]\n}",
+        "ttftMs": 656,
+        "totalMs": 4082
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "charisma_save",
+          "difficulty": "easy",
+          "question": "Did you see a dragon? There is no dragon in this tavern.",
+          "choices": ["Check around for a hidden dragon", "Talk to Maren about what I saw"]
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"charisma_save\",\n  \"difficulty\": \"easy\",\n  \"question\": \"Did you see a dragon? There is no dragon in this tavern.\",\n  \"choices\": [\"Check around for a hidden dragon\", \"Talk to Maren about what I saw\"]\n}",
+        "ttftMs": 842,
+        "totalMs": 3405
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "strength_save",
+          "difficulty": "very_hard",
+          "question": "How do you intend to achieve flight without a spell or magical item?",
+          "choices": [
+            "Attempt to cast Fly (if available)",
+            "Climb over the wall instead",
+            "Swim around to the other side"
+          ]
+        },
+        "raw": "{\"outcome\":\"impossible\",\"skill\": \"strength_save\", \"difficulty\": \"very_hard\",\"question\": \"How do you intend to achieve flight without a spell or magical item?\",\"choices\": [\"Attempt to cast Fly (if available)\", \"Climb over the wall instead\", \"Swim around to the other side\"]}",
+        "ttftMs": 576,
+        "totalMs": 2952
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "strength_save",
+          "difficulty": "very_hard"
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"very_hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 806,
+        "totalMs": 2465
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 648,
+        "totalMs": 2097
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 587,
+        "totalMs": 1789
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 574,
+        "totalMs": 1911
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 601,
+        "totalMs": 1744
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "insight",
+          "difficulty": "medium",
+          "question": "What specific argument or leverage do you offer Brannoc to bypass his suspicion?",
+          "choices": [
+            "Claim you are a merchant with urgent goods.",
+            "Assert you have permission from a high-ranking official.",
+            "Offer him a bribe or a small gift.",
+            "Lie about your identity and purpose."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"insight\",\n  \"difficulty\": \"medium\",\n  \"question\": \"What specific argument or leverage do you offer Brannoc to bypass his suspicion?\",\n  \"choices\": [\n    \"Claim you are a merchant with urgent goods.\",\n    \"Assert you have permission from a high-ranking official.\",\n    \"Offer him a bribe or a small gift.\",\n    \"Lie about your identity and purpose.\"\n  ]\n}",
+        "ttftMs": 621,
+        "totalMs": 4310
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "hard",
+          "question": "How do you try to convince him? Do you mimic his walk and stance, recite a patrol code word, or claim to be from a specific station?",
+          "choices": [
+            "Mimic his walk and posture.",
+            "Recite a made-up code word.",
+            "Claim to be from the North District Watch.",
+            "Demand he respect your authority."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"hard\",\n  \"question\": \"How do you try to convince him? Do you mimic his walk and stance, recite a patrol code word, or claim to be from a specific station?\",\n  \"choices\": [\n    \"Mimic his walk and posture.\",\n    \"Recite a made-up code word.\",\n    \"Claim to be from the North District Watch.\",\n    \"Demand he respect your authority.\"\n  ]\n}",
+        "ttftMs": 886,
+        "totalMs": 4638
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "sleight_of_hand",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"sleight_of_hand\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 829,
+        "totalMs": 2430
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 553,
+        "totalMs": 1957
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "What exactly are you trying to do?",
+          "choices": [
+            "Look for a distraction",
+            "Find the lockpick kit",
+            "Ask Maren about Voss",
+            "Check your pockets"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": \"What exactly are you trying to do?\",\n  \"choices\": [\n    \"Look for a distraction\",\n    \"Find the lockpick kit\",\n    \"Ask Maren about Voss\",\n    \"Check your pockets\"\n  ]\n}",
+        "ttftMs": 714,
+        "totalMs": 3485
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "acrobatics",
+          "difficulty": "medium",
+          "question": "Where exactly do you go? Over the wall, down to the docks, or into the alley?",
+          "choices": [
+            "Climb the fifteen-foot seawall to the city side.",
+            "Descend the stone steps to the docks.",
+            "Sneak through the narrow alley to the east."
+          ]
+        },
+        "raw": "{\"outcome\":\"ask\",\"skill\": \"acrobatics\", \"difficulty\":\"medium\", \"question\": \"Where exactly do you go? Over the wall, down to the docks, or into the alley?\", \"choices\":[\"Climb the fifteen-foot seawall to the city side.\",\"Descend the stone steps to the docks.\",\"Sneak through the narrow alley to the east.\"]}",
+        "ttftMs": 613,
+        "totalMs": 3242
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "stealth",
+          "difficulty": "medium",
+          "question": "What exactly are you using 'it' for, and what item are you referring to?",
+          "choices": [
+            "I want to hide in the shadows near the standing stones.",
+            "I want to cross the stream using the fallen log.",
+            "I want to examine the old wooden door more closely.",
+            "I want to use my rogue abilities to scout the north path."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": \"What exactly are you using 'it' for, and what item are you referring to?\",\n  \"choices\": [\n    \"I want to hide in the shadows near the standing stones.\",\n    \"I want to cross the stream using the fallen log.\",\n    \"I want to examine the old wooden door more closely.\",\n    \"I want to use my rogue abilities to scout the north path.\"\n  ]\n}",
+        "ttftMs": 575,
+        "totalMs": 4763
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 4,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "acrobatics",
+          "difficulty": "medium",
+          "question": "What are you trying to do?",
+          "choices": [
+            "Steal a coin from Maren's tip jar",
+            "Pick the lock on the chest behind the bar",
+            "Sneak past Sergeant Voss to the cellar"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"medium\",\n  \"question\": \"What are you trying to do?\",\n  \"choices\": [\"Steal a coin from Maren's tip jar\", \"Pick the lock on the chest behind the bar\", \"Sneak past Sergeant Voss to the cellar\"]\n}",
+        "ttftMs": 774,
+        "totalMs": 3445
+      }
+    },
+    {
+      "caseId": "sip-ale",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"easy\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 731,
+        "totalMs": 2286
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 756,
+        "totalMs": 1969
+      }
+    },
+    {
+      "caseId": "open-door",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 556,
+        "totalMs": 2197
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-north"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-north\"\n}",
+        "ttftMs": 507,
+        "totalMs": 1308
+      }
+    },
+    {
+      "caseId": "read-notices",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"perception\", \"difficulty\": \"easy\", \"question\": \"\", \"choices\": []}",
+        "ttftMs": 714,
+        "totalMs": 1799
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\"effect\": \"none\", \"exitId\": \"exit-street\", \"npcId\": \"npc-maren\"}",
+        "ttftMs": 692,
+        "totalMs": 1472
+      }
+    },
+    {
+      "caseId": "take-lantern",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "stealth",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 575,
+        "totalMs": 2112
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 582,
+        "totalMs": 1841
+      }
+    },
+    {
+      "caseId": "out-front",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "stealth",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 862,
+        "totalMs": 2469
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 695,
+        "totalMs": 1774
+      }
+    },
+    {
+      "caseId": "down-cellar",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"easy\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 700,
+        "totalMs": 2053
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-cellar",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-cellar\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 739,
+        "totalMs": 1907
+      }
+    },
+    {
+      "caseId": "go-to-bed",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "easy",
+          "question": "Which stairs do you take?",
+          "choices": [
+            "Use the exit-stairs to the second floor rooms",
+            "Slip through a window if one is nearby",
+            "Ask Maren about room availability first"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"easy\",\n  \"question\": \"Which stairs do you take?\",\n  \"choices\": [\n    \"Use the exit-stairs to the second floor rooms\",\n    \"Slip through a window if one is nearby\",\n    \"Ask Maren about room availability first\"\n  ]\n}",
+        "ttftMs": 820,
+        "totalMs": 3724
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-stairs",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-stairs\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 777,
+        "totalMs": 1949
+      }
+    },
+    {
+      "caseId": "to-the-water",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "strength_save",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"easy\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 607,
+        "totalMs": 2258
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-docks\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 555,
+        "totalMs": 1692
+      }
+    },
+    {
+      "caseId": "toward-tower",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "stealth",
+          "difficulty": "easy",
+          "question": "Which direction do you go?",
+          "choices": ["north towards the ruined tower", "west across the stream"]
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"stealth\", \"difficulty\": \"easy\", \"question\": \"Which direction do you go?\", \"choices\": [\"north towards the ruined tower\", \"west across the stream\"]}",
+        "ttftMs": 549,
+        "totalMs": 2340
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-north"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-north\"\n}",
+        "ttftMs": 624,
+        "totalMs": 1379
+      }
+    },
+    {
+      "caseId": "chat-maren",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "charisma_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"charisma_save\",\"difficulty\": \"easy\",\"question\": null,\"choices\": null}",
+        "ttftMs": 775,
+        "totalMs": 1769
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-maren"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-maren\"\n}",
+        "ttftMs": 660,
+        "totalMs": 1704
+      }
+    },
+    {
+      "caseId": "greet-sergeant",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 679,
+        "totalMs": 2058
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 773,
+        "totalMs": 1965
+      }
+    },
+    {
+      "caseId": "hail-guard",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "charisma_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"charisma_save\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 689,
+        "totalMs": 2414
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 578,
+        "totalMs": 1697
+      }
+    },
+    {
+      "caseId": "leave-maren",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "persuasion",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\": \"happens\", \"skill\": \"persuasion\", \"difficulty\": \"easy\", \"question\": null, \"choices\": null}",
+        "ttftMs": 761,
+        "totalMs": 1937
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"end_talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 762,
+        "totalMs": 2028
+      }
+    },
+    {
+      "caseId": "nod-goodbye",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "dexterity_save",
+          "difficulty": "easy"
+        },
+        "raw": "{\"outcome\":\"happens\",\"skill\": \"dexterity_save\",\"difficulty\": \"easy\",\"question\": null,\"choices\": null}",
+        "ttftMs": 743,
+        "totalMs": 1876
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "end_talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"end_talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 788,
+        "totalMs": 2068
+      }
+    },
+    {
+      "caseId": "last-night",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "intimidation",
+          "difficulty": "easy"
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"intimidation\",\n  \"difficulty\": \"easy\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 769,
+        "totalMs": 2351
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-cellar",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-cellar\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 694,
+        "totalMs": 1836
+      }
+    },
+    {
+      "caseId": "smugglers",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "insight",
+          "difficulty": "easy",
+          "question": "What specific question or observation will you make to probe Maren?",
+          "choices": [
+            "Ask if she has seen anyone suspicious lately.",
+            "Mention a rumor about the docks and see her reaction.",
+            "Casually ask if business is really that slow."
+          ]
+        },
+        "raw": "{\"outcome\": \"check\", \"skill\": \"insight\", \"difficulty\": \"easy\", \"question\": \"What specific question or observation will you make to probe Maren?\", \"choices\": [\"Ask if she has seen anyone suspicious lately.\", \"Mention a rumor about the docks and see her reaction.\", \"Casually ask if business is really that slow.\"]}",
+        "ttftMs": 726,
+        "totalMs": 3152
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "talk",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"talk\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 876,
+        "totalMs": 2104
+      }
+    },
+    {
+      "caseId": "another-ale",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "happens",
+          "skill": "stealth",
+          "difficulty": "easy",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"happens\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"easy\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 783,
+        "totalMs": 2234
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "none",
+          "exitId": "exit-street",
+          "npcId": "npc-voss"
+        },
+        "raw": "{\n  \"effect\": \"none\",\n  \"exitId\": \"exit-street\",\n  \"npcId\": \"npc-voss\"\n}",
+        "ttftMs": 674,
+        "totalMs": 1784
+      }
+    },
+    {
+      "caseId": "moon",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "acrobatics",
+          "difficulty": "very_hard",
+          "question": "You cannot simply jump to the moon. Do you mean you attempt a high leap across the stream, or are you trying something magical?",
+          "choices": [
+            "Leap across the stream to the west bank",
+            "Climb the standing stones to look up at the sky",
+            "Investigate the old wooden door instead"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"very_hard\",\n  \"question\": \"You cannot simply jump to the moon. Do you mean you attempt a high leap across the stream, or are you trying something magical?\",\n  \"choices\": [\n    \"Leap across the stream to the west bank\",\n    \"Climb the standing stones to look up at the sky\",\n    \"Investigate the old wooden door instead\"\n  ]\n}",
+        "ttftMs": 499,
+        "totalMs": 4426
+      }
+    },
+    {
+      "caseId": "absent-innkeeper",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "nature",
+          "difficulty": "very_hard",
+          "question": "Who are you asking for a room?",
+          "choices": [
+            "The innkeeper mentioned in the prompt does not exist here.",
+            "A nearby traveler or campfire party if one were present.",
+            "Nobody is present to hear you."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"nature\",\n  \"difficulty\": \"very_hard\",\n  \"question\": \"Who are you asking for a room?\",\n  \"choices\": [\n    \"The innkeeper mentioned in the prompt does not exist here.\",\n    \"A nearby traveler or campfire party if one were present.\",\n    \"Nobody is present to hear you.\"\n  ]\n}",
+        "ttftMs": 688,
+        "totalMs": 3941
+      }
+    },
+    {
+      "caseId": "absent-dragon",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "perception",
+          "difficulty": "very_hard",
+          "question": "Who or what are you talking to?",
+          "choices": ["the barkeep Maren", "Sergeant Voss", "an empty chair", "nobody"]
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"very_hard\",\n  \"question\": \"Who or what are you talking to?\",\n  \"choices\": [\n    \"the barkeep Maren\",\n    \"Sergeant Voss\",\n    \"an empty chair\",\n    \"nobody\"\n  ]\n}",
+        "ttftMs": 726,
+        "totalMs": 3567
+      }
+    },
+    {
+      "caseId": "fly-wall",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "acrobatics",
+          "difficulty": "easy",
+          "question": "What exactly are you trying to do? Climb, jump, or use magic?",
+          "choices": [
+            "Climb the seawall using crates",
+            "Jump over the fifteen-foot wall",
+            "Use a spell or item to fly",
+            "Swim up the wet side of the wall"
+          ]
+        },
+        "raw": "{\n\"outcome\": \"ask\",\n\"skill\": \"acrobatics\",\n\"difficulty\": \"easy\",\n\"question\": \"What exactly are you trying to do? Climb, jump, or use magic?\",\n\"choices\": [\n  \"Climb the seawall using crates\",\n  \"Jump over the fifteen-foot wall\",\n  \"Use a spell or item to fly\",\n  \"Swim up the wet side of the wall\"\n]\n}",
+        "ttftMs": 668,
+        "totalMs": 4145
+      }
+    },
+    {
+      "caseId": "lift-tavern",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "impossible",
+          "skill": "strength_save",
+          "difficulty": "very_hard"
+        },
+        "raw": "{\n  \"outcome\": \"impossible\",\n  \"skill\": \"strength_save\",\n  \"difficulty\": \"very_hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 877,
+        "totalMs": 2402
+      }
+    },
+    {
+      "caseId": "climb-wall",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium",
+          "question": "",
+          "choices": []
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"medium\",\n  \"question\": \"\",\n  \"choices\": []\n}",
+        "ttftMs": 567,
+        "totalMs": 1919
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-docks",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-docks\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 567,
+        "totalMs": 1696
+      }
+    },
+    {
+      "caseId": "sneak-guard",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "stealth",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 618,
+        "totalMs": 2038
+      },
+      "effect": {
+        "ok": true,
+        "object": {
+          "effect": "move",
+          "exitId": "exit-gate",
+          "npcId": "npc-brannoc"
+        },
+        "raw": "{\n  \"effect\": \"move\",\n  \"exitId\": \"exit-gate\",\n  \"npcId\": \"npc-brannoc\"\n}",
+        "ttftMs": 689,
+        "totalMs": 1928
+      }
+    },
+    {
+      "caseId": "persuade-guard",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "deception",
+          "difficulty": "medium",
+          "question": "How will you approach him? Will you lie, bluff your credentials, or appeal to his sense of duty?",
+          "choices": [
+            "Lie that you are a high-ranking official on urgent business.",
+            "Bluff that you were sent by the watch captain earlier.",
+            "Claim you are merely a traveler caught in the storm and lost.",
+            "Appeal to his honor, arguing the city needs all able hands."
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"medium\",\n  \"question\": \"How will you approach him? Will you lie, bluff your credentials, or appeal to his sense of duty?\",\n  \"choices\": [\n    \"Lie that you are a high-ranking official on urgent business.\",\n    \"Bluff that you were sent by the watch captain earlier.\",\n    \"Claim you are merely a traveler caught in the storm and lost.\",\n    \"Appeal to his honor, arguing the city needs all able hands.\"\n  ]\n}",
+        "ttftMs": 620,
+        "totalMs": 4730
+      }
+    },
+    {
+      "caseId": "lie-sergeant",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "deception",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"deception\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 931,
+        "totalMs": 2397
+      }
+    },
+    {
+      "caseId": "pick-chest",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "sleight_of_hand",
+          "difficulty": "hard"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"sleight_of_hand\",\n  \"difficulty\": \"hard\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 761,
+        "totalMs": 2250
+      }
+    },
+    {
+      "caseId": "cross-log",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "check",
+          "skill": "acrobatics",
+          "difficulty": "medium"
+        },
+        "raw": "{\n  \"outcome\": \"check\",\n  \"skill\": \"acrobatics\",\n  \"difficulty\": \"medium\",\n  \"question\": null,\n  \"choices\": null\n}",
+        "ttftMs": 517,
+        "totalMs": 1900
+      }
+    },
+    {
+      "caseId": "do-the-thing",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "What exactly are you trying to do or see?",
+          "choices": [
+            "Check for hidden traps on the floor",
+            "Look for a secret compartment in the table",
+            "Listen for whispers near the cellar door",
+            "Scan Voss's hand for a weapon"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": \"What exactly are you trying to do or see?\",\n  \"choices\": [\n    \"Check for hidden traps on the floor\",\n    \"Look for a secret compartment in the table\",\n    \"Listen for whispers near the cellar door\",\n    \"Scan Voss's hand for a weapon\"\n  ]\n}",
+        "ttftMs": 697,
+        "totalMs": 3922
+      }
+    },
+    {
+      "caseId": "over-there",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "stealth",
+          "difficulty": "easy",
+          "question": "Which specific location or object are you trying to reach by going 'over there'? Is it the gate, the crates, or the alley?",
+          "choices": [
+            "Move toward Brannoc and the gate",
+            "Climb over the stack of wet crates",
+            "Slip into the narrow alley east"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"stealth\",\n  \"difficulty\": \"easy\",\n  \"question\": \"Which specific location or object are you trying to reach by going 'over there'? Is it the gate, the crates, or the alley?\",\n  \"choices\": [\n    \"Move toward Brannoc and the gate\",\n    \"Climb over the stack of wet crates\",\n    \"Slip into the narrow alley east\"\n  ]\n}",
+        "ttftMs": 654,
+        "totalMs": 4357
+      }
+    },
+    {
+      "caseId": "use-it",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "perception",
+          "difficulty": "easy",
+          "question": "What specifically are you trying to use, and where did you find the item?",
+          "choices": [
+            "The old wooden door",
+            "A hidden pouch on your belt",
+            "The moss-covered fallen log",
+            "One of the standing stones"
+          ]
+        },
+        "raw": "{\n  \"outcome\": \"ask\",\n  \"skill\": \"perception\",\n  \"difficulty\": \"easy\",\n  \"question\": \"What specifically are you trying to use, and where did you find the item?\",\n  \"choices\": [\n    \"The old wooden door\",\n    \"A hidden pouch on your belt\",\n    \"The moss-covered fallen log\",\n    \"One of the standing stones\"\n  ]\n}",
+        "ttftMs": 638,
+        "totalMs": 3755
+      }
+    },
+    {
+      "caseId": "try-something",
+      "run": 5,
+      "adjudication": {
+        "ok": true,
+        "object": {
+          "outcome": "ask",
+          "skill": "deception",
+          "difficulty": "easy",
+          "question": "What exactly are you trying to do?",
+          "choices": [
+            "Ask for a discount on the ale.",
+            "Flirt with Maren.",
+            "Try to pickpocket Voss.",
+            "Sneak past Voss to the back door."
+          ]
+        },
+        "raw": "{\"outcome\": \"ask\", \"skill\": \"deception\", \"difficulty\": \"easy\", \"question\": \"What exactly are you trying to do?\", \"choices\": [\"Ask for a discount on the ale.\", \"Flirt with Maren.\", \"Try to pickpocket Voss.\", \"Sneak past Voss to the back door.\"]}",
+        "ttftMs": 700,
+        "totalMs": 3117
+      }
+    }
+  ]
+}

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '#lib/ui/Button.svelte'
+  import { checkLabel, type CallAnswer, type CallView } from './call.ts'
   import type { Mode, SceneNpc, SessionEvent } from './enums.ts'
 
   let {
@@ -7,7 +9,10 @@
     live = '',
     liveNpcId = null,
     thinking = false,
-    mode = 'exploration'
+    mode = 'exploration',
+    openCall = null,
+    onroll,
+    onanswer
   }: {
     events: SessionEvent[]
     npcs: SceneNpc[]
@@ -15,20 +20,37 @@
     live?: string
     /** The speaking NPC while the streaming line is an NPC line, else null. */
     liveNpcId?: string | null
-    /** The Director is choosing. */
+    /** A step of the Exchange is running and no Reply text has streamed yet. */
     thinking?: boolean
     /** In dialogue, narration reads as a stage direction between spoken lines. */
     mode?: Mode
+    /** The Call the Exchange waits on; shown inline at its `call-raised` event. Never has a DC. */
+    openCall?: CallView | null
+    /** Rolls the open Check; the Roll button is disabled without it. */
+    onroll?: () => void
+    /** Answers the open question with a choice; its choice buttons are disabled without it. */
+    onanswer?: (answer: CallAnswer) => void
   } = $props()
+
+  // The open Call is the latest one raised (a Session has at most one open at a time).
+  const openId = $derived(
+    openCall ? events.findLast((e) => e.kind === 'call-raised')?.id : undefined
+  )
+  const isWithdrawn = (e: SessionEvent) => e.data?.withdrawn === true
+  /** Whether the Call raised at `index` was later withdrawn (its next answer says so). */
+  const raisedWithdrawn = (index: number) => {
+    const answer = events.slice(index + 1).find((e) => e.kind === 'call-answered')
+    return answer !== undefined && isWithdrawn(answer)
+  }
 
   const speaker = (npcId: string | null) =>
     npcs.find((n) => n.id === npcId)?.name ?? npcId ?? 'Someone'
 </script>
 
 <ol aria-label="Story log" class="space-y-3">
-  {#each events as event (event.id)}
+  {#each events as event, index (event.id)}
     <li>
-      {#if event.kind === 'player-action'}
+      {#if event.kind === 'declaration'}
         <p class="text-accent italic">{event.text}</p>
       {:else if event.kind === 'narration'}
         {#if mode === 'dialogue'}
@@ -43,12 +65,64 @@
           </p>
           <p class="whitespace-pre-wrap">&ldquo;{event.text}&rdquo;</p>
         </blockquote>
-      {:else if event.kind === 'roll-requested'}
-        <p class="inline-block rounded-full bg-warning-bg px-3 py-0.5 text-sm text-warning">
+      {:else if event.kind === 'call-raised' && openCall?.kind === 'question' && event.id === openId}
+        <div role="group" aria-label="Question" class="rounded-panel border border-primary p-2">
+          <p class="font-semibold">{openCall.question}</p>
+          {#if openCall.choices?.length}
+            <div class="mt-2 flex flex-wrap gap-2">
+              {#each openCall.choices as choice (choice)}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={!onanswer}
+                  onclick={() => onanswer?.({ kind: 'choice', choice })}>{choice}</Button
+                >
+              {/each}
+            </div>
+          {/if}
+          <p class="mt-2 text-xs text-muted">
+            {openCall.choices?.length ? 'Pick one, or type' : 'Type'} your answer below.
+          </p>
+        </div>
+      {:else if event.kind === 'call-raised' && openCall?.kind === 'check' && event.id === openId}
+        <div
+          role="group"
+          aria-label="Check"
+          class="flex flex-wrap items-center justify-between gap-2 rounded-panel border border-primary p-2"
+        >
+          <div>
+            <p class="font-semibold">{checkLabel(openCall.skill)} check</p>
+            <p class="text-sm text-muted">{openCall.declaration.text}</p>
+          </div>
+          <Button type="button" disabled={!onroll} onclick={() => onroll?.()}>Roll</Button>
+        </div>
+      {:else if event.kind === 'call-raised' && event.data?.kind === 'question'}
+        <p
+          data-call
+          data-withdrawn={raisedWithdrawn(index) || undefined}
+          class={['text-sm', raisedWithdrawn(index) && 'text-muted line-through opacity-60']}
+        >
           {event.text}
         </p>
-      {:else if event.kind === 'roll-resolved'}
-        <p class="inline-block rounded-full bg-info-bg px-3 py-0.5 text-sm text-info">
+      {:else if event.kind === 'call-raised'}
+        <p
+          data-call
+          data-withdrawn={raisedWithdrawn(index) || undefined}
+          class={['text-sm text-muted', raisedWithdrawn(index) && 'line-through opacity-60']}
+        >
+          {event.text}
+        </p>
+      {:else if event.kind === 'call-answered' && isWithdrawn(event)}
+        <p data-call data-withdrawn class="text-sm text-muted italic opacity-60">{event.text}</p>
+      {:else if event.kind === 'call-answered' && event.data?.kind === 'question'}
+        <p data-answer class="text-accent italic">{event.text}</p>
+      {:else if event.kind === 'call-answered'}
+        <p
+          data-call
+          data-roll={event.data?.success === true ? 'success' : 'failure'}
+          class="text-sm font-semibold"
+        >
           {event.text}
         </p>
       {:else}

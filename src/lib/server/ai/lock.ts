@@ -1,7 +1,7 @@
 import type { AiStatus } from '#lib/ai/status.ts'
 
 /**
- * Once a turn shows the model is a reasoning model, AI controls stay disabled until the
+ * Once a model request shows the model is a reasoning model, AI controls stay disabled until the
  * user re-probes successfully ("Check connection") or the server restarts. In-memory on
  * purpose: a restart is how the operator signals they changed the model.
  */

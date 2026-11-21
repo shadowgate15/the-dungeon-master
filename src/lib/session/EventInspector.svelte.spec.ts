@@ -2,7 +2,7 @@ import { page } from 'vitest/browser'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-svelte'
 import type { MemoryInspector, MemoryRunSummary } from '#lib/memory/inspector.ts'
-import type { RunStats } from './pipeline-events.ts'
+import type { RulingMessage, RunStats } from './exchange-events.ts'
 import EventInspector from './EventInspector.svelte'
 
 const run = (over: Partial<MemoryRunSummary>): MemoryRunSummary => ({
@@ -41,7 +41,6 @@ describe('EventInspector memory section', () => {
       droppedItems: [{ kind: 'npc', reason: 'contains digits' }]
     })
     render(EventInspector, {
-      steps: [],
       stats: null,
       memory: memory({ lastExtraction: extraction, recent: [extraction] })
     })
@@ -55,7 +54,6 @@ describe('EventInspector memory section', () => {
 
   it('shows the paused badge and in-flight status', async () => {
     render(EventInspector, {
-      steps: [],
       stats: null,
       memory: memory({ paused: true, summaryRunning: true })
     })
@@ -67,11 +65,7 @@ describe('EventInspector memory section', () => {
 
   it('shows per-role context stats from the run', async () => {
     const stats: RunStats = {
-      steps: 1,
-      directorCalls: 1,
-      retries: 0,
-      fallbacks: 0,
-      capHits: 0,
+      steps: { adjudication: { requests: 1, retries: 0, defaults: 0, latencyMs: 900 } },
       context: {
         roles: {
           narrator: {
@@ -88,24 +82,84 @@ describe('EventInspector memory section', () => {
         trims: { memory: 1, events: 0, uncovered: 0, summary: 0 }
       }
     }
-    render(EventInspector, { steps: [], stats, memory: memory() })
+    render(EventInspector, { stats, memory: memory() })
 
     await expect.element(page.getByText('narrator: 1500 / 2600 tokens')).toBeVisible()
   })
 
   it('refreshes on demand', async () => {
     const onrefresh = vi.fn()
-    render(EventInspector, { steps: [], stats: null, memory: memory(), onrefresh })
+    render(EventInspector, { stats: null, memory: memory(), onrefresh })
 
     await page.getByRole('button', { name: 'Refresh memory' }).click()
     expect(onrefresh).toHaveBeenCalledOnce()
   })
 
   it('renders new load data after a refresh', async () => {
-    const { rerender } = render(EventInspector, { steps: [], stats: null, memory: memory() })
+    const { rerender } = render(EventInspector, { stats: null, memory: memory() })
     await expect.element(page.getByText('Watermark lag: 4 events')).toBeVisible()
 
-    await rerender({ steps: [], stats: null, memory: memory({ watermark: 10, lag: 0 }) })
+    await rerender({ stats: null, memory: memory({ watermark: 10, lag: 0 }) })
     await expect.element(page.getByText('Watermark lag: 0 events')).toBeVisible()
+  })
+})
+
+describe('EventInspector Exchange section', () => {
+  it('shows the requests, retries, defaults and latency of each step', async () => {
+    const stats: RunStats = {
+      steps: {
+        adjudication: { requests: 2, retries: 1, defaults: 1, latencyMs: 2400 },
+        effect: { requests: 1, retries: 0, defaults: 0, latencyMs: 800 },
+        reply: { requests: 1, retries: 0, defaults: 0, latencyMs: 3100 }
+      }
+    }
+    render(EventInspector, { stats })
+
+    const section = page.getByRole('region', { name: 'This Exchange' })
+    const step = (name: string) => section.getByRole('listitem').filter({ hasText: name })
+    await expect
+      .element(step('adjudication'))
+      .toHaveTextContent('adjudication: 2 requests, 1 retry, default applied, 2400 ms')
+    await expect.element(step('effect')).toHaveTextContent('effect: 1 request, 0 retries, 800 ms')
+    await expect.element(step('reply')).toHaveTextContent('reply: 1 request, 0 retries, 3100 ms')
+  })
+
+  it('shows a step that has not run as not run', async () => {
+    const stats: RunStats = {
+      steps: { adjudication: { requests: 1, retries: 0, defaults: 0, latencyMs: 500 } }
+    }
+    render(EventInspector, { stats })
+
+    const section = page.getByRole('region', { name: 'This Exchange' })
+    await expect
+      .element(section.getByRole('listitem').filter({ hasText: 'effect' }))
+      .toHaveTextContent('effect: not run')
+  })
+
+  it('shows the ruling: the Adjudication and the Effect that was applied', async () => {
+    const ruling: RulingMessage = {
+      type: 'ruling',
+      adjudication: { outcome: 'happens' },
+      effect: { effect: 'move', exitId: 'front-door' }
+    }
+    render(EventInspector, { stats: null, ruling })
+
+    const section = page.getByRole('region', { name: 'Ruling' })
+    await expect.element(section.getByText('happens')).toBeVisible()
+    await expect.element(section.getByText('move')).toBeVisible()
+    await expect.element(section.getByText('exitId: front-door')).toBeVisible()
+  })
+
+  it('shows an impossible Declaration with no Effect applied', async () => {
+    const ruling: RulingMessage = {
+      type: 'ruling',
+      adjudication: { outcome: 'impossible' },
+      effect: null
+    }
+    render(EventInspector, { stats: null, ruling })
+
+    const section = page.getByRole('region', { name: 'Ruling' })
+    await expect.element(section.getByText('impossible')).toBeVisible()
+    await expect.element(section.getByText('not applied')).toBeVisible()
   })
 })

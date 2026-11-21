@@ -21,8 +21,6 @@ export const POST: RequestHandler = async ({ request }) => {
   if (!parsed.success) return json({ error: 'Invalid request' }, { status: 400 })
 
   const port = getChatPort()
-  if (!port) return json({ error: 'AI is not configured' }, { status: 503 })
-
   if (isReasoningModelLocked()) {
     return json({ error: 'AI is disabled until the connection is checked' }, { status: 503 })
   }

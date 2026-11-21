@@ -10,6 +10,7 @@ import {
   sessionEnd,
   sessions
 } from '#lib/server/session/index.ts'
+import { clientEvent, clientScene } from '#lib/server/session/client-view.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 const campaigns = createCampaignService(db)
@@ -20,8 +21,9 @@ export const load: PageServerLoad = ({ params, cookies }) => {
   const found = sessions.get(params.sessionId)
   const campaign = campaigns.get(params.id)
   if (!found || !campaign || found.campaignId !== campaign.id) error(404, 'Session not found')
-  const events = sessions.events(found.id)
-  // "Previously" is for a new Session's first view only: open, before the first action, and not
+  // The DC of a Check never reaches the client.
+  const events = sessions.events(found.id).map(clientEvent)
+  // "Previously" is for a new Session's first view only: open, before the first Declaration, and not
   // seen before (a cookie marks the view, so resuming the Session later does not repeat it).
   const seenKey = `previously-${found.id}`
   const firstView = found.endedAt === null && events.length === 0 && !cookies.get(seenKey)
@@ -36,7 +38,7 @@ export const load: PageServerLoad = ({ params, cookies }) => {
       endedAt: found.endedAt,
       number: sessions.listNumbered(campaign.id).find((s) => s.id === found.id)?.number ?? 0
     },
-    scene: sessions.scene(found.id),
+    scene: clientScene(sessions.scene(found.id)),
     events,
     recap: recap ?? null,
     journal: journal.read(campaign.id, found.characterId),

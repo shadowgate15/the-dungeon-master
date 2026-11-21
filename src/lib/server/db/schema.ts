@@ -31,7 +31,8 @@ import {
   type DroppedItem
 } from '../../memory/enums'
 import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '../../world/enums'
-import { EVENT_KINDS, MODES, ROLES, type PendingRoll, type SceneExit } from '../../session/enums'
+import { EVENT_KINDS, MODES, ROLES, type SceneExit } from '../../session/enums'
+import type { Call } from '../../session/call'
 
 export const task = sqliteTable('task', {
   id: text('id')
@@ -288,7 +289,8 @@ export const sessionScene = sqliteTable(
     npcs: text('npcs', { mode: 'json' }).$type<string[]>().notNull(),
     mode: text('mode', { enum: MODES }).notNull(),
     dialogueNpcId: text('dialogue_npc_id'),
-    pendingRoll: text('pending_roll', { mode: 'json' }).$type<PendingRoll>(),
+    /** The Call the Exchange is waiting on (with its DC, never sent to the client). */
+    openCall: text('open_call', { mode: 'json' }).$type<Call>(),
     updatedAt: integer('updated_at').notNull()
   },
   () => [check('session_scene_mode_check', oneOf('mode', MODES))]

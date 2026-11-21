@@ -5,14 +5,15 @@
  */
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createScriptedPort, says } from '../../../testing/scripted-chat-port'
+import { effect, happens } from '../../../testing/exchange-scripts'
+import { createScriptedPort, says, type Script } from '../../../testing/scripted-chat-port'
 import { fact, session } from '../../db/schema'
 import { addNpc, playableCampaign, sessionServiceWith, setSceneNpcs } from '../fixture'
-import { createDirectorPipeline } from '../scene-director/pipeline.ts'
-import { createSceneRunner, type PipelineEvent } from '../scene-runner.ts'
+import { createSceneRunner } from '../scene-runner.ts'
 import type { SessionService } from '../service'
 import { buildNpcContext } from './npc.ts'
-import { createFixedReader, createWorldReader } from './sources.ts'
+import type { ContextSources } from './sources.ts'
+import { createCharacterLineReader, createFixedReader, createWorldReader } from './sources.ts'
 
 const SECRETS = {
   otherNote: 'PLANTED-OTHER-NPC-NOTE the duke pays Borg.',
@@ -78,9 +79,27 @@ const planted = [
   SECRETS.summary
 ]
 
+/** Plays one Declaration through the runner and returns what each model request was sent. */
+async function play(declaration: string, scripts: Script[], sources: Partial<ContextSources> = {}) {
+  const model = createScriptedPort(scripts)
+  const runner = createSceneRunner({
+    sessions,
+    port: model.port,
+    contextSources: {
+      summary: () => ({ text: SECRETS.summary, throughSeq: 0 }),
+      world: createWorldReader(fixture.db),
+      ...sources
+    }
+  })
+  const result = runner.begin(sessionId, declaration, new AbortController().signal)
+  if (!result.ok) throw new Error(result.reason)
+  for await (const e of result.events) void e
+  return model.requests.map((r) => JSON.stringify([r.systemPrompts, r.messages]))
+}
+
 describe('NPC isolation', () => {
   it('builds an NPC context with none of the planted secrets or other NPCs', () => {
-    sessions.appendEvent(sessionId, { role: 'player', kind: 'player-action', text: 'Hello' })
+    sessions.appendEvent(sessionId, { role: 'player', kind: 'declaration', text: 'Hello' })
     const resolved = sessions.scene(sessionId).npcs.find((n) => n.id === mira)!
     const built = buildNpcContext({ npc: resolved, events: sessions.events(sessionId) })
     const text = `${built.system}\n${built.content}`
@@ -91,53 +110,24 @@ describe('NPC isolation', () => {
     expect(text).not.toContain(SECRETS.borgName)
   })
 
-  it('holds in a real run: the NPC voice request carries none of the planted strings', async () => {
-    const model = createScriptedPort([
-      says('npc-speaks:mira'),
-      says('The key is under the altar.'),
-      says('yield')
+  it('holds in a real Exchange: the NPC Reply request carries none of the planted strings', async () => {
+    const [, , voice] = await play('Hello, Mira', [
+      happens(),
+      effect({ effect: 'talk', npcId: mira }),
+      says('The key is under the altar.')
     ])
-    const runner = createSceneRunner({
-      sessions,
-      port: model.port,
-      pipeline: createDirectorPipeline(),
-      contextSources: {
-        summary: () => ({ text: SECRETS.summary, throughSeq: 0 }),
-        world: createWorldReader(fixture.db)
-      }
-    })
-    const result = runner.begin(sessionId, 'Hello', new AbortController().signal)
-    if (!result.ok) throw new Error(result.reason)
-    const events: PipelineEvent[] = []
-    for await (const e of result.events) events.push(e)
-
-    const voice = model.requests[1]
-    const sent = JSON.stringify([voice.systemPrompts, voice.messages])
-    expect(sent).toContain('MIRA-OWN-NOTE')
-    for (const secret of planted) expect(sent).not.toContain(secret)
+    expect(voice).toContain('MIRA-OWN-NOTE')
+    for (const secret of planted) expect(voice).not.toContain(secret)
   })
 })
 
 describe('the other roles', () => {
-  it('gives the Narrator selected live Facts but never an NPC knowledge note, and the Director no World memory', async () => {
-    const model = createScriptedPort([says('narrate'), says('Dust settles.'), says('yield')])
-    const runner = createSceneRunner({
-      sessions,
-      port: model.port,
-      pipeline: createDirectorPipeline(),
-      contextSources: {
-        summary: () => ({ text: SECRETS.summary, throughSeq: 0 }),
-        world: createWorldReader(fixture.db)
-      }
-    })
-    const result = runner.begin(sessionId, 'I look around', new AbortController().signal)
-    if (!result.ok) throw new Error(result.reason)
-    for await (const e of result.events) void e
-
-    const sentOf = (i: number) =>
-      JSON.stringify([model.requests[i].systemPrompts, model.requests[i].messages])
-    const director = sentOf(0)
-    const narrator = sentOf(1)
+  it('gives the Narrator selected live Facts but never an NPC knowledge note, and the ruling steps no World memory', async () => {
+    const [adjudication, effectRequest, narrator] = await play('I look around', [
+      happens(),
+      effect({ effect: 'none' }),
+      says('Dust settles.')
+    ])
 
     // Narrator: the summary, the world-changing Fact and the Scene NPCs, but no per-NPC knowledge.
     expect(narrator).toContain(SECRETS.summary)
@@ -146,35 +136,26 @@ describe('the other roles', () => {
     for (const note of ['MIRA-OWN-NOTE', SECRETS.otherNote]) {
       expect(narrator).not.toContain(note)
     }
-    // Director: no World memory and no summary.
-    for (const text of [SECRETS.unknownFact, SECRETS.summary, 'MIRA-OWN-NOTE', 'Innkeeper']) {
-      expect(director).not.toContain(text)
+    // Adjudication and Effect: no World memory, no summary and no NPC knowledge.
+    for (const sent of [adjudication, effectRequest]) {
+      for (const text of [SECRETS.unknownFact, SECRETS.summary, 'MIRA-OWN-NOTE', 'Innkeeper']) {
+        expect(sent).not.toContain(text)
+      }
     }
   })
 
-  it('gives the Narrator the Campaign Seed and the Character sheet, and the Director neither', async () => {
-    const model = createScriptedPort([says('narrate'), says('Dust settles.'), says('yield')])
-    const runner = createSceneRunner({
-      sessions,
-      port: model.port,
-      pipeline: createDirectorPipeline(),
-      contextSources: {
-        summary: () => ({ text: null, throughSeq: 0 }),
-        world: createWorldReader(fixture.db),
-        fixed: createFixedReader(fixture.db)
-      }
-    })
-    const result = runner.begin(sessionId, 'I look around', new AbortController().signal)
-    if (!result.ok) throw new Error(result.reason)
-    for await (const e of result.events) void e
-
-    const sentOf = (i: number) =>
-      JSON.stringify([model.requests[i].systemPrompts, model.requests[i].messages])
-    expect(sentOf(1)).toContain('Premise: P')
-    expect(sentOf(1)).toContain('Tone: dark')
-    expect(sentOf(1)).toContain('Rowan')
-    expect(sentOf(1)).toContain('Fighter')
-    expect(sentOf(0)).not.toContain('Rowan')
-    expect(sentOf(0)).not.toContain('Premise: P')
+  it('gives the Narrator the Campaign Seed and the Character sheet, and the ruling steps only the Character line', async () => {
+    const [adjudication, , narrator] = await play(
+      'I look around',
+      [happens(), effect({ effect: 'none' }), says('Dust settles.')],
+      { fixed: createFixedReader(fixture.db), character: createCharacterLineReader(fixture.db) }
+    )
+    expect(narrator).toContain('Premise: P')
+    expect(narrator).toContain('Tone: dark')
+    expect(narrator).toContain('Rowan')
+    expect(narrator).toContain('Fighter')
+    expect(adjudication).toContain('Rowan')
+    expect(adjudication).toContain('fighter')
+    expect(adjudication).not.toContain('Premise: P')
   })
 })

@@ -1,6 +1,6 @@
 # Scenes replace Turns, run by a director pipeline
 
-Status: accepted (spec #200). Supersedes the Turn model and ADR 0002 (post-turn extraction instead of in-turn tools).
+Status: accepted (spec #200). Supersedes the Turn model and ADR 0002 (post-turn extraction instead of in-turn tools). Its Director pipeline is superseded by ADR 0005 (Exchanges replace the Director pipeline); the Scene, Mode and Event log stand.
 
 ## Context
 

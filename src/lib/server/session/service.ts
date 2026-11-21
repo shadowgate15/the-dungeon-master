@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm'
 import { nameSlug, validateDisposition } from '#lib/memory/validate.ts'
 import type { EventKind, Role, SceneNpc, SceneState, SessionEvent } from '#lib/session/enums.ts'
 import type { Database } from '../db/connect'
@@ -70,7 +70,7 @@ const sceneColumns = (scene: SceneState, updatedAt: number) => ({
   npcs: scene.npcs.map((n) => n.id),
   mode: scene.mode,
   dialogueNpcId: scene.dialogueNpcId,
-  pendingRoll: scene.pendingRoll,
+  openCall: scene.openCall,
   updatedAt
 })
 
@@ -156,7 +156,7 @@ export function createSessionService(
       npcs,
       mode: partner ? row.mode : 'exploration',
       dialogueNpcId: partner ? row.dialogueNpcId : null,
-      pendingRoll: row.pendingRoll
+      openCall: row.openCall
     }
   }
 
@@ -279,7 +279,7 @@ export function createSessionService(
      * Session per Campaign, and an accepted Arc is required. The Campaign's first Session starts
      * in a Scene generated from its World, Seed and Arc (three staged model calls) and stored as
      * World memory in one transaction; any stage failing throws `SessionStartError` and creates
-     * nothing. Later Sessions open on a copy of the previous Session's Scene, with no model call.
+     * nothing. Later Sessions open on a copy of the previous Session's Scene (without its open Call), with no model call.
      */
     async start(campaignId: string): Promise<Session> {
       const ready = readyToStart(campaignId)
@@ -289,7 +289,13 @@ export function createSessionService(
           recheck(tx, campaignId)
           const created = insertSession(tx, campaignId, ready.characterId)
           tx.insert(sessionScene)
-            .values({ ...previous, sessionId: created.id, updatedAt: created.startedAt })
+            // An open Call belongs to the previous Session's Exchange, so it stays behind.
+            .values({
+              ...previous,
+              openCall: null,
+              sessionId: created.id,
+              updatedAt: created.startedAt
+            })
             .run()
           return created
         })
@@ -359,7 +365,7 @@ export function createSessionService(
             npcs: present,
             mode: 'exploration',
             dialogueNpcId: null,
-            pendingRoll: null,
+            openCall: null,
             updatedAt: created.startedAt
           })
           .run()
@@ -493,6 +499,23 @@ export function createSessionService(
         .where(eq(sessionEvent.sessionId, sessionId))
         .orderBy(asc(sessionEvent.seq))
         .all()
+    },
+
+    /**
+     * Undoes a failed Exchange: puts the Scene back as it was before it and drops the events it
+     * recorded after `throughSeq` (its Declaration), in one transaction. Only the scene runner
+     * calls this, for an Exchange that never finished, so the committed log stays append-only.
+     */
+    rollBack(sessionId: string, scene: SceneState, throughSeq: number): void {
+      db.transaction((tx) => {
+        tx.update(sessionScene)
+          .set(sceneColumns(scene, now()))
+          .where(eq(sessionScene.sessionId, sessionId))
+          .run()
+        tx.delete(sessionEvent)
+          .where(and(eq(sessionEvent.sessionId, sessionId), gt(sessionEvent.seq, throughSeq)))
+          .run()
+      })
     },
 
     /** Appends an event to an open Session. The log is append-only; rejects on an ended Session. */
