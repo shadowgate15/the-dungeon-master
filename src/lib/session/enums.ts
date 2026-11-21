@@ -4,8 +4,9 @@
  */
 
 import { STANCES, type Stance } from '#lib/memory/enums.ts'
+import type { Call, CallView } from './call.ts'
 
-/** The kind of exchange a Scene is in. A roll is an overlay on any Mode, never a Mode. */
+/** The kind of exchange a Scene is in. A Call is an overlay on any Mode, never a Mode. */
 export const MODES = ['exploration', 'dialogue'] as const
 export type Mode = (typeof MODES)[number]
 
@@ -54,13 +55,6 @@ export interface SceneNpc {
   knowledge: string
 }
 
-/** A roll the player owes. Stays pending until the player rolls, so a reload cannot skip it. */
-export interface PendingRoll {
-  check: string
-  dc: number
-  reason: string
-}
-
 /**
  * Where and how play stands right now, with NPCs resolved from World memory (the stored Scene
  * holds their ids only). Owned by code; the AI never edits it freely.
@@ -73,8 +67,12 @@ export interface SceneState {
   mode: Mode
   /** The NPC being talked to while `mode` is `dialogue`, else null. */
   dialogueNpcId: string | null
-  pendingRoll: PendingRoll | null
+  /** What the Exchange is waiting on the player for; it survives a reload. Holds the DC. */
+  openCall: Call | null
 }
+
+/** The Scene as the client sees it: the open Call without its DC. */
+export type SceneView = Omit<SceneState, 'openCall'> & { openCall: CallView | null }
 
 /** One entry of a Session's append-only Event log. */
 export interface SessionEvent {
@@ -88,7 +86,7 @@ export interface SessionEvent {
   text: string | null
   /** The speaking NPC, for `npc-line`. */
   npcId: string | null
-  /** Kind-specific structured payload (a roll's check, DC and result, a scene change's target). */
+  /** Kind-specific structured payload (a Call's skill and result, a scene change's target). */
   data: Record<string, unknown> | null
   createdAt: number
 }

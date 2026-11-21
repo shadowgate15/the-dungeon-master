@@ -129,3 +129,53 @@ test('plays a scene: a Declaration gets a Reply, an NPC answers, and the Charact
   await expect(scene.getByRole('region', { name: 'Mode' })).toContainText('exploration')
   await expect(scene.getByRole('region', { name: 'Exits' })).toContainText('The Gilded Stag')
 })
+
+/**
+ * A Check the fixture Character cannot pass whatever the die shows (Charisma 9, so Persuasion is
+ * -1 against DC 25), so the journey does not depend on where the process-wide dice are.
+ */
+const PERSUADE = {
+  outcome: 'check',
+  skill: 'persuasion',
+  difficulty: 'very_hard',
+  question: '',
+  choices: []
+}
+
+test('a Check raises a Call: rolling it shows the result and the Reply; typing over another withdraws it', async ({
+  page,
+  request
+}) => {
+  await startSession(page, request)
+  const log = page.getByRole('list', { name: 'Story log' })
+  const check = log.getByRole('group', { name: 'Check' })
+  const declare = async (text: string) => {
+    await page.getByLabel('Your action').fill(text)
+    await page.getByRole('button', { name: 'Send' }).click()
+  }
+
+  // The Declaration raises a Check: the Exchange stops and waits on the Roll, with no DC shown.
+  await script(request, [PERSUADE])
+  await declare('I talk the guard into letting me pass')
+  await expect(check).toContainText('Persuasion check')
+  await expect(check).toContainText('I talk the guard into letting me pass')
+  await expect(check).not.toContainText('DC')
+  await expect(page.getByLabel('Your action')).toBeEnabled()
+
+  // Rolling fails it: code logs the result, then the Narrator replies (no Effect on a failure).
+  await script(request, ['The guard folds his arms and does not budge.'])
+  await check.getByRole('button', { name: 'Roll' }).click()
+  await expect(log).toContainText(/Persuasion: \d+ - 1 = \d+, failure/)
+  await expect(log).toContainText('The guard folds his arms and does not budge.')
+  await expect(check).toBeHidden()
+
+  // Another Check, typed over: the Call is withdrawn and the new Declaration runs instead.
+  await script(request, [PERSUADE])
+  await declare('I try to charm him once more')
+  await expect(check).toBeVisible()
+  await script(request, [HAPPENS, { effect: 'none' }, 'You turn away and look for another way in.'])
+  await declare('I give up and walk along the wall')
+  await expect(log.getByText('Persuasion check withdrawn')).toHaveAttribute('data-withdrawn')
+  await expect(log).toContainText('You turn away and look for another way in.')
+  await expect(check).toBeHidden()
+})

@@ -1,9 +1,11 @@
 import { fetchServerSentEvents } from '@tanstack/ai-client'
+import type { CallAnswer } from './call.ts'
 import { EXCHANGE_CHUNK, type ExchangeEvent } from './exchange-events.ts'
 
 /** What to tell the player when the server refused to start an Exchange, by the reason it gave. */
 const REFUSAL_MESSAGE: Record<string, string> = {
-  'in-flight': 'The previous Declaration is still being answered.'
+  'in-flight': 'The previous Declaration is still being answered.',
+  'no-open-call': 'There is nothing to answer right now.'
 }
 
 /** Sends a Declaration and reports each Exchange event. Resolves with an error text or null. */
@@ -16,6 +18,16 @@ export function sendAction(
   return postRun(sessionId, 'action', { text }, onEvent, signal)
 }
 
+/** Answers the open Call (a roll: code rolls) and reports the rest of its Exchange's events. */
+export function answerCall(
+  sessionId: string,
+  answer: CallAnswer,
+  onEvent: (event: ExchangeEvent) => void,
+  signal?: AbortSignal
+): Promise<string | null> {
+  return postRun(sessionId, 'answer', { answer }, onEvent, signal)
+}
+
 /**
  * Starts an Exchange over TanStack AI's server-sent-events connection and passes each event
  * (the value of an `EXCHANGE_CHUNK` custom chunk) to `onEvent`. A refused start comes back as a
@@ -23,7 +35,7 @@ export function sendAction(
  */
 async function postRun(
   sessionId: string,
-  route: 'action',
+  route: 'action' | 'answer',
   data: Record<string, unknown>,
   onEvent: (event: ExchangeEvent) => void,
   signal?: AbortSignal

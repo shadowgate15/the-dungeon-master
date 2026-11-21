@@ -116,7 +116,7 @@ export function createPlaceMover(db: Database, now: () => number) {
         npcs: target.npcs,
         mode: 'exploration',
         dialogueNpcId: null,
-        pendingRoll: null,
+        openCall: null,
         updatedAt: now()
       })
       .where(eq(sessionScene.sessionId, sessionId))

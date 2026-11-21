@@ -1,13 +1,14 @@
 <script lang="ts">
   import { examineText, goText, talkText } from './affordances.ts'
-  import type { SceneState, SessionEvent } from './enums.ts'
+  import { checkLabel } from './call.ts'
+  import type { SceneView, SessionEvent } from './enums.ts'
 
   let {
     scene,
     log = [],
     onpick
   }: {
-    scene: SceneState
+    scene: SceneView
     log?: SessionEvent[]
     /** When set, NPCs, exits and objects are clickable and call this with the action text to pre-fill. */
     onpick?: (text: string) => void
@@ -116,11 +117,11 @@
     {/if}
   </section>
 
-  <section aria-label="Pending roll">
-    <h2 class="text-xs font-semibold text-muted uppercase">Pending roll</h2>
-    {#if scene.pendingRoll}
-      <p>{scene.pendingRoll.check} DC {scene.pendingRoll.dc}</p>
-      <p class="text-xs text-muted">{scene.pendingRoll.reason}</p>
+  <section aria-label="Open Call">
+    <h2 class="text-xs font-semibold text-muted uppercase">Open Call</h2>
+    {#if scene.openCall}
+      <p>{checkLabel(scene.openCall.skill)} check</p>
+      <p class="text-xs text-muted">{scene.openCall.declaration.text}</p>
     {:else}
       <p class="text-muted">None</p>
     {/if}

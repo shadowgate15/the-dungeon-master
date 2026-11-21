@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '#lib/ui/Button.svelte'
+  import { checkLabel, type CallView } from './call.ts'
   import type { Mode, SceneNpc, SessionEvent } from './enums.ts'
 
   let {
@@ -7,7 +9,9 @@
     live = '',
     liveNpcId = null,
     thinking = false,
-    mode = 'exploration'
+    mode = 'exploration',
+    openCall = null,
+    onroll
   }: {
     events: SessionEvent[]
     npcs: SceneNpc[]
@@ -19,14 +23,29 @@
     thinking?: boolean
     /** In dialogue, narration reads as a stage direction between spoken lines. */
     mode?: Mode
+    /** The Call the Exchange waits on; shown inline at its `call-raised` event. Never has a DC. */
+    openCall?: CallView | null
+    /** Rolls the open Check; the Roll button is disabled without it. */
+    onroll?: () => void
   } = $props()
+
+  // The open Call is the latest one raised (a Session has at most one open at a time).
+  const openId = $derived(
+    openCall ? events.findLast((e) => e.kind === 'call-raised')?.id : undefined
+  )
+  const isWithdrawn = (e: SessionEvent) => e.data?.withdrawn === true
+  /** Whether the Call raised at `index` was later withdrawn (its next answer says so). */
+  const raisedWithdrawn = (index: number) => {
+    const answer = events.slice(index + 1).find((e) => e.kind === 'call-answered')
+    return answer !== undefined && isWithdrawn(answer)
+  }
 
   const speaker = (npcId: string | null) =>
     npcs.find((n) => n.id === npcId)?.name ?? npcId ?? 'Someone'
 </script>
 
 <ol aria-label="Story log" class="space-y-3">
-  {#each events as event (event.id)}
+  {#each events as event, index (event.id)}
     <li>
       {#if event.kind === 'declaration'}
         <p class="text-accent italic">{event.text}</p>
@@ -43,8 +62,36 @@
           </p>
           <p class="whitespace-pre-wrap">&ldquo;{event.text}&rdquo;</p>
         </blockquote>
-      {:else if event.kind === 'call-raised' || event.kind === 'call-answered'}
-        <p data-call class="text-sm text-muted">{event.text}</p>
+      {:else if event.kind === 'call-raised' && openCall && event.id === openId}
+        <div
+          role="group"
+          aria-label="Check"
+          class="flex flex-wrap items-center justify-between gap-2 rounded-panel border border-primary p-2"
+        >
+          <div>
+            <p class="font-semibold">{checkLabel(openCall.skill)} check</p>
+            <p class="text-sm text-muted">{openCall.declaration.text}</p>
+          </div>
+          <Button type="button" disabled={!onroll} onclick={() => onroll?.()}>Roll</Button>
+        </div>
+      {:else if event.kind === 'call-raised'}
+        <p
+          data-call
+          data-withdrawn={raisedWithdrawn(index) || undefined}
+          class={['text-sm text-muted', raisedWithdrawn(index) && 'line-through opacity-60']}
+        >
+          {event.text}
+        </p>
+      {:else if event.kind === 'call-answered' && isWithdrawn(event)}
+        <p data-call data-withdrawn class="text-sm text-muted italic opacity-60">{event.text}</p>
+      {:else if event.kind === 'call-answered'}
+        <p
+          data-call
+          data-roll={event.data?.success === true ? 'success' : 'failure'}
+          class="text-sm font-semibold"
+        >
+          {event.text}
+        </p>
       {:else}
         <p class="text-center text-xs tracking-wide text-muted uppercase">{event.text}</p>
       {/if}

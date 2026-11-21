@@ -1,18 +1,19 @@
 import { EventType, toServerSentEventsResponse, type StreamChunk } from '@tanstack/ai'
 import { json } from '@sveltejs/kit'
 import { EXCHANGE_CHUNK, type ExchangeEvent } from '#lib/session/exchange-events.ts'
-import type { BeginRefusal } from './scene-runner.ts'
+import type { RunRefusal } from './scene-runner.ts'
 
 /** The HTTP status for each reason the runner can refuse to start an Exchange. */
-const REFUSAL_STATUS: Record<BeginRefusal, number> = {
+const REFUSAL_STATUS: Record<RunRefusal, number> = {
   'not-found': 404,
   ended: 409,
   'in-flight': 409,
-  'empty-action': 400
+  'empty-action': 400,
+  'no-open-call': 409
 }
 
 /** A refused run: the status for the reason, and the reason as JSON for the client to show. */
-export function refusalResponse(reason: BeginRefusal): Response {
+export function refusalResponse(reason: RunRefusal): Response {
   return json({ reason }, { status: REFUSAL_STATUS[reason] })
 }
 

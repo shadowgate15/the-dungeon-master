@@ -3,26 +3,36 @@
  * model only answers each step inside it (see GLOSSARY.md and docs/adr/0005).
  *
  * `begin` claims the Session, saves the Declaration as a `declaration` event, then runs one
- * Exchange over the chat port and the database-backed Scene and Event log. The stream ends with
- * exactly one `done` event saying why the floor went back to the player.
+ * Exchange over the chat port and the database-backed Scene and Event log. An Exchange that needs
+ * a Check pauses on a Call; `answerCall` rolls it and runs the rest. The stream ends with exactly
+ * one `done` event saying why the floor went back to the player. No streamed event carries a DC.
  */
+import type { CallAnswer } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
 import type { ChatPort } from '../ai/port.ts'
 import type { BeatProgress } from '../arc/beat-progress.ts'
+import { createDice, type Dice } from '../dice.ts'
 import type { MemoryExtraction } from '../memory/extraction.ts'
 import type { RollingSummary } from '../memory/summary.ts'
+import type { CheckModifier } from './check-modifier.ts'
+import { clientEvent } from './client-view.ts'
 import type { ContextSources } from './context/sources.ts'
-import { runExchange } from './exchange/run.ts'
+import { answerCheck, rollCheck, withdrawCall } from './exchange/call.ts'
+import { runExchange, type ExchangeStart } from './exchange/run.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
 export type { DoneReason, ExchangeEvent, RunStats } from '#lib/session/exchange-events.ts'
 export type { ExchangeContext } from './exchange/context.ts'
 
 export type BeginRefusal = 'not-found' | 'ended' | 'empty-action' | 'in-flight'
+export type AnswerRefusal = 'not-found' | 'ended' | 'in-flight' | 'no-open-call'
+export type RunRefusal = BeginRefusal | AnswerRefusal
 
-export type BeginResult =
-  { ok: true; events: AsyncGenerator<ExchangeEvent> } | { ok: false; reason: BeginRefusal }
+export type RunResult<R extends RunRefusal> =
+  { ok: true; events: AsyncGenerator<ExchangeEvent> } | { ok: false; reason: R }
+export type BeginResult = RunResult<BeginRefusal>
+export type AnswerResult = RunResult<AnswerRefusal>
 
 export interface SceneRunnerDeps {
   sessions: SessionService
@@ -35,10 +45,23 @@ export interface SceneRunnerDeps {
   summary?: RollingSummary
   /** What the prompts read beyond the log and Scene (summary, World memory, Character). */
   contextSources?: ContextSources
+  /** Code's roller for Checks; unseeded when absent. */
+  dice?: Dice
+  /** The Character's modifier for a Check's skill or save; 0 when absent. */
+  checkModifier?: CheckModifier
+}
+
+/** What a run saves before any model call, and where its Exchange then starts. */
+interface Recorded {
+  /** The saved events, streamed first, in order. */
+  events: SessionEvent[]
+  start: ExchangeStart
 }
 
 export function createSceneRunner(deps: SceneRunnerDeps) {
   const { sessions, port } = deps
+  const dice = deps.dice ?? createDice()
+  const checkModifier = deps.checkModifier ?? (() => 0)
   // Sessions with a run in flight. Claimed synchronously when a run starts, so two quick requests
   // cannot both pass the check.
   const inFlight = new Set<string>()
@@ -63,20 +86,17 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   async function* run(
     sessionId: string,
     signal: AbortSignal,
-    declaration: SessionEvent
+    start: ExchangeStart
   ): AsyncGenerator<ExchangeEvent> {
     try {
       const steering = deps.beatProgress && (() => deps.beatProgress!.steering(sessionId))
-      const replied = yield* runExchange(
+      const end = yield* runExchange(
         { sessionId, sessions, port, signal, steering, context: deps.contextSources },
-        declaration
+        start
       )
-      if (replied) {
-        checkBeats(sessionId, declaration.seq)
-        yield { type: 'done', reason: 'replied' }
-      } else {
-        yield { type: 'done', reason: 'stopped' }
-      }
+      // Only an Exchange that replied is complete: one waiting on a Call runs no background work.
+      if (end === 'replied') checkBeats(sessionId, start.declaration.seq)
+      yield { type: 'done', reason: end }
     } catch (error) {
       if (signal.aborted) {
         yield { type: 'done', reason: 'stopped' }
@@ -99,27 +119,27 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   }
 
   /**
-   * Starts a run: claims the Session, saves the run's first event (`record`) before any model
-   * call, then streams that event and the Exchange's. The claim is held until the stream actually
-   * finishes, so a stopped run cannot overlap the next one while the Exchange winds down. A stream
-   * nobody ever reads is released when the caller aborts.
+   * Starts a run: claims the Session, saves the run's first events (`record`) before any model
+   * call, then streams those events and the Exchange's, each without its DC. The claim is held
+   * until the stream actually finishes, so a stopped run cannot overlap the next one while the
+   * Exchange winds down. A stream nobody ever reads is released when the caller aborts.
    */
   function start(
     sessionId: string,
     signal: AbortSignal,
-    record: () => SessionEvent
-  ): { ok: true; events: AsyncGenerator<ExchangeEvent> } | { ok: false; reason: 'ended' } {
+    record: () => Recorded
+  ): RunResult<'ended'> {
     inFlight.add(sessionId)
     const free = () => void inFlight.delete(sessionId)
     let started = false
     signal.addEventListener('abort', () => !started && free(), { once: true })
 
-    let first: SessionEvent
+    let recorded: Recorded
     try {
       // The run boundary: NPCs that died, left or were retired since the last run drop out of the
       // stored Scene (they never resolve in the meantime), ending a dialogue with them.
       sessions.pruneScene(sessionId)
-      first = record()
+      recorded = record()
     } catch (error) {
       free()
       if (error instanceof SessionValidationError) return { ok: false, reason: 'ended' }
@@ -129,13 +149,18 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
     async function* events(): AsyncGenerator<ExchangeEvent> {
       started = true
       try {
-        yield { type: 'event', event: first }
-        yield* run(sessionId, signal, first)
+        for (const event of recorded.events) yield { type: 'event', event }
+        yield* run(sessionId, signal, recorded.start)
       } finally {
         free()
       }
     }
-    return { ok: true, events: events() }
+    async function* forClient(): AsyncGenerator<ExchangeEvent> {
+      for await (const e of events()) {
+        yield e.type === 'event' ? { type: 'event', event: clientEvent(e.event) } : e
+      }
+    }
+    return { ok: true, events: forClient() }
   }
 
   return {
@@ -147,7 +172,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
     /**
      * Starts an Exchange for the player's Declaration. Refusals are decided synchronously, before
      * anything is saved. The Declaration is saved before any model call, so a stopped or failed
-     * Exchange keeps it.
+     * Exchange keeps it. An open Call is withdrawn first: the player chose to do something else.
      */
     begin(sessionId: string, declaration: string, signal: AbortSignal): BeginResult {
       const refused = refusal(sessionId)
@@ -156,9 +181,34 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       if (!text) return { ok: false, reason: 'empty-action' }
       if (inFlight.has(sessionId)) return { ok: false, reason: 'in-flight' }
 
-      return start(sessionId, signal, () =>
-        sessions.appendEvent(sessionId, { role: 'player', kind: 'declaration', text })
-      )
+      return start(sessionId, signal, () => {
+        const open = sessions.scene(sessionId).openCall
+        const withdrawn = open ? [withdrawCall(sessions, sessionId, open)] : []
+        const saved = sessions.appendEvent(sessionId, { role: 'player', kind: 'declaration', text })
+        return { events: [...withdrawn, saved], start: { kind: 'declaration', declaration: saved } }
+      })
+    },
+
+    /**
+     * Answers the open Call and runs the rest of its Exchange. For a roll, code rolls the d20 plus
+     * the Character's modifier, logs the result and clears the Call before any model call; on
+     * success the Effect runs and then the Reply, on failure the Reply narrates the failure.
+     */
+    answerCall(sessionId: string, answer: CallAnswer, signal: AbortSignal): AnswerResult {
+      const refused = refusal(sessionId)
+      if (refused) return { ok: false, reason: refused }
+      if (inFlight.has(sessionId)) return { ok: false, reason: 'in-flight' }
+      const call = sessions.scene(sessionId).openCall
+      // #273: a question Call takes a choice or free text instead of a roll.
+      if (!call || answer.kind !== 'roll') return { ok: false, reason: 'no-open-call' }
+
+      return start(sessionId, signal, () => {
+        const roll = rollCheck(call, dice, checkModifier, sessionId)
+        const answered = answerCheck(sessions, sessionId, call, roll)
+        const declaration = sessions.events(sessionId).find((e) => e.seq === call.declaration.seq)
+        if (!declaration) throw new Error('The open Call has no Declaration in the log')
+        return { events: [answered], start: { kind: 'check', declaration, call, roll } }
+      })
     }
   }
 }

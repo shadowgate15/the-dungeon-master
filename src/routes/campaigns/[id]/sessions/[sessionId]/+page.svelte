@@ -8,13 +8,13 @@
   import Journal from '#lib/session/Journal.svelte'
   import Previously from '#lib/session/Previously.svelte'
   import type { ExchangeEvent, RulingMessage, RunStats } from '#lib/session/exchange-events.ts'
-  import { sendAction } from '#lib/session/play.ts'
+  import { answerCall, sendAction } from '#lib/session/play.ts'
+  import DeclarationForm from '#lib/session/DeclarationForm.svelte'
   import type { SessionEvent } from '#lib/session/enums.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Dialog from '#lib/ui/Dialog.svelte'
   import Link from '#lib/ui/Link.svelte'
-  import Textarea from '#lib/ui/Textarea.svelte'
 
   // The event inspector is for development only.
   const dev = import.meta.env.DEV
@@ -89,11 +89,15 @@
     return ok
   }
 
-  async function send(e: SubmitEvent) {
-    e.preventDefault()
-    const text = draft.trim()
-    if (!text || busy) return
+  // Sending while a Call is open withdraws it (the runner does that) and starts a new Exchange.
+  async function send(text: string) {
+    if (busy) return
     if (await stream((signal) => sendAction(data.session.id, text, onMessage, signal))) draft = ''
+  }
+
+  function roll() {
+    if (busy) return
+    void stream((signal) => answerCall(data.session.id, { kind: 'roll' }, onMessage, signal))
   }
 </script>
 
@@ -164,6 +168,8 @@
             {liveNpcId}
             {thinking}
             mode={data.scene.mode}
+            openCall={data.scene.openCall}
+            onroll={!ended && !busy ? roll : undefined}
           />
         {/if}
       </div>
@@ -172,19 +178,13 @@
         <Alert variant="danger">{problem}</Alert>
       {/if}
       {#if !ended}
-        <form onsubmit={send} class="flex items-end gap-2">
-          <label class="flex-1 text-sm">
-            Your action
-            <Textarea bind:value={draft} rows={2} disabled={busy} placeholder="What do you do?" />
-          </label>
-          {#if busy}
-            <Button type="button" variant="secondary" onclick={() => controller?.abort()}
-              >Stop</Button
-            >
-          {:else}
-            <Button type="submit" disabled={!draft.trim()}>Send</Button>
-          {/if}
-        </form>
+        <DeclarationForm
+          bind:draft
+          {busy}
+          callOpen={data.scene.openCall !== null}
+          onsend={send}
+          onstop={() => controller?.abort()}
+        />
       {/if}
     </section>
 

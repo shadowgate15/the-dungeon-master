@@ -70,7 +70,7 @@ const sceneColumns = (scene: SceneState, updatedAt: number) => ({
   npcs: scene.npcs.map((n) => n.id),
   mode: scene.mode,
   dialogueNpcId: scene.dialogueNpcId,
-  pendingRoll: scene.pendingRoll,
+  openCall: scene.openCall,
   updatedAt
 })
 
@@ -156,7 +156,7 @@ export function createSessionService(
       npcs,
       mode: partner ? row.mode : 'exploration',
       dialogueNpcId: partner ? row.dialogueNpcId : null,
-      pendingRoll: row.pendingRoll
+      openCall: row.openCall
     }
   }
 
@@ -279,7 +279,7 @@ export function createSessionService(
      * Session per Campaign, and an accepted Arc is required. The Campaign's first Session starts
      * in a Scene generated from its World, Seed and Arc (three staged model calls) and stored as
      * World memory in one transaction; any stage failing throws `SessionStartError` and creates
-     * nothing. Later Sessions open on a copy of the previous Session's Scene, with no model call.
+     * nothing. Later Sessions open on a copy of the previous Session's Scene (without its open Call), with no model call.
      */
     async start(campaignId: string): Promise<Session> {
       const ready = readyToStart(campaignId)
@@ -289,7 +289,13 @@ export function createSessionService(
           recheck(tx, campaignId)
           const created = insertSession(tx, campaignId, ready.characterId)
           tx.insert(sessionScene)
-            .values({ ...previous, sessionId: created.id, updatedAt: created.startedAt })
+            // An open Call belongs to the previous Session's Exchange, so it stays behind.
+            .values({
+              ...previous,
+              openCall: null,
+              sessionId: created.id,
+              updatedAt: created.startedAt
+            })
             .run()
           return created
         })
@@ -359,7 +365,7 @@ export function createSessionService(
             npcs: present,
             mode: 'exploration',
             dialogueNpcId: null,
-            pendingRoll: null,
+            openCall: null,
             updatedAt: created.startedAt
           })
           .run()

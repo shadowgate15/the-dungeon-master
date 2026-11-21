@@ -1,8 +1,10 @@
 /**
  * One Exchange (ADR 0005): a fixed sequence of steps over a recorded Declaration. Adjudication
- * rules how it resolves; on happens, Effect picks and code applies the one state change; the Reply
+ * rules how it resolves; a Check raises a Call, which pauses the Exchange until the player rolls.
+ * On happens or a successful Check, Effect picks and code applies the one state change; the Reply
  * streams last, told what was settled. Code owns the order; the model only answers each step.
  */
+import type { CheckCall, CheckRoll } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type {
   ContextReport,
@@ -15,6 +17,7 @@ import type {
 } from '#lib/session/exchange-events.ts'
 import type { ChatPort } from '../../ai/port.ts'
 import { adjudicate } from './adjudicate.ts'
+import { raiseCheck } from './call.ts'
 import type { ExchangeContext } from './context.ts'
 import type { Adjudication } from './contract.ts'
 import { applyEffect, chooseEffect } from './effect.ts'
@@ -30,22 +33,46 @@ function addReport(context: ContextStats, report: ContextReport) {
   }
 }
 
-/** The Reply's facts for a ruling and the change its Effect made (if any). */
-function outcomeFacts(adjudication: Adjudication, change: string | null): string {
+/** The Reply's facts for a ruling, its Check result (if rolled) and the change its Effect made. */
+function outcomeFacts(
+  adjudication: Adjudication,
+  check: CheckRoll | null,
+  change: string | null
+): string {
   if (adjudication.outcome === 'impossible') {
     return 'Outcome: the player character cannot do this. Say so in the fiction; nothing changes.'
   }
-  return ['Outcome: the player character does it.', ...(change ? [change] : [])].join(' ')
+  const skill = adjudication.outcome === 'check' ? adjudication.skill.replaceAll('_', ' ') : ''
+  if (check && !check.success) {
+    return `Outcome: the player character tries and fails (a failed ${skill} check). Narrate the failure; nothing changes.`
+  }
+  const does = check
+    ? `Outcome: the player character succeeds (a successful ${skill} check) and does it.`
+    : 'Outcome: the player character does it.'
+  return [does, ...(change ? [change] : [])].join(' ')
 }
 
 /**
- * Runs the Exchange for a recorded Declaration, streaming its events. Returns true once the Reply
- * is saved, false when the player stopped it. Throws on a model failure or an invalid answer.
+ * Where an Exchange starts: a new Declaration, or a Check Call the player has just rolled (the
+ * Call is already cleared and its result logged). #273 adds an answered question here.
+ */
+export type ExchangeStart =
+  | { kind: 'declaration'; declaration: SessionEvent }
+  | { kind: 'check'; declaration: SessionEvent; call: CheckCall; roll: CheckRoll }
+
+/** How an Exchange handed the floor back: a saved Reply, a stopped one, or an open Call. */
+export type ExchangeEnd = 'replied' | 'stopped' | 'call'
+
+/**
+ * Runs the Exchange, streaming its events. Returns `replied` once the Reply is saved, `stopped`
+ * when the player stopped it and `call` when it paused on a Call. Throws on a model failure or
+ * an invalid answer.
  */
 export async function* runExchange(
   ctx: ExchangeContext,
-  declaration: SessionEvent
-): AsyncGenerator<ExchangeEvent, boolean> {
+  start: ExchangeStart
+): AsyncGenerator<ExchangeEvent, ExchangeEnd> {
+  const { declaration } = start
   const context: ContextStats = { roles: {}, trims: noTrims() }
   const stats: RunStats = { steps: {}, context }
   let step: ExchangeStep = 'adjudication'
@@ -71,15 +98,31 @@ export async function* runExchange(
     }
   }
 
-  yield { type: 'thinking', step }
-  const adjudication = await adjudicate(run, declaration)
-  yield snapshot()
+  let adjudication: Adjudication
+  let check: CheckRoll | null = null
+  if (start.kind === 'check') {
+    const { skill, difficulty } = start.call
+    adjudication = { outcome: 'check', skill, difficulty } as Adjudication
+    check = start.roll
+  } else {
+    yield { type: 'thinking', step }
+    adjudication = await adjudicate(run, declaration)
+    yield snapshot()
+    if (adjudication.outcome === 'check') {
+      const event = raiseCheck(ctx.sessions, ctx.sessionId, declaration, adjudication)
+      yield { type: 'event', event }
+      yield { type: 'ruling', adjudication, effect: null }
+      return 'call'
+    }
+  }
 
   let effect: RulingEffect | null = null
   let change: string | null = null
-  // TEMPORARY: a Check or a question resolves as happens until #272 (Checks as Calls) and #273
-  // (questions) give them their own paths. Remove this fallback with those tickets.
-  const happens = adjudication.outcome !== 'impossible'
+  // TEMPORARY: a question resolves as happens until #273 gives it its own path.
+  const happens =
+    adjudication.outcome === 'happens' ||
+    adjudication.outcome === 'ask' ||
+    (check !== null && check.success)
   if (happens) {
     step = 'effect'
     yield { type: 'thinking', step }
@@ -92,7 +135,7 @@ export async function* runExchange(
 
   step = 'reply'
   yield { type: 'thinking', step }
-  const replied = yield* reply(run, outcomeFacts(adjudication, change))
+  const replied = yield* reply(run, outcomeFacts(adjudication, check, change))
   yield snapshot()
-  return replied
+  return replied ? 'replied' : 'stopped'
 }

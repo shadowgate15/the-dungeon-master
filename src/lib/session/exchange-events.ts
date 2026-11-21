@@ -78,12 +78,12 @@ export interface RulingEffect {
 export interface RulingMessage {
   type: 'ruling'
   adjudication: RulingAdjudication
-  /** The Effect that was applied; null when none ran (the Declaration was impossible). */
+  /** The Effect that was applied; null when none ran (the Declaration was impossible, failed its check, or raised a Call). */
   effect: RulingEffect | null
 }
 
-/** Why the Exchange handed the floor back to the player. */
-export type DoneReason = 'replied' | 'stopped' | 'error'
+/** Why the Exchange handed the floor back to the player: `call` means it waits on an open Call. */
+export type DoneReason = 'replied' | 'call' | 'stopped' | 'error'
 
 /**
  * What an Exchange streams. `event` carries a committed Event log entry; `done` ends the run.

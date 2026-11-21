@@ -18,6 +18,15 @@ import {
 } from './service'
 import { eq } from 'drizzle-orm'
 import type { Database } from '../db/connect'
+import type { CheckCall } from '#lib/session/call.ts'
+
+const openCheck: CheckCall = {
+  kind: 'check',
+  skill: 'perception',
+  difficulty: 'medium',
+  dc: 15,
+  declaration: { seq: 1, text: 'I look around' }
+}
 
 let db: Database
 let sessions: SessionService
@@ -46,7 +55,7 @@ describe('starting a Session', () => {
     expect(scene.objects.length).toBeGreaterThan(0)
     expect(scene.npcs.length).toBeGreaterThan(0)
     expect(scene.mode).toBe('exploration')
-    expect(scene.pendingRoll).toBeNull()
+    expect(scene.openCall).toBeNull()
     expect(sessions.events(session.id)).toEqual([])
   })
 
@@ -143,18 +152,19 @@ describe('the Scene', () => {
   it('persists code-applied changes', async () => {
     const { id } = await sessions.start(campaignId)
     const scene = sessions.scene(id)
+    const call = openCheck
 
     sessions.saveScene(id, {
       ...scene,
       mode: 'dialogue',
       dialogueNpcId: scene.npcs[0].id,
-      pendingRoll: { check: 'perception', dc: 12, reason: 'looking around' }
+      openCall: call
     })
 
     expect(sessions.scene(id)).toMatchObject({
       mode: 'dialogue',
       dialogueNpcId: scene.npcs[0].id,
-      pendingRoll: { check: 'perception', dc: 12 }
+      openCall: call
     })
   })
 })
@@ -292,12 +302,12 @@ describe('Scene NPCs resolve live from World memory', () => {
 })
 
 describe('Scene carry-over and the Character lock', () => {
-  it('opens a later Session on a clone of the previous Scene with an empty Event log', async () => {
+  it('opens a later Session on a clone of the previous Scene, without its open Call, with an empty Event log', async () => {
     const first = await sessions.start(campaignId)
     const npcId = sessions.scene(first.id).npcs[0].id
-    const roll = { check: 'Persuasion', dc: 12, reason: 'win her trust' }
+    const call = { ...openCheck, declaration: { seq: 1, text: 'I look' } }
     db.update(sessionScene)
-      .set({ mode: 'dialogue', dialogueNpcId: npcId, pendingRoll: roll })
+      .set({ mode: 'dialogue', dialogueNpcId: npcId, openCall: call })
       .where(eq(sessionScene.sessionId, first.id))
       .run()
     sessions.appendEvent(first.id, { role: 'player', kind: 'declaration', text: 'I look' })
@@ -312,7 +322,8 @@ describe('Scene carry-over and the Character lock', () => {
     expect(after.npcs.map((n) => n.id)).toEqual(before.npcs.map((n) => n.id))
     expect(after.mode).toBe('dialogue')
     expect(after.dialogueNpcId).toBe(npcId)
-    expect(after.pendingRoll).toEqual(roll)
+    expect(before.openCall).toEqual(call)
+    expect(after.openCall).toBeNull()
     expect(sessions.events(second.id)).toEqual([])
   })
 

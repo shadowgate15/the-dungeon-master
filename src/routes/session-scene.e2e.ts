@@ -59,7 +59,7 @@ test('starts a Session, shows its Scene, saves an action and restores both on re
   ).not.toHaveCount(0)
   await expect(scene.getByRole('region', { name: 'Present' })).toContainText(FIRST_SCENE.npc)
   await expect(scene.getByRole('region', { name: 'Mode' })).toContainText('exploration')
-  await expect(scene.getByRole('region', { name: 'Pending roll' })).toContainText('None')
+  await expect(scene.getByRole('region', { name: 'Open Call' })).toContainText('None')
   await expect(page.getByText('Nothing has happened yet.')).toBeVisible()
 
   // An action lands in the story log.

@@ -1,6 +1,7 @@
 import { page } from 'vitest/browser'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-svelte'
+import type { CallView } from './call.ts'
 import type { SceneNpc, SessionEvent } from './enums.ts'
 import StoryLog from './StoryLog.svelte'
 
@@ -40,18 +41,77 @@ describe('StoryLog', () => {
     await expect.element(page.getByText('Mira looks up.')).not.toHaveAttribute('data-aside')
   })
 
-  it("shows the Declaration as the player's line and a Call as a subdued note", async () => {
-    const log = [
-      event(1, 'declaration', 'I pick the lock.'),
-      event(2, 'call-raised', 'Roll Sleight of Hand.'),
-      event(3, 'call-answered', 'Rolled 14.'),
-      event(4, 'narration', 'The lock clicks.')
-    ]
-    render(StoryLog, { props: { events: log, npcs } })
-
+  it("shows the Declaration as the player's line", async () => {
+    render(StoryLog, { props: { events: [event(1, 'declaration', 'I pick the lock.')], npcs } })
     await expect.element(page.getByText('I pick the lock.')).toHaveClass(/italic/)
-    await expect.element(page.getByText('Roll Sleight of Hand.')).toHaveAttribute('data-call')
-    await expect.element(page.getByText('Rolled 14.')).toHaveAttribute('data-call')
+  })
+
+  describe('a Check Call', () => {
+    const call: CallView = {
+      kind: 'check',
+      skill: 'sleight_of_hand',
+      difficulty: 'hard',
+      declaration: { seq: 1, text: 'I pick the lock.' }
+    }
+    const raised = [
+      event(1, 'declaration', 'I pick the lock.'),
+      {
+        ...event(2, 'call-raised', 'Sleight of hand check: I pick the lock.'),
+        role: 'code' as const
+      }
+    ]
+
+    it('shows the open Check inline with its skill, its reason and a Roll button, and no DC', async () => {
+      const onroll = vi.fn()
+      render(StoryLog, { props: { events: raised, npcs, openCall: call, onroll } })
+
+      const check = page.getByRole('group', { name: 'Check' })
+      await expect.element(check).toHaveTextContent('Sleight of hand check')
+      await expect.element(check).toHaveTextContent('I pick the lock.')
+      await expect.element(check).not.toHaveTextContent(/DC|\b20\b/)
+      await page.getByRole('button', { name: 'Roll' }).click()
+      expect(onroll).toHaveBeenCalledOnce()
+    })
+
+    it('disables the Roll button while it cannot be answered', async () => {
+      render(StoryLog, { props: { events: raised, npcs, openCall: call } })
+      await expect.element(page.getByRole('button', { name: 'Roll' })).toBeDisabled()
+    })
+
+    it('shows the roll result line once answered, and no Roll button', async () => {
+      const answered = {
+        ...event(3, 'call-answered', 'Sleight of hand: 14 + 2 = 16, failure'),
+        data: {
+          kind: 'check',
+          skill: 'sleight_of_hand',
+          die: 14,
+          modifier: 2,
+          total: 16,
+          success: false
+        }
+      }
+      render(StoryLog, { props: { events: [...raised, answered], npcs, openCall: null } })
+
+      await expect
+        .element(page.getByText('Sleight of hand: 14 + 2 = 16, failure'))
+        .toHaveAttribute('data-roll', 'failure')
+      await expect.element(page.getByRole('button', { name: 'Roll' })).not.toBeInTheDocument()
+    })
+
+    it('shows a withdrawn Check subdued', async () => {
+      const withdrawn = {
+        ...event(3, 'call-answered', 'Sleight of hand check withdrawn'),
+        data: { kind: 'check', skill: 'sleight_of_hand', withdrawn: true }
+      }
+      render(StoryLog, { props: { events: [...raised, withdrawn], npcs, openCall: null } })
+
+      await expect
+        .element(page.getByText('Sleight of hand check withdrawn'))
+        .toHaveAttribute('data-withdrawn')
+      await expect
+        .element(page.getByText('Sleight of hand check: I pick the lock.'))
+        .toHaveAttribute('data-withdrawn')
+    })
   })
 
   it('shows the thinking indicator until the Reply streams', async () => {

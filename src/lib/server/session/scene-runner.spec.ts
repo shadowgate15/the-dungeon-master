@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import type { Database } from '../db/connect'
+import type { MemoryExtraction } from '../memory/extraction.ts'
 import { place, sessionScene } from '../db/schema'
 import {
   answers,
@@ -13,10 +14,14 @@ import { effect, happens, impossible, rules } from '../../testing/exchange-scrip
 import { playableCampaign, sessionServiceWith, updateNpc } from './fixture'
 import {
   createSceneRunner,
+  type AnswerResult,
   type BeginResult,
   type ExchangeEvent,
-  type SceneRunner
+  type SceneRunner,
+  type SceneRunnerDeps
 } from './scene-runner.ts'
+import { createDice } from '../dice.ts'
+import { createCheckModifier } from './check-modifier.ts'
 import { createSessionService, type SessionService } from './service'
 
 let db: Database
@@ -33,9 +38,16 @@ beforeEach(async () => {
   model = createScriptedPort()
 })
 
-const runner = (): SceneRunner => createSceneRunner({ sessions, port: model.port })
+const runner = ({ seed = 1, ...deps }: { seed?: number } & Partial<SceneRunnerDeps> = {}) =>
+  createSceneRunner({
+    sessions,
+    port: model.port,
+    dice: createDice(seed),
+    checkModifier: createCheckModifier(db),
+    ...deps
+  })
 
-async function drain(result: BeginResult) {
+async function drain(result: BeginResult | AnswerResult) {
   if (!result.ok) throw new Error(`refused: ${result.reason}`)
   const events: ExchangeEvent[] = []
   for await (const e of result.events) events.push(e)
@@ -44,6 +56,14 @@ async function drain(result: BeginResult) {
 
 const play = (text: string, using = runner()) =>
   drain(using.begin(sessionId, text, new AbortController().signal))
+
+const roll = (using: SceneRunner) =>
+  drain(using.answerCall(sessionId, { kind: 'roll' }, new AbortController().signal))
+
+const answeredData = () =>
+  sessions.events(sessionId).findLast((e) => e.kind === 'call-answered')?.data
+
+const climb = () => rules({ outcome: 'check', skill: 'athletics', difficulty: 'hard' })
 
 const log = () => sessions.events(sessionId).map((e) => `${e.role}:${e.kind}:${e.text}`)
 const done = (events: ExchangeEvent[]) => events.at(-1)
@@ -265,20 +285,150 @@ describe('an impossible Declaration', () => {
   })
 })
 
-describe('a Check or a question (until their own tickets)', () => {
-  it('resolves as happens for now, while the ruling shows what the model said', async () => {
+describe('a Check', () => {
+  // A human Fighter: athletics +5 (proficient), constitution save +4 (proficient).
+  // Seed 4 rolls a 19 first; seed 7 rolls a 1.
+
+  it('raises a Call that pauses the Exchange, then a roll that succeeds applies its Effect', async () => {
+    const using = runner({ seed: 4 })
+    model.enqueue(climb())
+    const raised = await play('I vault down the cellar stairs', using)
+
+    expect(done(raised)).toEqual({ type: 'done', reason: 'call' })
+    expect(sessions.scene(sessionId).openCall).toMatchObject({ kind: 'check', skill: 'athletics' })
+
     model.enqueue(
-      rules({ outcome: 'check', skill: 'athletics', difficulty: 'hard' }),
-      effect({ effect: 'none' }),
-      says('You heave the door open.')
+      effect({ effect: 'move', exitId: 'cellar-stairs' }),
+      answers(cellar),
+      answers(cellarNpcs),
+      says('You land in the cold dark.')
     )
-    const events = await play('I force the door')
-    expect(events.find((e) => e.type === 'ruling')).toEqual({
-      type: 'ruling',
-      adjudication: { outcome: 'check', skill: 'athletics', difficulty: 'hard' },
-      effect: { effect: 'none' }
+    const answered = await roll(using)
+
+    expect(log()).toEqual([
+      'player:declaration:I vault down the cellar stairs',
+      'code:call-raised:Athletics check: I vault down the cellar stairs',
+      'code:call-answered:Athletics: 19 + 5 = 24, success',
+      'code:scene-changed:You go through: Cellar stairs. You are now at The Damp Cellar.',
+      'narrator:narration:You land in the cold dark.'
+    ])
+    expect(answeredData()).toMatchObject({ die: 19, modifier: 5, total: 24, success: true })
+    expect(sessions.scene(sessionId)).toMatchObject({
+      location: { name: 'The Damp Cellar' },
+      openCall: null
     })
+    expect(done(answered)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('that fails gets a Reply narrating the failure, and no Effect', async () => {
+    const using = runner({ seed: 7 })
+    model.enqueue(climb())
+    await play('I vault down the cellar stairs', using)
+    const before = sessions.scene(sessionId)
+
+    model.enqueue(says('You slip and land hard on the top step.'))
+    const answered = await roll(using)
+
+    expect(model.requests).toHaveLength(2)
+    expect(model.requests[1].messages.map((m) => m.content).join('\n')).toContain('fails')
+    expect(log().slice(-2)).toEqual([
+      'code:call-answered:Athletics: 1 + 5 = 6, failure',
+      'narrator:narration:You slip and land hard on the top step.'
+    ])
+    expect(answeredData()).toMatchObject({ die: 1, modifier: 5, total: 6, success: false })
+    expect(sessions.scene(sessionId)).toEqual({ ...before, openCall: null })
+    expect(done(answered)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('maps the difficulty to the DC: a 19 + 5 fails a very hard Check', async () => {
+    const using = runner({ seed: 4 })
+    model.enqueue(rules({ outcome: 'check', skill: 'athletics', difficulty: 'very_hard' }))
+    await play('I leap the chasm', using)
+    model.enqueue(says('Not quite.'))
+    await roll(using)
+    expect(answeredData()).toMatchObject({ total: 24, success: false })
+  })
+
+  it('rolls a save with the save modifier', async () => {
+    const using = runner({ seed: 4 })
+    model.enqueue(rules({ outcome: 'check', skill: 'constitution_save', difficulty: 'easy' }))
+    await play('I drink the bitter draught', using)
+    model.enqueue(effect({ effect: 'none' }), says('You keep it down.'))
+    await roll(using)
+    expect(log()).toContain('code:call-answered:Constitution save: 19 + 4 = 23, success')
+  })
+
+  it('is withdrawn by a new Declaration, which starts a new Exchange', async () => {
+    const using = runner()
+    model.enqueue(climb())
+    await play('I vault down the cellar stairs', using)
+
+    model.enqueue(happens(), effect({ effect: 'none' }), says('You sit by the fire instead.'))
+    const events = await play('Never mind, I sit by the fire', using)
+
+    expect(log()).toEqual([
+      'player:declaration:I vault down the cellar stairs',
+      'code:call-raised:Athletics check: I vault down the cellar stairs',
+      'code:call-answered:Athletics check withdrawn',
+      'player:declaration:Never mind, I sit by the fire',
+      'narrator:narration:You sit by the fire instead.'
+    ])
+    expect(answeredData()).toMatchObject({ withdrawn: true })
+    expect(sessions.scene(sessionId).openCall).toBeNull()
     expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('stays open across a reload: a new runner instance can roll it', async () => {
+    model.enqueue(climb())
+    await play('I vault down the cellar stairs')
+
+    const reloaded = createSessionService(db)
+    expect(reloaded.scene(sessionId).openCall).toMatchObject({ kind: 'check', skill: 'athletics' })
+    model.enqueue(effect({ effect: 'none' }), says('Down you go.'))
+    const answered = await drain(
+      runner({ seed: 4, sessions: reloaded }).answerCall(
+        sessionId,
+        { kind: 'roll' },
+        new AbortController().signal
+      )
+    )
+    expect(done(answered)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('runs no background jobs while it is open, and runs them once the Exchange replies', async () => {
+    const trigger = vi.fn(() => Promise.resolve())
+    const using = runner({ seed: 4, memory: { trigger } as unknown as MemoryExtraction })
+    model.enqueue(climb())
+    await play('I vault down the cellar stairs', using)
+    await using.settled()
+    expect(trigger).not.toHaveBeenCalled()
+
+    model.enqueue(effect({ effect: 'none' }), says('Down.'))
+    await roll(using)
+    await using.settled()
+    expect(trigger).toHaveBeenCalledTimes(1)
+  })
+
+  it('never sends the DC to the client, in streamed events or chunks', async () => {
+    const using = runner({ seed: 4 })
+    model.enqueue(climb())
+    const raised = await play('I vault down the cellar stairs', using)
+    model.enqueue(effect({ effect: 'none' }), says('Down.'))
+    const answered = await roll(using)
+    model.enqueue(rules({ outcome: 'check', skill: 'stealth', difficulty: 'medium' }))
+    const again = await play('I sneak past', using)
+    model.enqueue(happens(), effect({ effect: 'none' }), says('Fine.'))
+    const withdrawn = await play('I stand up', using)
+
+    for (const events of [raised, answered, again, withdrawn]) {
+      const sent = JSON.stringify(events)
+      expect(sent).not.toMatch(/"dc"/)
+      expect(sent).not.toMatch(/\bDC\b/)
+    }
+    // The DC is still kept server-side.
+    expect(sessions.events(sessionId).find((e) => e.kind === 'call-raised')?.data).toMatchObject({
+      dc: 20
+    })
   })
 })
 
@@ -356,6 +506,38 @@ describe('refusals', () => {
 
     model.enqueue(happens(), effect({ effect: 'none' }), says('More rain.'))
     expect(done(await play('I wait again', using))).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('refuses to answer when no Call is open, an unknown Session and an ended one', () => {
+    const using = runner()
+    const signal = new AbortController().signal
+    expect(using.answerCall(sessionId, { kind: 'roll' }, signal)).toEqual({
+      ok: false,
+      reason: 'no-open-call'
+    })
+    expect(using.answerCall('nope', { kind: 'roll' }, signal)).toEqual({
+      ok: false,
+      reason: 'not-found'
+    })
+    sessions.end(sessionId)
+    expect(using.answerCall(sessionId, { kind: 'roll' }, signal)).toEqual({
+      ok: false,
+      reason: 'ended'
+    })
+    expect(log()).toEqual([])
+  })
+
+  it('refuses to answer while an Exchange is in flight', async () => {
+    const using = runner()
+    model.enqueue(climb())
+    await play('I climb', using)
+    model.enqueue(happens(), effect({ effect: 'none' }), says('Rain.'))
+    const busy = using.begin(sessionId, 'I wait', new AbortController().signal)
+    expect(using.answerCall(sessionId, { kind: 'roll' }, new AbortController().signal)).toEqual({
+      ok: false,
+      reason: 'in-flight'
+    })
+    await drain(busy)
   })
 
   it('releases the claim when a stream nobody reads is aborted', () => {

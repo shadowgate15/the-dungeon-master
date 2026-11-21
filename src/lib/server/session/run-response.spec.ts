@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
-import { sendAction } from '#lib/session/play.ts'
+import { answerCall, sendAction } from '#lib/session/play.ts'
 import { refusalResponse, runResponse } from './run-response.ts'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -41,6 +41,22 @@ describe('a run over the wire', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/sessions/s1/action')
   })
 
+  it('sends a roll to the answer route', async () => {
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body)).forwardedProps).toEqual({ answer: { kind: 'roll' } })
+      return runResponse('s1', run({ type: 'done', reason: 'replied' }), new AbortController())
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await received((on) => answerCall('s1', { kind: 'roll' }, on))
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/sessions/s1/answer')
+  })
+
+  it('tells the client when there is no Call to answer', async () => {
+    vi.stubGlobal('fetch', async () => refusalResponse('no-open-call'))
+    const { problem } = await received((on) => answerCall('s1', { kind: 'roll' }, on))
+    expect(problem).toBe('There is nothing to answer right now.')
+  })
+
   it('carries the ruling to the client for the inspector', async () => {
     const ruling: ExchangeEvent = {
       type: 'ruling',
@@ -79,5 +95,6 @@ describe('a run over the wire', () => {
     expect(refusalResponse('not-found').status).toBe(404)
     expect(refusalResponse('in-flight').status).toBe(409)
     expect(refusalResponse('empty-action').status).toBe(400)
+    expect(refusalResponse('no-open-call').status).toBe(409)
   })
 })

@@ -2,6 +2,7 @@ import { NO_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import { getChatPort } from '../ai/index.ts'
 import type { ChatPort } from '../ai/port.ts'
 import { db } from '../db/index.ts'
+import { dice } from '../dice.ts'
 import { createBeatProgress } from '../arc/beat-progress.ts'
 import { createMemoryExtraction } from '../memory/extraction.ts'
 import { createRollingSummary } from '../memory/summary.ts'
@@ -10,6 +11,7 @@ import {
   createFixedReader,
   createWorldReader
 } from './context/sources.ts'
+import { createCheckModifier } from './check-modifier.ts'
 import { createSessionEnd } from './end-session.ts'
 import { createSceneRunner } from './scene-runner.ts'
 import { createSessionService } from './service.ts'
@@ -56,5 +58,7 @@ export const sceneRunner = createSceneRunner({
     world: createWorldReader(db),
     fixed: createFixedReader(db),
     character: createCharacterLineReader(db)
-  }
+  },
+  dice,
+  checkModifier: createCheckModifier(db)
 })

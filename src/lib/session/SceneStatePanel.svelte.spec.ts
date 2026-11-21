@@ -1,10 +1,10 @@
 import { page } from 'vitest/browser'
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-svelte'
-import type { SceneState, SessionEvent } from './enums.ts'
+import type { SceneView, SessionEvent } from './enums.ts'
 import SceneStatePanel from './SceneStatePanel.svelte'
 
-const scene: SceneState = {
+const scene: SceneView = {
   location: { name: 'The Rusty Flagon', description: 'A smoky tavern.' },
   exits: [{ id: 'door', name: 'Front door' }],
   objects: ['Hearth'],
@@ -13,7 +13,7 @@ const scene: SceneState = {
   ],
   mode: 'exploration',
   dialogueNpcId: null,
-  pendingRoll: null
+  openCall: null
 }
 
 const line = (seq: number, text: string): SessionEvent => ({
@@ -57,5 +57,25 @@ describe('SceneStatePanel', () => {
 
     await expect.element(page.getByText('The Rusty Flagon')).toBeVisible()
     await expect.element(page.getByText('A smoky tavern.')).not.toBeInTheDocument()
+  })
+
+  it('shows the open Call by skill and reason, never its DC', async () => {
+    render(SceneStatePanel, {
+      scene: {
+        ...scene,
+        openCall: {
+          kind: 'check',
+          skill: 'athletics',
+          difficulty: 'hard',
+          declaration: { seq: 1, text: 'I climb the wall.' }
+        }
+      },
+      log: []
+    })
+
+    const call = page.getByRole('region', { name: 'Open Call' })
+    await expect.element(call).toHaveTextContent('Athletics check')
+    await expect.element(call).toHaveTextContent('I climb the wall.')
+    await expect.element(call).not.toHaveTextContent(/DC|hard/)
   })
 })
