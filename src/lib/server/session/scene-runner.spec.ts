@@ -20,7 +20,9 @@ import {
   type SceneRunner,
   type SceneRunnerDeps
 } from './scene-runner.ts'
+import type { CarriedEffect } from '../../session/call.ts'
 import { createDice } from '../dice.ts'
+import { EFFECT_SYSTEM } from './exchange/contract.ts'
 import { createCheckModifier } from './check-modifier.ts'
 import { createSessionService, type SessionService } from './service'
 
@@ -429,6 +431,95 @@ describe('a Check', () => {
     expect(sessions.events(sessionId).find((e) => e.kind === 'call-raised')?.data).toMatchObject({
       dc: 20
     })
+  })
+})
+
+describe('a clicked exit or NPC', () => {
+  const click = (text: string, carried: CarriedEffect, using = runner()) =>
+    drain(using.begin(sessionId, text, new AbortController().signal, carried))
+  const cellarStairs: CarriedEffect = { effect: 'move', exitId: 'cellar-stairs' }
+  const effectRequested = () => model.requests.some((r) => r.systemPrompts.includes(EFFECT_SYSTEM))
+
+  it('ruled happens applies the carried move without asking the Effect step', async () => {
+    model.enqueue(happens(), answers(cellar), answers(cellarNpcs), says('Cold air rises.'))
+
+    const events = await click('I go through the Cellar stairs.', cellarStairs)
+
+    expect(effectRequested()).toBe(false)
+    expect(sessions.scene(sessionId).location.name).toBe('The Damp Cellar')
+    expect(log()).toEqual([
+      'player:declaration:I go through the Cellar stairs.',
+      'code:scene-changed:You go through: Cellar stairs. You are now at The Damp Cellar.',
+      'narrator:narration:Cold air rises.'
+    ])
+    expect(events.find((e) => e.type === 'ruling')).toMatchObject({ effect: cellarStairs })
+    expect(
+      model.requests
+        .at(-1)!
+        .messages.map((m) => m.content)
+        .join('\n')
+    ).toContain('went through Cellar stairs')
+    expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('ruled impossible applies no Effect and only gets a Reply', async () => {
+    const [brenna] = sessions.scene(sessionId).npcs
+    const before = sessions.scene(sessionId)
+    model.enqueue(impossible(), says('Brenna will not look at you.'))
+
+    const events = await click('I talk to Brenna.', { effect: 'talk', npcId: brenna.id })
+
+    expect(model.requests).toHaveLength(2)
+    expect(events.find((e) => e.type === 'ruling')).toMatchObject({ effect: null })
+    expect(log()).toEqual([
+      'player:declaration:I talk to Brenna.',
+      'narrator:narration:Brenna will not look at you.'
+    ])
+    expect(sessions.scene(sessionId)).toEqual(before)
+  })
+
+  it('ruled check applies the carried Effect once the roll succeeds', async () => {
+    const using = runner({ seed: 4 })
+    model.enqueue(climb())
+    await click('I go through the Cellar stairs.', cellarStairs, using)
+    expect(sessions.scene(sessionId).openCall).toMatchObject({ effect: cellarStairs })
+
+    model.enqueue(answers(cellar), answers(cellarNpcs), says('You force it open.'))
+    const answered = await roll(using)
+
+    expect(effectRequested()).toBe(false)
+    expect(sessions.scene(sessionId).location.name).toBe('The Damp Cellar')
+    expect(log().slice(-2)).toEqual([
+      'code:scene-changed:You go through: Cellar stairs. You are now at The Damp Cellar.',
+      'narrator:narration:You force it open.'
+    ])
+    expect(done(answered)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('ruled check applies nothing when the roll fails', async () => {
+    const using = runner({ seed: 7 })
+    model.enqueue(climb())
+    await click('I go through the Cellar stairs.', cellarStairs, using)
+    const before = sessions.scene(sessionId)
+
+    model.enqueue(says('The door holds.'))
+    await roll(using)
+
+    expect(effectRequested()).toBe(false)
+    expect(sessions.scene(sessionId)).toEqual({ ...before, openCall: null })
+    expect(log().at(-1)).toBe('narrator:narration:The door holds.')
+  })
+
+  it('the Scene no longer allows is treated as typed: the Effect step decides', async () => {
+    const before = sessions.scene(sessionId)
+    model.enqueue(happens(), effect({ effect: 'none' }), says('There is no such door.'))
+
+    const events = await click('I go through the Trapdoor.', { effect: 'move', exitId: 'trapdoor' })
+
+    expect(effectRequested()).toBe(true)
+    expect(events.find((e) => e.type === 'ruling')).toMatchObject({ effect: { effect: 'none' } })
+    expect(sessions.scene(sessionId).location.name).toBe(before.location.name)
+    expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
   })
 })
 

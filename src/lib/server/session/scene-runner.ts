@@ -7,7 +7,7 @@
  * a Check pauses on a Call; `answerCall` rolls it and runs the rest. The stream ends with exactly
  * one `done` event saying why the floor went back to the player. No streamed event carries a DC.
  */
-import type { CallAnswer } from '#lib/session/call.ts'
+import type { CallAnswer, CarriedEffect } from '#lib/session/call.ts'
 import type { SceneState, SessionEvent } from '#lib/session/enums.ts'
 import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
 import type { ChatPort } from '../ai/port.ts'
@@ -17,8 +17,10 @@ import type { MemoryExtraction } from '../memory/extraction.ts'
 import type { RollingSummary } from '../memory/summary.ts'
 import type { CheckModifier } from './check-modifier.ts'
 import { clientEvent } from './client-view.ts'
+import { effectScene } from './context/ruling.ts'
 import type { ContextSources } from './context/sources.ts'
 import { answerCheck, rollCheck, withdrawCall } from './exchange/call.ts'
+import { validateEffect } from './exchange/contract.ts'
 import { runExchange, type ExchangeStart } from './exchange/run.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
@@ -118,6 +120,11 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
     }
   }
 
+  /** Whether the Scene still allows a carried Effect: the exit exists, the NPC is present. */
+  function allowed(sessionId: string, effect: CarriedEffect): boolean {
+    return validateEffect(effectScene(sessions.scene(sessionId)), effect).ok
+  }
+
   /** The refusals every run shares: the Session must exist and not have ended. */
   function refusal(sessionId: string): 'not-found' | 'ended' | null {
     const current = sessions.get(sessionId)
@@ -182,8 +189,17 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
      * Starts an Exchange for the player's Declaration. Refusals are decided synchronously, before
      * anything is saved. The Declaration is saved before any model call, so a stopped or failed
      * Exchange keeps it. An open Call is withdrawn first: the player chose to do something else.
+     *
+     * A clicked exit or NPC carries its Effect, which is applied instead of asking the Effect step
+     * (still only once the Declaration happens or its Check succeeds). A carried Effect the Scene
+     * no longer allows is dropped, so the Declaration runs as if typed.
      */
-    begin(sessionId: string, declaration: string, signal: AbortSignal): BeginResult {
+    begin(
+      sessionId: string,
+      declaration: string,
+      signal: AbortSignal,
+      effect?: CarriedEffect
+    ): BeginResult {
       const refused = refusal(sessionId)
       if (refused) return { ok: false, reason: refused }
       const text = declaration.trim()
@@ -194,9 +210,10 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
         const open = sessions.scene(sessionId).openCall
         const withdrawn = open ? [withdrawCall(sessions, sessionId, open)] : []
         const saved = sessions.appendEvent(sessionId, { role: 'player', kind: 'declaration', text })
+        const carried = effect && allowed(sessionId, effect) ? effect : undefined
         return {
           events: [...withdrawn, saved],
-          start: { kind: 'declaration', declaration: saved },
+          start: { kind: 'declaration', declaration: saved, ...(carried && { effect: carried }) },
           // Failing after a withdrawal undoes it too, so the Call is open again as it was.
           keepThrough: withdrawn.length ? withdrawn[0].seq - 1 : saved.seq
         }
@@ -221,9 +238,11 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
         const answered = answerCheck(sessions, sessionId, call, roll)
         const declaration = sessions.events(sessionId).find((e) => e.seq === call.declaration.seq)
         if (!declaration) throw new Error('The open Call has no Declaration in the log')
+        // The Effect a click carried, unless the Scene changed under the open Call since.
+        const carried = call.effect && allowed(sessionId, call.effect) ? call.effect : undefined
         return {
           events: [answered],
-          start: { kind: 'check', declaration, call, roll },
+          start: { kind: 'check', declaration, call, roll, ...(carried && { effect: carried }) },
           // Failing after the roll reopens the Call, so the player can roll it again.
           keepThrough: answered.seq - 1
         }

@@ -1,17 +1,23 @@
 <script lang="ts">
   import { examineText, goText, talkText } from './affordances.ts'
-  import { checkLabel } from './call.ts'
+  import { checkLabel, type CarriedEffect } from './call.ts'
   import type { SceneView, SessionEvent } from './enums.ts'
 
   let {
     scene,
     log = [],
-    onpick
+    onpick,
+    ondeclare
   }: {
     scene: SceneView
     log?: SessionEvent[]
-    /** When set, NPCs, exits and objects are clickable and call this with the action text to pre-fill. */
+    /** When set, objects are clickable and call this with the action text to pre-fill. */
     onpick?: (text: string) => void
+    /**
+     * When set, exits and NPCs are clickable and declare at once: the action text and the Effect
+     * it carries (move through that exit, talk to that NPC).
+     */
+    ondeclare?: (text: string, effect: CarriedEffect) => void
   } = $props()
   const talkingTo = $derived(scene.npcs.find((n) => n.id === scene.dialogueNpcId))
   const inDialogue = $derived(scene.mode === 'dialogue')
@@ -62,7 +68,10 @@
       <ul class="list-inside list-disc">
         {#each scene.exits as exit (exit.id)}
           <li>
-            {#if onpick}<button type="button" class="underline" onclick={() => onpick(goText(exit))}
+            {#if ondeclare}<button
+                type="button"
+                class="underline"
+                onclick={() => ondeclare(goText(exit), { effect: 'move', exitId: exit.id })}
                 >{exit.name}</button
               >{:else}{exit.name}{/if}
           </li>
@@ -103,10 +112,11 @@
               : 'border-border'}"
           >
             <p class="font-medium">
-              {#if onpick}<button
+              {#if ondeclare}<button
                   type="button"
                   class="underline"
-                  onclick={() => onpick(talkText(npc))}>{npc.name}</button
+                  onclick={() => ondeclare(talkText(npc), { effect: 'talk', npcId: npc.id })}
+                  >{npc.name}</button
                 >{:else}{npc.name}{/if}
             </p>
             <p class="text-xs">Attitude: {npc.attitude}</p>

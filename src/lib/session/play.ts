@@ -1,5 +1,5 @@
 import { fetchServerSentEvents } from '@tanstack/ai-client'
-import type { CallAnswer } from './call.ts'
+import type { CallAnswer, CarriedEffect } from './call.ts'
 import { EXCHANGE_CHUNK, type ExchangeEvent } from './exchange-events.ts'
 
 /** What to tell the player when the server refused to start an Exchange, by the reason it gave. */
@@ -8,14 +8,18 @@ const REFUSAL_MESSAGE: Record<string, string> = {
   'no-open-call': 'There is nothing to answer right now.'
 }
 
-/** Sends a Declaration and reports each Exchange event. Resolves with an error text or null. */
+/**
+ * Sends a Declaration and reports each Exchange event. Resolves with an error text or null. A
+ * clicked exit or NPC passes the Effect it carries.
+ */
 export function sendAction(
   sessionId: string,
   text: string,
   onEvent: (event: ExchangeEvent) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  effect?: CarriedEffect
 ): Promise<string | null> {
-  return postRun(sessionId, 'action', { text }, onEvent, signal)
+  return postRun(sessionId, 'action', effect ? { text, effect } : { text }, onEvent, signal)
 }
 
 /** Answers the open Call (a roll: code rolls) and reports the rest of its Exchange's events. */

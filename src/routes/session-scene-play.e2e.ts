@@ -73,7 +73,7 @@ async function startSession(page: Page, request: APIRequestContext) {
   await page.waitForLoadState('networkidle')
 }
 
-test('plays a scene: a Declaration gets a Reply, an NPC answers, and the Character moves through an exit', async ({
+test('plays a scene: a Declaration gets a Reply, an NPC answers, and clicking an exit moves the Character', async ({
   page,
   request
 }) => {
@@ -109,10 +109,10 @@ test('plays a scene: a Declaration gets a Reply, an NPC answers, and the Charact
   await expect(scene.getByRole('region', { name: 'Mode' })).toContainText('dialogue')
   await expect(page.getByLabel('Your action')).toBeEnabled()
 
-  // Exchange 3: the Character goes through the front door; the new place is generated first.
+  // Exchange 3: clicking the front door declares the move at once. The click carries its Effect,
+  // so only the Adjudication is asked; the new place is generated before the Reply.
   await script(request, [
     HAPPENS,
-    { effect: 'move', exitId: 'front-door' },
     {
       name: 'The Rain-Slick Yard',
       description: 'A muddy yard behind the inn.',
@@ -122,7 +122,8 @@ test('plays a scene: a Declaration gets a Reply, an NPC answers, and the Charact
     { npcs: [] },
     'Rain needles your face as the door bangs shut behind you.'
   ])
-  await declare('I step back out into the rain')
+  await scene.getByRole('button', { name: 'Front door' }).click()
+  await expect(log).toContainText('I head to Front door.')
   await expect(log).toContainText('You go through: Front door.')
   await expect(log).toContainText('Rain needles your face as the door bangs shut behind you.')
   await expect(scene.getByRole('region', { name: 'Location' })).toContainText('The Rain-Slick Yard')
