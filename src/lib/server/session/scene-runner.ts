@@ -8,7 +8,7 @@
  * one `done` event saying why the floor went back to the player. No streamed event carries a DC.
  */
 import type { CallAnswer } from '#lib/session/call.ts'
-import type { SessionEvent } from '#lib/session/enums.ts'
+import type { SceneState, SessionEvent } from '#lib/session/enums.ts'
 import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
 import type { ChatPort } from '../ai/port.ts'
 import type { BeatProgress } from '../arc/beat-progress.ts'
@@ -56,6 +56,8 @@ interface Recorded {
   /** The saved events, streamed first, in order. */
   events: SessionEvent[]
   start: ExchangeStart
+  /** The last event a model error keeps: the log is cut back to it and the Scene restored. */
+  keepThrough: number
 }
 
 export function createSceneRunner(deps: SceneRunnerDeps) {
@@ -86,7 +88,9 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
   async function* run(
     sessionId: string,
     signal: AbortSignal,
-    start: ExchangeStart
+    start: ExchangeStart,
+    before: SceneState,
+    keepThrough: number
   ): AsyncGenerator<ExchangeEvent> {
     try {
       const steering = deps.beatProgress && (() => deps.beatProgress!.steering(sessionId))
@@ -101,7 +105,10 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       if (signal.aborted) {
         yield { type: 'done', reason: 'stopped' }
       } else {
-        // #275 adds retries and safe defaults; until then a failed step ends the Exchange here.
+        // A model or transport error: the Exchange never finished, so the Scene goes back to how it
+        // was and the log back to `keepThrough`. A new Declaration stays; a withdrawn or answered
+        // Call is restored, with its withdrawal or roll (and anything after) dropped.
+        sessions.rollBack(sessionId, before, keepThrough)
         yield {
           type: 'done',
           reason: 'error',
@@ -135,10 +142,12 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
     signal.addEventListener('abort', () => !started && free(), { once: true })
 
     let recorded: Recorded
+    let before: SceneState
     try {
       // The run boundary: NPCs that died, left or were retired since the last run drop out of the
       // stored Scene (they never resolve in the meantime), ending a dialogue with them.
       sessions.pruneScene(sessionId)
+      before = sessions.scene(sessionId)
       recorded = record()
     } catch (error) {
       free()
@@ -150,7 +159,7 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
       started = true
       try {
         for (const event of recorded.events) yield { type: 'event', event }
-        yield* run(sessionId, signal, recorded.start)
+        yield* run(sessionId, signal, recorded.start, before, recorded.keepThrough)
       } finally {
         free()
       }
@@ -185,7 +194,12 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
         const open = sessions.scene(sessionId).openCall
         const withdrawn = open ? [withdrawCall(sessions, sessionId, open)] : []
         const saved = sessions.appendEvent(sessionId, { role: 'player', kind: 'declaration', text })
-        return { events: [...withdrawn, saved], start: { kind: 'declaration', declaration: saved } }
+        return {
+          events: [...withdrawn, saved],
+          start: { kind: 'declaration', declaration: saved },
+          // Failing after a withdrawal undoes it too, so the Call is open again as it was.
+          keepThrough: withdrawn.length ? withdrawn[0].seq - 1 : saved.seq
+        }
       })
     },
 
@@ -207,7 +221,12 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
         const answered = answerCheck(sessions, sessionId, call, roll)
         const declaration = sessions.events(sessionId).find((e) => e.seq === call.declaration.seq)
         if (!declaration) throw new Error('The open Call has no Declaration in the log')
-        return { events: [answered], start: { kind: 'check', declaration, call, roll } }
+        return {
+          events: [answered],
+          start: { kind: 'check', declaration, call, roll },
+          // Failing after the roll reopens the Call, so the player can roll it again.
+          keepThrough: answered.seq - 1
+        }
       })
     }
   }

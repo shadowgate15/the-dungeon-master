@@ -76,17 +76,29 @@ export async function* runExchange(
   const context: ContextStats = { roles: {}, trims: noTrims() }
   const stats: RunStats = { steps: {}, context }
   let step: ExchangeStep = 'adjudication'
-  const snapshot = (): ExchangeEvent => ({
-    type: 'stats',
-    stats: {
-      steps: Object.fromEntries(Object.entries(stats.steps).map(([k, v]) => [k, { ...v }])),
-      context: { roles: { ...context.roles }, trims: { ...context.trims } }
+  let startedAt = performance.now()
+  const current = () =>
+    (stats.steps[step] ??= { requests: 0, retries: 0, defaults: 0, latencyMs: 0 })
+  /** Starts timing a step; its latency covers every request and retry it makes. */
+  const enter = (next: ExchangeStep): ExchangeEvent => {
+    step = next
+    startedAt = performance.now()
+    current()
+    return { type: 'thinking', step }
+  }
+  const snapshot = (): ExchangeEvent => {
+    current().latencyMs = Math.round(performance.now() - startedAt)
+    return {
+      type: 'stats',
+      stats: {
+        steps: Object.fromEntries(Object.entries(stats.steps).map(([k, v]) => [k, { ...v }])),
+        context: { roles: { ...context.roles }, trims: { ...context.trims } }
+      }
     }
-  })
-  // Every model request is counted against the step that made it (retries included, for #275).
+  }
+  // Every model request is counted against the step that made it, retries included.
   const counted: ChatPort = (request) => {
-    const current = (stats.steps[step] ??= { requests: 0 })
-    current.requests++
+    current().requests++
     return ctx.port(request)
   }
   const run: ExchangeContext = {
@@ -95,18 +107,21 @@ export async function* runExchange(
     report: (report) => {
       addReport(context, report)
       ctx.report?.(report)
-    }
+    },
+    tally: (what) => void (what === 'retry' ? current().retries++ : current().defaults++)
   }
 
   let adjudication: Adjudication
+  // The Effect the ruling already settled (a defaulted Adjudication settles `none`).
+  let settled: RulingEffect | undefined
   let check: CheckRoll | null = null
   if (start.kind === 'check') {
     const { skill, difficulty } = start.call
     adjudication = { outcome: 'check', skill, difficulty } as Adjudication
     check = start.roll
   } else {
-    yield { type: 'thinking', step }
-    adjudication = await adjudicate(run, declaration)
+    yield enter('adjudication')
+    ;({ adjudication, effect: settled } = await adjudicate(run, declaration))
     yield snapshot()
     if (adjudication.outcome === 'check') {
       const event = raiseCheck(ctx.sessions, ctx.sessionId, declaration, adjudication)
@@ -123,9 +138,10 @@ export async function* runExchange(
     adjudication.outcome === 'happens' ||
     adjudication.outcome === 'ask' ||
     (check !== null && check.success)
-  if (happens) {
-    step = 'effect'
-    yield { type: 'thinking', step }
+  if (happens && settled) {
+    effect = settled
+  } else if (happens) {
+    yield enter('effect')
     const chosen = await chooseEffect(run, declaration)
     change = yield* applyEffect(run, chosen)
     effect = chosen
@@ -133,8 +149,7 @@ export async function* runExchange(
   }
   yield { type: 'ruling', adjudication, effect }
 
-  step = 'reply'
-  yield { type: 'thinking', step }
+  yield enter('reply')
   const replied = yield* reply(run, outcomeFacts(adjudication, check, change))
   yield snapshot()
   return replied ? 'replied' : 'stopped'

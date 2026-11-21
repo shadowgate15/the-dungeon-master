@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm'
 import { nameSlug, validateDisposition } from '#lib/memory/validate.ts'
 import type { EventKind, Role, SceneNpc, SceneState, SessionEvent } from '#lib/session/enums.ts'
 import type { Database } from '../db/connect'
@@ -499,6 +499,23 @@ export function createSessionService(
         .where(eq(sessionEvent.sessionId, sessionId))
         .orderBy(asc(sessionEvent.seq))
         .all()
+    },
+
+    /**
+     * Undoes a failed Exchange: puts the Scene back as it was before it and drops the events it
+     * recorded after `throughSeq` (its Declaration), in one transaction. Only the scene runner
+     * calls this, for an Exchange that never finished, so the committed log stays append-only.
+     */
+    rollBack(sessionId: string, scene: SceneState, throughSeq: number): void {
+      db.transaction((tx) => {
+        tx.update(sessionScene)
+          .set(sceneColumns(scene, now()))
+          .where(eq(sessionScene.sessionId, sessionId))
+          .run()
+        tx.delete(sessionEvent)
+          .where(and(eq(sessionEvent.sessionId, sessionId), gt(sessionEvent.seq, throughSeq)))
+          .run()
+      })
     },
 
     /** Appends an event to an open Session. The log is append-only; rejects on an ended Session. */

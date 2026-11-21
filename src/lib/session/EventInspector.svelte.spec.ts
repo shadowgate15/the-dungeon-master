@@ -65,7 +65,7 @@ describe('EventInspector memory section', () => {
 
   it('shows per-role context stats from the run', async () => {
     const stats: RunStats = {
-      steps: { adjudication: { requests: 1 } },
+      steps: { adjudication: { requests: 1, retries: 0, defaults: 0, latencyMs: 900 } },
       context: {
         roles: {
           narrator: {
@@ -105,15 +105,35 @@ describe('EventInspector memory section', () => {
 })
 
 describe('EventInspector Exchange section', () => {
-  it('shows the model requests of each step', async () => {
+  it('shows the requests, retries, defaults and latency of each step', async () => {
     const stats: RunStats = {
-      steps: { adjudication: { requests: 1 }, effect: { requests: 2 }, reply: { requests: 1 } }
+      steps: {
+        adjudication: { requests: 2, retries: 1, defaults: 1, latencyMs: 2400 },
+        effect: { requests: 1, retries: 0, defaults: 0, latencyMs: 800 },
+        reply: { requests: 1, retries: 0, defaults: 0, latencyMs: 3100 }
+      }
     }
     render(EventInspector, { stats })
 
     const section = page.getByRole('region', { name: 'This Exchange' })
-    await expect.element(section.getByText('effect requests')).toBeVisible()
-    await expect.element(section.getByText('2')).toBeVisible()
+    const step = (name: string) => section.getByRole('listitem').filter({ hasText: name })
+    await expect
+      .element(step('adjudication'))
+      .toHaveTextContent('adjudication: 2 requests, 1 retry, default applied, 2400 ms')
+    await expect.element(step('effect')).toHaveTextContent('effect: 1 request, 0 retries, 800 ms')
+    await expect.element(step('reply')).toHaveTextContent('reply: 1 request, 0 retries, 3100 ms')
+  })
+
+  it('shows a step that has not run as not run', async () => {
+    const stats: RunStats = {
+      steps: { adjudication: { requests: 1, retries: 0, defaults: 0, latencyMs: 500 } }
+    }
+    render(EventInspector, { stats })
+
+    const section = page.getByRole('region', { name: 'This Exchange' })
+    await expect
+      .element(section.getByRole('listitem').filter({ hasText: 'effect' }))
+      .toHaveTextContent('effect: not run')
   })
 
   it('shows the ruling: the Adjudication and the Effect that was applied', async () => {

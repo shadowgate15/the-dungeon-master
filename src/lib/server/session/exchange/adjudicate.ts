@@ -3,27 +3,33 @@
  * Code validates the answer before anything changes state.
  */
 import type { SessionEvent } from '#lib/session/enums.ts'
-import { callModel } from '../../ai/port.ts'
 import { buildRulingContext } from '../context/ruling.ts'
+import { askValidated } from './ask.ts'
 import { characterOf, eventsBefore, type ExchangeContext } from './context.ts'
 import {
   ADJUDICATION_SYSTEM,
   adjudicationSchema,
   validateAdjudication,
-  type Adjudication
+  type Adjudication,
+  type Effect
 } from './contract.ts'
 
 /** Room for the flat answer, as the eval sent it. */
 const ADJUDICATION_MAX_TOKENS = 200
 
 /**
- * Asks the model to rule on the Declaration and returns the validated Adjudication. Throws on a
- * model error or an answer that fails validation.
+/** A ruling, and the Effect it already settles (the default's `none`), which skips Effect. */
+export interface Ruled {
+  adjudication: Adjudication
+  effect?: Effect
+}
+
+/**
+ * Asks the model to rule on the Declaration and returns the validated Adjudication. An invalid
+ * answer is retried once, then defaults to `happens` with Effect `none`, so the Reply still runs.
+ * Throws on a model error.
  */
-export async function adjudicate(
-  ctx: ExchangeContext,
-  declaration: SessionEvent
-): Promise<Adjudication> {
+export async function adjudicate(ctx: ExchangeContext, declaration: SessionEvent): Promise<Ruled> {
   const built = buildRulingContext({
     role: 'adjudication',
     system: ADJUDICATION_SYSTEM,
@@ -33,17 +39,23 @@ export async function adjudicate(
     declaration: declaration.text ?? ''
   })
   ctx.report?.(built.report)
-  const call = await callModel(ctx.port, {
-    systemPrompts: [ADJUDICATION_SYSTEM],
-    messages: [{ role: 'user', content: built.content }],
-    maxTokens: ADJUDICATION_MAX_TOKENS,
-    outputSchema: adjudicationSchema,
-    threadId: ctx.sessionId,
-    signal: ctx.signal
-  })
-  if (!call.ok) throw new Error(call.failure.message)
-  // #275 retries an invalid answer once, then defaults to happens.
-  const valid = validateAdjudication(call.object)
-  if (!valid.ok) throw new Error(`The Adjudication answer was invalid: ${valid.error}`)
-  return valid.adjudication
+  const asked = await askValidated(
+    ctx,
+    {
+      systemPrompts: [ADJUDICATION_SYSTEM],
+      messages: [{ role: 'user', content: built.content }],
+      maxTokens: ADJUDICATION_MAX_TOKENS,
+      outputSchema: adjudicationSchema,
+      threadId: ctx.sessionId,
+      signal: ctx.signal
+    },
+    (answer) => {
+      const valid = validateAdjudication(answer)
+      return valid.ok ? { ok: true, value: valid.adjudication } : valid
+    },
+    { outcome: 'happens' }
+  )
+  return asked.defaulted
+    ? { adjudication: asked.value, effect: { effect: 'none' } }
+    : { adjudication: asked.value }
 }
