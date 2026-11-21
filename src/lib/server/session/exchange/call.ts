@@ -9,7 +9,9 @@ import {
   type Call,
   type CarriedEffect,
   type CheckCall,
-  type CheckRoll
+  type CheckRoll,
+  type ClarifyingRound,
+  type QuestionCall
 } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type { Dice } from '../../dice.ts'
@@ -18,13 +20,23 @@ import type { SessionService } from '../service.ts'
 import { DIFFICULTY_DC, type Adjudication } from './contract.ts'
 
 type CheckRuling = Extract<Adjudication, { outcome: 'check' }>
+type AskRuling = Extract<Adjudication, { outcome: 'ask' }>
 
-/** Saves a Check Call for the Declaration on the Scene and logs it as `call-raised`. */
+const callDeclaration = (declaration: SessionEvent) => ({
+  seq: declaration.seq,
+  text: declaration.text ?? ''
+})
+
+/**
+ * Saves a Check Call for the Declaration on the Scene and logs it as `call-raised`. A Check called
+ * after clarifying keeps the history, so the Effect after the roll knows what was meant.
+ */
 export function raiseCheck(
   sessions: SessionService,
   sessionId: string,
   declaration: SessionEvent,
   ruling: CheckRuling,
+  history: ClarifyingRound[] = [],
   effect?: CarriedEffect
 ): SessionEvent {
   const call: CheckCall = {
@@ -32,7 +44,8 @@ export function raiseCheck(
     skill: ruling.skill,
     difficulty: ruling.difficulty,
     dc: DIFFICULTY_DC[ruling.difficulty],
-    declaration: { seq: declaration.seq, text: declaration.text ?? '' },
+    declaration: callDeclaration(declaration),
+    ...(history.length > 0 && { history }),
     ...(effect && { effect })
   }
   sessions.saveScene(sessionId, { ...sessions.scene(sessionId), openCall: call })
@@ -42,6 +55,55 @@ export function raiseCheck(
     text: `${checkLabel(call.skill)} check: ${call.declaration.text}`,
     data: { kind: call.kind, skill: call.skill, difficulty: call.difficulty, dc: call.dc }
   })
+}
+
+/**
+ * Saves a question Call for the Declaration on the Scene, with the rounds already answered, and
+ * logs it as `call-raised` with the question as its text.
+ */
+export function raiseQuestion(
+  sessions: SessionService,
+  sessionId: string,
+  declaration: SessionEvent,
+  ruling: AskRuling,
+  history: ClarifyingRound[],
+  effect?: CarriedEffect
+): SessionEvent {
+  const call: QuestionCall = {
+    kind: 'question',
+    question: ruling.question,
+    ...(ruling.choices && { choices: ruling.choices }),
+    declaration: callDeclaration(declaration),
+    history,
+    ...(effect && { effect })
+  }
+  sessions.saveScene(sessionId, { ...sessions.scene(sessionId), openCall: call })
+  return sessions.appendEvent(sessionId, {
+    role: 'code',
+    kind: 'call-raised',
+    text: call.question,
+    data: { kind: call.kind, question: call.question, choices: call.choices ?? [] }
+  })
+}
+
+/**
+ * Clears the open question Call and logs the player's answer as their `call-answered` line.
+ * Returns the event and the history with this round added.
+ */
+export function answerQuestion(
+  sessions: SessionService,
+  sessionId: string,
+  call: QuestionCall,
+  answer: { answer: string; chosen: boolean }
+): { event: SessionEvent; history: ClarifyingRound[] } {
+  sessions.saveScene(sessionId, { ...sessions.scene(sessionId), openCall: null })
+  const event = sessions.appendEvent(sessionId, {
+    role: 'player',
+    kind: 'call-answered',
+    text: answer.answer,
+    data: { kind: call.kind, question: call.question, ...answer }
+  })
+  return { event, history: [...call.history, { question: call.question, answer: answer.answer }] }
 }
 
 /** Rolls a Check Call: d20 plus the Character's modifier, against the DC. */
@@ -83,7 +145,11 @@ export function withdrawCall(
   return sessions.appendEvent(sessionId, {
     role: 'code',
     kind: 'call-answered',
-    text: `${checkLabel(call.skill)} check withdrawn`,
-    data: { kind: call.kind, skill: call.skill, withdrawn: true }
+    text:
+      call.kind === 'check' ? `${checkLabel(call.skill)} check withdrawn` : 'Question withdrawn',
+    data:
+      call.kind === 'check'
+        ? { kind: call.kind, skill: call.skill, withdrawn: true }
+        : { kind: call.kind, question: call.question, withdrawn: true }
   })
 }

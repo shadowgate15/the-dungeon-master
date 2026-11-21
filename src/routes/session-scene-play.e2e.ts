@@ -179,3 +179,57 @@ test('a Check raises a Call: rolling it shows the result and the Reply; typing o
   await expect(log).toContainText('You turn away and look for another way in.')
   await expect(check).toBeHidden()
 })
+
+/** An Adjudication that asks what the player means, offering two choices. */
+const WHICH_WAY = {
+  outcome: 'ask',
+  skill: 'none',
+  difficulty: 'none',
+  question: 'Which way do you go?',
+  choices: ['The front door', 'The cellar stairs']
+}
+
+test('a question raises a Call: a choice or typed text answers it; "Do something else" withdraws it', async ({
+  page,
+  request
+}) => {
+  await startSession(page, request)
+  const log = page.getByRole('list', { name: 'Story log' })
+  const question = log.getByRole('group', { name: 'Question' })
+  const input = page.getByLabel('Your action')
+  const raise = async (text: string) => {
+    await script(request, [WHICH_WAY])
+    await input.fill(text)
+    await page.getByRole('button', { name: 'Send' }).click()
+    await expect(question).toContainText('Which way do you go?')
+    await expect(input).toBeEnabled()
+  }
+
+  // An unclear Declaration raises a question; a choice answers it in one click, and the clarified
+  // Declaration is ruled on and replied to.
+  await raise('I leave')
+  await script(request, [HAPPENS, { effect: 'none' }, 'You stay by the door, thinking.'])
+  await question.getByRole('button', { name: 'The front door' }).click()
+  await expect(log.getByText('The front door', { exact: true })).toHaveAttribute('data-answer')
+  await expect(log).toContainText('You stay by the door, thinking.')
+  await expect(question).toBeHidden()
+
+  // Typed text answers it by default.
+  await raise('I leave again')
+  await script(request, [HAPPENS, { effect: 'none' }, 'You slip out of the back window.'])
+  await input.fill('Out of the back window')
+  await page.getByRole('button', { name: 'Answer' }).click()
+  await expect(log.getByText('Out of the back window', { exact: true })).toHaveAttribute(
+    'data-answer'
+  )
+  await expect(log).toContainText('You slip out of the back window.')
+
+  // "Do something else" sends a new Declaration instead, withdrawing the question.
+  await raise('I head off')
+  await script(request, [HAPPENS, { effect: 'none' }, 'You order an ale instead.'])
+  await input.fill('Actually, I order an ale')
+  await page.getByRole('button', { name: 'Do something else' }).click()
+  await expect(log.getByText('Question withdrawn')).toHaveAttribute('data-withdrawn')
+  await expect(log).toContainText('You order an ale instead.')
+  await expect(question).toBeHidden()
+})

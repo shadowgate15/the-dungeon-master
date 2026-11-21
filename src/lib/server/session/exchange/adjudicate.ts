@@ -2,6 +2,7 @@
  * Adjudication: one non-streaming structured request that rules how the Declaration resolves.
  * Code validates the answer before anything changes state.
  */
+import type { ClarifyingRound } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
 import { buildRulingContext } from '../context/ruling.ts'
 import { askValidated } from './ask.ts'
@@ -17,7 +18,6 @@ import {
 /** Room for the flat answer, as the eval sent it. */
 const ADJUDICATION_MAX_TOKENS = 200
 
-/**
 /** A ruling, and the Effect it already settles (the default's `none`), which skips Effect. */
 export interface Ruled {
   adjudication: Adjudication
@@ -25,18 +25,23 @@ export interface Ruled {
 }
 
 /**
- * Asks the model to rule on the Declaration and returns the validated Adjudication. An invalid
- * answer is retried once, then defaults to `happens` with Effect `none`, so the Reply still runs.
- * Throws on a model error.
+ * Asks the model to rule on the Declaration, merged with any clarifying rounds so far, and returns
+ * the validated Adjudication. An invalid answer is retried once, then defaults to `happens` with
+ * Effect `none`, so the Reply still runs. Throws on a model error.
  */
-export async function adjudicate(ctx: ExchangeContext, declaration: SessionEvent): Promise<Ruled> {
+export async function adjudicate(
+  ctx: ExchangeContext,
+  declaration: SessionEvent,
+  clarifying: ClarifyingRound[] = []
+): Promise<Ruled> {
   const built = buildRulingContext({
     role: 'adjudication',
     system: ADJUDICATION_SYSTEM,
     scene: ctx.sessions.scene(ctx.sessionId),
     events: eventsBefore(ctx, declaration),
     character: characterOf(ctx),
-    declaration: declaration.text ?? ''
+    declaration: declaration.text ?? '',
+    clarifying
   })
   ctx.report?.(built.report)
   const asked = await askValidated(

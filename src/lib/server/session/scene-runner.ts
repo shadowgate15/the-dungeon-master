@@ -4,10 +4,11 @@
  *
  * `begin` claims the Session, saves the Declaration as a `declaration` event, then runs one
  * Exchange over the chat port and the database-backed Scene and Event log. An Exchange that needs
- * a Check pauses on a Call; `answerCall` rolls it and runs the rest. The stream ends with exactly
+ * a Check or a clarifying question pauses on a Call; `answerCall` rolls or answers it and runs the
+ * rest. The stream ends with exactly
  * one `done` event saying why the floor went back to the player. No streamed event carries a DC.
  */
-import type { CallAnswer } from '#lib/session/call.ts'
+import type { CallAnswer, QuestionCall } from '#lib/session/call.ts'
 import type { SceneState, SessionEvent } from '#lib/session/enums.ts'
 import type { ExchangeEvent } from '#lib/session/exchange-events.ts'
 import type { ChatPort } from '../ai/port.ts'
@@ -18,7 +19,7 @@ import type { RollingSummary } from '../memory/summary.ts'
 import type { CheckModifier } from './check-modifier.ts'
 import { clientEvent } from './client-view.ts'
 import type { ContextSources } from './context/sources.ts'
-import { answerCheck, rollCheck, withdrawCall } from './exchange/call.ts'
+import { answerCheck, answerQuestion, rollCheck, withdrawCall } from './exchange/call.ts'
 import { runExchange, type ExchangeStart } from './exchange/run.ts'
 import { SessionValidationError, type SessionService } from './service.ts'
 
@@ -26,7 +27,7 @@ export type { DoneReason, ExchangeEvent, RunStats } from '#lib/session/exchange-
 export type { ExchangeContext } from './exchange/context.ts'
 
 export type BeginRefusal = 'not-found' | 'ended' | 'empty-action' | 'in-flight'
-export type AnswerRefusal = 'not-found' | 'ended' | 'in-flight' | 'no-open-call'
+export type AnswerRefusal = 'not-found' | 'ended' | 'empty-action' | 'in-flight' | 'no-open-call'
 export type RunRefusal = BeginRefusal | AnswerRefusal
 
 export type RunResult<R extends RunRefusal> =
@@ -58,6 +59,24 @@ interface Recorded {
   start: ExchangeStart
   /** The last event a model error keeps: the log is cut back to it and the Scene restored. */
   keepThrough: number
+}
+
+/**
+ * The answer an open question takes from `answer`, or why it is refused: a roll answers only a
+ * Check, a choice must be one the question offered, and free text must not be blank.
+ */
+function questionAnswer(
+  call: QuestionCall,
+  answer: CallAnswer
+): { answer: string; chosen: boolean } | 'no-open-call' | 'empty-action' {
+  if (answer.kind === 'roll') return 'no-open-call'
+  if (answer.kind === 'choice') {
+    return call.choices?.includes(answer.choice)
+      ? { answer: answer.choice, chosen: true }
+      : 'no-open-call'
+  }
+  const text = answer.text.trim()
+  return text ? { answer: text, chosen: false } : 'empty-action'
 }
 
 export function createSceneRunner(deps: SceneRunnerDeps) {
@@ -206,26 +225,45 @@ export function createSceneRunner(deps: SceneRunnerDeps) {
     /**
      * Answers the open Call and runs the rest of its Exchange. For a roll, code rolls the d20 plus
      * the Character's modifier, logs the result and clears the Call before any model call; on
-     * success the Effect runs and then the Reply, on failure the Reply narrates the failure.
+     * success the Effect runs and then the Reply, on failure the Reply narrates the failure. A
+     * question takes one of its choices or free text: the answer is logged and added to the
+     * history, and the Declaration is ruled on again with it.
      */
     answerCall(sessionId: string, answer: CallAnswer, signal: AbortSignal): AnswerResult {
       const refused = refusal(sessionId)
       if (refused) return { ok: false, reason: refused }
       if (inFlight.has(sessionId)) return { ok: false, reason: 'in-flight' }
       const call = sessions.scene(sessionId).openCall
-      // #273: a question Call takes a choice or free text instead of a roll.
-      if (!call || answer.kind !== 'roll') return { ok: false, reason: 'no-open-call' }
-
-      return start(sessionId, signal, () => {
-        const roll = rollCheck(call, dice, checkModifier, sessionId)
-        const answered = answerCheck(sessions, sessionId, call, roll)
+      if (!call) return { ok: false, reason: 'no-open-call' }
+      const declarationOf = () => {
         const declaration = sessions.events(sessionId).find((e) => e.seq === call.declaration.seq)
         if (!declaration) throw new Error('The open Call has no Declaration in the log')
+        return declaration
+      }
+
+      if (call.kind === 'check') {
+        if (answer.kind !== 'roll') return { ok: false, reason: 'no-open-call' }
+        return start(sessionId, signal, () => {
+          const roll = rollCheck(call, dice, checkModifier, sessionId)
+          const answered = answerCheck(sessions, sessionId, call, roll)
+          return {
+            events: [answered],
+            start: { kind: 'check', declaration: declarationOf(), call, roll },
+            // Failing after the roll reopens the Call, so the player can roll it again.
+            keepThrough: answered.seq - 1
+          }
+        })
+      }
+
+      const given = questionAnswer(call, answer)
+      if (typeof given === 'string') return { ok: false, reason: given }
+      return start(sessionId, signal, () => {
+        const { event, history } = answerQuestion(sessions, sessionId, call, given)
         return {
-          events: [answered],
-          start: { kind: 'check', declaration, call, roll },
-          // Failing after the roll reopens the Call, so the player can roll it again.
-          keepThrough: answered.seq - 1
+          events: [event],
+          start: { kind: 'question', declaration: declarationOf(), history },
+          // Failing after the answer reopens the question, so the player can answer it again.
+          keepThrough: event.seq - 1
         }
       })
     }

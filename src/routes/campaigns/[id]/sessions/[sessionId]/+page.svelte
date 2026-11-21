@@ -11,6 +11,7 @@
   import { answerCall, sendAction } from '#lib/session/play.ts'
   import DeclarationForm from '#lib/session/DeclarationForm.svelte'
   import type { SessionEvent } from '#lib/session/enums.ts'
+  import type { CallAnswer } from '#lib/session/call.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Dialog from '#lib/ui/Dialog.svelte'
@@ -95,9 +96,16 @@
     if (await stream((signal) => sendAction(data.session.id, text, onMessage, signal))) draft = ''
   }
 
-  function roll() {
-    if (busy) return
-    void stream((signal) => answerCall(data.session.id, { kind: 'roll' }, onMessage, signal))
+  function answer(given: CallAnswer): Promise<boolean> {
+    if (busy) return Promise.resolve(false)
+    return stream((signal) => answerCall(data.session.id, given, onMessage, signal))
+  }
+
+  const roll = () => void answer({ kind: 'roll' })
+
+  // Typing while a question is open answers it ("Answer"); "Do something else" sends instead.
+  async function answerText(text: string) {
+    if (await answer({ kind: 'text', text })) draft = ''
   }
 </script>
 
@@ -170,6 +178,7 @@
             mode={data.scene.mode}
             openCall={data.scene.openCall}
             onroll={!ended && !busy ? roll : undefined}
+            onanswer={!ended && !busy ? (given) => void answer(given) : undefined}
           />
         {/if}
       </div>
@@ -182,7 +191,9 @@
           bind:draft
           {busy}
           callOpen={data.scene.openCall !== null}
+          question={data.scene.openCall?.kind === 'question'}
           onsend={send}
+          onanswer={answerText}
           onstop={() => controller?.abort()}
         />
       {/if}

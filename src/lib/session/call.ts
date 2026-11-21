@@ -3,8 +3,8 @@
  * lives on the Scene as `openCall` until it is answered or withdrawn, so a reload keeps it. Shared
  * by the server and the UI; the client only ever sees a `CallView`, never the DC.
  *
- * Today a Call is a Check. A question Call (#273) joins the `Call` union with its own `kind`, and
- * its answers join `CallAnswer`.
+ * A Call is a Check the player rolls, or a clarifying question the player answers with a choice
+ * or free text.
  */
 
 /** The Declaration a Call belongs to: the event that started the Exchange it paused. */
@@ -27,16 +27,42 @@ export interface CheckCall {
   /** From the difficulty map; server-side only. */
   dc: number
   declaration: CallDeclaration
+  /** What the player clarified before the Check was called, if anything. */
+  history?: ClarifyingRound[]
   effect?: CarriedEffect
 }
 
-export type Call = CheckCall
+/** One round of clarifying a Declaration: what the DM asked and what the player answered. */
+export interface ClarifyingRound {
+  question: string
+  answer: string
+}
 
-/** A Call as the client sees it: everything but the DC. */
-export type CallView = Omit<CheckCall, 'dc'>
+/**
+ * A clarifying question about an unclear Declaration, with any one-click choices. Answering it
+ * appends a round to `history` and rules on the Declaration again.
+ */
+export interface QuestionCall {
+  kind: 'question'
+  question: string
+  choices?: string[]
+  declaration: CallDeclaration
+  /** The rounds already answered for this Declaration, oldest first. */
+  history: ClarifyingRound[]
+  effect?: CarriedEffect
+}
 
-/** How the player answers a Call. A roll carries nothing: code rolls. */
-export type CallAnswer = { kind: 'roll' }
+export type Call = CheckCall | QuestionCall
+
+/** A Call as the client sees it: everything but a Check's DC. */
+export type CallView = Omit<CheckCall, 'dc'> | QuestionCall
+
+/**
+ * How the player answers a Call. A roll carries nothing: code rolls. A question takes one of its
+ * choices or free text.
+ */
+export type CallAnswer =
+  { kind: 'roll' } | { kind: 'choice'; choice: string } | { kind: 'text'; text: string }
 
 /** A Check's result, as the `call-answered` event's data holds it (with the DC server-side). */
 export interface CheckRoll {

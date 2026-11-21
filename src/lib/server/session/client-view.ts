@@ -15,6 +15,7 @@ export function clientEvent(event: SessionEvent): SessionEvent {
 /** The Scene with its open Call's DC left out. */
 export function clientScene(scene: SceneState): SceneView {
   if (!scene.openCall) return { ...scene, openCall: null }
+  if (scene.openCall.kind !== 'check') return { ...scene, openCall: scene.openCall }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { dc, ...call } = scene.openCall
   return { ...scene, openCall: call }

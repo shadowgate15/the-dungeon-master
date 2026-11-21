@@ -114,6 +114,51 @@ describe('StoryLog', () => {
     })
   })
 
+  describe('a question Call', () => {
+    const call: CallView = {
+      kind: 'question',
+      question: 'Which door?',
+      choices: ['The red door', 'The blue door'],
+      declaration: { seq: 1, text: 'I open the door.' },
+      history: []
+    }
+    const raised = [
+      event(1, 'declaration', 'I open the door.'),
+      { ...event(2, 'call-raised', 'Which door?'), role: 'code' as const }
+    ]
+
+    it('shows the open question inline with a button per choice', async () => {
+      const onanswer = vi.fn()
+      render(StoryLog, { props: { events: raised, npcs, openCall: call, onanswer } })
+
+      const question = page.getByRole('group', { name: 'Question' })
+      await expect.element(question).toHaveTextContent('Which door?')
+      await expect.element(question.getByRole('button', { name: 'The red door' })).toBeVisible()
+      await question.getByRole('button', { name: 'The blue door' }).click()
+      expect(onanswer).toHaveBeenCalledWith({ kind: 'choice', choice: 'The blue door' })
+    })
+
+    it('disables the choices while it cannot be answered', async () => {
+      render(StoryLog, { props: { events: raised, npcs, openCall: call } })
+      await expect.element(page.getByRole('button', { name: 'The red door' })).toBeDisabled()
+    })
+
+    it("shows the answer as the player's line once answered, and no choices", async () => {
+      const answered = {
+        ...event(3, 'call-answered', 'The red door'),
+        role: 'player' as const,
+        data: { kind: 'question', question: 'Which door?', answer: 'The red door', chosen: true }
+      }
+      render(StoryLog, { props: { events: [...raised, answered], npcs, openCall: null } })
+
+      await expect.element(page.getByText('Which door?')).toBeVisible()
+      await expect.element(page.getByText('The red door')).toHaveAttribute('data-answer')
+      await expect
+        .element(page.getByRole('button', { name: 'The red door' }))
+        .not.toBeInTheDocument()
+    })
+  })
+
   it('shows the thinking indicator until the Reply streams', async () => {
     const { rerender } = render(StoryLog, { props: { events: [], npcs, thinking: true } })
     await expect.element(page.getByRole('status')).toHaveTextContent('thinking')

@@ -119,7 +119,10 @@
 
   <section aria-label="Open Call">
     <h2 class="text-xs font-semibold text-muted uppercase">Open Call</h2>
-    {#if scene.openCall}
+    {#if scene.openCall?.kind === 'question'}
+      <p>Question: {scene.openCall.question}</p>
+      <p class="text-xs text-muted">{scene.openCall.declaration.text}</p>
+    {:else if scene.openCall}
       <p>{checkLabel(scene.openCall.skill)} check</p>
       <p class="text-xs text-muted">{scene.openCall.declaration.text}</p>
     {:else}

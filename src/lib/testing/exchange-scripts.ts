@@ -22,6 +22,10 @@ export const rules = (ruling: Ruling): Script =>
 export const happens = () => rules({ outcome: 'happens' })
 export const impossible = () => rules({ outcome: 'impossible' })
 
+/** An Adjudication answer that asks the player what they mean. */
+export const asks = (question: string, choices: string[] = []) =>
+  rules({ outcome: 'ask', question, choices })
+
 /** An Effect answer. */
 export const effect = (
   answer:

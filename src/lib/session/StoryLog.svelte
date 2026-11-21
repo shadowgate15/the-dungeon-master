@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from '#lib/ui/Button.svelte'
-  import { checkLabel, type CallView } from './call.ts'
+  import { checkLabel, type CallAnswer, type CallView } from './call.ts'
   import type { Mode, SceneNpc, SessionEvent } from './enums.ts'
 
   let {
@@ -11,7 +11,8 @@
     thinking = false,
     mode = 'exploration',
     openCall = null,
-    onroll
+    onroll,
+    onanswer
   }: {
     events: SessionEvent[]
     npcs: SceneNpc[]
@@ -27,6 +28,8 @@
     openCall?: CallView | null
     /** Rolls the open Check; the Roll button is disabled without it. */
     onroll?: () => void
+    /** Answers the open question with a choice; its choice buttons are disabled without it. */
+    onanswer?: (answer: CallAnswer) => void
   } = $props()
 
   // The open Call is the latest one raised (a Session has at most one open at a time).
@@ -62,7 +65,27 @@
           </p>
           <p class="whitespace-pre-wrap">&ldquo;{event.text}&rdquo;</p>
         </blockquote>
-      {:else if event.kind === 'call-raised' && openCall && event.id === openId}
+      {:else if event.kind === 'call-raised' && openCall?.kind === 'question' && event.id === openId}
+        <div role="group" aria-label="Question" class="rounded-panel border border-primary p-2">
+          <p class="font-semibold">{openCall.question}</p>
+          {#if openCall.choices?.length}
+            <div class="mt-2 flex flex-wrap gap-2">
+              {#each openCall.choices as choice (choice)}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={!onanswer}
+                  onclick={() => onanswer?.({ kind: 'choice', choice })}>{choice}</Button
+                >
+              {/each}
+            </div>
+          {/if}
+          <p class="mt-2 text-xs text-muted">
+            {openCall.choices?.length ? 'Pick one, or type' : 'Type'} your answer below.
+          </p>
+        </div>
+      {:else if event.kind === 'call-raised' && openCall?.kind === 'check' && event.id === openId}
         <div
           role="group"
           aria-label="Check"
@@ -74,6 +97,14 @@
           </div>
           <Button type="button" disabled={!onroll} onclick={() => onroll?.()}>Roll</Button>
         </div>
+      {:else if event.kind === 'call-raised' && event.data?.kind === 'question'}
+        <p
+          data-call
+          data-withdrawn={raisedWithdrawn(index) || undefined}
+          class={['text-sm', raisedWithdrawn(index) && 'text-muted line-through opacity-60']}
+        >
+          {event.text}
+        </p>
       {:else if event.kind === 'call-raised'}
         <p
           data-call
@@ -84,6 +115,8 @@
         </p>
       {:else if event.kind === 'call-answered' && isWithdrawn(event)}
         <p data-call data-withdrawn class="text-sm text-muted italic opacity-60">{event.text}</p>
+      {:else if event.kind === 'call-answered' && event.data?.kind === 'question'}
+        <p data-answer class="text-accent italic">{event.text}</p>
       {:else if event.kind === 'call-answered'}
         <p
           data-call

@@ -10,7 +10,8 @@ import {
   hangsAfter,
   says
 } from '../../testing/scripted-chat-port'
-import { effect, happens, impossible, rules } from '../../testing/exchange-scripts'
+import type { CallAnswer } from '#lib/session/call.ts'
+import { asks, effect, happens, impossible, rules } from '../../testing/exchange-scripts'
 import { playableCampaign, sessionServiceWith, updateNpc } from './fixture'
 import {
   createSceneRunner,
@@ -429,6 +430,187 @@ describe('a Check', () => {
     expect(sessions.events(sessionId).find((e) => e.kind === 'call-raised')?.data).toMatchObject({
       dc: 20
     })
+  })
+})
+
+describe('a clarifying question', () => {
+  const which = () => asks('Which way do you go?', ['The front door', 'The cellar stairs'])
+  const answer = (a: CallAnswer, using = runner()) =>
+    drain(using.answerCall(sessionId, a, new AbortController().signal))
+  /** Everything a model request was sent, as one string. */
+  const request = (index: number) =>
+    model.requests
+      .at(index)!
+      .messages.map((m) => m.content)
+      .join('\n')
+
+  it('raises a Call holding the question, then a chosen choice is ruled again and gets a Reply', async () => {
+    model.enqueue(which())
+    const raised = await play('I leave')
+
+    expect(done(raised)).toEqual({ type: 'done', reason: 'call' })
+    expect(raised.some((e) => e.type === 'delta')).toBe(false)
+    expect(sessions.scene(sessionId).openCall).toEqual({
+      kind: 'question',
+      question: 'Which way do you go?',
+      choices: ['The front door', 'The cellar stairs'],
+      declaration: { seq: 1, text: 'I leave' },
+      history: []
+    })
+
+    model.enqueue(happens(), effect({ effect: 'none' }), says('You step out into the rain.'))
+    const answered = await answer({ kind: 'choice', choice: 'The front door' })
+
+    expect(log()).toEqual([
+      'player:declaration:I leave',
+      'code:call-raised:Which way do you go?',
+      'player:call-answered:The front door',
+      'narrator:narration:You step out into the rain.'
+    ])
+    expect(answeredData()).toMatchObject({ kind: 'question', answer: 'The front door' })
+    expect(sessions.scene(sessionId).openCall).toBeNull()
+    expect(done(answered)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('takes free text, and the re-adjudication is told the question and the answer', async () => {
+    model.enqueue(which())
+    await play('I leave')
+    const asked = model.requests.length
+
+    model.enqueue(happens(), effect({ effect: 'none' }), says('You slip out the back.'))
+    await answer({ kind: 'text', text: 'Out the back window, quietly' })
+
+    const ruling = request(asked)
+    expect(ruling).toContain('I leave')
+    expect(ruling).toContain('Which way do you go?')
+    expect(ruling).toContain('Out the back window, quietly')
+    expect(log()).toContain('player:call-answered:Out the back window, quietly')
+  })
+
+  it('asks as many rounds as it takes, keeping the history, before a ruling', async () => {
+    model.enqueue(which())
+    await play('I leave')
+    model.enqueue(asks('Openly, or quietly?'))
+    const second = await answer({ kind: 'text', text: 'The front door' })
+
+    expect(done(second)).toEqual({ type: 'done', reason: 'call' })
+    expect(sessions.scene(sessionId).openCall).toMatchObject({
+      kind: 'question',
+      question: 'Openly, or quietly?',
+      declaration: { seq: 1, text: 'I leave' },
+      history: [{ question: 'Which way do you go?', answer: 'The front door' }]
+    })
+
+    model.enqueue(happens(), effect({ effect: 'none' }), says('You stroll out the front.'))
+    const ruled = model.requests.length
+    await answer({ kind: 'text', text: 'Openly' })
+
+    const ruling = request(ruled)
+    expect(ruling).toContain('The front door')
+    expect(ruling).toContain('Openly')
+    expect(log().at(-1)).toBe('narrator:narration:You stroll out the front.')
+  })
+
+  it('can lead to a Check Call, rolled as usual', async () => {
+    const using = runner({ seed: 4 })
+    model.enqueue(asks('Climb what?', ['The wall', 'The stairs rail']))
+    await play('I climb', using)
+
+    model.enqueue(climb())
+    const asked = await answer({ kind: 'choice', choice: 'The wall' }, using)
+    expect(done(asked)).toEqual({ type: 'done', reason: 'call' })
+    expect(sessions.scene(sessionId).openCall).toMatchObject({ kind: 'check', skill: 'athletics' })
+
+    model.enqueue(effect({ effect: 'none' }), says('You haul yourself over.'))
+    await roll(using)
+    // The Effect after the roll (the request before the Reply) still knows what was clarified.
+    expect(request(-2)).toContain('The wall')
+    expect(log().slice(-2)).toEqual([
+      'code:call-answered:Athletics: 19 + 5 = 24, success',
+      'narrator:narration:You haul yourself over.'
+    ])
+  })
+
+  it('is withdrawn by a new Declaration, which starts a new Exchange', async () => {
+    model.enqueue(which())
+    await play('I leave')
+
+    model.enqueue(happens(), effect({ effect: 'none' }), says('You order another ale.'))
+    const events = await play('Actually, I order an ale')
+
+    expect(log()).toEqual([
+      'player:declaration:I leave',
+      'code:call-raised:Which way do you go?',
+      'code:call-answered:Question withdrawn',
+      'player:declaration:Actually, I order an ale',
+      'narrator:narration:You order another ale.'
+    ])
+    expect(answeredData()).toMatchObject({ kind: 'question', withdrawn: true })
+    expect(sessions.scene(sessionId).openCall).toBeNull()
+    expect(done(events)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('stays open across a reload: a new runner instance can answer it', async () => {
+    model.enqueue(which())
+    await play('I leave')
+
+    const reloaded = createSessionService(db)
+    expect(reloaded.scene(sessionId).openCall).toMatchObject({
+      kind: 'question',
+      question: 'Which way do you go?'
+    })
+    model.enqueue(happens(), effect({ effect: 'none' }), says('Out you go.'))
+    const answered = await answer(
+      { kind: 'choice', choice: 'The cellar stairs' },
+      runner({ sessions: reloaded })
+    )
+    expect(done(answered)).toEqual({ type: 'done', reason: 'replied' })
+  })
+
+  it('restores the question when the re-adjudication fails, so it can be answered again', async () => {
+    model.enqueue(which())
+    await play('I leave')
+    const before = sessions.scene(sessionId)
+    const logged = log()
+
+    model.enqueue(fails)
+    const events = await answer({ kind: 'text', text: 'The front door' })
+
+    expect(done(events)).toMatchObject({ type: 'done', reason: 'error' })
+    expect(sessions.scene(sessionId)).toEqual(before)
+    expect(log()).toEqual(logged)
+  })
+
+  it('refuses a roll, a choice it did not offer and an empty answer', async () => {
+    model.enqueue(which())
+    await play('I leave')
+    const using = runner()
+    const signal = new AbortController().signal
+
+    expect(using.answerCall(sessionId, { kind: 'roll' }, signal)).toEqual({
+      ok: false,
+      reason: 'no-open-call'
+    })
+    expect(using.answerCall(sessionId, { kind: 'choice', choice: 'The roof' }, signal)).toEqual({
+      ok: false,
+      reason: 'no-open-call'
+    })
+    expect(using.answerCall(sessionId, { kind: 'text', text: '  ' }, signal)).toEqual({
+      ok: false,
+      reason: 'empty-action'
+    })
+  })
+
+  it('refuses a question answer while a Check is open', async () => {
+    model.enqueue(climb())
+    await play('I climb the wall')
+    expect(
+      runner().answerCall(
+        sessionId,
+        { kind: 'text', text: 'The wall' },
+        new AbortController().signal
+      )
+    ).toEqual({ ok: false, reason: 'no-open-call' })
   })
 })
 

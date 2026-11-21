@@ -5,7 +5,8 @@ import { EXCHANGE_CHUNK, type ExchangeEvent } from './exchange-events.ts'
 /** What to tell the player when the server refused to start an Exchange, by the reason it gave. */
 const REFUSAL_MESSAGE: Record<string, string> = {
   'in-flight': 'The previous Declaration is still being answered.',
-  'no-open-call': 'There is nothing to answer right now.'
+  'no-open-call': 'There is nothing to answer right now.',
+  'empty-action': 'Type an answer first.'
 }
 
 /** Sends a Declaration and reports each Exchange event. Resolves with an error text or null. */
@@ -18,7 +19,10 @@ export function sendAction(
   return postRun(sessionId, 'action', { text }, onEvent, signal)
 }
 
-/** Answers the open Call (a roll: code rolls) and reports the rest of its Exchange's events. */
+/**
+ * Answers the open Call (a roll, where code rolls; or a choice or free text for a question) and
+ * reports the rest of its Exchange's events.
+ */
 export function answerCall(
   sessionId: string,
   answer: CallAnswer,

@@ -4,11 +4,16 @@ import { sceneRunner } from '#lib/server/session/index.ts'
 import { refusalResponse, runResponse } from '#lib/server/session/run-response.ts'
 import type { RequestHandler } from './$types'
 
-/** Reads the answer from the request; only a roll (code rolls, so it carries nothing) for now. */
+/**
+ * Reads the answer from the request: a roll (code rolls, so it carries nothing), a chosen choice
+ * or free text. Whether it fits the open Call is the runner's to decide.
+ */
 function parseAnswer(value: unknown): CallAnswer | null {
-  if (value && typeof value === 'object' && (value as { kind?: unknown }).kind === 'roll') {
-    return { kind: 'roll' }
-  }
+  if (!value || typeof value !== 'object') return null
+  const { kind, choice, text } = value as { kind?: unknown; choice?: unknown; text?: unknown }
+  if (kind === 'roll') return { kind }
+  if (kind === 'choice' && typeof choice === 'string') return { kind, choice }
+  if (kind === 'text' && typeof text === 'string') return { kind, text }
   return null
 }
 

@@ -1,10 +1,12 @@
 /**
  * One Exchange (ADR 0005): a fixed sequence of steps over a recorded Declaration. Adjudication
- * rules how it resolves; a Check raises a Call, which pauses the Exchange until the player rolls.
+ * rules how it resolves; a Check or a clarifying question raises a Call, which pauses the Exchange
+ * until the player rolls or answers. An answered question is ruled on again, merged with the
+ * answers so far, for as many rounds as it takes.
  * On happens or a successful Check, Effect picks and code applies the one state change; the Reply
  * streams last, told what was settled. Code owns the order; the model only answers each step.
  */
-import type { CheckCall, CheckRoll } from '#lib/session/call.ts'
+import type { CheckCall, CheckRoll, ClarifyingRound } from '#lib/session/call.ts'
 import type { SessionEvent } from '#lib/session/enums.ts'
 import type {
   ContextReport,
@@ -17,7 +19,7 @@ import type {
 } from '#lib/session/exchange-events.ts'
 import type { ChatPort } from '../../ai/port.ts'
 import { adjudicate } from './adjudicate.ts'
-import { raiseCheck } from './call.ts'
+import { raiseCheck, raiseQuestion } from './call.ts'
 import type { ExchangeContext } from './context.ts'
 import type { Adjudication } from './contract.ts'
 import { applyEffect, chooseEffect } from './effect.ts'
@@ -53,12 +55,14 @@ function outcomeFacts(
 }
 
 /**
- * Where an Exchange starts: a new Declaration, or a Check Call the player has just rolled (the
- * Call is already cleared and its result logged). #273 adds an answered question here.
+ * Where an Exchange starts: a new Declaration, a Check Call the player has just rolled, or a
+ * question Call the player has just answered (either Call is already cleared and its answer
+ * logged). An answered question carries the clarifying history, this answer included.
  */
 export type ExchangeStart =
   | { kind: 'declaration'; declaration: SessionEvent }
   | { kind: 'check'; declaration: SessionEvent; call: CheckCall; roll: CheckRoll }
+  | { kind: 'question'; declaration: SessionEvent; history: ClarifyingRound[] }
 
 /** How an Exchange handed the floor back: a saved Reply, a stopped one, or an open Call. */
 export type ExchangeEnd = 'replied' | 'stopped' | 'call'
@@ -115,16 +119,22 @@ export async function* runExchange(
   // The Effect the ruling already settled (a defaulted Adjudication settles `none`).
   let settled: RulingEffect | undefined
   let check: CheckRoll | null = null
+  let history: ClarifyingRound[] = []
   if (start.kind === 'check') {
     const { skill, difficulty } = start.call
     adjudication = { outcome: 'check', skill, difficulty } as Adjudication
     check = start.roll
+    history = start.call.history ?? []
   } else {
+    if (start.kind === 'question') history = start.history
     yield enter('adjudication')
-    ;({ adjudication, effect: settled } = await adjudicate(run, declaration))
+    ;({ adjudication, effect: settled } = await adjudicate(run, declaration, history))
     yield snapshot()
-    if (adjudication.outcome === 'check') {
-      const event = raiseCheck(ctx.sessions, ctx.sessionId, declaration, adjudication)
+    if (adjudication.outcome === 'check' || adjudication.outcome === 'ask') {
+      const event =
+        adjudication.outcome === 'check'
+          ? raiseCheck(ctx.sessions, ctx.sessionId, declaration, adjudication, history)
+          : raiseQuestion(ctx.sessions, ctx.sessionId, declaration, adjudication, history)
       yield { type: 'event', event }
       yield { type: 'ruling', adjudication, effect: null }
       return 'call'
@@ -133,16 +143,12 @@ export async function* runExchange(
 
   let effect: RulingEffect | null = null
   let change: string | null = null
-  // TEMPORARY: a question resolves as happens until #273 gives it its own path.
-  const happens =
-    adjudication.outcome === 'happens' ||
-    adjudication.outcome === 'ask' ||
-    (check !== null && check.success)
+  const happens = adjudication.outcome === 'happens' || (check !== null && check.success)
   if (happens && settled) {
     effect = settled
   } else if (happens) {
     yield enter('effect')
-    const chosen = await chooseEffect(run, declaration)
+    const chosen = await chooseEffect(run, declaration, history)
     change = yield* applyEffect(run, chosen)
     effect = chosen
     yield snapshot()

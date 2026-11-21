@@ -6,6 +6,7 @@
  * what ships. Change a prompt or schema here, then re-run the eval. See GLOSSARY.md and ADR 0005.
  */
 import { z } from 'zod'
+import type { ClarifyingRound } from '#lib/session/call.ts'
 import type { Mode } from '#lib/session/enums.ts'
 
 export const OUTCOMES = ['happens', 'impossible', 'check', 'ask'] as const
@@ -258,11 +259,15 @@ export interface CharacterLine {
   summary: string
 }
 
-/** The compact Scene context both requests see as the user message, ending with the Declaration. */
+/**
+ * The compact Scene context both requests see as the user message, ending with the Declaration
+ * and, while it is being clarified, each question asked about it and the player's answer.
+ */
 export function sceneContext(
   scene: ExchangeScene,
   character: CharacterLine,
-  declaration: string
+  declaration: string,
+  clarifying: ClarifyingRound[] = []
 ): string {
   const talkingTo = scene.npcs.find((n) => n.id === scene.dialogueNpcId)
   return [
@@ -273,7 +278,18 @@ export function sceneContext(
     `Objects:\n${scene.objects.map((o) => `- ${o}`).join('\n') || '- none'}`,
     `People present:\n${scene.npcs.map((n) => `- ${n.id}: ${n.name}, ${n.note}`).join('\n') || '- nobody'}`,
     `Recent events:\n${scene.events.join('\n')}`,
-    `The player declares: "${declaration}"`
+    `The player declares: "${declaration}"`,
+    ...(clarifying.length > 0
+      ? [
+          [
+            'Asked what they meant:',
+            ...clarifying.map(
+              (c) => `- You asked: "${c.question}" The player answered: "${c.answer}"`
+            ),
+            'Rule on the declaration as these answers clarify it.'
+          ].join('\n')
+        ]
+      : [])
   ].join('\n\n')
 }
 
