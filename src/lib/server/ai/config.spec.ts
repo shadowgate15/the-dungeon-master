@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_CONTEXT_LIMIT,
   DEFAULT_LM_STUDIO_BASE_URL,
+  DEFAULT_MODEL,
   resolveAiConfig,
   withContextFallback
 } from './config.ts'
@@ -20,10 +21,11 @@ describe('AI config', () => {
     })
   })
 
-  it('treats an unset or blank model as not configured', () => {
-    expect(resolveAiConfig({}).model).toBeNull()
-    expect(resolveAiConfig({ model: '' }).model).toBeNull()
-    expect(resolveAiConfig({ model: '   ' }).model).toBeNull()
+  it('falls back to the default model when the model is unset or blank', () => {
+    expect(DEFAULT_MODEL).toBe('qwen/qwen3.5-9b')
+    expect(resolveAiConfig({}).model).toBe('qwen/qwen3.5-9b')
+    expect(resolveAiConfig({ model: '' }).model).toBe('qwen/qwen3.5-9b')
+    expect(resolveAiConfig({ model: '   ' }).model).toBe('qwen/qwen3.5-9b')
   })
 
   it('treats a blank base URL as unset', () => {

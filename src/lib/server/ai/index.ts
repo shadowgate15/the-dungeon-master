@@ -28,17 +28,16 @@ export async function getAiStatus(options?: { recheck?: boolean }): Promise<AiSt
 
 /** Disables the AI until a successful re-probe or a server restart. */
 export function lockReasoningModel() {
-  if (config.model) reasoningLock.engage(config.model)
+  reasoningLock.engage(config.model)
 }
 
 export function isReasoningModelLocked() {
   return reasoningLock.locked
 }
 
-/** The configured chat port for per-field generation, or null when no model is set. */
+/** The chat port over the configured model. */
 export function getChatPort() {
-  const adapter = getChatAdapter()
-  return adapter ? createChatPort(adapter, config.sampling) : null
+  return createChatPort(getChatAdapter(), config.sampling)
 }
 
 /** The context window to budget a prompt for: the loaded model's, else the configured limit. */
@@ -48,7 +47,7 @@ export async function getContextLimit(): Promise<number> {
   return config.contextLimit
 }
 
-/** The configured chat adapter, or null when no model is set. */
+/** The chat adapter over the configured model. */
 export function getChatAdapter() {
-  return config.model ? createChatAdapter({ baseUrl: config.baseUrl, model: config.model }) : null
+  return createChatAdapter({ baseUrl: config.baseUrl, model: config.model })
 }

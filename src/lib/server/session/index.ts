@@ -1,4 +1,3 @@
-import { NO_MODEL_MESSAGE } from '#lib/ai/status.ts'
 import { getChatPort } from '../ai/index.ts'
 import type { ChatPort } from '../ai/port.ts'
 import { db } from '../db/index.ts'
@@ -16,15 +15,8 @@ import { createSessionEnd } from './end-session.ts'
 import { createSceneRunner } from './scene-runner.ts'
 import { createSessionService } from './service.ts'
 
-/**
- * The port is resolved per call so an unconfigured model reads as a failed step, not a startup
- * error.
- */
-const modelPort: ChatPort = (request) => {
-  const port = getChatPort()
-  if (!port) throw new Error(NO_MODEL_MESSAGE)
-  return port(request)
-}
+/** The port is resolved per call, so nothing talks to the model at startup. */
+const modelPort: ChatPort = (request) => getChatPort()(request)
 
 /** Server-only singletons: the Session service and the process-wide scene runner. */
 export const sessions = createSessionService(db, Date.now, modelPort)

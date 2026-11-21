@@ -50,7 +50,7 @@ function problem(error: unknown) {
 }
 
 type GenerateCampaign = NonNullable<ReturnType<typeof campaigns.get>>
-type Port = NonNullable<ReturnType<typeof getChatPort>>
+type Port = ReturnType<typeof getChatPort>
 
 /**
  * Runs generation as an AG-UI stream: `RUN_STARTED`, each `ArcStreamEvent` as a `CUSTOM` chunk
@@ -159,7 +159,6 @@ export const POST: RequestHandler = async ({ request, params }) => {
       return json({ error: 'An Arc cannot be generated for this Campaign' }, { status: 409 })
     }
     const port = getChatPort()
-    if (!port) return json({ error: 'AI is not configured' }, { status: 503 })
     if (isReasoningModelLocked()) {
       return json({ error: 'AI is disabled until the connection is checked' }, { status: 503 })
     }
