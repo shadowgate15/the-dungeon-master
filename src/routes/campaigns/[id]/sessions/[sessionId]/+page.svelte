@@ -65,7 +65,14 @@
   }
 
   /** Runs one Exchange and refreshes the page data after it. */
-  async function stream(start: (signal: AbortSignal) => Promise<string | null>): Promise<boolean> {
+  /**
+   * Streams one Exchange. `sent` runs once it ended without a problem, before the input is enabled
+   * again, so clearing the draft there never wipes what the player types next.
+   */
+  async function stream(
+    start: (signal: AbortSignal) => Promise<string | null>,
+    sent?: () => void
+  ): Promise<void> {
     busy = true
     problem = null
     controller = new AbortController()
@@ -82,21 +89,26 @@
       if (!controller.signal.aborted) problem = 'That Declaration could not be sent.'
       else ok = true
     } finally {
-      busy = false
       thinking = false
       live = ''
       controller = null
-      await invalidateAll()
-      streamed = []
+      try {
+        await invalidateAll()
+      } finally {
+        streamed = []
+        if (ok) sent?.()
+        busy = false
+      }
     }
-    return ok
   }
 
   // Sending while a Call is open withdraws it (the runner does that) and starts a new Exchange.
   async function send(text: string) {
     if (busy) return
-    if (await stream((signal) => sendDeclaration(data.session.id, text, onMessage, signal)))
-      draft = ''
+    await stream(
+      (signal) => sendDeclaration(data.session.id, text, onMessage, signal),
+      () => (draft = '')
+    )
   }
 
   // A clicked exit or NPC declares at once, carrying its Effect; the draft is left as it was.
@@ -105,16 +117,16 @@
     void stream((signal) => sendDeclaration(data.session.id, text, onMessage, signal, effect))
   }
 
-  function answer(given: CallAnswer): Promise<boolean> {
-    if (busy) return Promise.resolve(false)
-    return stream((signal) => answerCall(data.session.id, given, onMessage, signal))
+  function answer(given: CallAnswer, sent?: () => void): Promise<void> {
+    if (busy) return Promise.resolve()
+    return stream((signal) => answerCall(data.session.id, given, onMessage, signal), sent)
   }
 
   const roll = () => void answer({ kind: 'roll' })
 
   // Typing while a question is open answers it ("Answer"); "Do something else" sends instead.
   async function answerText(text: string) {
-    if (await answer({ kind: 'text', text })) draft = ''
+    await answer({ kind: 'text', text }, () => (draft = ''))
   }
 </script>
 
