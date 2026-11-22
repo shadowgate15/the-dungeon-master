@@ -72,25 +72,25 @@ With Claude as DM, pull (search and open by link) replaces push (selection by bu
 - Retrieval runs semantic search over triplets with BFS expansion, then scores the episodic vertices those triplets link to.
 - Normalized scores against RAG and summary baselines:
 
-| Task | AriGraph | RAG | Summary |
-|---|---|---|---|
-| Treasure Hunt | 1.0 | 0.33 | 0.33 |
-| Cooking | 1.0 | 0.36 | 0.52 |
-| Cleaning | 0.79 | 0.39 | 0.35 |
+| Task          | AriGraph | RAG  | Summary |
+| ------------- | -------- | ---- | ------- |
+| Treasure Hunt | 1.0      | 0.33 | 0.33    |
+| Cooking       | 1.0      | 0.36 | 0.52    |
+| Cleaning      | 0.79     | 0.39 | 0.35    |
 
-  This is the clearest evidence that a structured world graph beats both summaries and plain RAG for tracking game state.
+This is the clearest evidence that a structured world graph beats both summaries and plain RAG for tracking game state.
 
 **GraphRAG** ([Microsoft][graphrag]): offline extraction of entities, relationships and claims, Leiden community clustering and bottom-up community summaries. It has global, local and DRIFT query modes. It is built for static corpora, so it is relevant to rendering world overviews ("what are the factions?") but not to turn-by-turn updates.
 
 **Comparison against the five questions:**
 
-| Axis | Graph |
-|---|---|
-| Model read/write | Small, typed CRUD tools. The model must split narration into atoms. Easy to validate in code. |
-| Who knows what | Not built into any of these tools. It can be modelled as `knows` edges (NPC → fact), or as a visibility property on edges, but each holder needs its own edges. |
-| Consistency | Only as good as the update rule. The reference server has delete only. Graphiti has validity intervals plus LLM-judged invalidation. AriGraph has LLM-judged replacement. Identity (one NPC, not two "Mira"s) needs explicit entity resolution. |
-| Scale | Hybrid search (BM25 + vector + graph hops) scales well. Reading the whole graph does not. |
-| UI | Node-link graph views, entity cards and timelines (from validity intervals). Atomic observations read poorly as prose. |
+| Axis             | Graph                                                                                                                                                                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model read/write | Small, typed CRUD tools. The model must split narration into atoms. Easy to validate in code.                                                                                                                                                   |
+| Who knows what   | Not built into any of these tools. It can be modelled as `knows` edges (NPC → fact), or as a visibility property on edges, but each holder needs its own edges.                                                                                 |
+| Consistency      | Only as good as the update rule. The reference server has delete only. Graphiti has validity intervals plus LLM-judged invalidation. AriGraph has LLM-judged replacement. Identity (one NPC, not two "Mira"s) needs explicit entity resolution. |
+| Scale            | Hybrid search (BM25 + vector + graph hops) scales well. Reading the whole graph does not.                                                                                                                                                       |
+| UI               | Node-link graph views, entity cards and timelines (from validity intervals). Atomic observations read poorly as prose.                                                                                                                          |
 
 ### 2. Linked-document store (Obsidian-style)
 
@@ -130,13 +130,13 @@ With Claude as DM, pull (search and open by link) replaces push (selection by bu
 
 **Comparison against the five questions:**
 
-| Axis | Documents |
-|---|---|
+| Axis             | Documents                                                                                                                                                                                                                                    |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Model read/write | Native to a large-context coding agent: read a page, edit a section, follow links. Prose holds nuance (motives, voice, history) that atoms lose. Writes are unvalidated free text unless a schema is enforced (Basic Memory's schema tools). |
-| Who knows what | File or folder granularity only (for example `secrets/` versus `public/`). Inline secrets are just text, so filtering needs a parser, like Foundry's secret blocks. |
-| Consistency | Nothing prevents a contradiction. They are found by lint or ingest-time review (LLM Wiki). Pages are edited in place, so history lives in git or an append-only log, not in the store. |
-| Scale | An index file works up to hundreds of pages, and a full-text plus vector index is needed beyond that (Basic Memory, qmd). Link traversal gives cheap neighbourhood context. |
-| UI | The best of the three: rendered markdown pages, backlinks, Obsidian-style graph view. A human can edit the same files. |
+| Who knows what   | File or folder granularity only (for example `secrets/` versus `public/`). Inline secrets are just text, so filtering needs a parser, like Foundry's secret blocks.                                                                          |
+| Consistency      | Nothing prevents a contradiction. They are found by lint or ingest-time review (LLM Wiki). Pages are edited in place, so history lives in git or an append-only log, not in the store.                                                       |
+| Scale            | An index file works up to hundreds of pages, and a full-text plus vector index is needed beyond that (Basic Memory, qmd). Link traversal gives cheap neighbourhood context.                                                                  |
+| UI               | The best of the three: rendered markdown pages, backlinks, Obsidian-style graph view. A human can edit the same files.                                                                                                                       |
 
 ### 3. Hybrid: structured records for mechanics, linked notes for narrative
 
@@ -158,13 +158,13 @@ Tools built for human GMs settled on this shape.
 
 **Comparison against the five questions:**
 
-| Axis | Hybrid |
-|---|---|
+| Axis             | Hybrid                                                                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Model read/write | Mechanics through typed, validated tools (the project principle that "the LLM never invents numbers"). Narrative through document tools. Links tie the two together, for example an NPC row id inside an NPC page. |
-| Who knows what | The best fit. Visibility is a field on rows, links and secret blocks, and code filters what the player UI shows and what an NPC "knows" (Foundry's pattern, and ReverieMem's below). |
-| Consistency | Invariants (dead stays dead, HP, location) are enforced by code on rows. Narrative contradictions are linted. Supersession and validity can live on rows and on fact or claim items. |
-| Scale | SQL for mechanics, full-text plus vector plus links for narrative. Both are local-first on SQLite (Basic Memory shows the pattern). |
-| UI | A typed side panel (character sheet, combat tracker, NPC card) plus rendered notes with backlinks and a graph view, each filtered by viewer. |
+| Who knows what   | The best fit. Visibility is a field on rows, links and secret blocks, and code filters what the player UI shows and what an NPC "knows" (Foundry's pattern, and ReverieMem's below).                               |
+| Consistency      | Invariants (dead stays dead, HP, location) are enforced by code on rows. Narrative contradictions are linted. Supersession and validity can live on rows and on fact or claim items.                               |
+| Scale            | SQL for mechanics, full-text plus vector plus links for narrative. Both are local-first on SQLite (Basic Memory shows the pattern).                                                                                |
+| UI               | A typed side panel (character sheet, combat tracker, NPC card) plus rendered notes with backlinks and a graph view, each filtered by viewer.                                                                       |
 
 Cost: two models to keep in sync. Anything that exists both as a row and as a page (an NPC) needs one owner per field, or the two drift.
 
@@ -209,7 +209,7 @@ Implication for this project:
 
 - **FIREBALL** ([Zhu et al. 2023, arXiv 2305.01528][fireball]): nearly 25,000 sessions of real D&D play through the Avrae Discord bot, with true game state. Adding Avrae state information improves generated turns, by automated metrics and human judgment.
 - **Labyrinth function-calling GM** ([Song, Zhu, Callison-Burch, Wordplay @ ACL 2024, arXiv 2409.06949][labyrinth]): game-specific controls exposed as functions improve narrative quality and consistency of state updates, by human evaluation and unit tests.
-- **PAYADOR** ([Góngora et al. 2025, arXiv 2504.07304][payador]): grounds the LLM in a *minimal* structured world representation and predicts the outcomes of actions instead of enumerating actions. This argues for keeping the enforced core small.
+- **PAYADOR** ([Góngora et al. 2025, arXiv 2504.07304][payador]): grounds the LLM in a _minimal_ structured world representation and predicts the outcomes of actions instead of enumerating actions. This argues for keeping the enforced core small.
 - **NCP-Bench** ([arXiv 2608.08160, ICML 2026][ncp-bench]):
   - Narrative Commitment Preservation measured over 100 environments.
   - The best model (GPT-5.2) keeps its commitments in only 42% of runs after 20 turns.
@@ -234,7 +234,7 @@ Primary sources fetched for this note. Several papers were read from the arXiv a
 
 - [mcp-memory]: https://github.com/modelcontextprotocol/servers/tree/main/src/memory
 - [neo4j-memory]: https://github.com/neo4j-contrib/mcp-neo4j/tree/main/servers/mcp-neo4j-memory
-- [zep]: https://arxiv.org/abs/2501.13956 (full text: https://arxiv.org/html/2501.13956)
+- [zep]: https://arxiv.org/abs/2501.13956 'full text: https://arxiv.org/html/2501.13956'
 - [arigraph]: https://arxiv.org/abs/2407.04363
 - [graphrag]: https://microsoft.github.io/graphrag/
 - [basic-memory]: https://github.com/basicmachines-co/basic-memory
