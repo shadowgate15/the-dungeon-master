@@ -117,7 +117,7 @@ _Avoid_: Reference data, compendium
 ### Play
 
 **Session**:
-One sitting of play in a Campaign, from start to end, run by one DM. A Session is open or closed. A Campaign has many Sessions but at most one open at a time. The only thing a Session owns is its Session summary: the Campaign's Event log and Scene carry on across Sessions, and every event is stamped with the Session it happened in. A Session that stopped without End Session is closed when the next one opens, before anything else happens.
+One sitting of play in a Campaign, from start to end, run by one DM. A Session is open or closed, and begins only when the DM attaches. A Campaign has many Sessions but at most one open at a time. The only thing a Session owns is its Session summary: the Campaign's Event log and Scene carry on across Sessions, and every event made during a Session is stamped with it. Edits the Player makes between sittings, with no DM attached, belong to no Session. A Session that stopped without End Session is closed when the next one opens, before anything else happens.
 _Avoid_: Game, run, playthrough, sitting
 
 **End Session**:
