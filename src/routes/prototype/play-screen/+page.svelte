@@ -49,7 +49,7 @@
     onresolve={() => (status = 'thinking')}
   />{/if}
 
-<div class="h-20"></div>
+{#if variant !== 'C'}<div class="h-20"></div>{/if}
 
 <PrototypeSwitcher {variants} current={variant}>
   {#snippet extras()}

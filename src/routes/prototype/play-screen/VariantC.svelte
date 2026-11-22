@@ -36,9 +36,13 @@
   const mod = (n: number) => (n >= 10 ? '+' : '') + Math.floor((n - 10) / 2)
 </script>
 
-<main class="grid grid-cols-1 gap-3 p-3 lg:grid-cols-[20rem_1fr_15rem]">
+<main
+  class="grid h-[calc(100dvh-3.1rem)] grid-cols-1 gap-3 overflow-hidden p-3 pb-16 lg:grid-cols-[20rem_1fr_15rem]"
+>
   <!-- Sheet -->
-  <aside class="flex flex-col rounded-panel border border-border bg-surface">
+  <aside
+    class="flex min-h-0 flex-col overflow-y-auto rounded-panel border border-border bg-surface"
+  >
     <div class="flex border-b border-border">
       {#each party as p (p.handle)}
         <button
@@ -111,7 +115,7 @@
   </aside>
 
   <!-- Timeline -->
-  <section class="flex min-h-[70vh] flex-col gap-2">
+  <section class="flex min-h-0 flex-col gap-2">
     <div class="flex items-center gap-2 text-xs">
       <span class="text-muted">Show</span>
       {#each [['story', 'Story'], ['rolls', 'Rolls'], ['dm', 'DM activity']] as [k, label] (k)}
@@ -122,7 +126,7 @@
       {/each}
     </div>
     <div
-      class="flex flex-1 flex-col gap-1.5 overflow-y-auto rounded-panel border border-border bg-surface p-3"
+      class="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto rounded-panel border border-border bg-surface p-3"
     >
       {#each timeline as s (s.id)}
         {#if (s.kind === 'narration' || s.kind === 'floor') && show.story}
@@ -167,11 +171,12 @@
         {/if}
       {/if}
     </div>
+    {#if scenario.status === 'permission'}<PermissionPrompt onanswer={onresolve} />{/if}
     <Composer combat={scenario.combat} {busy} {onsend} showPicker={false} bind:actingAs={acting} />
   </section>
 
   <!-- Rail -->
-  <aside class="flex flex-col gap-3 text-sm">
+  <aside class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm">
     <div class="rounded-panel border border-border bg-surface p-3">
       <p class="font-display text-3xl">{scene.clock.split(', ')[1]}</p>
       <p class="text-muted">{scene.clock.split(', ')[0]}</p>
@@ -204,7 +209,3 @@
     </div>
   </aside>
 </main>
-
-{#if scenario.status === 'permission'}
-  <div class="fixed top-14 right-4 z-40 w-80"><PermissionPrompt onanswer={onresolve} /></div>
-{/if}
