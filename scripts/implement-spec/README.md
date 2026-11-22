@@ -17,17 +17,17 @@ Run it from any checkout or worktree of this repository. It resolves the main re
 5. Implements the first ready ticket: cuts its branch `implement-spec/<spec#>-<ticket#>` from the integration tip into its own worktree under `.claude/worktrees/`, records that launch commit and a fresh session ID in the state file, and runs an implementer `claude -p` session there (permission checks bypassed, default model). The session's output goes to its log, never the console.
 6. Runs the done check on the session: it exited 0, its branch has commits beyond the launch commit, and the branch still contains the launch commit. A pass marks the ticket `implemented`; anything else marks it `failed`, keeps its worktree, and names the failed check and the log on the console.
 
-`--explore` is accepted but does nothing yet.
+With `--explore`, one explorer `claude -p` session runs in the integration worktree before any implementer and writes Markdown notes to the run's `notes/` directory, which every later prompt points at. Its session and status are recorded under `steps.explore` in the state file; once it is `done`, re-runs skip it. A failed explorer (non-zero exit) ends the run before any implementer launches. Without the flag no explorer runs.
 
 ## The run directory
 
 `.implement-spec/<spec#>/` at the main repository root, gitignored:
 
-| Path         | Contents                                                                                                   |
-| ------------ | ---------------------------------------------------------------------------------------------------------- |
-| `state.json` | The integration branch and worktree, and each ticket's status, launch commit and session (ID and outcome). |
-| `notes/`     | Shared notes for the run's sessions.                                                                       |
-| `logs/`      | One log per session: `<role>-<ticket#>.log`.                                                               |
+| Path         | Contents                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `state.json` | The integration branch and worktree, each ticket's status, launch commit and session (ID and outcome), and each step not tied to a ticket (`steps.explore`). |
+| `notes/`     | Shared notes for the run's sessions, including the explorer's.                                                                                               |
+| `logs/`      | One log per session: `<role>-<ticket#>.log`, or `<role>.log` for a role not tied to a ticket (`explorer.log`).                                               |
 
 ## Re-running
 

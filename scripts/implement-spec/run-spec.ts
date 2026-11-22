@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { implementerPrompt } from './prompts.ts'
+import { explorerPrompt, implementerPrompt, type Pointers } from './prompts.ts'
 
 /** An issue that blocks a ticket, with its state on GitHub. */
 export type Blocker = { number: number; open: boolean }
@@ -84,12 +84,20 @@ export type TicketState = {
   session?: SessionState
 }
 
+/** A step of the run not tied to a ticket. `explore` runs before any implementer, when asked for. */
+export type StepName = 'explore'
+
+/** A step's status and its session. A `done` step is never run again. */
+export type StepState = { status: 'running' | 'done' | 'failed'; session: SessionState }
+
 /** The run's persisted state, rewritten after every transition. */
 export type RunState = {
   spec: number
   integrationBranch: string
   integrationWorktree: string
   tickets: Record<number, TicketState>
+  /** Steps not tied to a ticket that have started, by name. */
+  steps?: Partial<Record<StepName, StepState>>
 }
 
 /** Where a spec's run lives: state, notes, logs and the PR body, under the main repository root. */
@@ -156,6 +164,44 @@ type Run = {
   ports: Ports
 }
 
+const pointers = (run: Run): Pointers => ({
+  spec: run.spec,
+  integrationBranch: run.branch,
+  notes: run.paths.notes
+})
+
+/**
+ * Runs the explorer in the integration worktree, unless an earlier run finished exploring.
+ * Resolves to whether exploration is done.
+ */
+const explore = async (run: Run): Promise<boolean> => {
+  const { claude, log } = run.ports
+  if (run.state.steps?.explore?.status === 'done') return true
+  const logFile = logPath(run.paths.logs, 'explorer')
+  const session: SessionState = { id: randomUUID() }
+  const step: StepState = { status: 'running', session }
+  run.state.steps = { ...run.state.steps, explore: step }
+  run.save()
+
+  log(`launched explorer (log ${logFile})`)
+  const exitCode = await claude.run({
+    role: 'explorer',
+    cwd: run.state.integrationWorktree,
+    prompt: explorerPrompt(pointers(run)),
+    sessionId: session.id,
+    resume: false,
+    logFile
+  })
+
+  const check: DoneCheck = exitCode === 0 ? 'passed' : 'nonzero-exit'
+  session.outcome = { exitCode, check }
+  step.status = check === 'passed' ? 'done' : 'failed'
+  run.save()
+  if (check === 'passed') log(`explored (notes ${run.paths.notes})`)
+  else log(`failed explorer: ${check} (log ${logFile})`)
+  return check === 'passed'
+}
+
 /** The first done check an implementer fails, or `passed`. */
 const doneCheck = async (
   git: GitPort,
@@ -189,10 +235,7 @@ const implement = async (run: Run, ticket: number): Promise<boolean> => {
   const exitCode = await claude.run({
     role: 'implementer',
     cwd,
-    prompt: implementerPrompt(
-      { spec: run.spec, integrationBranch: run.branch, notes: run.paths.notes },
-      { ticket, branch }
-    ),
+    prompt: implementerPrompt(pointers(run), { ticket, branch }),
     sessionId: session.id,
     resume: false,
     logFile
@@ -209,7 +252,7 @@ const implement = async (run: Run, ticket: number): Promise<boolean> => {
 
 export const runSpec = async (
   spec: number,
-  _options: RunOptions,
+  options: RunOptions,
   ports: Ports
 ): Promise<RunResult> => {
   const { tracker, git, log } = ports
@@ -232,6 +275,8 @@ export const runSpec = async (
   const save = () => saveState(paths.state, state)
   const run: Run = { spec, root, paths, branch, state, save, ports }
   save()
+
+  if (options.explore && !(await explore(run))) return { ok: false, frontier: [] }
 
   const frontier = readyTickets(tickets, state)
   for (const ticket of tickets.filter(({ number }) => frontier.includes(number))) {

@@ -340,4 +340,60 @@ describe('runSpec', () => {
       }
     )
   })
+  describe('--explore', () => {
+    it('runs one explorer session in the integration worktree before any implementer, and points implementers at its notes', async () => {
+      const { ports, claude } = portsFor([ticket(1)])
+
+      await runSpec(100, { explore: true }, ports)
+
+      const runDir = join(root, '.implement-spec', '100')
+      expect(claude.sessions.map(({ role }) => role)).toEqual(['explorer', 'implementer'])
+      const [explorer, implementer] = claude.sessions
+      expect(explorer).toMatchObject({
+        cwd: join(root, '.claude', 'worktrees', 'implement-spec-100'),
+        resume: false,
+        logFile: join(runDir, 'logs', 'explorer.log')
+      })
+      expect(explorer.prompt).toMatch(/#100\b/)
+      expect(explorer.prompt).toContain(join(runDir, 'notes'))
+      expect(implementer.prompt).toContain(join(runDir, 'notes'))
+    })
+
+    it('runs no explorer without the flag', async () => {
+      const { ports, claude } = portsFor([ticket(1)])
+
+      await runSpec(100, {}, ports)
+
+      expect(claude.sessions.map(({ role }) => role)).toEqual(['implementer'])
+      expect(readState(100).steps?.explore).toBeUndefined()
+    })
+
+    it('records the finished exploration so a re-run does not explore again', async () => {
+      const { ports, claude } = portsFor([ticket(1), ticket(2, [{ number: 1, open: true }])])
+
+      await runSpec(100, { explore: true }, ports)
+      expect(readState(100).steps.explore).toMatchObject({
+        status: 'done',
+        session: { id: claude.sessions[0].sessionId }
+      })
+      await runSpec(100, { explore: true }, ports)
+
+      expect(claude.sessions.filter(({ role }) => role === 'explorer')).toHaveLength(1)
+    })
+
+    it('launches no implementer when the explorer fails, naming its log', async () => {
+      const { ports, claude } = portsFor([ticket(1)], (session, fake) =>
+        session.role === 'explorer' ? 1 : implementsCleanly(session, fake)
+      )
+
+      const result = await runSpec(100, { explore: true }, ports)
+
+      expect(result.ok).toBe(false)
+      expect(claude.sessions.map(({ role }) => role)).toEqual(['explorer'])
+      expect(readState(100).steps.explore.status).toBe('failed')
+      const failed = lines.find((line) => /failed/.test(line))
+      expect(failed).toMatch(/explorer/)
+      expect(failed).toContain(join(root, '.implement-spec', '100', 'logs', 'explorer.log'))
+    })
+  })
 })
