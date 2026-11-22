@@ -125,15 +125,19 @@ Where the spotlight of play is right now: one Place, the Characters and NPCs pre
 _Avoid_: Room, location, state, encounter
 
 **Declaration**:
-What a Player says one of their Characters does or says, in free text or by clicking something in the Scene. It always names the Character. Free text is always accepted, even while a Call is open.
+What a Player says one of their Characters does or says, in free text or by clicking something in the Scene. It always names exactly one Character, who must be in the Scene. It goes onto the open Floor and is answered together with the rest of that Floor, never on its own. Free text is always accepted, even while a Call is open.
 _Avoid_: Action, command, input, move, turn
+
+**Floor**:
+The DM waiting on the Players' Declarations. Out of Combat it is open to every Character in the Scene; in Combat, only to the Character whose turn it is. Until it closes, the Declarations on it can be added to, edited or withdrawn, and the DM hears none of them. It closes when every Player with a Character in the Scene has said they are done; it never times out. The DM then answers the whole Floor at once, in one Narration. A Floor closed with no Declarations hands the DM the initiative.
+_Avoid_: Round (that is Combat's), batch, queue, turn
 
 **Check**:
 A d20 roll plus a Character's modifier for one skill or saving throw, against a DC. The DM names the skill or save and a difficulty tier (easy, medium, hard or very hard); code turns the tier into the SRD DC and rolls. The Player sees the skill and the reason, never the DC.
 _Avoid_: Roll request, skill roll, test
 
 **Call**:
-The DM's open request to a Player: a Check or Roll sequence to roll, or a question, optionally with choices. One Call can ask for rolls from several of the Player's Characters at once. It is kept in the Scene, so it survives a reload. Answering it lets the DM continue; a new Declaration withdraws it.
+The DM's open request to a Player: a Check or Roll sequence to roll, or a question, optionally with choices. One Call can ask for different rolls from several Characters at once, and the DM continues only once all are answered. It is kept in the Scene, so it survives a reload. Answering it lets the DM continue; a Floor closed with Declarations on it withdraws it.
 _Avoid_: Prompt, pending roll, modal, interrupt
 
 **Roll sequence**:
