@@ -1,8 +1,9 @@
-// The real tracker and git ports: thin, untested wrappers over the `gh` and `git` CLIs.
-import { execFile } from 'node:child_process'
+// The real tracker, git and claude ports: thin, untested wrappers over the `gh`, `git` and `claude` CLIs.
+import { execFile, spawn } from 'node:child_process'
+import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { promisify } from 'node:util'
-import type { Blocker, GitPort, Ticket, TrackerPort } from './run-spec.ts'
+import type { Blocker, ClaudePort, GitPort, Ticket, TrackerPort } from './run-spec.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -63,6 +64,50 @@ export const createGit = (cwd: string): GitPort => {
           ? ['worktree', 'add', path, branch]
           : ['worktree', 'add', '-b', branch, path, base]
       )
-    }
+    },
+    head: async (branch) => (await git(['rev-parse', '--verify', `${branch}^{commit}`])).trim(),
+    hasCommitsBeyond: async (branch, base) =>
+      Number((await git(['rev-list', '--count', `${base}..${branch}`])).trim()) > 0,
+    contains: (branch, commit) =>
+      git(['merge-base', '--is-ancestor', commit, branch]).then(
+        () => true,
+        () => false
+      )
   }
 }
+
+/**
+ * Runs `claude -p` unattended (permission checks bypassed, default model, session saved so it can
+ * be resumed), with the prompt on stdin and all output appended to the session's log file.
+ * Resolves to the exit code; a `claude` that can't be started resolves to 127.
+ */
+export const createClaude = (): ClaudePort => ({
+  run: ({ cwd, prompt, sessionId, resume, logFile }) =>
+    new Promise((resolve) => {
+      mkdirSync(dirname(logFile), { recursive: true })
+      const out = openSync(logFile, 'a')
+      const child = spawn(
+        'claude',
+        [
+          '-p',
+          resume ? '--resume' : '--session-id',
+          sessionId,
+          '--dangerously-skip-permissions',
+          '--output-format',
+          'text'
+        ],
+        { cwd, stdio: ['pipe', out, out] }
+      )
+      let finished = false
+      const finish = (code: number) => {
+        if (finished) return
+        finished = true
+        closeSync(out)
+        resolve(code)
+      }
+      child.on('error', () => finish(127))
+      child.on('close', (code) => finish(code ?? 1))
+      child.stdin?.on('error', () => {})
+      child.stdin?.end(prompt)
+    })
+})

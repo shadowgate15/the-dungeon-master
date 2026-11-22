@@ -1,7 +1,7 @@
 // Runs a spec's tickets as a deterministic loop. See README.md beside this file.
 //
 //   pnpm implement-spec <spec#> [--explore]
-import { createGit, createTracker } from './ports.ts'
+import { createClaude, createGit, createTracker } from './ports.ts'
 import { runSpec } from './run-spec.ts'
 
 const USAGE = 'usage: pnpm implement-spec <spec#> [--explore]'
@@ -27,6 +27,11 @@ const root = await createGit(process.cwd()).repoRoot()
 const result = await runSpec(
   parsed.spec,
   { explore: parsed.explore },
-  { tracker: createTracker(root), git: createGit(root), log: (line) => console.log(line) }
+  {
+    tracker: createTracker(root),
+    git: createGit(root),
+    claude: createClaude(),
+    log: (line) => console.log(line)
+  }
 )
 process.exit(result.ok ? 0 : 1)

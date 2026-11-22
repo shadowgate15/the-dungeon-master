@@ -2,7 +2,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { runSpec, type GitPort, type Ports, type Ticket, type TrackerPort } from './run-spec.ts'
+import {
+  runSpec,
+  type ClaudePort,
+  type GitPort,
+  type Ports,
+  type Ticket,
+  type TrackerPort
+} from './run-spec.ts'
 
 /** A fake tracker serving a fixed graph, counting how often it is read. */
 const fakeTracker = (tickets: Ticket[]) => {
@@ -16,12 +23,45 @@ const fakeTracker = (tickets: Ticket[]) => {
   return { tracker, reads }
 }
 
-/** A fake git holding branches and worktrees in memory, with `main` already present. */
+/**
+ * A fake git holding branches, worktrees and a commit graph in memory, with `main` already present.
+ * Each commit records its parents, so ancestry answers come from the graph the way real git's do.
+ */
 const fakeGit = (root: string) => {
+  const parents = new Map<string, string[]>([['main-tip', []]])
   const branches = new Map<string, string>([['main', 'main-tip']])
   const worktrees = new Map<string, string>()
   const added: { path: string; branch: string; base?: string }[] = []
+  let made = 0
+  const ancestry = (commit: string) => {
+    const seen = new Set<string>()
+    const walk = (at: string) => {
+      if (seen.has(at)) return
+      seen.add(at)
+      for (const parent of parents.get(at) ?? []) walk(parent)
+    }
+    walk(commit)
+    return seen
+  }
+  const tip = (branch: string) => {
+    const at = branches.get(branch)
+    if (at === undefined) throw new Error(`no branch ${branch}`)
+    return at
+  }
+  /** Adds a commit to `branch`, with `from`'s tip as a second parent when given (a merge). */
+  const commit = (branch: string, from?: string) => {
+    const id = `c${++made}`
+    parents.set(id, from === undefined ? [tip(branch)] : [tip(branch), tip(from)])
+    branches.set(branch, id)
+    return id
+  }
   const git: GitPort = {
+    head: async (branch) => tip(branch),
+    hasCommitsBeyond: async (branch, base) => {
+      const behind = ancestry(base)
+      return [...ancestry(tip(branch))].some((at) => !behind.has(at))
+    },
+    contains: async (branch, commit) => ancestry(tip(branch)).has(commit),
     repoRoot: async () => root,
     branchExists: async (branch) => branches.has(branch),
     worktreeFor: async (branch) =>
@@ -36,7 +76,32 @@ const fakeGit = (root: string) => {
       added.push({ path, branch, base })
     }
   }
-  return { git, branches, worktrees, added }
+  return { git, branches, worktrees, added, commit }
+}
+
+type FakeGit = ReturnType<typeof fakeGit>
+type Session = Parameters<ClaudePort['run']>[0]
+/** How a fake session behaves: it may act on the fake git as a real one would, and returns its exit code. */
+type Behave = (session: Session, git: FakeGit) => number | Promise<number>
+
+/** A fake claude answering every session with `behave`, recording each call. */
+const fakeClaude = (git: FakeGit, behave: Behave) => {
+  const sessions: Session[] = []
+  const claude: ClaudePort = {
+    run: async (session) => {
+      sessions.push(session)
+      return behave(session, git)
+    }
+  }
+  return { claude, sessions }
+}
+
+/** An implementer that commits on the branch checked out in its directory and exits 0. */
+const implementsCleanly: Behave = (session, git) => {
+  const branch = git.worktrees.get(session.cwd)
+  if (branch === undefined) throw new Error(`no worktree at ${session.cwd}`)
+  git.commit(branch)
+  return 0
 }
 
 const ticket = (number: number, blockedBy: Ticket['blockedBy'] = [], open = true): Ticket => ({
@@ -56,12 +121,21 @@ beforeEach(() => {
 
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
-const portsFor = (tickets: Ticket[]) => {
+const portsFor = (tickets: Ticket[], behave: Behave = implementsCleanly) => {
   const tracker = fakeTracker(tickets)
   const git = fakeGit(root)
-  const ports: Ports = { tracker: tracker.tracker, git: git.git, log: (line) => lines.push(line) }
-  return { ports, tracker, git }
+  const claude = fakeClaude(git, behave)
+  const ports: Ports = {
+    tracker: tracker.tracker,
+    git: git.git,
+    claude: claude.claude,
+    log: (line) => lines.push(line)
+  }
+  return { ports, tracker, git, claude }
 }
+
+const integrationWorktrees = (git: FakeGit) =>
+  git.added.filter(({ branch }) => branch === 'implement-spec/100')
 
 const readState = (spec: number) =>
   JSON.parse(readFileSync(join(root, '.implement-spec', String(spec), 'state.json'), 'utf8'))
@@ -92,15 +166,17 @@ describe('runSpec', () => {
 
     await runSpec(100, {}, ports)
 
-    expect(git.added).toHaveLength(1)
-    const [worktree] = git.added
-    expect(worktree.branch).toBe('implement-spec/100')
+    const [worktree, ...others] = integrationWorktrees(git)
+    expect(others).toEqual([])
     expect(worktree.base).toBe('main')
     expect(worktree.path.startsWith(join(root, '.claude', 'worktrees') + '/')).toBe(true)
   })
 
   it('writes a state file in the run directory listing every ticket as pending', async () => {
-    const { ports } = portsFor([ticket(1), ticket(2, [{ number: 1, open: true }])])
+    const { ports } = portsFor([
+      ticket(1, [{ number: 90, open: true }]),
+      ticket(2, [{ number: 1, open: true }])
+    ])
 
     await runSpec(100, {}, ports)
 
@@ -110,13 +186,16 @@ describe('runSpec', () => {
   })
 
   it('reuses the branch, worktree and state on a re-run', async () => {
-    const { ports, git } = portsFor([ticket(1), ticket(2, [{ number: 1, open: true }])])
+    const { ports, git } = portsFor([
+      ticket(1, [{ number: 90, open: true }]),
+      ticket(2, [{ number: 1, open: true }])
+    ])
 
     const first = await runSpec(100, {}, ports)
     const stateAfterFirst = readState(100)
     const second = await runSpec(100, {}, ports)
 
-    expect(git.added).toHaveLength(1)
+    expect(integrationWorktrees(git)).toHaveLength(1)
     expect(readState(100)).toEqual(stateAfterFirst)
     expect(second.frontier).toEqual(first.frontier)
   })
@@ -127,8 +206,10 @@ describe('runSpec', () => {
 
     await runSpec(100, {}, ports)
 
-    expect(git.added).toEqual([expect.objectContaining({ branch: 'implement-spec/100' })])
-    expect(git.added[0].base).toBeUndefined()
+    expect(integrationWorktrees(git)).toEqual([
+      expect.objectContaining({ branch: 'implement-spec/100' })
+    ])
+    expect(integrationWorktrees(git)[0].base).toBeUndefined()
     expect(git.branches.get('implement-spec/100')).toBe('integration-tip')
   })
 
@@ -148,5 +229,115 @@ describe('runSpec', () => {
 
     expect(result.frontier).toEqual([2])
     expect(readState(100).tickets[1].status).toBe('done')
+  })
+
+  describe('implementing the first ready ticket', () => {
+    it('cuts the ticket its own branch and worktree from the integration tip, recording the launch commit before the session starts', async () => {
+      let stateAtLaunch: ReturnType<typeof readState> | undefined
+      const { ports, git } = portsFor([ticket(1)], (session, fake) => {
+        stateAtLaunch = readState(100)
+        return implementsCleanly(session, fake)
+      })
+      git.branches.set('implement-spec/100', 'integration-tip')
+
+      await runSpec(100, {}, ports)
+
+      const worktree = git.added.find(({ branch }) => branch === 'implement-spec/100-1')
+      expect(worktree).toEqual({
+        path: join(root, '.claude', 'worktrees', 'implement-spec-100-1'),
+        branch: 'implement-spec/100-1',
+        base: 'integration-tip'
+      })
+      expect(stateAtLaunch?.tickets[1]).toMatchObject({
+        status: 'running',
+        launchCommit: 'integration-tip'
+      })
+    })
+
+    it('runs a fresh implementer session in the ticket worktree with a prompt pointing at the ticket, branches and notes', async () => {
+      const { ports, claude } = portsFor([ticket(7)])
+
+      await runSpec(100, {}, ports)
+
+      const runDir = join(root, '.implement-spec', '100')
+      expect(claude.sessions).toEqual([
+        expect.objectContaining({
+          role: 'implementer',
+          cwd: join(root, '.claude', 'worktrees', 'implement-spec-100-7'),
+          resume: false,
+          logFile: join(runDir, 'logs', 'implementer-7.log')
+        })
+      ])
+      const [{ prompt }] = claude.sessions
+      expect(prompt).toMatch(/#100\b/)
+      expect(prompt).toMatch(/#7\b/)
+      expect(prompt).toContain('implement-spec/100-7')
+      expect(prompt).toMatch(/implement-spec\/100(?![-\d])/)
+      expect(prompt).toContain(join(runDir, 'notes'))
+      expect(prompt).toMatch(/\btdd\b/)
+    })
+
+    it('saves the session ID in the state file before the session starts', async () => {
+      let stateAtLaunch: ReturnType<typeof readState> | undefined
+      const { ports, claude } = portsFor([ticket(1)], (session, fake) => {
+        stateAtLaunch = readState(100)
+        return implementsCleanly(session, fake)
+      })
+
+      await runSpec(100, {}, ports)
+
+      const [{ sessionId }] = claude.sessions
+      expect(sessionId).toMatch(/^[0-9a-f-]{36}$/)
+      expect(stateAtLaunch?.tickets[1].session).toEqual({ id: sessionId })
+    })
+
+    it('moves the ticket on to merging when the done check passes, with one console line per event', async () => {
+      const { ports } = portsFor([ticket(1)])
+
+      await runSpec(100, {}, ports)
+
+      expect(readState(100).tickets[1]).toMatchObject({
+        status: 'implemented',
+        session: { outcome: { exitCode: 0, check: 'passed' } }
+      })
+      const events = lines.filter((line) => /#1\b/.test(line))
+      expect(events).toEqual([
+        expect.stringMatching(/ready/),
+        expect.stringMatching(/launched/),
+        expect.stringMatching(/implemented/)
+      ])
+      expect(events[1]).toContain(join(root, '.implement-spec', '100', 'logs', 'implementer-1.log'))
+    })
+
+    const failures: [string, Behave][] = [
+      ['nonzero-exit', (session, fake) => (implementsCleanly(session, fake), 1)],
+      ['no-commits', () => 0],
+      [
+        'missing-launch-commit',
+        (session, fake) => {
+          fake.branches.set(fake.worktrees.get(session.cwd) ?? '', 'unrelated-commit')
+          return 0
+        }
+      ]
+    ]
+
+    it.each(failures)(
+      'marks the ticket failed when the done check finds %s, naming the log',
+      async (check, behave) => {
+        const { ports } = portsFor([ticket(1)], behave)
+
+        const result = await runSpec(100, {}, ports)
+
+        expect(result.ok).toBe(false)
+        expect(readState(100).tickets[1]).toMatchObject({
+          status: 'failed',
+          session: { outcome: { check } }
+        })
+        const failed = lines.find((line) => /failed/.test(line))
+        expect(failed).toMatch(/#1\b/)
+        expect(failed).toContain(check)
+        expect(failed).toContain(join(root, '.implement-spec', '100', 'logs', 'implementer-1.log'))
+      }
+    )
   })
 })

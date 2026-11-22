@@ -14,6 +14,8 @@ Run it from any checkout or worktree of this repository. It resolves the main re
 2. Creates the integration branch `implement-spec/<spec#>` from `main`, in its own worktree under `.claude/worktrees/`.
 3. Creates the run directory and a state file listing every ticket as `pending`.
 4. Prints the ready frontier: every open ticket whose blockers are all closed on GitHub or `done` in the state file.
+5. Implements the first ready ticket: cuts its branch `implement-spec/<spec#>-<ticket#>` from the integration tip into its own worktree under `.claude/worktrees/`, records that launch commit and a fresh session ID in the state file, and runs an implementer `claude -p` session there (permission checks bypassed, default model). The session's output goes to its log, never the console.
+6. Runs the done check on the session: it exited 0, its branch has commits beyond the launch commit, and the branch still contains the launch commit. A pass marks the ticket `implemented`; anything else marks it `failed`, keeps its worktree, and names the failed check and the log on the console.
 
 `--explore` is accepted but does nothing yet.
 
@@ -21,11 +23,11 @@ Run it from any checkout or worktree of this repository. It resolves the main re
 
 `.implement-spec/<spec#>/` at the main repository root, gitignored:
 
-| Path         | Contents                                                       |
-| ------------ | -------------------------------------------------------------- |
-| `state.json` | The integration branch and worktree, and each ticket's status. |
-| `notes/`     | Shared notes for the run's sessions.                           |
-| `logs/`      | One log per session.                                           |
+| Path         | Contents                                                                                                   |
+| ------------ | ---------------------------------------------------------------------------------------------------------- |
+| `state.json` | The integration branch and worktree, and each ticket's status, launch commit and session (ID and outcome). |
+| `notes/`     | Shared notes for the run's sessions.                                                                       |
+| `logs/`      | One log per session: `<role>-<ticket#>.log`.                                                               |
 
 ## Re-running
 
@@ -34,6 +36,7 @@ Running the command again for the same spec reuses the integration branch, its w
 ## Code
 
 - `main.ts`: parses arguments, builds the real ports and calls `runSpec`.
-- `run-spec.ts`: `runSpec(spec, options, ports)`, the whole run behind the tracker and git ports.
-- `ports.ts`: the real ports, thin wrappers over `gh` and `git`.
+- `run-spec.ts`: `runSpec(spec, options, ports)`, the whole run behind the tracker, git and claude ports.
+- `prompts.ts`: each role's prompt, pointers plus the role's instructions.
+- `ports.ts`: the real ports, thin wrappers over `gh`, `git` and `claude`.
 - `run-spec.spec.ts`: whole runs against fake ports and a temp repository root.

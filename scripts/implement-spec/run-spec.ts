@@ -1,7 +1,9 @@
 // Runs a spec's task graph from start (or resume) to finish. Every side effect goes through the
 // injected ports, so tests drive whole runs against fakes and a temp repository root.
+import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { implementerPrompt } from './prompts.ts'
 
 /** An issue that blocks a ticket, with its state on GitHub. */
 export type Blocker = { number: number; open: boolean }
@@ -22,17 +24,65 @@ export type GitPort = {
   worktreeFor: (branch: string) => Promise<string | null>
   /** Adds a worktree at `path` for `branch`; with `base`, creates the branch from `base` first. */
   addWorktree: (path: string, branch: string, base?: string) => Promise<void>
+  /** The commit a branch points at. */
+  head: (branch: string) => Promise<string>
+  /** Whether `branch` has any commit that `base` does not. */
+  hasCommitsBeyond: (branch: string, base: string) => Promise<boolean>
+  /** Whether `commit` is reachable from `branch`. */
+  contains: (branch: string, commit: string) => Promise<boolean>
 }
 
-export type Ports = { tracker: TrackerPort; git: GitPort; log: (line: string) => void }
+/** The roles a `claude` session can play in a run. */
+export type Role = 'explorer' | 'implementer' | 'merger' | 'reviewer' | 'fixer' | 'pr-writer'
+
+/** One role session: started with `sessionId`, or resumed by it, in `cwd`, all output to `logFile`. */
+export type ClaudeSession = {
+  role: Role
+  cwd: string
+  prompt: string
+  sessionId: string
+  resume: boolean
+  logFile: string
+}
+
+export type ClaudePort = {
+  /** Runs one session to its end and resolves to its exit code. */
+  run: (session: ClaudeSession) => Promise<number>
+}
+
+export type Ports = {
+  tracker: TrackerPort
+  git: GitPort
+  claude: ClaudePort
+  log: (line: string) => void
+}
 
 export type RunOptions = { explore?: boolean }
 
 export type RunResult = { ok: boolean; frontier: number[] }
 
-export type TicketStatus = 'pending' | 'running' | 'done' | 'failed'
+/**
+ * `implemented`: the implementer passed its done check and the ticket waits to be merged.
+ * `done`: merged into the integration branch.
+ */
+export type TicketStatus = 'pending' | 'running' | 'implemented' | 'done' | 'failed'
 
-export type TicketState = { status: TicketStatus }
+/** The implementer's done check: `passed`, or the first check that failed. */
+export type DoneCheck = 'passed' | 'nonzero-exit' | 'no-commits' | 'missing-launch-commit'
+
+/** How a session ended: its exit code and the done check the script ran on it. */
+export type SessionOutcome = { exitCode: number; check: DoneCheck }
+
+/** A role session's ID, saved before it launches, and its outcome once it has ended. */
+export type SessionState = { id: string; outcome?: SessionOutcome }
+
+export type TicketState = {
+  status: TicketStatus
+  /** The integration tip the ticket's branch was cut from. */
+  launchCommit?: string
+  /** The implementer session. */
+  session?: SessionState
+}
 
 /** The run's persisted state, rewritten after every transition. */
 export type RunState = {
@@ -54,6 +104,12 @@ export const runPaths = (root: string, spec: number) => {
 }
 
 export const integrationBranch = (spec: number) => `implement-spec/${spec}`
+
+export const ticketBranch = (spec: number, ticket: number) => `implement-spec/${spec}-${ticket}`
+
+/** A session's log: `logs/<role>-<ticket#>.log`, or `logs/<role>.log` for a role not tied to a ticket. */
+export const logPath = (logs: string, role: Role, ticket?: number) =>
+  join(logs, ticket === undefined ? `${role}.log` : `${role}-${ticket}.log`)
 
 const worktreePath = (root: string, branch: string) =>
   join(root, '.claude', 'worktrees', branch.replaceAll('/', '-'))
@@ -89,11 +145,74 @@ const readyTickets = (tickets: Ticket[], state: RunState) =>
     )
     .map((ticket) => ticket.number)
 
+/** Everything a run's steps share. `save` persists `state`, and is called after every transition. */
+type Run = {
+  spec: number
+  root: string
+  paths: ReturnType<typeof runPaths>
+  branch: string
+  state: RunState
+  save: () => void
+  ports: Ports
+}
+
+/** The first done check an implementer fails, or `passed`. */
+const doneCheck = async (
+  git: GitPort,
+  branch: string,
+  launchCommit: string,
+  exitCode: number
+): Promise<DoneCheck> => {
+  if (exitCode !== 0) return 'nonzero-exit'
+  if (!(await git.hasCommitsBeyond(branch, launchCommit))) return 'no-commits'
+  if (!(await git.contains(branch, launchCommit))) return 'missing-launch-commit'
+  return 'passed'
+}
+
+/**
+ * Cuts the ticket's branch and worktree from the integration tip, runs a fresh implementer there
+ * and applies the done check. Resolves to whether the ticket passed.
+ */
+const implement = async (run: Run, ticket: number): Promise<boolean> => {
+  const { git, claude, log } = run.ports
+  const branch = ticketBranch(run.spec, ticket)
+  const cwd = worktreePath(run.root, branch)
+  const logFile = logPath(run.paths.logs, 'implementer', ticket)
+  const launchCommit = await git.head(run.branch)
+  const session: SessionState = { id: randomUUID() }
+  const entry: TicketState = { status: 'running', launchCommit, session }
+  run.state.tickets[ticket] = entry
+  run.save()
+  await git.addWorktree(cwd, branch, launchCommit)
+
+  log(`launched #${ticket} implementer (log ${logFile})`)
+  const exitCode = await claude.run({
+    role: 'implementer',
+    cwd,
+    prompt: implementerPrompt(
+      { spec: run.spec, integrationBranch: run.branch, notes: run.paths.notes },
+      { ticket, branch }
+    ),
+    sessionId: session.id,
+    resume: false,
+    logFile
+  })
+
+  const check = await doneCheck(git, branch, launchCommit, exitCode)
+  session.outcome = { exitCode, check }
+  entry.status = check === 'passed' ? 'implemented' : 'failed'
+  run.save()
+  if (check === 'passed') log(`implemented #${ticket}`)
+  else log(`failed #${ticket} implementer: ${check} (log ${logFile})`)
+  return check === 'passed'
+}
+
 export const runSpec = async (
   spec: number,
   _options: RunOptions,
-  { tracker, git, log }: Ports
+  ports: Ports
 ): Promise<RunResult> => {
+  const { tracker, git, log } = ports
   const root = await git.repoRoot()
   const paths = runPaths(root, spec)
   for (const dir of [paths.dir, paths.notes, paths.logs]) mkdirSync(dir, { recursive: true })
@@ -110,12 +229,17 @@ export const runSpec = async (
   }
   state.integrationWorktree = worktree
   for (const ticket of tickets) state.tickets[ticket.number] ??= { status: 'pending' }
-  saveState(paths.state, state)
+  const save = () => saveState(paths.state, state)
+  const run: Run = { spec, root, paths, branch, state, save, ports }
+  save()
 
   const frontier = readyTickets(tickets, state)
   for (const ticket of tickets.filter(({ number }) => frontier.includes(number))) {
     log(`ready #${ticket.number} ${ticket.title}`)
   }
   if (frontier.length === 0) log('nothing is ready')
-  return { ok: true, frontier }
+
+  const [first] = frontier
+  const ok = first === undefined || (await implement(run, first))
+  return { ok, frontier }
 }
