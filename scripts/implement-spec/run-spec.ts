@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { implementerPrompt } from './prompts.ts'
+import { implementerPrompt, mergerPrompt } from './prompts.ts'
 
 /** An issue that blocks a ticket, with its state on GitHub. */
 export type Blocker = { number: number; open: boolean }
@@ -30,6 +30,8 @@ export type GitPort = {
   hasCommitsBeyond: (branch: string, base: string) => Promise<boolean>
   /** Whether `commit` is reachable from `branch`. */
   contains: (branch: string, commit: string) => Promise<boolean>
+  /** Removes the worktree at `path`, keeping its branch. */
+  removeWorktree: (path: string) => Promise<void>
 }
 
 /** The roles a `claude` session can play in a run. */
@@ -67,8 +69,13 @@ export type RunResult = { ok: boolean; frontier: number[] }
  */
 export type TicketStatus = 'pending' | 'running' | 'implemented' | 'done' | 'failed'
 
-/** The implementer's done check: `passed`, or the first check that failed. */
-export type DoneCheck = 'passed' | 'nonzero-exit' | 'no-commits' | 'missing-launch-commit'
+/**
+ * A session's done check: `passed`, or the first check that failed. Implementers can fail
+ * `nonzero-exit`, `no-commits` or `missing-launch-commit`; mergers `nonzero-exit` or `not-merged`
+ * (the integration branch doesn't contain the ticket branch's head).
+ */
+export type DoneCheck =
+  'passed' | 'nonzero-exit' | 'no-commits' | 'missing-launch-commit' | 'not-merged'
 
 /** How a session ended: its exit code and the done check the script ran on it. */
 export type SessionOutcome = { exitCode: number; check: DoneCheck }
@@ -82,6 +89,8 @@ export type TicketState = {
   launchCommit?: string
   /** The implementer session. */
   session?: SessionState
+  /** The merger session that merges the ticket branch into the integration branch. */
+  merger?: SessionState
 }
 
 /** The run's persisted state, rewritten after every transition. */
@@ -151,6 +160,8 @@ type Run = {
   root: string
   paths: ReturnType<typeof runPaths>
   branch: string
+  /** The integration branch's worktree, where mergers run. */
+  worktree: string
   state: RunState
   save: () => void
   ports: Ports
@@ -207,6 +218,60 @@ const implement = async (run: Run, ticket: number): Promise<boolean> => {
   return check === 'passed'
 }
 
+/** The merger's done check: it exited 0 and the integration branch contains the ticket branch's head. */
+const mergeCheck = async (
+  git: GitPort,
+  integration: string,
+  ticketHead: string,
+  exitCode: number
+): Promise<DoneCheck> => {
+  if (exitCode !== 0) return 'nonzero-exit'
+  if (!(await git.contains(integration, ticketHead))) return 'not-merged'
+  return 'passed'
+}
+
+/**
+ * Runs a fresh merger in the integration worktree to merge an implemented ticket's branch. On a
+ * pass the ticket is `done` and its worktree removed; on a failure it stays `implemented`, with
+ * the merger's outcome recorded. Resolves to whether the merge passed.
+ */
+const merge = async (run: Run, ticket: number): Promise<boolean> => {
+  const { git, claude, log } = run.ports
+  const branch = ticketBranch(run.spec, ticket)
+  const logFile = logPath(run.paths.logs, 'merger', ticket)
+  const ticketHead = await git.head(branch)
+  const entry = run.state.tickets[ticket]
+  const session: SessionState = { id: randomUUID() }
+  entry.merger = session
+  run.save()
+
+  log(`launched #${ticket} merger (log ${logFile})`)
+  const exitCode = await claude.run({
+    role: 'merger',
+    cwd: run.worktree,
+    prompt: mergerPrompt(
+      { spec: run.spec, integrationBranch: run.branch, notes: run.paths.notes },
+      { ticket, branch }
+    ),
+    sessionId: session.id,
+    resume: false,
+    logFile
+  })
+
+  const check = await mergeCheck(git, run.branch, ticketHead, exitCode)
+  session.outcome = { exitCode, check }
+  if (check !== 'passed') {
+    run.save()
+    log(`failed #${ticket} merger: ${check} (log ${logFile})`)
+    return false
+  }
+  entry.status = 'done'
+  run.save()
+  await git.removeWorktree(worktreePath(run.root, branch))
+  log(`merged #${ticket}`)
+  return true
+}
+
 export const runSpec = async (
   spec: number,
   _options: RunOptions,
@@ -230,7 +295,7 @@ export const runSpec = async (
   state.integrationWorktree = worktree
   for (const ticket of tickets) state.tickets[ticket.number] ??= { status: 'pending' }
   const save = () => saveState(paths.state, state)
-  const run: Run = { spec, root, paths, branch, state, save, ports }
+  const run: Run = { spec, root, paths, branch, worktree, state, save, ports }
   save()
 
   const frontier = readyTickets(tickets, state)
@@ -239,7 +304,14 @@ export const runSpec = async (
   }
   if (frontier.length === 0) log('nothing is ready')
 
-  const [first] = frontier
-  const ok = first === undefined || (await implement(run, first))
+  // One ticket at a time: implement the first ready ticket, merge it, recompute the frontier.
+  let ok = true
+  for (let next = frontier[0]; next !== undefined; next = readyTickets(tickets, state)[0]) {
+    if (!(await implement(run, next))) {
+      ok = false
+      continue
+    }
+    if (!(await merge(run, next))) return { ok: false, frontier }
+  }
   return { ok, frontier }
 }

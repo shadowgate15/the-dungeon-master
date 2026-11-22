@@ -72,7 +72,10 @@ export const createGit = (cwd: string): GitPort => {
       git(['merge-base', '--is-ancestor', commit, branch]).then(
         () => true,
         () => false
-      )
+      ),
+    removeWorktree: async (path) => {
+      await git(['worktree', 'remove', path])
+    }
   }
 }
 

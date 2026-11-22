@@ -26,3 +26,20 @@ export const implementerPrompt = (
     `4. Before finishing, merge the current tip of ${pointers.integrationBranch} into your branch and commit the merge.`,
     'Do not push, open pull requests, or change anything on GitHub.'
   ].join('\n')
+
+export const mergerPrompt = (
+  pointers: Pointers,
+  { ticket, branch }: { ticket: number; branch: string }
+) =>
+  [
+    `You are the merger for ticket #${ticket} of spec #${pointers.spec}.`,
+    ...pointerLines(pointers),
+    `Ticket: #${ticket} (read it with \`gh issue view ${ticket}\`).`,
+    `Ticket branch: ${branch}. Its implementer has finished and passed its done check.`,
+    `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`,
+    '',
+    `1. Merge ${branch} into ${pointers.integrationBranch} here (\`git merge --no-ff ${branch}\`).`,
+    '2. If there are conflicts, resolve them with judgment, keeping the intent of both sides, and commit the merge.',
+    '3. Run the lint, type-check and unit tests. Fix anything the merge broke and commit the fix.',
+    'Do not push, open pull requests, or change anything on GitHub.'
+  ].join('\n')
