@@ -33,7 +33,13 @@ let campaign = null, es = null, thinkStart = 0, timer = null;
 const $ = (id) => document.getElementById(id);
 
 async function loadCampaigns() {
-  const list = await (await fetch(q('/api/campaigns'))).json();
+  let r;
+  try { r = await fetch(q('/api/campaigns')); } catch { r = null; }
+  if (!r || !r.ok) {
+    $('sess').textContent = r ? 'server rejected this tab (restarted?) — open the URL the launcher printed' : 'game server not reachable';
+    $('sess').className = 'badge off'; return;
+  }
+  const list = await r.json();
   const cur = $('camp').value;
   $('camp').innerHTML = list.map(c => '<option value="' + c.path + '">' + c.name + (c.session ? ' ●' : '') + '</option>').join('');
   if (cur) $('camp').value = cur;
@@ -50,6 +56,7 @@ function connect(path) {
   campaign = path; $('camp').value = path; $('log').innerHTML = '';
   if (es) es.close();
   es = new EventSource(q('/api/stream', '&campaign=' + encodeURIComponent(path)));
+  es.onerror = () => { $('sess').textContent = 'lost the game server stream'; $('sess').className = 'badge off'; };
   let first = true;
   es.addEventListener('state', (m) => {
     const s = JSON.parse(m.data);
