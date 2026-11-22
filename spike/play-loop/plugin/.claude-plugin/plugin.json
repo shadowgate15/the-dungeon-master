@@ -1,0 +1,12 @@
+{
+  "name": "dm-spike",
+  "version": "0.0.0",
+  "description": "PROTOTYPE — play-loop spike for The Dungeon Master (#298). Throwaway.",
+  "mcpServers": {
+    "dm": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/dm-bridge.ts"],
+      "env": { "MCP_PROTOCOL_NEGOTIATION": "legacy" }
+    }
+  }
+}

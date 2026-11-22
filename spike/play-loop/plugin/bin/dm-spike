@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# PROTOTYPE — launcher for the play-loop spike (#298).
+# Run inside a campaign folder:  dm-spike [--auto-allow] [extra claude args]
+#                                dm-spike stop
+set -euo pipefail
+PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SERVER="$PLUGIN_DIR/../server/server.ts"
+RT="$HOME/.dm-spike/runtime.json"
+mkdir -p "$HOME/.dm-spike"
+
+rt() { node -e "console.log(JSON.parse(require('fs').readFileSync('$RT','utf8')).$1)" 2>/dev/null; }
+healthy() { [ -f "$RT" ] && curl -sf -H "x-dm-token: $(rt token)" "http://127.0.0.1:$(rt port)/api/health" >/dev/null; }
+
+if [ "${1:-}" = "stop" ]; then
+  if healthy; then
+    curl -sf -X POST -H "x-dm-token: $(rt token)" "http://127.0.0.1:$(rt port)/api/stop" >/dev/null || true
+    echo "server stopped"
+  else
+    echo "server not running"
+  fi
+  exit 0
+fi
+
+AUTO=0
+if [ "${1:-}" = "--auto-allow" ]; then AUTO=1; shift; fi
+
+t0=$(date +%s)
+if ! healthy; then
+  echo "starting game server…"
+  nohup node "$SERVER" >>"$HOME/.dm-spike/server.log" 2>&1 &
+  for _ in $(seq 1 50); do healthy && break; sleep 0.1; done
+  healthy || { echo "server failed to start; see ~/.dm-spike/server.log"; exit 1; }
+fi
+PORT=$(rt port); TOKEN=$(rt token)
+curl -sf -X POST -H "x-dm-token: $TOKEN" -d "{\"path\":\"$PWD\"}" "http://127.0.0.1:$PORT/api/register" >/dev/null
+URL="http://127.0.0.1:$PORT/?token=$TOKEN"
+echo "server up in $(( $(date +%s) - t0 ))s · campaign: $PWD"
+echo "UI: $URL"
+if command -v open >/dev/null; then open "$URL"; fi
+
+export DM_SPIKE_CAMPAIGN="$PWD" DM_SPIKE_AUTOALLOW="$AUTO" MCP_PROTOCOL_NEGOTIATION=legacy
+exec claude --plugin-dir "$PLUGIN_DIR" --dangerously-load-development-channels plugin:dm-spike@inline "$@"
