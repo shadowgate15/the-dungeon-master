@@ -1,0 +1,11 @@
+{
+  "name": "dm-spike-local",
+  "owner": { "name": "dm-spike" },
+  "plugins": [
+    {
+      "name": "dm-spike",
+      "source": "./plugin",
+      "description": "PROTOTYPE — play-loop spike (#298). Throwaway."
+    }
+  ]
+}

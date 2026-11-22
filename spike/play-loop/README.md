@@ -24,8 +24,13 @@ mkdir -p ~/dm-spike-camp && cd ~/dm-spike-camp
 <repo>/spike/play-loop/plugin/bin/dm-spike stop         # stop the server
 ```
 
-The launcher starts the server if needed, registers the folder, opens the UI in your browser, then `exec`s
-`claude --plugin-dir … --dangerously-load-development-channels plugin:dm-spike@inline`. Type actions in the browser.
+The launcher starts the server if needed, registers the folder, installs the plugin from the spike's local
+marketplace at **project scope** (writes the campaign folder's `.claude/settings.json`, nothing global), opens the UI,
+then `exec`s `claude --dangerously-load-development-channels plugin:dm-spike@dm-spike-local`. Type actions in the browser.
+
+Learned on the first run: the dev flag rejects a `--plugin-dir` plugin (`plugin:dm-spike@inline · plugin not installed`);
+it needs an installed `plugin:<name>@<marketplace>`. And `--channels` is no way around it: it registers only
+allowlisted plugins (Anthropic's, or an org's `allowedChannelPlugins`); anything else starts but the channel doesn't register.
 Logs: `~/.dm-spike/server.log`, `~/.dm-spike/bridge.log`.
 
 ## What to notice (the question)

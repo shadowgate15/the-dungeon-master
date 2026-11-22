@@ -38,5 +38,16 @@ echo "server up in $(( $(date +%s) - t0 ))s · campaign: $PWD"
 echo "UI: $URL"
 if command -v open >/dev/null; then open "$URL"; fi
 
+# The dev-channels flag only accepts an *installed* plugin (plugin:<name>@<marketplace>); a --plugin-dir
+# plugin (@inline) is rejected as "plugin not installed". So install from the spike's local marketplace,
+# at project scope: it lands in this campaign folder's .claude/settings.json, nothing global.
+# A directory marketplace is read in place, so edits to the spike apply without reinstalling.
+MARKET_DIR="$(cd "$PLUGIN_DIR/.." && pwd)"
+if ! claude plugin list 2>/dev/null | grep -q 'dm-spike@dm-spike-local'; then
+  echo "installing dm-spike@dm-spike-local into this folder (project scope)…"
+  claude plugin marketplace add --scope project "$MARKET_DIR" >/dev/null
+  claude plugin install --scope project dm-spike@dm-spike-local || { echo "plugin install failed"; exit 1; }
+fi
+
 export DM_SPIKE_CAMPAIGN="$PWD" DM_SPIKE_AUTOALLOW="$AUTO" MCP_PROTOCOL_NEGOTIATION=legacy
-exec claude --plugin-dir "$PLUGIN_DIR" --dangerously-load-development-channels plugin:dm-spike@inline "$@"
+exec claude --dangerously-load-development-channels plugin:dm-spike@dm-spike-local "$@"
