@@ -21,17 +21,17 @@ Run it from any checkout or worktree of this repository. It resolves the main re
 
 The run exits non-zero when any implementer or merger failed.
 
-`--explore` is accepted but does nothing yet.
+With `--explore`, one explorer `claude -p` session runs in the integration worktree before any implementer and writes Markdown notes to the run's `notes/` directory, which every later prompt points at. Its session and status are recorded under `steps.explore` in the state file; once it is `done`, re-runs skip it. A failed explorer (non-zero exit) ends the run before any implementer launches. Without the flag no explorer runs.
 
 ## The run directory
 
 `.implement-spec/<spec#>/` at the main repository root, gitignored:
 
-| Path         | Contents                                                                                                                            |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `state.json` | The integration branch and worktree, and each ticket's status, launch commit, and implementer and merger sessions (ID and outcome). |
-| `notes/`     | Shared notes for the run's sessions.                                                                                                |
-| `logs/`      | One log per session: `<role>-<ticket#>.log`.                                                                                        |
+| Path         | Contents                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state.json` | The integration branch and worktree, each ticket's status, launch commit, and implementer and merger sessions (ID and outcome), and each step not tied to a ticket (`steps.explore`). |
+| `notes/`     | Shared notes for the run's sessions, including the explorer's.                                                                                                                        |
+| `logs/`      | One log per session: `<role>-<ticket#>.log`, or `<role>.log` for a role not tied to a ticket (`explorer.log`).                                                                        |
 
 ## Re-running
 

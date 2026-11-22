@@ -43,3 +43,16 @@ export const mergerPrompt = (
     '3. Run the lint, type-check and unit tests. Fix anything the merge broke and commit the fix.',
     'Do not push, open pull requests, or change anything on GitHub.'
   ].join('\n')
+
+export const explorerPrompt = (pointers: Pointers) =>
+  [
+    `You are the explorer for spec #${pointers.spec}. Implementers start after you finish, one per ticket.`,
+    ...pointerLines(pointers),
+    "Tickets: the spec's sub-issues (read each with `gh issue view <n>`).",
+    'This directory is the integration worktree. Do not change or commit anything in it.',
+    '',
+    '1. Read the spec and every ticket.',
+    '2. Explore what the tickets need: the relevant codebase files, the domain docs and ADRs, and any external documentation.',
+    `3. Write your findings as Markdown files in ${pointers.notes}, so implementers can focus on implementing instead of exploring. Point to files and interfaces rather than copying them.`,
+    'Do not push, open pull requests, or change anything on GitHub.'
+  ].join('\n')
