@@ -53,8 +53,16 @@ The set of choices a Campaign is created from. A name, a premise, a **Tone** and
 _Avoid_: Seed, World seed, template, config
 
 **Seed card**:
-The live, hand-editable form that holds the Campaign Seed while a Campaign is created or edited. It is the source of truth and has no AI in it; the DM writes into it only when a Player asks, through tools that set its fields.
+The live, hand-editable form that holds the Campaign Seed while a Campaign is being created. It is the source of truth and has no AI in it; the DM writes into it only when a Player asks, through tools that set its fields. It becomes read-only at Begin, and is editable again only after Start over.
 _Avoid_: Campaign form, draft
+
+**Begin**:
+The Player's act that ends a Campaign's creation and starts its story. It is allowed once the Campaign Seed is complete and the Party has at least one Character, and only a Player can do it, never the DM. At Begin the DM builds the World and the Arc from the Campaign Seed and the Party, and the Players are shown only what their Characters would know. Nothing before Begin is play, so the Event log starts after it.
+_Avoid_: Generate, start, launch
+
+**Start over**:
+Discarding a begun Campaign's World and Arc so its Campaign Seed can be edited and Begin done again. It is allowed only until the first Narration of play; after that the World stands.
+_Avoid_: Regenerate, reset, reroll
 
 **Tone**:
 The mood of play a Campaign aims for, one of: heroic, lighthearted, tense, dark, mysterious, epic. Unordered. It describes how play feels, not the setting (that is the genre flavor). The DM uses it to set mood and register.
@@ -71,7 +79,7 @@ The step-by-step flow in which a Player builds a Character: Concept (name, race,
 _Avoid_: Character form, character builder
 
 **Character draft**:
-The unsaved state of a Character while the wizard is open. It lives only in the browser and is discarded on abandon or reload; nothing is stored until the Character is saved.
+The unsaved state of a Character while it is being built in the wizard. It is kept with its Campaign, so it survives a reload and the DM can write into it when a Player asks, and it is discarded only when abandoned. It is not a Character, and does not join the Party, until it is saved.
 _Avoid_: Saved draft, work in progress
 
 **Ability Score Method**:
