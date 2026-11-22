@@ -14,6 +14,8 @@ export type Ticket = { number: number; title: string; open: boolean; blockedBy: 
 export type TrackerPort = {
   /** The spec's open sub-issues and their blockers, read once per run. */
   readSpec: (spec: number) => Promise<Ticket[]>
+  /** Opens a draft PR from `head` into `base` and resolves to its number. */
+  openDraftPr: (pr: { head: string; base: string; title: string; body: string }) => Promise<number>
 }
 
 export type GitPort = {
@@ -107,6 +109,8 @@ export type RunState = {
   tickets: Record<number, TicketState>
   /** Steps not tied to a ticket that have started, by name. */
   steps?: Partial<Record<StepName, StepState>>
+  /** The draft PR from the integration branch, opened after the first merge. */
+  pr?: number
 }
 
 /** Where a spec's run lives: state, notes, logs and the PR body, under the main repository root. */
@@ -271,10 +275,29 @@ const mergeCheck = async (
   return 'passed'
 }
 
+/** The minimal PR body: `Closes #<spec>`, then one `Closes #<ticket>` line per ticket in the run. */
+const closesBody = (run: Run) =>
+  [run.spec, ...Object.keys(run.state.tickets).map(Number)]
+    .map((number) => `Closes #${number}`)
+    .join('\n')
+
+/** Opens the draft PR from the integration branch, unless this or an earlier run already did. */
+const openPr = async (run: Run) => {
+  if (run.state.pr !== undefined) return
+  run.state.pr = await run.ports.tracker.openDraftPr({
+    head: run.branch,
+    base: 'main',
+    title: `feat: implement spec #${run.spec}`,
+    body: closesBody(run)
+  })
+  run.save()
+  run.ports.log(`opened draft PR #${run.state.pr}`)
+}
+
 /**
  * Runs a fresh merger in the integration worktree to merge an implemented ticket's branch. On a
  * pass the ticket is `done` and its worktree removed; on a failure it stays `implemented`, with
- * the merger's outcome recorded. Resolves to whether the merge passed.
+ * the merger's outcome recorded. The first pass opens the draft PR. Resolves to whether the merge passed.
  */
 const merge = async (run: Run, ticket: number): Promise<boolean> => {
   const { git, claude, log } = run.ports
@@ -307,6 +330,7 @@ const merge = async (run: Run, ticket: number): Promise<boolean> => {
   run.save()
   await git.removeWorktree(worktreePath(run.root, branch))
   log(`merged #${ticket}`)
+  await openPr(run)
   return true
 }
 

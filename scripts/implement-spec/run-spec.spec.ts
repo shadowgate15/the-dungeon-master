@@ -11,16 +11,24 @@ import {
   type TrackerPort
 } from './run-spec.ts'
 
-/** A fake tracker serving a fixed graph, counting how often it is read. */
+type DraftPr = Parameters<TrackerPort['openDraftPr']>[0] & { number: number }
+
+/** A fake tracker serving a fixed graph, counting how often it is read and recording the PRs it opens. */
 const fakeTracker = (tickets: Ticket[]) => {
   const reads: number[] = []
+  const prs: DraftPr[] = []
   const tracker: TrackerPort = {
     readSpec: async (spec) => {
       reads.push(spec)
       return tickets
+    },
+    openDraftPr: async (pr) => {
+      const number = 500 + prs.length
+      prs.push({ ...pr, number })
+      return number
     }
   }
-  return { tracker, reads }
+  return { tracker, reads, prs }
 }
 
 /**
@@ -617,6 +625,68 @@ describe('runSpec', () => {
       const failed = lines.find((line) => /failed/.test(line))
       expect(failed).toMatch(/explorer/)
       expect(failed).toContain(join(root, '.implement-spec', '100', 'logs', 'explorer.log'))
+    })
+  })
+
+  describe('the draft PR', () => {
+    it('opens no PR before the first merge, and a draft PR from the integration branch right after it', async () => {
+      const prsAt: Record<string, number> = {}
+      const { ports, tracker } = portsFor(
+        [ticket(1), ticket(2, [{ number: 1, open: true }])],
+        (session, fake) => {
+          prsAt[`${session.role}-${session.logFile.match(/(\d+)\.log$/)?.[1]}`] = tracker.prs.length
+          return succeeds(session, fake)
+        }
+      )
+
+      await runSpec(100, {}, ports)
+
+      expect(prsAt).toEqual({
+        'implementer-1': 0,
+        'merger-1': 0,
+        'implementer-2': 1,
+        'merger-2': 1
+      })
+      expect(tracker.prs).toEqual([
+        expect.objectContaining({ head: 'implement-spec/100', base: 'main', number: 500 })
+      ])
+      expect(lines).toContainEqual(expect.stringMatching(/PR #500/))
+    })
+
+    it('has a body closing the spec and every ticket', async () => {
+      const { ports, tracker } = portsFor([
+        ticket(1),
+        ticket(2, [{ number: 1, open: true }]),
+        ticket(3, [{ number: 91, open: true }])
+      ])
+
+      await runSpec(100, {}, ports)
+
+      const [{ body }] = tracker.prs
+      expect(body.split('\n')).toEqual(['Closes #100', 'Closes #1', 'Closes #2', 'Closes #3'])
+    })
+
+    it('records the PR number in the state file and reuses it on a re-run', async () => {
+      const tickets = [ticket(1), ticket(2, [{ number: 90, open: true }])]
+      const { ports, tracker } = portsFor(tickets)
+      await runSpec(100, {}, ports)
+      expect(readState(100).pr).toBe(500)
+
+      tickets[1].blockedBy = [{ number: 90, open: false }]
+      await runSpec(100, {}, ports)
+
+      expect(readState(100).tickets[2].status).toBe('done')
+      expect(tracker.prs).toHaveLength(1)
+      expect(readState(100).pr).toBe(500)
+    })
+
+    it('opens no PR when nothing merges', async () => {
+      const { ports, tracker } = portsFor([ticket(1)], () => 1)
+
+      await runSpec(100, {}, ports)
+
+      expect(tracker.prs).toEqual([])
+      expect(readState(100).pr).toBeUndefined()
     })
   })
 })
