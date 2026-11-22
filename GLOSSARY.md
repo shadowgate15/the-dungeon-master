@@ -69,7 +69,7 @@ The mood of play a Campaign aims for, one of: heroic, lighthearted, tense, dark,
 _Avoid_: Genre, theme, style
 
 **Length**:
-How much story a Campaign is meant to hold, one of: one-shot, short, medium, long. Ordered shortest to longest. one-shot is a single sitting; short is a few Sessions; medium is a season of play; long is an open-ended saga. It measures story scope, not hours or Session counts. The DM uses it to pace how much story to plan.
+How much story a Campaign is meant to hold, one of: one-shot, short, medium, long. Ordered shortest to longest. one-shot is a single sitting; short is a few Sessions; medium is a season of play; long is an open-ended saga. It measures story scope, not hours or Session counts. It paces the story's Arcs: a one-shot is one single-Act Arc, short is one Arc, medium a few, and long an open-ended succession.
 _Avoid_: Duration, Session count, size
 
 ### Character creation
@@ -159,8 +159,12 @@ _Avoid_: Transcript, history, chat
 ### Story
 
 **Arc**:
-The DM's plan for a Campaign's story, generated from its Campaign Seed: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one Arc, and how many Acts and Beats it holds scales with the Campaign's Length. It is a plan, not a script, and it is hidden from the Players. The DM may revise pending Beats during play; reached and abandoned Beats stay as history.
+The DM's plan for one story in a Campaign, with a beginning, middle and end: a title, a premise, the stakes, an ordered series of Acts, each holding Beats, and a resolution. A Campaign has at most one current Arc, and its story is the succession of its Arcs. The first is built at Begin, and later ones from what play has made of the World. The Campaign's Length paces how many Arcs it holds and how big each is. An Arc is a plan, not a script, and it is hidden from the Players. The DM may revise its pending Beats and the Acts before its final Act, but nothing can follow the final Act. Reached and abandoned Beats stay as history. An Arc has an **Arc state**.
 _Avoid_: Plot, storyline, script, outline
+
+**Arc state**:
+Whether an Arc is current, concluded or retired. It is concluded when no Beat is left pending, and retired when the DM drops it because its premise or stakes no longer fit, which abandons its pending Beats. An Arc leaves current once and never returns, and stays on record. Play may go on for a while with no current Arc.
+_Avoid_: Finished, cancelled, archived Arc
 
 **Act**:
 A named phase of an Arc, such as setup, escalation or climax, with a one-line purpose. It groups the Beats that belong to that phase. A one-shot's Arc has a single Act.
@@ -171,7 +175,7 @@ A turning point or outcome the story should reach, with a title and a sentence o
 _Avoid_: Quest, objective, milestone
 
 **Beat state**:
-Whether a Beat is pending, reached or abandoned. A Beat leaves pending once and never returns. It is reached when play clearly established its outcome, and abandoned when the story made it impossible or irrelevant, or moved past its Act. The DM rules on it and code validates the change. The current Act is the Act of the first pending Beat, and the Arc is complete when no Beat is pending.
+Whether a Beat is pending, reached or abandoned. A Beat leaves pending once and never returns. It is reached when play clearly established its outcome, and abandoned when the story made it impossible or irrelevant, or moved past its Act, or when its Arc was retired. The DM rules on it and code validates the change. The current Act is the Act of the first pending Beat.
 _Avoid_: Progress, status
 
 ### World and knowledge
