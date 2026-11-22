@@ -33,3 +33,6 @@ storybook-static
 # Claude Code agent worktrees
 .claude/worktrees/
 e2e.db
+
+# implement-spec run state
+/.implement-spec/
