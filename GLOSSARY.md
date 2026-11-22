@@ -133,8 +133,20 @@ A d20 roll plus a Character's modifier for one skill or saving throw, against a 
 _Avoid_: Roll request, skill roll, test
 
 **Call**:
-The DM's open request to a Player: a Check to roll, or a question, optionally with choices. It is kept in the Scene, so it survives a reload. Answering it lets the DM continue; a new Declaration withdraws it.
+The DM's open request to a Player: a Check or Roll sequence to roll, or a question, optionally with choices. One Call can ask for rolls from several of the Player's Characters at once. It is kept in the Scene, so it survives a reload. Answering it lets the DM continue; a new Declaration withdraws it.
 _Avoid_: Prompt, pending roll, modal, interrupt
+
+**Roll sequence**:
+Rolls that follow on from one another inside one Call, such as to-hit then damage, or a save then full or half damage. The Player clicks each roll, code rolls it and decides what comes next, and the DM hears only the outcome. The Player rolls for their own Characters; code rolls for everyone else.
+_Avoid_: Roll chain, combo, multi-roll
+
+**Combat**:
+A fight in the current Scene, run in initiative order: who is fighting, whose turn it is, and how many rounds have passed. A Campaign has at most one Combat at a time. When it ends, its rounds are added to the in-fiction time.
+_Avoid_: Encounter, battle, fight
+
+**Creature**:
+A faceless combatant that exists only for one Combat, made from an SRD stat block (the third goblin, say). It is not an Entity and leaves nothing behind unless the DM makes a survivor into an NPC. An NPC can also carry a stat block and fight.
+_Avoid_: Monster, mob, enemy, minion
 
 **Narration**:
 The prose the DM sends to the Players: description, outcome, or an NPC speaking in their own voice.
