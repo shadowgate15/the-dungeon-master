@@ -38,6 +38,16 @@ export const createTracker = (cwd: string): TrackerPort => ({
           }
         })
     )
+  },
+  openDraftPr: async ({ head, base, title, body }) => {
+    const url = await run(
+      'gh',
+      ['pr', 'create', '--draft', '--head', head, '--base', base, '--title', title, '--body', body],
+      cwd
+    )
+    const number = Number(url.trim().match(/\/pull\/(\d+)/)?.[1])
+    if (!Number.isInteger(number)) throw new Error(`gh pr create printed no PR URL: ${url}`)
+    return number
   }
 })
 

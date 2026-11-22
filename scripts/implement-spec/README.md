@@ -17,7 +17,7 @@ Run it from any checkout or worktree of this repository. It resolves the main re
 5. Works through the ready tickets one at a time, recomputing the frontier after each merge, until nothing is ready or a merger fails.
 6. Implementing a ticket: cuts its branch `implement-spec/<spec#>-<ticket#>` from the integration tip into its own worktree under `.claude/worktrees/`, records that launch commit and a fresh session ID in the state file, and runs an implementer `claude -p` session there (permission checks bypassed, default model). The session's output goes to its log, never the console.
 7. Runs the done check on the implementer: it exited 0, its branch has commits beyond the launch commit, and the branch still contains the launch commit. A pass marks the ticket `implemented`; anything else marks it `failed`, keeps its worktree, and names the failed check and the log on the console. A failed ticket's dependents never launch; independent tickets carry on.
-8. Merging an implemented ticket: records a fresh session ID and runs a merger `claude -p` session in the integration worktree to merge the ticket branch. It passes when it exits 0 and the integration branch contains the ticket branch's head. A pass marks the ticket `done` and removes its worktree (the branch is kept). A failure (`nonzero-exit` or `not-merged`) leaves the ticket `implemented` with its worktree, names the log, and stops the run.
+8. Merging an implemented ticket: records a fresh session ID and runs a merger `claude -p` session in the integration worktree to merge the ticket branch. It passes when it exits 0 and the integration branch contains the ticket branch's head. A pass marks the ticket `done` and removes its worktree (the branch is kept). The first pass also opens a draft PR from the integration branch into `main`, with the body `Closes #<spec#>` followed by one `Closes #<ticket#>` line per ticket, and records its number in the state file; a re-run reuses that PR. The script never closes issues itself: merging the PR does. A failure (`nonzero-exit` or `not-merged`) leaves the ticket `implemented` with its worktree, names the log, and stops the run.
 
 The run exits non-zero when any implementer or merger failed.
 
@@ -27,11 +27,11 @@ With `--explore`, one explorer `claude -p` session runs in the integration workt
 
 `.implement-spec/<spec#>/` at the main repository root, gitignored:
 
-| Path         | Contents                                                                                                                                                                              |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `state.json` | The integration branch and worktree, each ticket's status, launch commit, and implementer and merger sessions (ID and outcome), and each step not tied to a ticket (`steps.explore`). |
-| `notes/`     | Shared notes for the run's sessions, including the explorer's.                                                                                                                        |
-| `logs/`      | One log per session: `<role>-<ticket#>.log`, or `<role>.log` for a role not tied to a ticket (`explorer.log`).                                                                        |
+| Path         | Contents                                                                                                                                                                                                    |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state.json` | The integration branch and worktree, each ticket's status, launch commit, and implementer and merger sessions (ID and outcome), each step not tied to a ticket (`steps.explore`), and the PR number (`pr`). |
+| `notes/`     | Shared notes for the run's sessions, including the explorer's.                                                                                                                                              |
+| `logs/`      | One log per session: `<role>-<ticket#>.log`, or `<role>.log` for a role not tied to a ticket (`explorer.log`).                                                                                              |
 
 ## Re-running
 
