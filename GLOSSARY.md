@@ -117,8 +117,16 @@ _Avoid_: Reference data, compendium
 ### Play
 
 **Session**:
-One sitting of play in a Campaign, from start to end, run by one DM. A Campaign has many Sessions but at most one open at a time. A Session owns nothing of its own: the Campaign's Event log and Scene carry on across Sessions, and every event is stamped with the Session it happened in.
+One sitting of play in a Campaign, from start to end, run by one DM. A Session is open or closed. A Campaign has many Sessions but at most one open at a time. The only thing a Session owns is its Session summary: the Campaign's Event log and Scene carry on across Sessions, and every event is stamped with the Session it happened in. A Session that stopped without End Session is closed when the next one opens, before anything else happens.
 _Avoid_: Game, run, playthrough, sitting
+
+**End Session**:
+The Player's act that closes the open Session. The DM narrates a closing moment, writes the Session summary, and tidies the Arc and the World before the Session closes.
+_Avoid_: Quit, save, end sitting
+
+**Session summary**:
+A short, past-tense account of what the Characters did and learned in one Session, plus its **open threads**: the unresolved matters the Characters know about. The DM writes it as the Session closes. It holds only what the Characters know, so it can be shown to the Players, and it is read-only to them. A Session in which nothing was narrated has none.
+_Avoid_: Rolling summary, log, notes, previously
 
 **Scene**:
 Where the spotlight of play is right now: one Place, the Characters and NPCs present there, and any open Call. A Campaign has exactly one current Scene. Exits and objects belong to the Place, and every Character and NPC has its own whereabouts, so a Character outside the Scene is simply elsewhere. With a split Party the spotlight moves between Places; there are never two Scenes. The DM changes the Scene only through tools.
@@ -151,6 +159,10 @@ _Avoid_: Monster, mob, enemy, minion
 **Narration**:
 The prose the DM sends to the Players: description, outcome, or an NPC speaking in their own voice.
 _Avoid_: Reply, response, output, message
+
+**Recap**:
+The Narration that opens a Session of a begun Campaign: a few sentences, written fresh in the DM's voice from recent Session summaries, that recall where things stand and hand the floor back to the Players. It moves no time and answers no Declaration. The first Session after Begin has none.
+_Avoid_: Previously, summary, intro
 
 **Event log**:
 A Campaign's append-only record of play. Each entry is a typed event (a Declaration, Narration, a Call raised or answered, a Check and its roll, or a change a tool made to state), stamped with its Session and in-fiction time. It is the history of everything held as current state. It is never undone or edited: a correction is a new event.
@@ -243,3 +255,7 @@ _Avoid_: Discover, share, unlock
 **Journal**:
 A Player's read-only view of what their Characters believe: the people, places and claims their Beliefs point at, each marked with which Character holds it. It never shows the World layer directly or anything an NPC believes.
 _Avoid_: Codex, log, notes
+
+**Session history**:
+A Player's read-only list of a Campaign's closed Sessions, each with when it was played, the in-fiction time it spanned, and its Session summary.
+_Avoid_: Sitting history, transcript, log
