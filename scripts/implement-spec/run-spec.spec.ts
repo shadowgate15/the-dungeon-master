@@ -429,25 +429,32 @@ describe('runSpec', () => {
     ]
 
     it.each(mergerFailures)(
-      'stops launching when the merger fails with %s, keeping the ticket worktree and naming the log',
+      'stops launching and merging when the merger fails with %s, letting running sessions finish, keeping worktrees and naming the log',
       async (check, behave) => {
         const { ports, claude, git } = portsFor(
           [ticket(1), ticket(2, [{ number: 1, open: true }]), ticket(3)],
-          (session, fake) =>
-            session.role === 'merger' ? behave(session, fake) : succeeds(session, fake)
+          async (session, fake) => {
+            if (session.role === 'merger') return behave(session, fake)
+            if (session.cwd.endsWith('-3')) await new Promise((resolve) => setTimeout(resolve, 10))
+            return succeeds(session, fake)
+          }
         )
 
         const result = await runSpec(100, {}, ports)
 
         expect(result.ok).toBe(false)
-        expect(claude.sessions.map(({ role }) => role)).toEqual(['implementer', 'merger'])
+        expect(claude.sessions.map(({ role, cwd }) => `${role} ${cwd.slice(-1)}`)).toEqual([
+          'implementer 1',
+          'implementer 3',
+          'merger 0'
+        ])
         const state = readState(100)
         expect(state.tickets[1]).toMatchObject({
           status: 'implemented',
           merger: { outcome: { check } }
         })
         expect(state.tickets[2].status).toBe('pending')
-        expect(state.tickets[3].status).toBe('pending')
+        expect(state.tickets[3].status).toBe('implemented')
         expect(git.removed).toEqual([])
         const failed = lines.find((line) => /failed/.test(line))
         expect(failed).toMatch(/#1\b/)
@@ -469,6 +476,90 @@ describe('runSpec', () => {
       const state = readState(100)
       expect([1, 2, 3].map((n) => state.tickets[n].status)).toEqual(['failed', 'pending', 'done'])
       expect(claude.sessions.some(({ cwd }) => cwd.endsWith('-2'))).toBe(false)
+    })
+  })
+
+  describe('running ready tickets in parallel', () => {
+    /** Wraps `behave` so each session waits `delay(session)` ms first, recording when it starts and ends. */
+    const timed = (delay: (session: Session) => number, behave: Behave = succeeds) => {
+      const events: string[] = []
+      const name = (session: Session) =>
+        `${session.role}-${session.logFile.match(/-(\d+)\.log$/)?.[1]}`
+      const run: Behave = async (session, fake) => {
+        events.push(`start ${name(session)}`)
+        await new Promise((resolve) => setTimeout(resolve, delay(session)))
+        const exitCode = await behave(session, fake)
+        events.push(`end ${name(session)}`)
+        return exitCode
+      }
+      return { events, run }
+    }
+    const ticketOf = (session: Session) => Number(session.logFile.match(/-(\d+)\.log$/)?.[1])
+
+    it('runs both middle tickets of a diamond at once, and the last only after both merge', async () => {
+      const { events, run } = timed((session) =>
+        session.role === 'implementer' && ticketOf(session) === 3 ? 20 : 1
+      )
+      const { ports } = portsFor(
+        [
+          ticket(4, [
+            { number: 2, open: true },
+            { number: 3, open: true }
+          ]),
+          ticket(2, [{ number: 1, open: true }]),
+          ticket(3, [{ number: 1, open: true }]),
+          ticket(1)
+        ],
+        run
+      )
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(events).toEqual([
+        'start implementer-1',
+        'end implementer-1',
+        'start merger-1',
+        'end merger-1',
+        'start implementer-2',
+        'start implementer-3',
+        'end implementer-2',
+        'start merger-2',
+        'end merger-2',
+        'end implementer-3',
+        'start merger-3',
+        'end merger-3',
+        'start implementer-4',
+        'end implementer-4',
+        'start merger-4',
+        'end merger-4'
+      ])
+      const state = readState(100)
+      expect([1, 2, 3, 4].map((n) => state.tickets[n].status)).toEqual([
+        'done',
+        'done',
+        'done',
+        'done'
+      ])
+    })
+    it('launches every ready ticket at once and merges them one at a time, in the order their implementers finished', async () => {
+      const implementerDelay: Record<number, number> = { 1: 10, 2: 20, 3: 1, 4: 25, 5: 5 }
+      const { events, run } = timed((session) =>
+        session.role === 'merger' ? 15 : implementerDelay[ticketOf(session)]
+      )
+      const { ports } = portsFor(
+        [1, 2, 3, 4, 5].map((n) => ticket(n)),
+        run
+      )
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(events.slice(0, 5)).toEqual([1, 2, 3, 4, 5].map((n) => `start implementer-${n}`))
+      const mergers = events.filter((event) => event.includes('merger'))
+      expect(mergers).toEqual(
+        [3, 5, 1, 2, 4].flatMap((n) => [`start merger-${n}`, `end merger-${n}`])
+      )
     })
   })
 
