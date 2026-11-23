@@ -4,7 +4,16 @@ A dev-only command that runs a spec's tickets as a deterministic loop, instead o
 
 ```sh
 pnpm implement-spec <spec#> [--explore]
+pnpm implement-spec <spec#> --status
 ```
+
+On a terminal, the run draws a live progress chart in place of console lines. The chart shows:
+
+- a header with the spec, PR and total time
+- each ticket by dependency layer, with its status glyph (`·` pending, `◐` running, `⏸` waiting out a usage limit, `●` implemented and queued, `✓` done, `✗` failed), its open blockers, its `impl`/`merge` times and attempt count, its queue place, its failed check and its log
+- the end-of-run steps
+
+When the frame is taller than the terminal, finished layers collapse. The final frame ends with a one-line verdict. `NO_COLOR` turns off color. When output isn't a terminal, lines print as before. `--status` draws one frame from `state.json` and exits. It reads the ticket graph from `gh` only when the state has none cached.
 
 Run it from any checkout or worktree of this repository. It resolves the main repository root from git's common directory, so the run directory and worktrees always land in the same place.
 
@@ -35,12 +44,13 @@ With `--explore`, one explorer `claude -p` session runs in the integration workt
 
 `.implement-spec/<spec#>/` at the main repository root, gitignored:
 
-| Path         | Contents                                                                                                                                                                                                                                                                                                                                 |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `state.json` | The integration branch and worktree, each ticket's status, launch commit, implementer and merger sessions (ID and outcome) and place in the merge queue (`finishOrder`), each step not tied to a ticket (`steps.explore`, `review`, `fix`, `pr-description`, `ready`), the PR number (`pr`) and whether it was marked ready (`prReady`). |
-| `notes/`     | Shared notes for the run's sessions, including the explorer's.                                                                                                                                                                                                                                                                           |
-| `pr-body.md` | The PR description the PR writer wrote, with any missing `Closes` lines appended.                                                                                                                                                                                                                                                        |
-| `logs/`      | One log per session: `<role>-<ticket#>.log`, or `<role>.log` for a role not tied to a ticket (`explorer.log`, `reviewer.log`, `fixer.log`, `pr-writer.log`).                                                                                                                                                                             |
+| Path         | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state.json` | The integration branch and worktree, each ticket's status, launch commit, implementer and merger sessions (ID and outcome) and place in the merge queue (`finishOrder`), each step not tied to a ticket (`steps.explore`, `review`, `fix`, `pr-description`, `ready`), the PR number (`pr`) and whether it was marked ready (`prReady`). Sessions also record `startedAt`/`endedAt`, `activeMs`, `attempts` and `waitingUntil`; `graph` caches the tickets and `runs` each run's span, for the chart. |
+| `run.log`    | Every console line with its ISO time, under a `--- run started` header per run (naming how many sessions it resumes).                                                                                                                                                                                                                                                                                                                                                                                 |
+| `notes/`     | Shared notes for the run's sessions, including the explorer's.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `pr-body.md` | The PR description the PR writer wrote, with any missing `Closes` lines appended.                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `logs/`      | One log per session: `<role>-<ticket#>.log`, or `<role>.log` for a role not tied to a ticket (`explorer.log`, `reviewer.log`, `fixer.log`, `pr-writer.log`).                                                                                                                                                                                                                                                                                                                                          |
 
 ## Re-running
 
@@ -65,6 +75,7 @@ To start over, delete `.implement-spec/<spec#>/`, the integration worktree and t
 - `main.ts`: parses arguments, builds the real ports and calls `runSpec`.
 - `run-spec.ts`: `runSpec(spec, options, ports)`, the whole run behind the tracker, git and claude ports.
 - `prompts.ts`: each role's prompt, pointers plus the role's instructions.
+- `chart.ts`: `render(state, tickets, options)`, the progress chart as text, pure.
 - `ports.ts`: the real ports, thin wrappers over `gh`, `git` and `claude`.
 - `usage-limit.ts`: reads a usage-limit message and the time it resets.
 - `run-spec.spec.ts`: whole runs against fake ports and a temp repository root.
