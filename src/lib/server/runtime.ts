@@ -3,9 +3,10 @@ import path from 'node:path'
 
 /**
  * The running game server's runtime file, in the user-level state directory: how the bridge and
- * the launcher find the server and prove they may talk to it.
+ * the launcher find the server and prove they may talk to it. `version` is the plugin version the
+ * launcher started it from (none for a dev server), so a stale server can be restarted.
  */
-export type Runtime = { port: number; token: string; pid: number }
+export type Runtime = { port: number; token: string; pid: number; version?: string }
 
 export function runtimeFilePath(home: string): string {
   return path.join(home, 'runtime.json')
