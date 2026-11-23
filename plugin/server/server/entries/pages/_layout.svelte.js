@@ -1,5 +1,5 @@
 import { ft as resolve } from "../../chunks/internal.js";
-import { a as derived, c as head, h as attr, s as ensure_array_like, t as attr_class, v as escape_html } from "../../chunks/server2.js";
+import { c as ensure_array_like, g as attr, l as head, o as derived, t as attr_class, y as escape_html } from "../../chunks/server2.js";
 import { t as onDestroy } from "../../chunks/index-server.js";
 import { _ as resolveQueryValue, a as notifyManager, c as functionalUpdate, f as matchMutation, h as partialMatchKey, i as createRetryer, l as hashKey, m as noop$1, o as focusManager, p as matchQuery, r as Removable, t as Query, u as hashQueryKeyByOptions, y as skipToken } from "../../chunks/query.js";
 import { a as Subscribable, i as onlineManager, r as setQueryClientContext } from "../../chunks/context.js";
@@ -1531,7 +1531,7 @@ function _layout($$renderer, $$props) {
 		head("12qhfyh", $$renderer, ($$renderer) => {
 			$$renderer.push(`<link rel="icon"${attr("href", favicon_default)}/>`);
 		});
-		$$renderer.push(`<header class="flex items-center justify-end gap-4 border-b border-border px-4 py-2"><a${attr("href", resolve("/credits"))} class="text-sm underline">Credits</a> `);
+		$$renderer.push(`<header class="flex h-12 items-center justify-end gap-4 border-b border-border px-4"><a${attr("href", resolve("/credits"))} class="text-sm underline">Credits</a> `);
 		ThemeToggle($$renderer, {
 			theme: data.theme,
 			redirectTo: page.url.pathname + page.url.search

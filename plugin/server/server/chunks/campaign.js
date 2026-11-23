@@ -1,4 +1,4 @@
-import { Ct as DUNGEON_MASTER_HOME, L as equipment, P as classTable, St as DUNGEON_MASTER_CAMPAIGNS, X as race, _t as asc, a as seedRulesData, at as subclass, b as alignment, bt as sql, c as openDatabase, d as characterChoice, f as characterDraft, ft as ABILITY_METHODS, g as characterSpell, gt as SOLO_PLAYER, h as characterSkill, i as userStateDir, l as campaign, m as characterItem, mt as CUSTOM_BACKGROUND_FEATURE_MAX, n as canonicalFolder, nt as skill, o as loadRulesDataset, ot as subrace, p as characterEquipment, pt as BACKSTORY_MAX, r as defaultCampaignRoot, rt as spell, s as migrateDatabase, t as campaignDatabasePath, u as character, vt as eq, x as background, y as abilityScoreMethod, yt as inArray } from "./paths.js";
+import { A as background, At as inArray, Bt as DUNGEON_MASTER_HOME, Ct as CUSTOM_BACKGROUND_FEATURE_MAX, Et as asc, Ft as sql, It as Column, K as equipment, Lt as is, O as abilityScoreMethod, Ot as and, St as BACKSTORY_MAX, Tt as SOLO_PLAYER, U as classTable, _ as declaration, a as seedRulesData, at as race, c as openDatabase, d as characterChoice, dt as skill, f as characterDraft, ft as spell, g as characterSpell, h as characterSkill, ht as subrace, i as userStateDir, k as alignment, kt as eq, l as campaign, m as characterItem, mt as subclass, n as canonicalFolder, o as loadRulesDataset, p as characterEquipment, r as defaultCampaignRoot, s as migrateDatabase, t as campaignDatabasePath, u as character, xt as ABILITY_METHODS, y as floor, zt as DUNGEON_MASTER_CAMPAIGNS } from "./paths.js";
 import { D as equipmentGroupKeys, M as resolveFeatures, O as equipmentGroups, a as WIZARD_RULES_KEYS, c as resolverDraft, d as STEPS, o as emptyDraft, r as deriveStats, t as tryDraftToCharacterInput } from "./save.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { o as parseCampaignSeed, r as campaignSeedCard } from "./seed.js";
@@ -109,6 +109,10 @@ function createLiveUpdates({ sessions }) {
 			} });
 		}
 	};
+}
+// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/functions/aggregate.js
+function max(expression) {
+	return sql`max(${expression})`.mapWith(is(expression, Column) ? expression : String);
 }
 // src/lib/character/edit.ts
 /**
@@ -743,6 +747,103 @@ function createParty(db, now = Date.now) {
 		}
 	};
 }
+// src/lib/character/acting.ts
+/**
+* Whether a Character can act: put a Declaration on the Floor or be picked as the acting
+* Character. Dead and departed Characters can't. The one rule the sheet tabs, the composer and the
+* server all use; presence in the Scene (#328) and Unconscious (#332) join it later.
+*/
+function canAct(character) {
+	return character.status === "alive";
+}
+// src/lib/server/floor/floor.ts
+/** The Character can't put a Declaration on the Floor (unknown, dead or departed, not theirs). */
+var DeclarationRefusedError = class extends Error {};
+/** The open Floor holds no Declaration with this id. */
+var DeclarationNotFoundError = class extends Error {};
+/** Declarations are a sentence or a short paragraph, not an essay. */
+var DECLARATION_MAX = 2e3;
+/**
+* A Campaign's Floor, over its database. The open Floor is created on the first Declaration; its
+* Declarations stay with the Campaign until the Floor closes, so a reload loses nothing.
+*/
+function createFloor(db, now = Date.now) {
+	function openFloorId() {
+		return db.select({ id: floor.id }).from(floor).where(eq(floor.state, "open")).get()?.id;
+	}
+	function cleanText(text) {
+		const trimmed = typeof text === "string" ? text.trim() : "";
+		if (!trimmed) throw new DeclarationRefusedError("Say what the Character does");
+		if (trimmed.length > 2e3) throw new DeclarationRefusedError(`Keep a Declaration under ${DECLARATION_MAX} characters`);
+		return trimmed;
+	}
+	function pending(id) {
+		const floorId = openFloorId();
+		if (!(floorId && db.select({ id: declaration.id }).from(declaration).where(and(eq(declaration.id, id), eq(declaration.floorId, floorId))).get())) throw new DeclarationNotFoundError("Declaration not found on the open Floor");
+	}
+	return {
+		/** The open Floor (empty until something is sent). */
+		current() {
+			const floorId = openFloorId();
+			if (!floorId) return { declarations: [] };
+			return { declarations: db.select({
+				id: declaration.id,
+				character: declaration.characterId,
+				characterName: character.name,
+				player: declaration.player,
+				text: declaration.text
+			}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all() };
+		},
+		/**
+		* Puts a Declaration for one Character on the open Floor, opening it if none is. Refused for a
+		* Character who can't act or whom `player` doesn't control.
+		*/
+		send({ character: characterId, text, player = SOLO_PLAYER }) {
+			const clean = cleanText(text);
+			return db.transaction(() => {
+				const actor = db.select().from(character).where(eq(character.id, characterId)).get();
+				if (!actor) throw new DeclarationRefusedError("Character not found");
+				if (!canAct(actor)) throw new DeclarationRefusedError(`${actor.name} can't act`);
+				if (actor.controllingPlayer !== player) throw new DeclarationRefusedError(`${actor.name} is not your Character`);
+				const at = now();
+				const floorId = openFloorId() ?? db.insert(floor).values({
+					campaignId: db.select({ id: campaign.id }).from(campaign).get().id,
+					createdAt: at
+				}).returning({ id: floor.id }).get().id;
+				const last = db.select({ n: max(declaration.position) }).from(declaration).where(eq(declaration.floorId, floorId)).get()?.n;
+				return {
+					id: db.insert(declaration).values({
+						floorId,
+						characterId,
+						player,
+						text: clean,
+						position: (last ?? 0) + 1,
+						createdAt: at,
+						updatedAt: at
+					}).returning().get().id,
+					character: characterId,
+					characterName: actor.name,
+					player,
+					text: clean
+				};
+			});
+		},
+		/** Rewrites a Declaration still on the open Floor. */
+		edit(id, text) {
+			const clean = cleanText(text);
+			pending(id);
+			db.update(declaration).set({
+				text: clean,
+				updatedAt: now()
+			}).where(eq(declaration.id, id)).run();
+		},
+		/** Takes a Declaration back off the open Floor. */
+		withdraw(id) {
+			pending(id);
+			db.delete(declaration).where(eq(declaration.id, id)).run();
+		}
+	};
+}
 // src/lib/server/campaign/registry.ts
 /**
 * The list of Campaign folders the server knows, as `registry.json` in the user-level state
@@ -916,6 +1017,10 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		party(id) {
 			return createParty(database(find(id).folder), now);
 		},
+		/** The Campaign's open Floor and the Declarations on it. */
+		floor(id) {
+			return createFloor(database(find(id).folder), now);
+		},
 		/**
 		* The database of the registered Campaign in this folder, or undefined when the folder is not
 		* a registered Campaign (or its database is gone). How game tools find their Campaign.
@@ -989,6 +1094,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { CampaignArchivedError as a, CampaignNotFoundError as c, DraftNotFoundError as d, loadWizardRules as f, SESSION_LIVE_MESSAGE as h, sessions as i, NotACampaignFolderError as l, CharacterValidationError as m, library as n, CampaignExistsError as o, CharacterNotFoundError as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u };
+export { CharacterValidationError as _, CampaignArchivedError as a, CampaignNotFoundError as c, DeclarationNotFoundError as d, DeclarationRefusedError as f, CharacterNotFoundError as g, loadWizardRules as h, sessions as i, NotACampaignFolderError as l, DraftNotFoundError as m, library as n, CampaignExistsError as o, canAct as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, SESSION_LIVE_MESSAGE as v };
 
 //# sourceMappingURL=campaign.js.map

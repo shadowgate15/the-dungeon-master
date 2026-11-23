@@ -8,13 +8,28 @@
       "_config.js"
     ]
   },
+  "_Badge.js": {
+    "file": "chunks/Badge.js",
+    "name": "Badge",
+    "imports": [
+      "_server2.js",
+      "_Button.js"
+    ]
+  },
+  "_Button.js": {
+    "file": "chunks/Button.js",
+    "name": "Button",
+    "imports": [
+      "_server2.js"
+    ]
+  },
   "_Dialog.js": {
     "file": "chunks/Dialog.js",
     "name": "Dialog",
     "imports": [
       "_server2.js",
       "_index-server.js",
-      "_Field.js"
+      "_Button.js"
     ]
   },
   "_DmBadge.js": {
@@ -26,7 +41,7 @@
       "_context.js",
       "_index-server.js",
       "_useQueryClient.js",
-      "_TextInput.js"
+      "_Badge.js"
     ]
   },
   "_Field.js": {
@@ -47,8 +62,7 @@
     "file": "chunks/TextInput.js",
     "name": "TextInput",
     "imports": [
-      "_server2.js",
-      "_Field.js"
+      "_server2.js"
     ]
   },
   "_Textarea.js": {
@@ -191,6 +205,14 @@
       "_campaign.js"
     ]
   },
+  "_respond2.js": {
+    "file": "chunks/respond2.js",
+    "name": "respond",
+    "imports": [
+      "_exports.js",
+      "_campaign.js"
+    ]
+  },
   "_save.js": {
     "file": "chunks/save.js",
     "name": "save",
@@ -243,6 +265,13 @@
       "_index-server.js",
       "_server2.js",
       "_server-errors.js"
+    ]
+  },
+  "_summary.js": {
+    "file": "chunks/summary.js",
+    "name": "summary",
+    "imports": [
+      "_save.js"
     ]
   },
   "_theme.js": {
@@ -418,8 +447,9 @@
     "isDynamicEntry": true,
     "imports": [
       "_server2.js",
-      "_Field.js",
+      "_Button.js",
       "_Dialog.js",
+      "_Field.js",
       "_Textarea.js"
     ]
   },
@@ -462,7 +492,7 @@
       "node_modules/.pnpm/@tanstack+svelte-query-devtools@6.3.7_@tanstack+svelte-query@6.3.7_svelte@5.57.3_@types_8ea849ea8105e537a5386474a23c1746/node_modules/@tanstack/svelte-query-devtools/dist/index.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.bRR0D3Od.css"
+      "_app/immutable/assets/_layout.Bwd3sMDV.css"
     ],
     "assets": [
       "_app/immutable/assets/metamorphous-latin-ext-400-normal.D08n4oeX.woff2",
@@ -527,6 +557,37 @@
       "_respond.js"
     ]
   },
+  "src/routes/api/campaigns/[id]/floor/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/floor/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/floor/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/floor/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_campaign.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/floor/declarations/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/floor/declarations/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/floor/declarations/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/floor/declarations/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_respond.js",
+      "_respond2.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/floor/declarations/[declaration]/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/floor/declarations/_declaration_/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/floor/declarations/_declaration_/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/floor/declarations/[declaration]/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_respond.js",
+      "_respond2.js"
+    ]
+  },
   "src/routes/api/dev/report-issue/+server.ts": {
     "file": "entries/endpoints/api/dev/report-issue/_server.ts.js",
     "name": "entries/endpoints/api/dev/report-issue/_server.ts",
@@ -580,11 +641,13 @@
       "_state.js",
       "_navigation.js",
       "_paths2.js",
-      "_TextInput.js",
+      "_Badge.js",
       "_DmBadge.js",
-      "_Field.js",
+      "_Button.js",
       "_forms.js",
-      "_Dialog.js"
+      "_Dialog.js",
+      "_Field.js",
+      "_TextInput.js"
     ]
   },
   "src/routes/campaigns/[id]/+page.server.ts": {
@@ -609,6 +672,7 @@
       "_forms.js",
       "_paths2.js",
       "_enums.js",
+      "_Button.js",
       "_Field.js",
       "_Panel.js",
       "_Textarea.js",
@@ -640,13 +704,44 @@
       "_forms.js",
       "_paths2.js",
       "_Panel.js",
-      "_TextInput.js",
-      "_Field.js",
+      "_Badge.js",
+      "_Button.js",
       "_navigation.js",
       "_Dialog.js",
       "_schema.js",
       "_save.js",
-      "_Textarea.js"
+      "_Field.js",
+      "_Textarea.js",
+      "_TextInput.js",
+      "_summary.js"
+    ]
+  },
+  "src/routes/campaigns/[id]/play/+page.server.ts": {
+    "file": "entries/pages/campaigns/_id_/play/_page.server.ts.js",
+    "name": "entries/pages/campaigns/_id_/play/_page.server.ts",
+    "src": "src/routes/campaigns/[id]/play/+page.server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_campaign.js",
+      "_summary.js",
+      "_schema.js"
+    ]
+  },
+  "src/routes/campaigns/[id]/play/+page.svelte": {
+    "file": "entries/pages/campaigns/_id_/play/_page.svelte.js",
+    "name": "entries/pages/campaigns/_id_/play/_page.svelte",
+    "src": "src/routes/campaigns/[id]/play/+page.svelte",
+    "isEntry": true,
+    "imports": [
+      "_internal.js",
+      "_server2.js",
+      "_paths2.js",
+      "_DmBadge.js",
+      "_Badge.js",
+      "_Button.js",
+      "_Textarea.js",
+      "_useQueryClient.js"
     ]
   },
   "src/routes/credits/+page.server.ts": {

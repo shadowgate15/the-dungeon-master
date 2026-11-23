@@ -1451,6 +1451,14 @@ function attr_class(value, hash, directives) {
 	return result ? ` class="${escape_html(result, true)}"` : "";
 }
 /**
+* @param {any} value
+* @param {Record<string,any>|[Record<string,any>,Record<string,any>]} [directives]
+*/
+function attr_style(value, directives) {
+	var result = to_style(value, directives);
+	return result ? ` style="${escape_html(result, true)}"` : "";
+}
+/**
 * Legacy mode: If the prop has a fallback and is bound in the
 * parent component, propagate the fallback value upwards.
 * @param {Record<string, unknown>} props_parent
@@ -1522,6 +1530,6 @@ function derived(fn) {
 		return updated_value;
 	};
 }
-export { noop as _, derived as a, head as c, stringify as d, getContext as f, clsx as g, attr as h, bind_props as i, props_id as l, ssr_context as m, attributes as n, element as o, setContext as p, await_block as r, ensure_array_like as s, attr_class as t, render as u, escape_html as v };
+export { clsx as _, bind_props as a, ensure_array_like as c, render as d, stringify as f, attr as g, ssr_context as h, await_block as i, head as l, setContext as m, attr_style as n, derived as o, getContext as p, attributes as r, element as s, attr_class as t, props_id as u, noop as v, escape_html as y };
 
 //# sourceMappingURL=server2.js.map

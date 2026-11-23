@@ -10,7 +10,7 @@ return {
 	app_path: "_app",
 	assets: new Set(["robots.txt"]),
 	mime_types: {".txt":"text/plain"},
-	client: {start:"_app/immutable/entry/start.BkddJ2vk.js",app:"_app/immutable/entry/app.RWr29VTZ.js",imports:["_app/immutable/entry/start.BkddJ2vk.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/CJohmYQp.js","_app/immutable/chunks/C2Ror5sl.js","_app/immutable/chunks/oE_7pxdZ.js","_app/immutable/chunks/xrp05j8D.js","_app/immutable/entry/app.RWr29VTZ.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
+	client: {start:"_app/immutable/entry/start.DHP3e-iK.js",app:"_app/immutable/entry/app.DEVxCnN_.js",imports:["_app/immutable/entry/start.DHP3e-iK.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/kFbcn9Ny.js","_app/immutable/chunks/pd6cx8RH.js","_app/immutable/chunks/BH4ECt33.js","_app/immutable/chunks/BeSO2yj4.js","_app/immutable/chunks/9lSbqI6C.js","_app/immutable/entry/app.DEVxCnN_.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
 	
 	nodes: [
 		__memo(() => import('./nodes/0.js')),
@@ -20,7 +20,8 @@ return {
 		__memo(() => import('./nodes/4.js')),
 		__memo(() => import('./nodes/5.js')),
 		__memo(() => import('./nodes/6.js')),
-		__memo(() => import('./nodes/7.js'))
+		__memo(() => import('./nodes/7.js')),
+		__memo(() => import('./nodes/8.js'))
 	],
 	remotes: {
 		
@@ -60,6 +61,27 @@ return {
 			params: [{"name":"id","optional":false,"rest":false,"chained":false},{"name":"draft","optional":false,"rest":false,"chained":false}],
 			page: null,
 			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/drafts/_draft_/save/_server.ts.js'))
+		},
+		{
+			id: "/api/campaigns/[id]/floor",
+			pattern: /^\/api\/campaigns\/([^/]+?)\/floor\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
+			page: null,
+			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/floor/_server.ts.js'))
+		},
+		{
+			id: "/api/campaigns/[id]/floor/declarations",
+			pattern: /^\/api\/campaigns\/([^/]+?)\/floor\/declarations\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
+			page: null,
+			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/floor/declarations/_server.ts.js'))
+		},
+		{
+			id: "/api/campaigns/[id]/floor/declarations/[declaration]",
+			pattern: /^\/api\/campaigns\/([^/]+?)\/floor\/declarations\/([^/]+?)\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false},{"name":"declaration","optional":false,"rest":false,"chained":false}],
+			page: null,
+			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/floor/declarations/_declaration_/_server.ts.js'))
 		},
 		{
 			id: "/api/dev/report-issue",
@@ -104,17 +126,24 @@ return {
 			endpoint: null
 		},
 		{
+			id: "/campaigns/[id]/play",
+			pattern: /^\/campaigns\/([^/]+?)\/play\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
+			page: { layouts: [0,], errors: [1,], leaf: 6 },
+			endpoint: null
+		},
+		{
 			id: "/credits",
 			pattern: /^\/credits\/?$/,
 			params: [],
-			page: { layouts: [0,], errors: [1,], leaf: 6 },
+			page: { layouts: [0,], errors: [1,], leaf: 7 },
 			endpoint: null
 		},
 		{
 			id: "/theme",
 			pattern: /^\/theme\/?$/,
 			params: [],
-			page: { layouts: [0,], errors: [1,], leaf: 7 },
+			page: { layouts: [0,], errors: [1,], leaf: 8 },
 			endpoint: null
 		}
 	],

@@ -1,9 +1,10 @@
 import { ft as resolve } from "../../../../chunks/internal.js";
-import { a as derived, c as head, g as clsx, i as bind_props, s as ensure_array_like, t as attr_class, v as escape_html } from "../../../../chunks/server2.js";
+import { _ as clsx, a as bind_props, c as ensure_array_like, l as head, o as derived, t as attr_class, y as escape_html } from "../../../../chunks/server2.js";
 import "../../../../chunks/forms.js";
 import "../../../../chunks/paths2.js";
 import { a as SCALES, n as LENGTHS, o as TECH_LEVELS, r as MAGIC_LEVELS, s as TONES, t as GENRE_FLAVORS } from "../../../../chunks/enums.js";
-import { i as Link, n as Button, r as Alert, t as Field } from "../../../../chunks/Field.js";
+import { n as Alert, r as Link, t as Button } from "../../../../chunks/Button.js";
+import { t as Field } from "../../../../chunks/Field.js";
 import { n as CreationStepper, r as Select, t as Panel } from "../../../../chunks/Panel.js";
 import { t as Textarea } from "../../../../chunks/Textarea.js";
 import { t as TextInput } from "../../../../chunks/TextInput.js";
@@ -236,6 +237,16 @@ function _page($$renderer, $$props) {
 			if (data.campaign.status !== "missing") {
 				$$renderer.push("<!--[0-->");
 				DmBadge($$renderer, { attached: sessions.data.includes(data.campaign.id) });
+				$$renderer.push(`<!----> `);
+				Link($$renderer, {
+					href: resolve("/campaigns/[id]/play", { id: data.campaign.id }),
+					class: "ml-auto text-sm",
+					children: ($$renderer) => {
+						$$renderer.push(`<!---->Play console`);
+					},
+					$$slots: { default: true }
+				});
+				$$renderer.push(`<!---->`);
 			} else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--></div> <p class="text-xs text-muted">${escape_html(data.campaign.path)}</p></header> `);
 			if (data.campaign.status === "missing") {

@@ -1,15 +1,18 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
-import { a as derived, c as head, g as clsx, h as attr, i as bind_props, l as props_id, n as attributes, s as ensure_array_like, t as attr_class, v as escape_html } from "../../../../../chunks/server2.js";
+import { _ as clsx, a as bind_props, c as ensure_array_like, g as attr, l as head, o as derived, r as attributes, t as attr_class, u as props_id, y as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/forms.js";
 import "../../../../../chunks/paths2.js";
 import { n as CreationStepper, r as Select, t as Panel } from "../../../../../chunks/Panel.js";
-import { n as Badge, t as TextInput } from "../../../../../chunks/TextInput.js";
-import { i as Link, n as Button, r as Alert, t as Field } from "../../../../../chunks/Field.js";
+import { t as Badge } from "../../../../../chunks/Badge.js";
+import { n as Alert, r as Link, t as Button } from "../../../../../chunks/Button.js";
 import { n as beforeNavigate, r as goto } from "../../../../../chunks/navigation.js";
 import { t as Dialog } from "../../../../../chunks/Dialog.js";
 import { s as ABILITY_KEYS } from "../../../../../chunks/schema.js";
-import { A as fixedEquipment, C as rollAbilityScores, E as categoryItems, M as resolveFeatures, O as equipmentGroups, S as pointsSpent, T as rollTotals, _ as POINT_BUY, b as methodPatch, c as resolverDraft, d as STEPS, f as computeSteps, g as ABILITY_LABELS, h as skillsStepGroups, i as LIMITS, j as ownedEquipment, k as equipmentRows, l as spellPickFlags, m as groupLabel, n as cappedScore, o as emptyDraft, p as groupIssues, r as deriveStats, s as reconcile, t as tryDraftToCharacterInput, u as spellsView, v as STANDARD_ARRAY, w as rollTotal, x as pointCost, y as availableValues } from "../../../../../chunks/save.js";
+import { A as fixedEquipment, C as rollAbilityScores, E as categoryItems, M as resolveFeatures, O as equipmentGroups, S as pointsSpent, T as rollTotals, _ as POINT_BUY, b as methodPatch, c as resolverDraft, d as STEPS, f as computeSteps, g as ABILITY_LABELS, h as skillsStepGroups, i as LIMITS, j as ownedEquipment, l as spellPickFlags, m as groupLabel, n as cappedScore, o as emptyDraft, p as groupIssues, r as deriveStats, s as reconcile, t as tryDraftToCharacterInput, u as spellsView, v as STANDARD_ARRAY, w as rollTotal, x as pointCost, y as availableValues } from "../../../../../chunks/save.js";
+import { t as Field } from "../../../../../chunks/Field.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
+import { t as TextInput } from "../../../../../chunks/TextInput.js";
+import { r as draftToSummaryData, t as buildSummary } from "../../../../../chunks/summary.js";
 // src/lib/campaign/PartyList.svelte
 function PartyList($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -1126,68 +1129,6 @@ function CharacterSummary($$renderer, $$props) {
 		$$renderer.push(`<!--]--></article>`);
 	});
 }
-// src/lib/character/summary.ts
-function draftToSummaryData(rules, draft) {
-	const resolved = resolveFeatures(rules, resolverDraft(draft));
-	const custom = draft.background === "custom";
-	return {
-		...draft,
-		equipment: equipmentRows(rules, draft, resolved),
-		classSpells: draft.classSpells,
-		customBackgroundName: custom ? draft.customBackgroundName : null,
-		customBackgroundFeature: custom ? draft.customBackgroundFeature : null
-	};
-}
-function buildSummary(rules, data) {
-	const resolved = resolveFeatures(rules, {
-		race: data.race,
-		subrace: data.subrace,
-		class: data.class,
-		subclass: data.subclass,
-		background: data.background,
-		picks: data.picks
-	});
-	const owned = [...fixedEquipment(rules, data).flatMap((f) => f.items), ...data.equipment ?? []].reduce((all, e) => {
-		const row = all.find((r) => r.item === e.item);
-		if (row) row.quantity += e.quantity;
-		else all.push({
-			item: e.item,
-			quantity: e.quantity
-		});
-		return all;
-	}, []);
-	const stats = deriveStats(rules, resolved, {
-		class: data.class,
-		level: data.level,
-		baseScores: data.baseScores,
-		equipment: owned.map((e) => e.item)
-	});
-	const name = (list, slug) => slug === null ? null : list.find((e) => e.slug === slug)?.name ?? slug;
-	const spellsBySlug = new Map(rules.spells.map((s) => [s.slug, s]));
-	const spellSlugs = [
-		...resolved.grantedSpells.map((s) => s.spell),
-		...data.classSpells ?? [],
-		...resolved.groups.filter((g) => g.kind === "spell").flatMap((g) => g.picks)
-	];
-	return {
-		data,
-		resolved,
-		stats,
-		names: {
-			race: name(rules.races, data.race),
-			subrace: name(rules.subraces, data.subrace),
-			class: name(rules.classes, data.class),
-			subclass: name(rules.subclasses, data.subclass),
-			background: data.customBackgroundName || name(rules.backgrounds, data.background),
-			alignment: name(rules.alignments, data.alignment)
-		},
-		equipment: owned.map((e) => ({
-			name: name(rules.equipment, e.item) ?? e.item,
-			quantity: e.quantity
-		})),
-		spells: [...new Set(spellSlugs)].map((slug) => spellsBySlug.get(slug)).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
-	};
-}
 // src/lib/character/ReviewStep.svelte
 function ReviewStep($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -1810,7 +1751,19 @@ function _page($$renderer, $$props) {
 			},
 			$$slots: { default: true }
 		});
-		$$renderer.push(`<!----> <header class="space-y-1"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> <p class="text-xs text-muted">${escape_html(data.campaign.path)}</p></header> `);
+		$$renderer.push(`<!----> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
+		if (data.campaign.status !== "missing") {
+			$$renderer.push("<!--[0-->");
+			Link($$renderer, {
+				href: resolve("/campaigns/[id]/play", { id: data.campaign.id }),
+				class: "ml-auto text-sm",
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->Play console`);
+				},
+				$$slots: { default: true }
+			});
+		} else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]--></div> <p class="text-xs text-muted">${escape_html(data.campaign.path)}</p></header> `);
 		if (data.campaign.status === "missing") {
 			$$renderer.push("<!--[0-->");
 			Alert($$renderer, {

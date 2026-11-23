@@ -1,9 +1,9 @@
-import { a as derived, v as escape_html } from "./server2.js";
+import { o as derived, y as escape_html } from "./server2.js";
 import { _ as resolveQueryValue, a as notifyManager, b as timeUntilStale, d as isValidTimeout, g as replaceData, m as noop, n as fetchState, o as focusManager, s as isServer, v as shallowEqualObjects, x as timeoutManager } from "./query.js";
 import { a as Subscribable, t as getIsRestoringContext } from "./context.js";
 import { t as onDestroy } from "./index-server.js";
 import { t as useQueryClient } from "./useQueryClient.js";
-import { n as Badge } from "./TextInput.js";
+import { t as Badge } from "./Badge.js";
 // node_modules/.pnpm/@tanstack+query-core@5.105.1/node_modules/@tanstack/query-core/build/modern/queryObserver.js
 /**
 * A `QueryObserver` watches a single query in the `QueryCache` and computes a
@@ -671,6 +671,8 @@ function createQuery(options, queryClient) {
 // src/lib/live/messages.ts
 /** The query listing the ids of Campaigns with a DM at the table. */
 var SESSIONS_QUERY_KEY = ["sessions"];
+/** The query holding a Campaign's open Floor. */
+var floorQueryKey = (campaign) => ["floor", campaign];
 // src/lib/live/client.ts
 /** The ids of the Campaigns with a DM at the table, starting from the server-rendered list. */
 function createSessionsQuery(initial) {
@@ -695,6 +697,6 @@ function DmBadge($$renderer, $$props) {
 		$$slots: { default: true }
 	});
 }
-export { createSessionsQuery as n, DmBadge as t };
+export { createQuery as i, createSessionsQuery as n, floorQueryKey as r, DmBadge as t };
 
 //# sourceMappingURL=DmBadge.js.map

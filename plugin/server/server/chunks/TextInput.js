@@ -1,24 +1,4 @@
-import { g as clsx, i as bind_props, n as attributes } from "./server2.js";
-import { a as NEUTRAL_CLASSES, s as STATUS_CLASSES_BORDERLESS } from "./Field.js";
-// src/lib/ui/Badge.svelte
-function Badge($$renderer, $$props) {
-	let { variant = "neutral", size = "md", class: className, children, $$slots, $$events, ...rest } = $$props;
-	const variants = {
-		neutral: NEUTRAL_CLASSES,
-		...STATUS_CLASSES_BORDERLESS
-	};
-	$$renderer.push(`<span${attributes({
-		class: clsx([
-			"inline-flex items-center rounded-full border font-medium",
-			size === "sm" ? "px-2 py-0.5 text-xs" : "px-2.5 py-0.5 text-sm",
-			variants[variant],
-			className
-		]),
-		...rest
-	})}>`);
-	children?.($$renderer);
-	$$renderer.push(`<!----></span>`);
-}
+import { _ as clsx, a as bind_props, r as attributes } from "./server2.js";
 // src/lib/ui/TextInput.svelte
 function TextInput($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -37,6 +17,6 @@ function TextInput($$renderer, $$props) {
 		bind_props($$props, { value });
 	});
 }
-export { Badge as n, TextInput as t };
+export { TextInput as t };
 
 //# sourceMappingURL=TextInput.js.map

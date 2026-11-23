@@ -4723,6 +4723,76 @@ var choiceOptionItem = sqliteTable("choice_option_item", {
 	count: integer("count"),
 	requiresProficiencyId: optionalRef$1("requires_proficiency_id", () => proficiency.id)
 }, (t) => [unique("choice_option_item_position_unique").on(t.optionId, t.position), check("choice_option_item_type_check", inList("item_type", ITEM_TYPES))]);
+// src/lib/world/entity-types.ts
+/** The kinds of World-layer Entity. Each type's handle prefix is its name. */
+var ENTITY_TYPES = [
+	"npc",
+	"place",
+	"faction",
+	"topic"
+];
+/** An NPC's status. A dead NPC is not retired. */
+var NPC_STATUSES = [
+	"alive",
+	"dead",
+	"missing",
+	"departed"
+];
+// src/lib/server/db/world-schema.ts
+/**
+* An NPC, Place, Faction or Topic. `handle` is its readable, code-generated id (`npc:mira-voss`).
+* `fields` holds the typed fields, checked against the type's schema in code.
+*/
+var entity = sqliteTable("entity", {
+	handle: text("handle").primaryKey(),
+	type: text("type", { enum: ENTITY_TYPES }).notNull(),
+	name: text("name").notNull(),
+	fields: text("fields", { mode: "json" }).$type().notNull(),
+	version: integer("version").notNull().default(1),
+	retiredAt: integer("retired_at"),
+	retiredReason: text("retired_reason"),
+	/** Set when the Entity was retired by merging it into another. */
+	mergedInto: text("merged_into"),
+	createdAt: integer("created_at").notNull()
+}, () => [check("entity_type_check", sql.raw(`type IN (${ENTITY_TYPES.map((t) => `'${t}'`).join(", ")})`))]);
+/** Other names an Entity goes by. */
+var entityAlias = sqliteTable("entity_alias", {
+	handle: text("handle").notNull().references(() => entity.handle),
+	alias: text("alias").notNull()
+}, (t) => [primaryKey({ columns: [t.handle, t.alias] })]);
+/** Every revision of every Page; the newest is the Page. Links are stored as `[[handle]]`. */
+var pageRevision = sqliteTable("page_revision", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	handle: text("handle").notNull().references(() => entity.handle),
+	text: text("text").notNull(),
+	sessionId: text("session_id"),
+	eventId: integer("event_id"),
+	createdAt: integer("created_at").notNull()
+}, (t) => [index("page_revision_handle_idx").on(t.handle)]);
+/**
+* A Fact: append-only and bi-temporal. `validFrom` null means since before the Campaign. A Fact is
+* current until superseded (`supersededBy`, closed at `validTo`) or retired (with a reason).
+*/
+var fact = sqliteTable("fact", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	subject: text("subject").notNull().references(() => entity.handle),
+	claim: text("claim").notNull(),
+	validFrom: integer("valid_from"),
+	validTo: integer("valid_to"),
+	supersededBy: integer("superseded_by"),
+	retiredAt: integer("retired_at"),
+	retiredReason: text("retired_reason"),
+	sessionId: text("session_id"),
+	eventId: integer("event_id"),
+	recordedMinute: integer("recorded_minute").notNull()
+}, (t) => [index("fact_subject_idx").on(t.subject)]);
+/** An indexed `[[link]]`: from an Entity's Page (`factId` null) or from one of its Facts. */
+var worldLink = sqliteTable("world_link", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	fromHandle: text("from_handle").notNull(),
+	factId: integer("fact_id"),
+	toHandle: text("to_handle").notNull()
+}, (t) => [index("world_link_from_idx").on(t.fromHandle), index("world_link_to_idx").on(t.toHandle)]);
 // src/lib/server/db/schema.ts
 var schema_exports = /* @__PURE__ */ __exportAll({
 	ability: () => ability,
@@ -4752,19 +4822,25 @@ var schema_exports = /* @__PURE__ */ __exportAll({
 	classTable: () => classTable,
 	condition: () => condition,
 	damageType: () => damageType,
+	declaration: () => declaration,
+	entity: () => entity,
+	entityAlias: () => entityAlias,
 	equipment: () => equipment,
 	equipmentCategory: () => equipmentCategory,
 	equipmentCategoryItem: () => equipmentCategoryItem,
 	equipmentContent: () => equipmentContent,
 	equipmentWeaponProperty: () => equipmentWeaponProperty,
 	event: () => event,
+	fact: () => fact,
 	feature: () => feature,
+	floor: () => floor,
 	language: () => language,
 	magicItem: () => magicItem,
 	magicSchool: () => magicSchool,
 	monster: () => monster,
 	monsterConditionImmunity: () => monsterConditionImmunity,
 	monsterProficiency: () => monsterProficiency,
+	pageRevision: () => pageRevision,
 	proficiency: () => proficiency,
 	race: () => race,
 	raceAbilityBonus: () => raceAbilityBonus,
@@ -4784,7 +4860,8 @@ var schema_exports = /* @__PURE__ */ __exportAll({
 	subraceTrait: () => subraceTrait,
 	trait: () => trait,
 	traitProficiency: () => traitProficiency,
-	weaponProperty: () => weaponProperty
+	weaponProperty: () => weaponProperty,
+	worldLink: () => worldLink
 });
 var oneOf = (column, values) => sql.raw(`${column} IS NULL OR ${column} IN (${values.map((v) => `'${v}'`).join(", ")})`);
 /**
@@ -4982,6 +5059,32 @@ var characterDraft = sqliteTable("character_draft", {
 	createdAt: integer("created_at").notNull(),
 	updatedAt: integer("updated_at").notNull()
 });
+/**
+* A Floor: the DM waiting on the Players' Declarations. At most one is open per Campaign; until it
+* closes its Declarations can be added, edited or withdrawn and the DM hears none of them.
+*/
+var floor = sqliteTable("floor", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	campaignId: campaignOwner(),
+	state: text("state", { enum: ["open", "closed"] }).notNull().default("open"),
+	createdAt: integer("created_at").notNull(),
+	closedAt: integer("closed_at")
+});
+/**
+* A Declaration on a Floor: what a Player says one Character does. It names exactly one Character
+* and the Player who declared it. Withdrawing one deletes it; the DM never heard it.
+*/
+var declaration = sqliteTable("declaration", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	floorId: text("floor_id").notNull().references(() => floor.id, { onDelete: "cascade" }),
+	characterId: text("character_id").notNull().references(() => character.id, { onDelete: "cascade" }),
+	player: text("player").notNull(),
+	text: text("text").notNull(),
+	/** Send order on its Floor. */
+	position: integer("position").notNull(),
+	createdAt: integer("created_at").notNull(),
+	updatedAt: integer("updated_at").notNull()
+}, (t) => [index("declaration_floor_idx").on(t.floorId)]);
 // src/lib/server/db/connect.ts
 /** The only place connections are opened, so foreign keys are always enforced. */
 function openDatabase(url) {
@@ -6552,6 +6655,6 @@ function canonicalFolder(folder) {
 		return resolved;
 	}
 }
-export { raceTrait as $, classLevelFeature as A, equipmentContent as B, backgroundOption as C, DUNGEON_MASTER_HOME as Ct, choiceOption as D, choiceGroup as E, condition as F, magicSchool as G, feature as H, damageType as I, monsterProficiency as J, monster as K, equipment as L, classSavingThrow as M, classStartingEquipment as N, choiceOptionItem as O, classTable as P, raceLanguage as Q, equipmentCategory as R, backgroundEquipment as S, DUNGEON_MASTER_CAMPAIGNS as St, backgroundProficiency as T, DUNGEON_MASTER_VERSION as Tt, language as U, equipmentWeaponProperty as V, magicItem as W, race as X, proficiency as Y, raceAbilityBonus as Z, event as _, asc as _t, seedRulesData as a, subclass as at, alignment as b, sql as bt, openDatabase as c, subraceTrait as ct, characterChoice as d, weaponProperty as dt, ruleSection as et, characterDraft as f, ABILITY_METHODS as ft, characterSpell as g, SOLO_PLAYER as gt, characterSkill as h, CUSTOM_BACKGROUND_SLUG as ht, userStateDir as i, spellClass as it, classProficiency as j, classLevel as k, campaign as l, trait as lt, characterItem as m, CUSTOM_BACKGROUND_FEATURE_MAX as mt, canonicalFolder as n, skill as nt, loadRulesDataset as o, subrace as ot, characterEquipment as p, BACKSTORY_MAX as pt, monsterConditionImmunity as q, defaultCampaignRoot as r, spell as rt, migrateDatabase as s, subraceAbilityBonus as st, campaignDatabasePath as t, rulesDataset as tt, character as u, traitProficiency as ut, ability as v, eq as vt, backgroundOptionAlignment as w, DUNGEON_MASTER_PORT as wt, background as x, DATABASE_URL as xt, abilityScoreMethod as y, inArray as yt, equipmentCategoryItem as z };
+export { magicItem as $, background as A, inArray as At, classProficiency as B, DUNGEON_MASTER_HOME as Bt, pageRevision as C, CUSTOM_BACKGROUND_FEATURE_MAX as Ct, ability as D, desc as Dt, NPC_STATUSES as E, asc as Et, choiceGroup as F, sql as Ft, damageType as G, classStartingEquipment as H, DUNGEON_MASTER_VERSION as Ht, choiceOption as I, Column as It, equipmentCategoryItem as J, equipment as K, choiceOptionItem as L, is as Lt, backgroundOption as M, isNull as Mt, backgroundOptionAlignment as N, like as Nt, abilityScoreMethod as O, and as Ot, backgroundProficiency as P, or as Pt, language as Q, classLevel as R, DATABASE_URL as Rt, fact as S, BACKSTORY_MAX as St, ENTITY_TYPES as T, SOLO_PLAYER as Tt, classTable as U, classSavingThrow as V, DUNGEON_MASTER_PORT as Vt, condition as W, equipmentWeaponProperty as X, equipmentContent as Y, feature as Z, declaration as _, subraceTrait as _t, seedRulesData as a, race as at, entity as b, weaponProperty as bt, openDatabase as c, raceTrait as ct, characterChoice as d, skill as dt, magicSchool as et, characterDraft as f, spell as ft, characterSpell as g, subraceAbilityBonus as gt, characterSkill as h, subrace as ht, userStateDir as i, proficiency as it, backgroundEquipment as j, isNotNull as jt, alignment as k, eq as kt, campaign as l, ruleSection as lt, characterItem as m, subclass as mt, canonicalFolder as n, monsterConditionImmunity as nt, loadRulesDataset as o, raceAbilityBonus as ot, characterEquipment as p, spellClass as pt, equipmentCategory as q, defaultCampaignRoot as r, monsterProficiency as rt, migrateDatabase as s, raceLanguage as st, campaignDatabasePath as t, monster as tt, character as u, rulesDataset as ut, event as v, trait as vt, worldLink as w, CUSTOM_BACKGROUND_SLUG as wt, entityAlias as x, ABILITY_METHODS as xt, floor as y, traitProficiency as yt, classLevelFeature as z, DUNGEON_MASTER_CAMPAIGNS as zt };
 
 //# sourceMappingURL=paths.js.map
