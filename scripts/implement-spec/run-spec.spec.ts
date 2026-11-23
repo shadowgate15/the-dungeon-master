@@ -386,11 +386,15 @@ describe('runSpec', () => {
     it.each(failures)(
       'marks the ticket failed when the done check finds %s, naming the log',
       async (check, behave) => {
-        const { ports } = portsFor([ticket(1)], behave)
+        const { ports, git } = portsFor([ticket(1)], behave)
 
         const result = await runSpec(100, {}, ports)
 
         expect(result.ok).toBe(false)
+        expect(git.worktrees.get(join(root, '.claude', 'worktrees', 'implement-spec-100-1'))).toBe(
+          'implement-spec/100-1'
+        )
+        expect(git.removed).toEqual([])
         expect(readState(100).tickets[1]).toMatchObject({
           status: 'failed',
           session: { outcome: { check } }
@@ -881,6 +885,78 @@ describe('runSpec', () => {
       })
       expect(tracker.bodies).toEqual([])
       expect(tracker.ready).toEqual([])
+    })
+  })
+
+  describe('containing failures', () => {
+    const logs = join('.implement-spec', '100', 'logs')
+
+    it('costs only the failed ticket and its transitive dependents, skipping the end of the run and leaving the PR a draft', async () => {
+      const { ports, claude, tracker } = portsFor(
+        [
+          ticket(1),
+          ticket(2, [{ number: 1, open: true }]),
+          ticket(3, [{ number: 2, open: true }]),
+          ticket(4)
+        ],
+        (session, fake) =>
+          session.role === 'implementer' && session.cwd.endsWith('-1') ? 1 : succeeds(session, fake)
+      )
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(false)
+      const state = readState(100)
+      expect([1, 2, 3, 4].map((n) => state.tickets[n].status)).toEqual([
+        'failed',
+        'pending',
+        'pending',
+        'done'
+      ])
+      // No retries: each launched ticket ran exactly one implementer.
+      expect(claude.sessions.map(({ role, cwd }) => `${role} ${cwd.slice(-1)}`)).toEqual([
+        'implementer 1',
+        'implementer 4',
+        'merger 0'
+      ])
+      expect(state.steps).toBeUndefined()
+      expect(tracker.prs).toHaveLength(1)
+      expect(tracker.prs[0].body.split('\n')).toEqual([
+        'Closes #100',
+        'Closes #1',
+        'Closes #2',
+        'Closes #3',
+        'Closes #4'
+      ])
+      expect(tracker.bodies).toEqual([])
+      expect(tracker.ready).toEqual([])
+    })
+
+    it('ends by printing each failed ticket with its check and log', async () => {
+      const { ports } = portsFor([ticket(1), ticket(2), ticket(3)], (session, fake) => {
+        if (session.role === 'implementer' && session.cwd.endsWith('-2')) return 0
+        if (session.role === 'merger') return 1
+        return succeeds(session, fake)
+      })
+
+      await runSpec(100, {}, ports)
+
+      const summary = lines.slice(lines.indexOf('failed tickets:'))
+      expect(summary).toEqual([
+        'failed tickets:',
+        expect.stringMatching(/^ {2}#1 merger nonzero-exit \(log .*\)$/),
+        expect.stringMatching(/^ {2}#2 implementer no-commits \(log .*\)$/)
+      ])
+      expect(summary[1]).toContain(join(root, logs, 'merger-1.log'))
+      expect(summary[2]).toContain(join(root, logs, 'implementer-2.log'))
+    })
+
+    it('prints no failure summary when nothing failed', async () => {
+      const { ports } = portsFor([ticket(1)])
+
+      await runSpec(100, {}, ports)
+
+      expect(lines).not.toContain('failed tickets:')
     })
   })
 })

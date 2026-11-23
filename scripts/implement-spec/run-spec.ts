@@ -368,7 +368,6 @@ const merge = async (run: Run, ticket: number): Promise<boolean> => {
 }
 
 /**
-/**
  * Finishes a run whose tickets are all `done`: reviewer, fixer, PR writer, then the PR body is
  * replaced from the PR writer's file and the PR marked ready. Each finished step is recorded, so a
  * re-run picks up at the first unfinished one. Resolves to whether the run finished.
@@ -473,6 +472,28 @@ const drive = async (run: Run, tickets: Ticket[]): Promise<boolean> => {
   return ok && queue.length === 0
 }
 
+/**
+ * Prints every failed ticket, ascending, with the session that failed, its check and its log: a
+ * `failed` ticket's implementer, or the merger of an `implemented` ticket whose merge failed.
+ */
+const reportFailures = (run: Run) => {
+  const failures = Object.entries(run.state.tickets).flatMap(([key, entry]) => {
+    const ticket = Number(key)
+    const failed = (role: Role, session?: SessionState) => {
+      const check = session?.outcome?.check
+      return check === undefined || check === 'passed'
+        ? []
+        : [`  #${ticket} ${role} ${check} (log ${logPath(run.paths.logs, role, ticket)})`]
+    }
+    if (entry.status === 'failed') return failed('implementer', entry.session)
+    if (entry.status === 'implemented') return failed('merger', entry.merger)
+    return []
+  })
+  if (failures.length === 0) return
+  run.ports.log('failed tickets:')
+  for (const line of failures) run.ports.log(line)
+}
+
 export const runSpec = async (
   spec: number,
   options: RunOptions,
@@ -508,6 +529,7 @@ export const runSpec = async (
   if (frontier.length === 0) log('nothing is ready')
 
   const ok = await drive(run, tickets)
+  reportFailures(run)
   if (!ok || !Object.values(state.tickets).every(({ status }) => status === 'done')) {
     return { ok, frontier }
   }
