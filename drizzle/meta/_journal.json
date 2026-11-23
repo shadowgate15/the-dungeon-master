@@ -12,8 +12,15 @@
     {
       "idx": 1,
       "version": "6",
-      "when": 1795442480574,
-      "tag": "0001_party",
+      "when": 1795442514497,
+      "tag": "0001_event_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795442515497,
+      "tag": "0002_party",
       "breakpoints": true
     }
   ]

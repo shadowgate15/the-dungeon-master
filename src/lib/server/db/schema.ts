@@ -59,6 +59,8 @@ export const campaign = sqliteTable(
     scale: text('scale', { enum: SCALES }),
     magicLevel: text('magic_level', { enum: MAGIC_LEVELS }),
     techLevel: text('tech_level', { enum: TECH_LEVELS }),
+    /** The Seed's Entity version: every write to the Seed passes it and bumps it. */
+    version: integer('version').notNull().default(1),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
     archivedAt: integer('archived_at')
@@ -72,6 +74,27 @@ export const campaign = sqliteTable(
     check('campaign_tech_level_check', oneOf('tech_level', TECH_LEVELS))
   ]
 )
+
+/**
+ * The Event log: append-only, one event per mutating game-tool call, written in the call's
+ * transaction. The Session and in-fiction minute are stamped by code, never taken from input.
+ * Corrections are new events.
+ */
+export const event = sqliteTable('event', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** The Session the event belongs to; null for offline edits (no Session yet). */
+  sessionId: text('session_id'),
+  /** In-fiction minutes since the Campaign started. */
+  minute: integer('minute').notNull(),
+  /** The game tool that logged it. */
+  tool: text('tool').notNull(),
+  kind: text('kind').notNull(),
+  summary: text('summary').notNull(),
+  data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
+  /** DM-only events (Arc and Beat changes) never reach the Player. */
+  dmOnly: integer('dm_only', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at').notNull()
+})
 
 const ref = (name: string, target: () => AnySQLiteColumn) =>
   integer(name).notNull().references(target, { onDelete: 'restrict' })
