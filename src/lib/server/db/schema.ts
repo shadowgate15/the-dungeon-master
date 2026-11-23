@@ -17,7 +17,13 @@ import {
   TONES
 } from '../../campaign/enums'
 import { ABILITY_KEYS } from '../../rules/registry'
-import { ABILITY_METHODS, ALIGNMENTS, PICK_SOURCES } from '../../character/enums'
+import {
+  ABILITY_METHODS,
+  ALIGNMENTS,
+  CHARACTER_STATUSES,
+  PICK_SOURCES
+} from '../../character/enums'
+import type { StepId } from '../../character/steps'
 import {
   background,
   classTable,
@@ -74,10 +80,19 @@ const optionalRef = (name: string, target: () => AnySQLiteColumn) =>
 const between = (column: string, min: number, max: number) =>
   sql.raw(`${column} BETWEEN ${min} AND ${max}`)
 
+const campaignOwner = () =>
+  text('campaign_id')
+    .notNull()
+    .references(() => campaign.id, { onDelete: 'cascade' })
+
+/** Coin by denomination. */
+export type Coin = { cp: number; sp: number; ep: number; gp: number; pp: number }
+
 /**
- * A player's hero: the player's choices only. Everything computed from them is derived and never
- * stored. Rules references are integer FKs (RESTRICT). Nothing references a Character except its
- * own child rows, which cascade on delete.
+ * A Player's hero in one Campaign: the Player's choices plus play state. Everything computed from
+ * the choices (max HP, AC, modifiers, slots) is derived and never stored. Rules references are
+ * integer FKs (RESTRICT). Nothing references a Character except its own child rows, which cascade
+ * on delete.
  */
 export const character = sqliteTable(
   'character',
@@ -85,6 +100,10 @@ export const character = sqliteTable(
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    campaignId: campaignOwner(),
+    /** The Player who controls this Character; exactly one, transferable. */
+    controllingPlayer: text('controlling_player').notNull(),
+    status: text('status', { enum: CHARACTER_STATUSES }).notNull().default('alive'),
     name: text('name').notNull(),
     alignment: text('alignment', { enum: ALIGNMENTS }),
     appearance: text('appearance'),
@@ -111,12 +130,45 @@ export const character = sqliteTable(
     cha: integer('cha').notNull(),
     /** Raw dice of the six 4d6 rolls; only when abilityMethod is roll. */
     abilityRolls: text('ability_rolls', { mode: 'json' }).$type<number[][]>(),
+    // Play state: current values only; history is the Event log.
+    currentHp: integer('current_hp').notNull(),
+    tempHp: integer('temp_hp').notNull().default(0),
+    /** Spent spell slots by slot level 1 to 9. */
+    spentSlots: text('spent_slots', { mode: 'json' })
+      .$type<number[]>()
+      .notNull()
+      .$defaultFn(() => [0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    hitDiceSpent: integer('hit_dice_spent').notNull().default(0),
+    /** Spent uses by feature slug. */
+    featureUses: text('feature_uses', { mode: 'json' })
+      .$type<Record<string, number>>()
+      .notNull()
+      .$defaultFn(() => ({})),
+    /** Condition slugs. */
+    conditions: text('conditions', { mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .$defaultFn(() => []),
+    coin: text('coin', { mode: 'json' })
+      .$type<Coin>()
+      .notNull()
+      .$defaultFn(() => ({ cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 })),
+    /** The spell slug being concentrated on. */
+    concentration: text('concentration'),
+    deathSaves: text('death_saves', { mode: 'json' })
+      .$type<{ successes: number; failures: number }>()
+      .notNull()
+      .$defaultFn(() => ({ successes: 0, failures: 0 })),
+    /** Where the Character is; presence in a Scene is computed from it. */
+    whereabouts: text('whereabouts'),
     createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-    archivedAt: integer('archived_at')
+    updatedAt: integer('updated_at').notNull()
   },
   () => [
     check('character_level_check', between('level', 1, 20)),
+    check('character_status_check', oneOf('status', CHARACTER_STATUSES)),
+    check('character_temp_hp_check', sql.raw('temp_hp >= 0')),
+    check('character_hit_dice_spent_check', sql.raw('hit_dice_spent >= 0')),
     check('character_alignment_check', oneOf('alignment', ALIGNMENTS)),
     check('character_ability_method_check', oneOf('ability_method', ABILITY_METHODS)),
     ...ABILITY_KEYS.map((a) => check(`character_${a}_check`, between(`"${a}"`, 1, 30)))
@@ -188,5 +240,37 @@ export const characterChoice = sqliteTable(
     index('character_choice_character_idx').on(t.characterId)
   ]
 )
+
+/** What the Character carries: item and count. Starts as the starting equipment on save. */
+export const characterItem = sqliteTable(
+  'character_item',
+  {
+    characterId: owner(),
+    itemId: ref('item_id', () => equipment.id),
+    quantity: integer('quantity').notNull()
+  },
+  (t) => [
+    primaryKey({ columns: [t.characterId, t.itemId] }),
+    check('character_item_quantity_check', sql.raw('quantity >= 1'))
+  ]
+)
+
+/**
+ * A Character draft: the unsaved state of a new Character while the wizard is open, stored with
+ * the Campaign so a reload loses nothing. `data` is the wizard's draft as is; it joins the Party
+ * only when saved, which turns it into a `character` row and removes the draft.
+ */
+export const characterDraft = sqliteTable('character_draft', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  campaignId: campaignOwner(),
+  controllingPlayer: text('controlling_player').notNull(),
+  data: text('data', { mode: 'json' }).$type<unknown>().notNull(),
+  /** The wizard step the draft was last on. */
+  step: text('step').$type<StepId>().notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull()
+})
 
 export * from './rules-schema'

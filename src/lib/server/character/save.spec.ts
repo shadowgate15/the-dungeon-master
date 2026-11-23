@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { migrateDatabase, openDatabase, type Database } from '../db/connect'
-import { seedRulesData } from '../rules/seed'
+import type { Database } from '../db/connect'
+import { openCampaignTestDatabase } from '../db/test-database'
 import { createCharacterService, type CharacterInput } from './service'
 import { saveCharacter, updateCharacter } from './save'
 import { emptyDraft } from '#lib/character/draft.ts'
@@ -9,9 +9,7 @@ import { loadWizardRules } from './wizard-rules'
 
 let db: Database
 beforeEach(() => {
-  db = openDatabase(':memory:')
-  migrateDatabase(db)
-  seedRulesData(db)
+  db = openCampaignTestDatabase().db
 })
 
 const input: CharacterInput = {
@@ -76,15 +74,6 @@ describe('saveCharacter', () => {
         error: 'Name is required'
       })
       expect(service.get(id)?.name).toBe('Brannoch')
-    })
-
-    it('reports an archived Character as not editable', () => {
-      const service = createCharacterService(db)
-      const { id } = service.create(input)
-      service.archive(id)
-      expect(updateCharacter(service, id, JSON.stringify(input))).toEqual({
-        error: 'An archived Character cannot be edited'
-      })
     })
 
     it('reports a missing Character', () => {
