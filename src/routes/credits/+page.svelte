@@ -25,6 +25,12 @@
         <a class="underline" href={data.dataset.repository}>{data.dataset.repository}</a>
         at tag {data.dataset.tag}.
       </p>
+      <p>It includes these SRD {data.dataset.srdVersion} materials:</p>
+      <ul class="list-inside list-disc" data-testid="dataset-contents">
+        {#each data.dataset.contents as kind (kind.name)}
+          <li>{kind.name} ({kind.count})</li>
+        {/each}
+      </ul>
     {:else}
       <p>The rules data has not been loaded.</p>
     {/if}
