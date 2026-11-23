@@ -94,13 +94,23 @@ export type TicketStatus = 'pending' | 'running' | 'implemented' | 'done' | 'fai
  * A session's done check: `passed`, or the first check that failed. Implementers can fail
  * `nonzero-exit`, `no-commits` or `missing-launch-commit`; mergers `nonzero-exit` or `not-merged`
  * (the integration branch doesn't contain the ticket branch's head); the PR writer `nonzero-exit`
- * or `no-pr-body` (it wrote no PR body file).
+ * or `no-pr-body` (it wrote no PR body file). An implementer or merger fails `error` when a port
+ * call around its session throws.
  */
 export type DoneCheck =
-  'passed' | 'nonzero-exit' | 'no-commits' | 'missing-launch-commit' | 'not-merged' | 'no-pr-body'
+  | 'passed'
+  | 'nonzero-exit'
+  | 'no-commits'
+  | 'missing-launch-commit'
+  | 'not-merged'
+  | 'no-pr-body'
+  | 'error'
 
-/** How a session ended: its exit code and the done check the script ran on it. */
-export type SessionOutcome = { exitCode: number; check: DoneCheck }
+/**
+ * How a session ended: its exit code and the done check the script ran on it, or, for `error`, the
+ * thrown error's message (and no exit code when the session never ended).
+ */
+export type SessionOutcome = { exitCode?: number; check: DoneCheck; error?: string }
 
 /** A role session's ID, saved before it launches, and its outcome once it has ended. */
 export type SessionState = { id: string; outcome?: SessionOutcome }
@@ -227,6 +237,7 @@ const pointers = (run: Run): Pointers => ({
 const unfinishedReason = ({ outcome }: SessionState) => {
   if (outcome === undefined) return 'it was interrupted, as the run stopped while it was running'
   if (outcome.check === 'nonzero-exit') return `it exited with code ${outcome.exitCode}`
+  if (outcome.check === 'error') return `the script hit an error around it: ${outcome.error}`
   return `it exited ${outcome.exitCode} but failed the done check: ${outcome.check}`
 }
 
@@ -246,9 +257,11 @@ const nextSession = (previous: SessionState | undefined, prompt: string) => {
 
 /** A ticket whose implementer didn't complete: left `running` by a stopped run, or `failed`. */
 const unfinishedImplementer = (entry: TicketState) =>
-  (entry.status === 'running' || entry.status === 'failed') &&
-  entry.session !== undefined &&
-  entry.launchCommit !== undefined
+  entry.status === 'running' || entry.status === 'failed'
+
+/** An unfinished implementer whose session can be resumed against its launch commit. */
+const resumableImplementer = (entry: TicketState) =>
+  unfinishedImplementer(entry) && entry.session !== undefined && entry.launchCommit !== undefined
 
 /** The done check every session starts with: a non-zero exit fails it, otherwise `rest` decides. */
 const exited = async (
@@ -370,7 +383,7 @@ const implement = async (run: Run, ticket: number): Promise<boolean> => {
   const branch = ticketBranch(run.spec, ticket)
   const cwd = worktreePath(run.root, branch)
   const previous = run.state.tickets[ticket]
-  const resumable = unfinishedImplementer(previous) && (await git.branchExists(branch))
+  const resumable = resumableImplementer(previous) && (await git.branchExists(branch))
   const launchCommit = resumable ? (previous.launchCommit as string) : await git.head(run.branch)
   const entry: TicketState = { ...previous, status: 'running', launchCommit }
   const passed = await runSession(run, {
@@ -512,6 +525,34 @@ const markReady = async (run: Run): Promise<boolean> => {
 }
 
 /**
+ * Runs a ticket's implementer or merger, turning a throw from a port call around the session into
+ * a failure of that session with the `error` check, so the rest of the run carries on: the ticket
+ * is `failed` (implementer) or stays `implemented` with the merger's outcome recorded (merger).
+ * When the throw came before the session's ID was saved, the outcome goes on a new ID that never
+ * ran; a re-run finds no saved session for it and starts a fresh one.
+ */
+const contain = async (
+  run: Run,
+  ticket: number,
+  role: 'implementer' | 'merger',
+  work: (run: Run, ticket: number) => Promise<boolean>
+): Promise<boolean> => {
+  try {
+    return await work(run, ticket)
+  } catch (thrown) {
+    const error = thrown instanceof Error ? thrown.message : String(thrown)
+    const entry = run.state.tickets[ticket]
+    const key = role === 'implementer' ? 'session' : 'merger'
+    entry[key] = { id: entry[key]?.id ?? randomUUID(), outcome: { check: 'error', error } }
+    if (role === 'implementer') entry.status = 'failed'
+    run.save()
+    const logFile = logPath(run.paths.logs, role, ticket)
+    run.ports.log(`failed #${ticket} ${role}: error: ${error} (log ${logFile})`)
+    return false
+  }
+}
+
+/**
  * Picks up what an earlier run left: first every merger that didn't complete is resumed, one at a
  * time and before anything launches (a failure ends the drive there); then tickets left
  * `implemented` with no merger join the merge queue, and implementers that didn't complete are
@@ -544,7 +585,7 @@ const drive = async (run: Run, tickets: Ticket[]): Promise<boolean> => {
       .map(([key]) => Number(key))
 
   for (const ticket of earlier((entry) => entry.status === 'implemented' && !!entry.merger)) {
-    if (!(await merge(run, ticket))) return false
+    if (!(await contain(run, ticket, 'merger', merge))) return false
   }
   queue.push(...earlier((entry) => entry.status === 'implemented'))
   const resumable = earlier(unfinishedImplementer)
@@ -555,7 +596,7 @@ const drive = async (run: Run, tickets: Ticket[]): Promise<boolean> => {
       if (launched.has(ticket)) continue
       launched.add(ticket)
       track(
-        implement(run, ticket).then((passed) => {
+        contain(run, ticket, 'implementer', implement).then((passed) => {
           if (passed) queue.push(ticket)
           else ok = false
           step()
@@ -566,7 +607,7 @@ const drive = async (run: Run, tickets: Ticket[]): Promise<boolean> => {
     if (next === undefined) return
     merging = true
     track(
-      merge(run, next).then((merged) => {
+      contain(run, next, 'merger', merge).then((merged) => {
         merging = false
         if (!merged) {
           ok = false

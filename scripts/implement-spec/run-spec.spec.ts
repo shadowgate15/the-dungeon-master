@@ -892,19 +892,40 @@ describe('runSpec', () => {
   describe('resuming on a re-run', () => {
     const interrupted = new Error('run interrupted')
 
+    /**
+     * Simulates the process dying mid-session: `kill` snapshots the state file and throws out of
+     * the session; once the run has settled, `restore` puts the snapshot back, as a killed process
+     * would have left the state file.
+     */
+    const crashPoint = () => {
+      let snapshot: string | undefined
+      const file = () => join(root, '.implement-spec', '100', 'state.json')
+      return {
+        kill: (): never => {
+          snapshot = readFileSync(file(), 'utf8')
+          throw interrupted
+        },
+        restore: () => {
+          if (snapshot !== undefined) writeFileSync(file(), snapshot)
+        }
+      }
+    }
+
     it('resumes an implementer left running with its saved session ID in its worktree, telling it why', async () => {
       let crash = true
+      const point = crashPoint()
       const { ports, claude } = portsFor(
         [ticket(1), ticket(2, [{ number: 1, open: true }])],
         (session, fake) => {
           if (crash && session.role === 'implementer') {
             crash = false
-            throw interrupted
+            point.kill()
           }
           return succeeds(session, fake)
         }
       )
-      await expect(runSpec(100, {}, ports)).rejects.toBe(interrupted)
+      await runSpec(100, {}, ports)
+      point.restore()
       expect(readState(100).tickets[1].status).toBe('running')
 
       const result = await runSpec(100, {}, ports)
@@ -1037,18 +1058,20 @@ describe('runSpec', () => {
     it('starts a fresh session with a new saved ID when the session to resume was never saved by claude', async () => {
       const persisted = new Set<string>()
       let crash = true
+      const point = crashPoint()
       const savedAtLaunch: boolean[] = []
       const { ports, claude } = portsFor([ticket(1)], (session, fake) => {
         if (session.resume && !persisted.has(session.sessionId)) return 'no-session'
         savedAtLaunch.push(JSON.stringify(readState(100)).includes(`"${session.sessionId}"`))
         if (crash && session.role === 'implementer') {
           crash = false
-          throw new Error('run interrupted before claude saved the session')
+          point.kill()
         }
         persisted.add(session.sessionId)
         return succeeds(session, fake)
       })
-      await expect(runSpec(100, {}, ports)).rejects.toThrow()
+      await runSpec(100, {}, ports)
+      point.restore()
 
       const result = await runSpec(100, {}, ports)
 
@@ -1206,6 +1229,63 @@ describe('runSpec', () => {
 
   describe('containing failures', () => {
     const logs = join('.implement-spec', '100', 'logs')
+
+    it('fails only the ticket whose git call throws while launching it, and launches it again on a re-run', async () => {
+      const { ports, git } = portsFor([
+        ticket(1),
+        ticket(2),
+        ticket(3, [{ number: 1, open: true }])
+      ])
+      const addWorktree = git.git.addWorktree
+      let broken = true
+      git.git.addWorktree = async (path, branch, base) => {
+        if (broken && branch.endsWith('-1')) throw new Error('disk full')
+        return addWorktree(path, branch, base)
+      }
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(false)
+      const state = readState(100)
+      expect([1, 2, 3].map((n) => state.tickets[n].status)).toEqual(['failed', 'done', 'pending'])
+      expect(state.tickets[1].session.outcome).toMatchObject({ check: 'error', error: 'disk full' })
+      expect(lines).toContainEqual(
+        expect.stringMatching(/^failed #1 implementer: error: disk full/)
+      )
+      expect(lines).toContainEqual(expect.stringMatching(/^ {2}#1 implementer error \(log /))
+
+      broken = false
+      expect((await runSpec(100, {}, ports)).ok).toBe(true)
+      expect([1, 2, 3].map((n) => readState(100).tickets[n].status)).toEqual([
+        'done',
+        'done',
+        'done'
+      ])
+    })
+
+    it('treats a git call that throws while merging as a failed merger', async () => {
+      const { ports, git, claude } = portsFor([ticket(1), ticket(2, [{ number: 1, open: true }])])
+      const head = git.git.head
+      let broken = true
+      git.git.head = async (branch) => {
+        if (broken && branch === 'implement-spec/100-1') throw new Error('bad ref')
+        return head(branch)
+      }
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(false)
+      expect(claude.sessions.map(({ role }) => role)).toEqual(['implementer'])
+      const state = readState(100)
+      expect(state.tickets[1]).toMatchObject({
+        status: 'implemented',
+        merger: { outcome: { check: 'error', error: 'bad ref' } }
+      })
+      expect(lines).toContainEqual(expect.stringMatching(/^ {2}#1 merger error \(log /))
+
+      broken = false
+      expect((await runSpec(100, {}, ports)).ok).toBe(true)
+    })
 
     it('fails a run that stalls with no failure, naming each ticket left stuck and its open blockers', async () => {
       const { ports, claude, tracker } = portsFor([
