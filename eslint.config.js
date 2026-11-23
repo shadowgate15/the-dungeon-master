@@ -11,6 +11,8 @@ const gitignorePath = path.resolve(import.meta.dirname, '.gitignore')
 
 export default defineConfig(
   includeIgnoreFile(gitignorePath),
+  // The generated bridge bundle (pnpm build:bridge).
+  { ignores: ['plugin/bin/dm-bridge.mjs'] },
   js.configs.recommended,
   ts.configs.recommended,
   svelte.configs.recommended,

@@ -1,0 +1,75 @@
+import http from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { Readable } from 'node:stream'
+import { BRIDGE_API, createBridgeApi } from '../lib/server/bridge/api'
+import { createChannels } from '../lib/server/bridge/channels'
+import { createCampaignLibrary } from '../lib/server/campaign/library'
+import { writeRuntimeFile } from '../lib/server/runtime'
+import { gameTools } from '../lib/server/tools'
+import { createToolHost } from '../lib/server/tools/host'
+
+/**
+ * A game server for Vitest: the real Campaign library, tool host and bridge API over plain
+ * node:http on a free port, with its runtime file in a temporary user-level directory.
+ */
+export async function startTestGameServer({ home }: { home: string }) {
+  const library = createCampaignLibrary({ home })
+  const channels = createChannels()
+  const host = createToolHost({ library, tools: gameTools })
+  const token = 'test-token'
+  const api = createBridgeApi({ host, channels, token })
+  const seen: string[] = []
+
+  const server = http.createServer(async (req, res) => {
+    const url = `http://${req.headers.host}${req.url}`
+    seen.push(`${req.method} ${new URL(url).pathname}`)
+    if (!new URL(url).pathname.startsWith(BRIDGE_API)) return res.writeHead(404).end()
+    const body = req.method === 'GET' ? undefined : (Readable.toWeb(req) as ReadableStream)
+    const response = await api(
+      new Request(url, {
+        method: req.method,
+        headers: req.headers as Record<string, string>,
+        body,
+        duplex: 'half'
+      } as RequestInit)
+    )
+    res.writeHead(response.status, Object.fromEntries(response.headers))
+    if (!response.body) return res.end()
+    const stream = Readable.fromWeb(response.body as never)
+    res.on('close', () => stream.destroy())
+    stream.pipe(res)
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const { port } = server.address() as AddressInfo
+  writeRuntimeFile(home, { port, token, pid: process.pid })
+
+  let stopped = false
+  return {
+    url: `http://127.0.0.1:${port}`,
+    library,
+    channels,
+    host,
+
+    /** Requests the server has received, as `METHOD /path`. */
+    requests: () => [...seen],
+
+    /** Resolves once a bridge is listening for the Campaign's channel events. */
+    async whenListening(folder: string, timeout = 5000) {
+      const start = Date.now()
+      while (!channels.listening(folder)) {
+        if (Date.now() - start > timeout) throw new Error(`No bridge listening for ${folder}`)
+        await new Promise((r) => setTimeout(r, 20))
+      }
+    },
+
+    async stop() {
+      if (stopped) return
+      stopped = true
+      server.closeAllConnections()
+      await new Promise((resolve) => server.close(resolve))
+      library.close()
+    }
+  }
+}
+
+export type TestGameServer = Awaited<ReturnType<typeof startTestGameServer>>

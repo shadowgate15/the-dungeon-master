@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm'
 import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import { campaign } from '../db/schema'
 import { campaignSeedCard, parseCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
-import { campaignDatabasePath } from './paths'
+import { campaignDatabasePath, canonicalFolder } from './paths'
 import { createRegistry } from './registry'
 
 export type Campaign = typeof campaign.$inferSelect
@@ -151,9 +151,20 @@ export function createCampaignLibrary({ home, now = Date.now }: Options) {
       if (found.archivedAt !== null) {
         throw new CampaignArchivedError('An archived Campaign cannot be changed')
       }
-      const saved = update(id, parseCampaignSeed(card))
+      const saved = update(id, { ...parseCampaignSeed(card), version: found.version + 1 })
       registry.put({ id, path: folder, name: saved.name })
       return saved
+    },
+
+    /**
+     * The database of the registered Campaign in this folder, or undefined when the folder is not
+     * a registered Campaign (or its database is gone). How game tools find their Campaign.
+     */
+    databaseFor(input: string): Database | undefined {
+      const folder = canonicalFolder(input)
+      const entry = registry.list().find((e) => canonicalFolder(e.path) === folder)
+      if (!entry || !readCampaign(entry.path)) return undefined
+      return database(entry.path)
     },
 
     /** A no-op when already archived. */
