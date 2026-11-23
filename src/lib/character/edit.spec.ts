@@ -1,17 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { migrateDatabase, openDatabase } from '#lib/server/db/connect.ts'
+import { openCampaignTestDatabase } from '#lib/server/db/test-database.ts'
 import { createCharacterService, type CharacterInput } from '#lib/server/character/service.ts'
 import { loadWizardRules } from '#lib/server/character/wizard-rules.ts'
-import { seedRulesData } from '#lib/server/rules/seed.ts'
 import { detailToDraft } from './edit.ts'
 import { CharacterWizard } from './wizard.svelte.ts'
 
 const rules = loadWizardRules()
 
 function save(input: CharacterInput) {
-  const db = openDatabase(':memory:')
-  migrateDatabase(db)
-  seedRulesData(db)
+  const db = openCampaignTestDatabase().db
   const service = createCharacterService(db)
   return service.get(service.create(input).id)!
 }

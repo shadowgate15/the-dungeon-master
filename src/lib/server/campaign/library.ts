@@ -3,6 +3,8 @@ import path from 'node:path'
 import { eq } from 'drizzle-orm'
 import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import { campaign } from '../db/schema'
+import { createParty, type Party } from '../character/party'
+import { seedRulesData } from '../rules/seed'
 import { campaignSeedCard, parseCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
 import { campaignDatabasePath, canonicalFolder } from './paths'
 import { createRegistry } from './registry'
@@ -47,12 +49,13 @@ export function createCampaignLibrary({ home, now = Date.now }: Options) {
   const registry = createRegistry(home)
   const open = new Map<string, Database>()
 
-  /** The folder's Campaign database, opened (and migrated) once per server. */
+  /** The folder's Campaign database, opened (migrated and Rules Data seeded) once per server. */
   function database(folder: string): Database {
     let db = open.get(folder)
     if (!db) {
       db = openDatabase(campaignDatabasePath(folder))
       migrateDatabase(db)
+      seedRulesData(db)
       open.set(folder, db)
     }
     return db
@@ -154,6 +157,11 @@ export function createCampaignLibrary({ home, now = Date.now }: Options) {
       const saved = update(id, { ...parseCampaignSeed(card), version: found.version + 1 })
       registry.put({ id, path: folder, name: saved.name })
       return saved
+    },
+
+    /** The Campaign's Characters and Character drafts. */
+    party(id: string): Party {
+      return createParty(database(find(id).folder), now)
     },
 
     /**

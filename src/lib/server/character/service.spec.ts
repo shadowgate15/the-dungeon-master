@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
-import { openDatabase, migrateDatabase, type Database } from '../db/connect'
+import type { Database } from '../db/connect'
+import { openCampaignTestDatabase } from '../db/test-database'
 import {
   character,
   characterChoice,
   characterEquipment,
+  characterItem,
   characterSkill,
   characterSpell
 } from '../db/schema'
-import { seedRulesData } from '../rules/seed'
 import {
   CharacterNotFoundError,
   CharacterValidationError,
@@ -19,6 +20,7 @@ import {
 import { ALIGNMENTS, BACKSTORY_MAX, NAME_MAX, TEXT_MAX } from '#lib/character/enums.ts'
 
 let db: Database
+let campaignId: string
 let characters: CharacterService
 let clock: number
 
@@ -87,9 +89,7 @@ const wizard = (over: Partial<CharacterInput> = {}): CharacterInput => ({
 
 beforeEach(() => {
   clock = 1000
-  db = openDatabase(':memory:')
-  migrateDatabase(db)
-  seedRulesData(db)
+  ;({ db, campaignId } = openCampaignTestDatabase())
   characters = createCharacterService(db, () => clock)
 })
 
@@ -117,11 +117,46 @@ describe('Character service', () => {
         abilityMethod: 'standard-array',
         ...scores,
         abilityRolls: null,
-        archivedAt: null,
+        status: 'alive',
         createdAt: 1000,
         updatedAt: 1000
       })
       expect(created.id).toBeTruthy()
+    })
+
+    it('belongs to the Campaign, is alive and has its Controlling Player', () => {
+      const created = characters.create(fighter())
+      expect(created).toMatchObject({ campaignId, status: 'alive', controllingPlayer: 'player' })
+      expect(characters.create(fighter(), { player: 'taylor' }).controllingPlayer).toBe('taylor')
+    })
+
+    it('starts play state from the choices: full HP, starting gear and coin, nothing spent', () => {
+      // Human Fighter, Con 13 + 1 = 14: d10 + 2.
+      const created = characters.create(fighter())
+      expect(created).toMatchObject({
+        currentHp: 12,
+        tempHp: 0,
+        spentSlots: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        hitDiceSpent: 0,
+        featureUses: {},
+        conditions: [],
+        coin: { cp: 0, sp: 0, ep: 0, gp: 15, pp: 0 },
+        concentration: null,
+        deathSaves: { successes: 0, failures: 0 },
+        whereabouts: null
+      })
+      const inventory = characters.get(created.id)!.inventory
+      expect(inventory).toContainEqual({ item: 'crossbow-bolt', quantity: 20 })
+      expect(inventory).toContainEqual({ item: 'chain-mail', quantity: 1 })
+      // The Acolyte's fixed package is given, not chosen.
+      expect(inventory).toContainEqual({ item: 'clothes-common', quantity: 1 })
+    })
+
+    it('does not store derived stats', () => {
+      const created = characters.create(fighter())
+      for (const key of ['maxHp', 'armorClass', 'proficiencyBonus', 'hitPoints', 'speed']) {
+        expect(created).not.toHaveProperty(key)
+      }
     })
 
     it('reads back as slugs, children and the picks it was given', () => {
@@ -441,53 +476,19 @@ describe('Character service', () => {
       expect(characters.update(created.id, fighter()).level).toBe(3)
     })
 
-    it('refuses an archived Character', () => {
+    it('starts play state over from the new choices', () => {
       const created = characters.create(fighter())
-      characters.archive(created.id)
-      expect(() => characters.update(created.id, fighter())).toThrow(
-        /archived Character cannot be edited/
+      const updated = characters.update(
+        created.id,
+        fighter({ scores: { ...scores, con: 15, str: 13 } })
       )
+      // Con 15 + 1 = 16: d10 + 3.
+      expect(updated.currentHp).toBe(13)
+      expect(updated.controllingPlayer).toBe('player')
     })
 
     it('throws not-found for a missing Character', () => {
       expect(() => characters.update('missing', fighter())).toThrow(CharacterNotFoundError)
-    })
-  })
-
-  describe('archive and restore', () => {
-    it('archives, hides from the list and restores', () => {
-      const a = characters.create(fighter({ name: 'A' }))
-      characters.create(fighter({ name: 'B' }))
-      clock = 2000
-
-      expect(characters.archive(a.id)).toMatchObject({ archivedAt: 2000, updatedAt: 2000 })
-      expect(characters.list().map((c) => c.name)).toEqual(['B'])
-      expect(characters.listArchived().map((c) => c.name)).toEqual(['A'])
-
-      clock = 3000
-      expect(characters.restore(a.id)).toMatchObject({ archivedAt: null, updatedAt: 3000 })
-      expect(characters.list().map((c) => c.name)).toEqual(['A', 'B'])
-    })
-
-    it('is idempotent: repeating either does not move the timestamps', () => {
-      const a = characters.create(fighter())
-      expect(characters.restore(a.id)).toMatchObject({ archivedAt: null, updatedAt: 1000 })
-
-      clock = 2000
-      characters.archive(a.id)
-      clock = 3000
-      expect(characters.archive(a.id)).toMatchObject({ archivedAt: 2000, updatedAt: 2000 })
-    })
-
-    it('throws not-found for a missing Character', () => {
-      expect(() => characters.archive('missing')).toThrow(CharacterNotFoundError)
-      expect(() => characters.restore('missing')).toThrow(CharacterNotFoundError)
-    })
-
-    it('leaves an archived Character readable', () => {
-      const a = characters.create(fighter())
-      characters.archive(a.id)
-      expect(characters.get(a.id)).toMatchObject({ name: 'Brannoch' })
     })
   })
 
@@ -504,13 +505,12 @@ describe('Character service', () => {
       expect(owners(db.select().from(characterSpell).all())).toEqual(new Set())
       expect(owners(db.select().from(characterEquipment).all())).toEqual(new Set([b.id]))
       expect(owners(db.select().from(characterChoice).all())).toEqual(new Set([b.id]))
+      expect(owners(db.select().from(characterItem).all())).toEqual(new Set([b.id]))
     })
 
-    it('deletes an archived Character and throws not-found for a missing one', () => {
+    it('throws not-found for a missing Character', () => {
       const a = characters.create(fighter())
-      characters.archive(a.id)
       characters.delete(a.id)
-      expect(characters.listArchived()).toEqual([])
       expect(() => characters.delete(a.id)).toThrow(CharacterNotFoundError)
     })
   })
@@ -520,7 +520,7 @@ describe('Character service', () => {
       expect(characters.get('missing')).toBeUndefined()
     })
 
-    it('lists active Characters oldest first with the names the list shows', () => {
+    it('lists every Character of the Campaign oldest first with the names the list shows', () => {
       characters.create(fighter({ name: 'First' }))
       characters.create(wizard({ name: 'Second' }))
 
@@ -534,16 +534,6 @@ describe('Character service', () => {
         },
         { name: 'Second', raceName: 'Elf', subraceName: 'High Elf', className: 'Wizard' }
       ])
-    })
-
-    it('lists archived Characters most recently archived first', () => {
-      const a = characters.create(fighter({ name: 'A' }))
-      const b = characters.create(fighter({ name: 'B' }))
-      clock = 2000
-      characters.archive(a.id)
-      clock = 3000
-      characters.archive(b.id)
-      expect(characters.listArchived().map((c) => c.name)).toEqual(['B', 'A'])
     })
   })
 })
