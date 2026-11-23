@@ -8,8 +8,12 @@
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
   import Panel from '#lib/ui/Panel.svelte'
+  import DmBadge from '#lib/campaign/DmBadge.svelte'
+  import { createSessionsQuery } from '#lib/live/client.ts'
 
   let { data, form } = $props()
+
+  const sessions = createSessionsQuery(() => data.attached)
 
   // A failed save keeps what the Player typed; otherwise the card starts from the saved Seed.
   // svelte-ignore state_referenced_locally
@@ -27,7 +31,12 @@
 <main class="mx-auto max-w-3xl space-y-6 p-6">
   <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
   <header class="space-y-1">
-    <h1 class="font-display text-2xl">{data.campaign.name}</h1>
+    <div class="flex items-center gap-3">
+      <h1 class="font-display text-2xl">{data.campaign.name}</h1>
+      {#if data.campaign.status !== 'missing'}
+        <DmBadge attached={sessions.data.includes(data.campaign.id)} />
+      {/if}
+    </div>
     <p class="text-xs text-muted">{data.campaign.path}</p>
   </header>
 
@@ -36,7 +45,14 @@
       This Campaign's folder is missing. Re-add it from the Campaign library to open it.
     </Alert>
   {:else}
-    <CreationStepper current="Seed" unavailable={['Party', 'Begin']} />
+    <CreationStepper
+      current="Seed"
+      hrefs={{
+        Seed: resolve('/campaigns/[id]', { id: data.campaign.id }),
+        Party: resolve('/campaigns/[id]/party', { id: data.campaign.id })
+      }}
+      unavailable={['Begin']}
+    />
 
     {#if archived}
       <Alert variant="warning">This Campaign is archived. Restore it to change it.</Alert>

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
@@ -51,6 +52,8 @@ function campaignFolder(env: Env, cwd: string): string | undefined {
 export async function startBridge({ env = process.env, cwd = process.cwd() } = {}) {
   const folder = campaignFolder(env, cwd)
   const home = userStateDir(env)
+  // Names this bridge to the server, which holds one live session per Campaign.
+  const session = randomUUID()
   const log = (...parts: unknown[]) => process.stderr.write(`[dm-bridge] ${parts.join(' ')}\n`)
 
   async function api(route: string, init?: RequestInit): Promise<Response> {
@@ -59,7 +62,11 @@ export async function startBridge({ env = process.env, cwd = process.cwd() } = {
     try {
       return await fetch(`http://localhost:${runtime.port}${API}/${route}`, {
         ...init,
-        headers: { authorization: `Bearer ${runtime.token}`, 'content-type': 'application/json' }
+        headers: {
+          authorization: `Bearer ${runtime.token}`,
+          'content-type': 'application/json',
+          'x-dm-session': session
+        }
       })
     } catch {
       throw new ServerDown()
@@ -115,9 +122,18 @@ export async function startBridge({ env = process.env, cwd = process.cwd() } = {
 
   /** Relays the Campaign's channel events, reconnecting while the server is away. */
   async function relayChannel(campaign: string) {
+    let refused = false
     for (;;) {
       try {
         const res = await api(`events?campaign=${encodeURIComponent(campaign)}`)
+        if (res.status === 409) {
+          // Another session holds this Campaign; tool calls say so. Keep trying, so this
+          // session takes the table once the other one leaves.
+          if (!refused) log((await res.json()).message)
+          refused = true
+          throw new ServerDown()
+        }
+        refused = false
         if (!res.ok || !res.body) throw new ServerDown()
         const decoder = new TextDecoder()
         let buffer = ''

@@ -8,8 +8,11 @@
   import ActionToast from '#lib/campaign/ActionToast.svelte'
   import Button from '#lib/ui/Button.svelte'
   import TextInput from '#lib/ui/TextInput.svelte'
+  import { createSessionsQuery } from '#lib/live/client.ts'
 
   let { data, form } = $props()
+
+  const sessions = createSessionsQuery(() => data.attached)
 
   /** The row whose Delete or Re-add is open, if any. */
   let confirming = $state<{ id: string; what: 'delete' | 'readd' } | null>(null)
@@ -115,6 +118,7 @@
     view={data.view}
     activeCount={data.activeCount}
     archivedCount={data.archivedCount}
+    attached={sessions.data}
     actions={rowActions}
   />
 </main>
