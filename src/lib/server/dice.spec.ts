@@ -38,3 +38,38 @@ describe('seeded dice', () => {
     }
   })
 })
+
+describe('dice expressions', () => {
+  it('rolls NdM+K, reporting each die, the modifier and the total', () => {
+    const dice = createDice(42)
+    const faces = createDice(42)
+
+    const result = dice.rollExpression('2d6+3')
+
+    const expected = [faces.roll(6), faces.roll(6)]
+    expect(result.dice).toEqual(expected)
+    expect(result.modifier).toBe(3)
+    expect(result.total).toBe(expected[0] + expected[1] + 3)
+  })
+
+  it('rolls a negative modifier and a bare NdM', () => {
+    expect(createDice(1).rollExpression('1d20-1').modifier).toBe(-1)
+    const four = createDice(1).rollExpression('4d6')
+    expect(four.dice).toHaveLength(4)
+    expect(four.modifier).toBe(0)
+    expect(four.total).toBe(four.dice.reduce((a, b) => a + b, 0))
+  })
+
+  it('reads a single die without a count, ignoring case and spaces', () => {
+    const result = createDice(1).rollExpression(' D8 + 2 ')
+    expect(result.dice).toHaveLength(1)
+    expect(result.modifier).toBe(2)
+  })
+
+  it.each(['', 'd', '2d', 'd0', '0d6', '2d6+', '2x6', '2d6+3+1', 'abc', '101d6', '1d1001'])(
+    'rejects the invalid expression %j',
+    (expr) => {
+      expect(() => createDice(1).rollExpression(expr)).toThrow(/dice expression/i)
+    }
+  )
+})
