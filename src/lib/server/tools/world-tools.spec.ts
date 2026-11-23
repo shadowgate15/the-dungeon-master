@@ -236,7 +236,17 @@ describe('pages and links', () => {
 
 describe('the tool list', () => {
   it('lists each World tool with an object input schema', () => {
-    const names = ['search', 'open', 'establish', 'edit_page', 'set_field']
+    const names = [
+      'search',
+      'open',
+      'establish',
+      'edit_page',
+      'set_field',
+      'add_fact',
+      'supersede',
+      'retire',
+      'merge'
+    ]
     for (const name of names) {
       expect(host.list().find((t) => t.name === name)?.inputSchema).toMatchObject({
         type: 'object'
@@ -410,6 +420,128 @@ describe('facts', () => {
     expect(set.warnings).toEqual([expect.stringContaining('Mira is dead, drowned')])
     expect(
       refused('set_field', { handle: 'npc:mira-voss', version: 3, field: 'mood', value: 'x' }).code
+    ).toBe('invalid_input')
+  })
+})
+
+describe('retire', () => {
+  beforeEach(() => ok('establish', mira))
+
+  it('retires one Fact with a reason under the subject version', () => {
+    const f = ok('add_fact', { subject: 'npc:mira-voss', version: 1, claim: 'Mira has a twin' })
+    expect(
+      ok('retire', { fact: f.fact, version: 2, reason: 'mistaken: no twin was ever played' })
+    ).toMatchObject({ retired_facts: [{ id: f.fact, claim: 'Mira has a twin' }], version: 3 })
+    expect(ok('open', { handle: 'npc:mira-voss' }).facts).toEqual([])
+    expect(ok('open', { handle: 'npc:mira-voss', history: true }).facts).toEqual([
+      expect.objectContaining({ id: f.fact, state: 'retired', retired_reason: expect.any(String) })
+    ])
+    expect(host.events(folder).at(-1)).toMatchObject({ tool: 'retire', dmOnly: true })
+  })
+
+  it('retiring an Entity retires its current Facts and returns them', () => {
+    const a = ok('add_fact', { subject: 'npc:mira-voss', version: 1, claim: 'Mira limps' })
+    const b = ok('add_fact', { subject: 'npc:mira-voss', version: 2, claim: 'Mira hums' })
+    const c = ok('add_fact', {
+      subject: 'npc:mira-voss',
+      version: 3,
+      claim: 'Mira sings',
+      supersedes: [b.fact]
+    })
+    const retired = ok('retire', {
+      handle: 'npc:mira-voss',
+      version: 4,
+      reason: 'cut from the story'
+    })
+    expect(retired.retired_facts.map((f: { id: number }) => f.id)).toEqual([a.fact, c.fact])
+
+    const opened = ok('open', { handle: 'npc:mira-voss', history: true })
+    expect(opened.retired).toMatchObject({ reason: 'cut from the story' })
+    expect(opened.facts.map((f: { state: string }) => f.state)).toEqual([
+      'retired',
+      'superseded',
+      'retired'
+    ])
+    expect(ok('search', { query: 'Mira' }).results).toEqual([])
+    expect(
+      refused('edit_page', { handle: 'npc:mira-voss', version: opened.version, text: 'x' }).code
+    ).toBe('retired')
+    // A retired name no longer blocks a new one.
+    expect(ok('establish', { type: 'npc', name: 'Mira Voss' }).handle).toBe('npc:mira-voss-2')
+  })
+
+  it('needs exactly one of fact or handle', () => {
+    expect(refused('retire', { version: 1, reason: 'x' }).code).toBe('invalid_input')
+  })
+})
+
+describe('merge', () => {
+  it('moves Facts, aliases and incoming links into the survivor and retires the source', () => {
+    ok('establish', { ...mira, page: 'Runs the docks.' })
+    ok('establish', {
+      type: 'npc',
+      name: 'The Grey Fox',
+      aliases: ['Fox'],
+      page: 'A masked fence.',
+      distinct_from: []
+    })
+    ok('establish', { type: 'place', name: 'Salt Docks', page: 'The [[Grey Fox]] works here.' })
+    const fact = ok('add_fact', {
+      subject: 'npc:the-grey-fox',
+      version: 1,
+      claim: 'The Fox fences relics'
+    })
+    const about = ok('add_fact', {
+      subject: 'place:salt-docks',
+      version: 1,
+      claim: 'Smugglers answer to [[Fox]]'
+    })
+
+    const merged = ok('merge', {
+      from: 'npc:the-grey-fox',
+      into: 'npc:mira-voss',
+      versions: { from: 2, into: 1 }
+    })
+    expect(merged).toMatchObject({ from: 'npc:the-grey-fox', into: 'npc:mira-voss' })
+    expect(host.events(folder).at(-1)).toMatchObject({ tool: 'merge', dmOnly: true })
+
+    const into = ok('open', { handle: 'npc:mira-voss', history: true })
+    expect(into.aliases).toEqual(expect.arrayContaining(['The Grey Fox', 'Fox']))
+    expect(into.facts.map((f: { id: number }) => f.id)).toContain(fact.fact)
+    expect(into.page).toBe('Runs the docks.\n\nA masked fence.')
+    expect(into.revisions).toHaveLength(2)
+    expect(into.backlinks).toEqual(
+      expect.arrayContaining([
+        { handle: 'place:salt-docks', name: 'Salt Docks', via: 'page' },
+        { handle: 'place:salt-docks', name: 'Salt Docks', via: about.fact }
+      ])
+    )
+    expect(ok('open', { handle: 'place:salt-docks' }).page).toBe('The [[Mira Voss]] works here.')
+
+    const from = ok('open', { handle: 'npc:the-grey-fox', history: true })
+    expect(from.retired).toMatchObject({ merged_into: 'npc:mira-voss' })
+    expect(from.facts).toEqual([])
+    expect(ok('search', { query: 'Fox' }).results.map((r: { handle: string }) => r.handle)).toEqual(
+      ['npc:mira-voss']
+    )
+  })
+
+  it('refuses stale versions and merging an Entity into itself', () => {
+    ok('establish', mira)
+    ok('establish', { type: 'npc', name: 'Odo Brask' })
+    expect(
+      refused('merge', {
+        from: 'npc:odo-brask',
+        into: 'npc:mira-voss',
+        versions: { from: 1, into: 7 }
+      })
+    ).toMatchObject({ code: 'stale_version', next: 'open npc:mira-voss' })
+    expect(
+      refused('merge', {
+        from: 'npc:mira-voss',
+        into: 'npc:mira-voss',
+        versions: { from: 1, into: 1 }
+      }).code
     ).toBe('invalid_input')
   })
 })

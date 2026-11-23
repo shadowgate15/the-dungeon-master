@@ -1,11 +1,11 @@
-import { and, asc, desc, eq, isNull, like, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNotNull, isNull, like, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type { EntityType } from '#lib/world/entity-types.ts'
 import { entity, entityAlias, fact, pageRevision, worldLink } from '../db/schema'
 import { ToolError, expectVersion, type ToolContext } from '../tools/contract'
 import { fieldNames, parseFields, placeRefs, type Fields } from './fields'
 import { resolveLinks, renderLinks, type Known } from './links'
-import { isNearName, slug } from './names'
+import { isNearName, normalizeName, slug } from './names'
 
 /**
  * Whether a Fact's claim restates a field's value: it mentions the value's words, or links to the
@@ -226,6 +226,18 @@ export function createWorld({ db, stamp }: ToolContext) {
       .set({ supersededBy: by.id, validTo: by.validFrom })
       .where(eq(fact.id, old.id))
       .run()
+  }
+
+  /** Retires current Facts with one reason, returning them as the DM saw them. */
+  function retireFacts(facts: FactRow[], reason: string) {
+    const all = known()
+    for (const f of facts) {
+      db.update(fact)
+        .set({ retiredAt: stamp.minute, retiredReason: reason })
+        .where(eq(fact.id, f.id))
+        .run()
+    }
+    return facts.map((f) => ({ id: f.id, claim: renderLinks(f.claim, all) }))
   }
 
   /** Entities whose Page or current Facts link to `handle`. */
@@ -490,6 +502,83 @@ export function createWorld({ db, stamp }: ToolContext) {
       const version = bump(old.subject)
       reindex(old.subject)
       return { old: old.id, by: by.id, valid_to: by.validFrom, subject: old.subject, version }
+    },
+
+    retireFact(id: number, version: number, reason: string) {
+      const found = currentFact(id)
+      writable(found.subject, version)
+      const facts = retireFacts([found], reason)
+      const next = bump(found.subject)
+      reindex(found.subject)
+      return { handle: found.subject, version: next, retired_facts: facts }
+    },
+
+    retireEntity(handle: string, version: number, reason: string) {
+      writable(handle, version)
+      const current = db.select().from(fact).where(eq(fact.subject, handle)).all().filter(isCurrent)
+      const facts = retireFacts(current, reason)
+      db.update(entity)
+        .set({ retiredAt: stamp.minute, retiredReason: reason })
+        .where(eq(entity.handle, handle))
+        .run()
+      const next = bump(handle)
+      reindex(handle)
+      return { handle, version: next, retired_facts: facts }
+    },
+
+    merge(from: string, into: string, versions: { from: number; into: number }) {
+      if (from === into) throw ToolError.invalidInput('merge', 'An Entity cannot merge into itself')
+      writable(from, versions.from)
+      const survivor = writable(into, versions.into)
+      const before = known()
+      const fromPage = renderLinks(page(from), before)
+      const intoPage = renderLinks(page(into), before)
+
+      const facts = db
+        .update(fact)
+        .set({ subject: into })
+        .where(eq(fact.subject, from))
+        .returning({ id: fact.id })
+        .all()
+      db.update(worldLink)
+        .set({ fromHandle: into })
+        .where(and(eq(worldLink.fromHandle, from), isNotNull(worldLink.factId)))
+        .run()
+      const links = db
+        .update(worldLink)
+        .set({ toHandle: into })
+        .where(eq(worldLink.toHandle, from))
+        .returning({ id: worldLink.id })
+        .all()
+
+      const taken = new Set([survivor.name, ...aliasesOf(into)].map(normalizeName))
+      const aliases = [db.select().from(entity).where(eq(entity.handle, from)).get()!.name]
+        .concat(aliasesOf(from))
+        .filter((a) => !taken.has(normalizeName(a)) && taken.add(normalizeName(a)))
+      db.delete(entityAlias).where(eq(entityAlias.handle, from)).run()
+      for (const alias of aliases) db.insert(entityAlias).values({ handle: into, alias }).run()
+
+      db.update(entity)
+        .set({ retiredAt: stamp.minute, retiredReason: `Merged into ${into}`, mergedInto: into })
+        .where(eq(entity.handle, from))
+        .run()
+      const unresolved = fromPage.trim()
+        ? writePage(into, intoPage.trim() ? `${intoPage}\n\n${fromPage}` : fromPage)
+        : []
+      db.delete(worldLink)
+        .where(and(eq(worldLink.fromHandle, from), isNull(worldLink.factId)))
+        .run()
+
+      bump(from)
+      const version = bump(into)
+      for (const h of new Set([from, into, ...linkersOf(into)])) reindex(h)
+      return {
+        from,
+        into,
+        version,
+        moved: { facts: facts.map((f) => f.id), aliases, links: links.length },
+        unresolved
+      }
     },
 
     search(query: string, type?: EntityType) {

@@ -151,5 +151,66 @@ export const worldTools = [
         }
       }
     }
+  }),
+
+  writeTool({
+    name: 'retire',
+    description:
+      "Retire a Fact (pass its subject's version) or a whole Entity (its version), with a reason. Retiring an Entity retires its current Facts and returns them. Retired records stay on file but are no longer used.",
+    input: z
+      .object({
+        fact: z.int().optional(),
+        handle: handle.optional(),
+        version: z.int(),
+        reason: z.string().trim().min(1)
+      })
+      .refine((i) => (i.fact === undefined) !== (i.handle === undefined), {
+        message: 'Pass either fact or handle, not both'
+      }),
+    run: (ctx, { fact, handle, version, reason }) => {
+      const world = createWorld(ctx)
+      const result =
+        fact !== undefined
+          ? world.retireFact(fact, version, reason)
+          : world.retireEntity(handle!, version, reason)
+      const what = fact !== undefined ? `Fact ${fact}` : handle!
+      return {
+        result,
+        event: {
+          kind: 'retired',
+          summary: `Retired ${what}: ${reason}`,
+          data: {
+            fact,
+            handle: result.handle,
+            reason,
+            facts: result.retired_facts.map((f) => f.id)
+          },
+          dmOnly
+        }
+      }
+    }
+  }),
+
+  writeTool({
+    name: 'merge',
+    description:
+      'Merge a duplicate Entity into another: moves its Facts, aliases (and its name, as an alias) and incoming links, appends its Page to the survivor as a new revision, and retires it. Pass both versions.',
+    input: z.object({
+      from: handle,
+      into: handle,
+      versions: z.object({ from: z.int(), into: z.int() })
+    }),
+    run: (ctx, { from, into, versions }) => {
+      const result = createWorld(ctx).merge(from, into, versions)
+      return {
+        result,
+        event: {
+          kind: 'entities_merged',
+          summary: `Merged ${from} into ${into}`,
+          data: { from, into },
+          dmOnly
+        }
+      }
+    }
   })
 ]
