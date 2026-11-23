@@ -339,3 +339,4 @@ export const declaration = sqliteTable(
 )
 
 export * from './rules-schema'
+export * from './world-schema'
