@@ -39,7 +39,8 @@ const snapshot = () => ({
   monsters: repo.monsters(),
   conditions: repo.conditions(),
   magicItems: repo.magicItems(),
-  ruleSections: repo.ruleSections()
+  ruleSections: repo.ruleSections(),
+  search: repo.search('dragon breath')
 })
 
 describe('seedRulesData', () => {

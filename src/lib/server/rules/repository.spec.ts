@@ -139,4 +139,44 @@ describe('RulesRepository', () => {
       expect(repo.entry('goblin')).toBeNull()
     })
   })
+
+  describe('search', () => {
+    const handles = (query: string, options?: { limit?: number }) =>
+      repo.search(query, options).map((r) => r.handle)
+
+    it('ranks the entry named by the query first, in whichever kind it lives', () => {
+      expect(handles('goblin')[0]).toBe('monster:goblin')
+      expect(handles('prone')[0]).toBe('condition:prone')
+      expect(handles('Fireball')[0]).toBe('spell:fireball')
+      expect(handles('bag of holding')[0]).toBe('magic-item:bag-of-holding')
+      expect(handles('cover')[0]).toBe('rule:cover')
+    })
+
+    it('returns a handle, kind, name and snippet for each match', () => {
+      expect(repo.search('prone')[0]).toMatchObject({
+        handle: 'condition:prone',
+        kind: 'condition',
+        name: 'Prone',
+        snippet: expect.stringContaining('crawl')
+      })
+    })
+
+    it('matches the text of an entry, not only its name, across kinds', () => {
+      const found = handles('three-quarters cover')
+      expect(found).toContain('rule:cover')
+
+      const kinds = new Set(repo.search('fire', { limit: 50 }).map((r) => r.kind))
+      expect(kinds).toEqual(new Set(['spell', 'monster', 'magic-item']))
+    })
+
+    it('matches other forms of a word', () => {
+      expect(handles('grappling')).toContain('condition:grappled')
+    })
+
+    it('honours the limit and returns nothing for a query with no words', () => {
+      expect(handles('dragon', { limit: 3 })).toHaveLength(3)
+      expect(repo.search('  "*?  ')).toEqual([])
+      expect(repo.search('xyzzyplugh')).toEqual([])
+    })
+  })
 })

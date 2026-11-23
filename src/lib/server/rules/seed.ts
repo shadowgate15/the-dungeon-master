@@ -38,6 +38,48 @@ function need(ids: Ids, slug: string, what: string): number {
   return id
 }
 
+/** Names and descriptions of entries like a stat block's traits and actions. */
+const entryText = (entries: unknown[]) =>
+  entries.map((e) => {
+    const { name, desc } = e as { name?: string; desc?: string }
+    return [name, desc].filter(Boolean).join(': ')
+  })
+
+/** Markdown down to the words. */
+const plain = (text: string) =>
+  text
+    .replace(/[#*|_>`]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/** One search row per entry a rules handle can name: `kind:slug`, its name and its text. */
+function searchRows(d: RulesDataset) {
+  const row = (kind: string, e: { slug: string; name: string }, ...body: (string | null)[]) => ({
+    handle: `${kind}:${e.slug}`,
+    kind,
+    name: e.name,
+    body: plain(body.filter(Boolean).join('\n'))
+  })
+  return [
+    ...d.spells.map((s) => row('spell', s, s.school, ...s.description, ...s.higherLevel)),
+    ...d.monsters.map((m) =>
+      row(
+        'monster',
+        m,
+        `${m.size} ${m.type}${m.subtype ? ` (${m.subtype})` : ''}, ${m.alignment}`,
+        m.description,
+        ...entryText(m.specialAbilities),
+        ...entryText(m.actions),
+        ...entryText(m.legendaryActions),
+        ...entryText(m.reactions)
+      )
+    ),
+    ...d.conditions.map((c) => row('condition', c, ...c.description)),
+    ...d.magicItems.map((i) => row('magic-item', i, ...i.description)),
+    ...d.ruleSections.map((r) => row('rule', r, r.description))
+  ]
+}
+
 /**
  * Seeds the Rules Data tables from the committed dataset, in one transaction.
  *
@@ -613,6 +655,14 @@ export function seedRulesData(
           )
         })
       }
+    }
+
+    // --- Full-text search over the rules kinds a handle can name
+    tx.run(sql`DELETE FROM rules_search`)
+    for (const row of searchRows(dataset)) {
+      tx.run(
+        sql`INSERT INTO rules_search (handle, kind, name, body) VALUES (${row.handle}, ${row.kind}, ${row.name}, ${row.body})`
+      )
     }
 
     // --- Dataset version

@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, sql } from 'drizzle-orm'
 import type { ChoiceGroup } from '../../rules/schema'
 import type { Database } from '../db/connect'
 import * as t from '../db/rules-schema'
@@ -8,6 +8,11 @@ import * as t from '../db/rules-schema'
  * and carry their relations as slugs, so callers never join tables themselves.
  */
 export type RulesRepository = ReturnType<typeof createRulesRepository>
+
+/** The rules kinds a handle can name: `spell:fireball`, `monster:goblin`, `rule:cover`... */
+export type RulesKind = 'spell' | 'monster' | 'condition' | 'magic-item' | 'rule'
+
+export type SearchResult = { handle: string; kind: RulesKind; name: string; snippet: string }
 
 type OwnerType = (typeof t.choiceGroup.$inferSelect)['ownerType']
 
@@ -376,6 +381,37 @@ export function createRulesRepository(db: Database) {
     return found ? ({ handle, kind, name: found.name, entry: found } as Entry) : null
   }
 
+  /**
+   * Ranked matches for a free-text query across every rules kind. An entry named exactly by the
+   * query comes first; then entries holding every word, then entries holding any, by relevance
+   * (a word in the name weighs more than one in the text). Words match other forms of themselves
+   * ("grappling" finds Grappled).
+   */
+  function search(query: string, { limit = 10 }: { limit?: number } = {}): SearchResult[] {
+    const words = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+    if (!words.length) return []
+    const terms = words.map((w) => `"${w}"`)
+    const name = words.join(' ')
+    const run = (match: string, max: number) =>
+      db.all<SearchResult>(sql`
+        SELECT handle, kind, name,
+          snippet(rules_search, 3, '', '', '…', 16) AS snippet
+        FROM rules_search
+        WHERE rules_search MATCH ${match}
+        ORDER BY lower(name) = ${name} DESC, bm25(rules_search, 0, 0, 10, 1)
+        LIMIT ${max}
+      `)
+    const results = run(terms.join(' AND '), limit)
+    if (results.length < limit && terms.length > 1) {
+      const seen = new Set(results.map((r) => r.handle))
+      for (const r of run(terms.join(' OR '), limit)) {
+        if (results.length >= limit) break
+        if (!seen.has(r.handle)) results.push(r)
+      }
+    }
+    return results
+  }
+
   return {
     datasetInfo: () =>
       db.select().from(t.rulesDataset).where(eq(t.rulesDataset.id, 1)).get() ?? null,
@@ -412,6 +448,7 @@ export function createRulesRepository(db: Database) {
     magicItems,
     ruleSections,
     entry,
+    search,
     abilityScoreMethods: () =>
       db.select().from(t.abilityScoreMethod).orderBy(asc(t.abilityScoreMethod.id)).all()
   }
