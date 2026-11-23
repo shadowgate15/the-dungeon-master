@@ -18,7 +18,7 @@ import {
 export type Blocker = { number: number; open: boolean }
 
 /** One of the spec's open sub-issues, with its native `blocked_by` edges. */
-export type Ticket = { number: number; title: string; open: boolean; blockedBy: Blocker[] }
+export type Ticket = { number: number; title: string; blockedBy: Blocker[] }
 
 export type TrackerPort = {
   /** The spec's open sub-issues and their blockers, read once per run. */
@@ -143,6 +143,9 @@ export const runPaths = (root: string, spec: number) => {
   }
 }
 
+/** The branch the integration branch is cut from and the PR targets. */
+const BASE_BRANCH = 'main'
+
 export const integrationBranch = (spec: number) => `implement-spec/${spec}`
 
 export const ticketBranch = (spec: number, ticket: number) => `implement-spec/${spec}-${ticket}`
@@ -162,22 +165,24 @@ const saveState = (path: string, state: RunState) => {
   renameSync(`${path}.tmp`, path)
 }
 
-/** The integration branch's worktree: reused when it exists, otherwise created (and the branch cut from `main`). */
+/** The integration branch's worktree: reused when it exists, otherwise created (and the branch cut from the base branch). */
 const prepareIntegration = async (git: GitPort, root: string, branch: string) => {
   const existing = await git.worktreeFor(branch)
   if (existing) return existing
   const path = worktreePath(root, branch)
   if (await git.branchExists(branch)) await git.addWorktree(path, branch)
-  else await git.addWorktree(path, branch, 'main')
+  else await git.addWorktree(path, branch, BASE_BRANCH)
   return path
 }
 
-/** A ticket is ready when it is pending and open, and every blocker is closed on GitHub or done in this run. */
+/**
+ * A ticket (always open: the tracker reads only open ones) is ready when it is pending and every
+ * blocker is closed on GitHub or done in this run.
+ */
 const readyTickets = (tickets: Ticket[], state: RunState) =>
   tickets
     .filter(
       (ticket) =>
-        ticket.open &&
         state.tickets[ticket.number]?.status === 'pending' &&
         ticket.blockedBy.every(
           (blocker) => !blocker.open || state.tickets[blocker.number]?.status === 'done'
@@ -195,6 +200,11 @@ type Run = {
   save: () => void
   ports: Ports
 }
+
+/** The recorded state of a step not tied to a ticket, once it has started. */
+const stepState = (run: Run, name: StepName) => run.state.steps?.[name]
+
+const stepDone = (run: Run, name: StepName) => stepState(run, name)?.status === 'done'
 
 const pointers = (run: Run): Pointers => ({
   spec: run.spec,
@@ -229,121 +239,143 @@ const unfinishedImplementer = (entry: TicketState) =>
   entry.session !== undefined &&
   entry.launchCommit !== undefined
 
+/** The done check every session starts with: a non-zero exit fails it, otherwise `rest` decides. */
+const exited = async (
+  exitCode: number,
+  rest: () => Promise<DoneCheck> = async () => 'passed'
+): Promise<DoneCheck> => (exitCode !== 0 ? 'nonzero-exit' : rest())
+
+/** One role session, as `runSession` runs it. */
+type SessionSpec = {
+  role: Role
+  /** The ticket the session works on, for its log name and console lines. */
+  ticket?: number
+  cwd: string
+  prompt: string
+  /** The session that ran this work in an earlier run, if any. */
+  previous: SessionState | undefined
+  /** Puts the session about to run into the run state; `runSession` saves it before launching. */
+  record: (session: SessionState) => void
+  /** Runs once the session is saved and before it launches, such as adding its worktree. */
+  prepare?: () => Promise<void>
+  /** The done check on the session's exit code. */
+  check: (exitCode: number) => Promise<DoneCheck>
+  /** Applies the done check's result to the run state; `runSession` saves it afterwards. */
+  settle: (check: DoneCheck) => void
+}
+
+/**
+ * The sequence every role session shares: the earlier session resumed with a continue prompt when
+ * it didn't complete, otherwise a fresh one, its ID saved before it launches; then the done check,
+ * recorded as the session's outcome and saved. Prints one line on launch and one on a failed
+ * check. Resolves to whether the check passed.
+ */
+const runSession = async (run: Run, spec: SessionSpec): Promise<boolean> => {
+  const { claude, log } = run.ports
+  const logFile = logPath(run.paths.logs, spec.role, spec.ticket)
+  const label = spec.ticket === undefined ? spec.role : `#${spec.ticket} ${spec.role}`
+  const next = nextSession(spec.previous, spec.prompt)
+  const { session } = next
+  spec.record(session)
+  run.save()
+  await spec.prepare?.()
+
+  log(`${next.resume ? 'resumed' : 'launched'} ${label} (log ${logFile})`)
+  const exitCode = await claude.run({
+    role: spec.role,
+    cwd: spec.cwd,
+    prompt: next.prompt,
+    sessionId: session.id,
+    resume: next.resume,
+    logFile
+  })
+
+  const check = await spec.check(exitCode)
+  session.outcome = { exitCode, check }
+  spec.settle(check)
+  run.save()
+  if (check !== 'passed') log(`failed ${label}: ${check} (log ${logFile})`)
+  return check === 'passed'
+}
+
 /**
  * Runs one role session for a step in the integration worktree, unless an earlier run finished
  * the step: the step's earlier session resumed when it didn't complete, otherwise a fresh one. It
- * passes on exit 0, or with `check` deciding beyond that. Resolves to whether the step is done.
+ * passes on exit 0, with `check` deciding beyond that. Resolves to whether the step is done.
  */
 const sessionStep = async (
   run: Run,
   name: StepName,
   role: Role,
   prompt: string,
-  check: (exitCode: number) => DoneCheck = (exitCode) =>
-    exitCode === 0 ? 'passed' : 'nonzero-exit'
+  check?: () => Promise<DoneCheck>
 ): Promise<boolean> => {
-  const { claude, log } = run.ports
-  if (run.state.steps?.[name]?.status === 'done') return true
-  const logFile = logPath(run.paths.logs, role)
-  const next = nextSession(run.state.steps?.[name]?.session, prompt)
-  const { session } = next
-  const step: StepState = { status: 'running', session }
-  run.state.steps = { ...run.state.steps, [name]: step }
-  run.save()
-
-  log(`${next.resume ? 'resumed' : 'launched'} ${role} (log ${logFile})`)
-  const exitCode = await claude.run({
+  if (stepDone(run, name)) return true
+  const step: StepState = { status: 'running' }
+  return runSession(run, {
     role,
     cwd: run.state.integrationWorktree,
-    prompt: next.prompt,
-    sessionId: session.id,
-    resume: next.resume,
-    logFile
+    prompt,
+    previous: stepState(run, name)?.session,
+    record: (session) => {
+      step.session = session
+      run.state.steps = { ...run.state.steps, [name]: step }
+    },
+    check: (exitCode) => exited(exitCode, check),
+    settle: (result) => {
+      step.status = result === 'passed' ? 'done' : 'failed'
+    }
   })
-
-  const result = check(exitCode)
-  session.outcome = { exitCode, check: result }
-  step.status = result === 'passed' ? 'done' : 'failed'
-  run.save()
-  if (result !== 'passed') log(`failed ${role}: ${result} (log ${logFile})`)
-  return result === 'passed'
 }
 
 /** Runs the explorer, unless an earlier run finished exploring. Resolves to whether exploration is done. */
 const explore = async (run: Run): Promise<boolean> => {
-  if (run.state.steps?.explore?.status === 'done') return true
   const done = await sessionStep(run, 'explore', 'explorer', explorerPrompt(pointers(run)))
   if (done) run.ports.log(`explored (notes ${run.paths.notes})`)
   return done
 }
 
-/** The first done check an implementer fails, or `passed`. */
-const doneCheck = async (
-  git: GitPort,
-  branch: string,
-  launchCommit: string,
-  exitCode: number
-): Promise<DoneCheck> => {
-  if (exitCode !== 0) return 'nonzero-exit'
-  if (!(await git.hasCommitsBeyond(branch, launchCommit))) return 'no-commits'
-  if (!(await git.contains(branch, launchCommit))) return 'missing-launch-commit'
-  return 'passed'
-}
-
 /**
- * Runs the ticket's implementer and applies the done check. A ticket whose implementer didn't
+ * Runs the ticket's implementer and applies the done check: it exited 0, and its branch has
+ * commits beyond the launch commit and still contains it. A ticket whose implementer didn't
  * complete in an earlier run goes back to `running` and has that session resumed in its worktree,
  * against its original launch commit. Otherwise the ticket's branch and worktree are cut from the
  * integration tip and a fresh implementer runs there. Resolves to whether the ticket passed.
  */
 const implement = async (run: Run, ticket: number): Promise<boolean> => {
-  const { git, claude, log } = run.ports
+  const { git, log } = run.ports
   const branch = ticketBranch(run.spec, ticket)
   const cwd = worktreePath(run.root, branch)
-  const logFile = logPath(run.paths.logs, 'implementer', ticket)
   const previous = run.state.tickets[ticket]
   const resumable = unfinishedImplementer(previous) && (await git.branchExists(branch))
   const launchCommit = resumable ? (previous.launchCommit as string) : await git.head(run.branch)
-  const next = nextSession(
-    resumable ? previous.session : undefined,
-    implementerPrompt(pointers(run), { ticket, branch })
-  )
-  const { session } = next
-  const entry: TicketState = { ...previous, status: 'running', launchCommit, session }
-  run.state.tickets[ticket] = entry
-  run.save()
-  if (!resumable) await git.addWorktree(cwd, branch, launchCommit)
-  else if ((await git.worktreeFor(branch)) === null) await git.addWorktree(cwd, branch)
-
-  log(`${next.resume ? 'resumed' : 'launched'} #${ticket} implementer (log ${logFile})`)
-  const exitCode = await claude.run({
+  const entry: TicketState = { ...previous, status: 'running', launchCommit }
+  const passed = await runSession(run, {
     role: 'implementer',
+    ticket,
     cwd,
-    prompt: next.prompt,
-    sessionId: session.id,
-    resume: next.resume,
-    logFile
+    prompt: implementerPrompt(pointers(run), { ticket, branch }),
+    previous: resumable ? previous.session : undefined,
+    record: (session) => {
+      entry.session = session
+      run.state.tickets[ticket] = entry
+    },
+    prepare: async () => {
+      if (!resumable) await git.addWorktree(cwd, branch, launchCommit)
+      else if ((await git.worktreeFor(branch)) === null) await git.addWorktree(cwd, branch)
+    },
+    check: (exitCode) =>
+      exited(exitCode, async () => {
+        if (!(await git.hasCommitsBeyond(branch, launchCommit))) return 'no-commits'
+        if (!(await git.contains(branch, launchCommit))) return 'missing-launch-commit'
+        return 'passed'
+      }),
+    settle: (check) => {
+      entry.status = check === 'passed' ? 'implemented' : 'failed'
+    }
   })
-
-  const check = await doneCheck(git, branch, launchCommit, exitCode)
-  session.outcome = { exitCode, check }
-  entry.status = check === 'passed' ? 'implemented' : 'failed'
-  run.save()
-  if (check === 'passed') log(`implemented #${ticket}`)
-  else log(`failed #${ticket} implementer: ${check} (log ${logFile})`)
-  return check === 'passed'
-}
-
-/** The merger's done check: it exited 0 and the integration branch contains the ticket branch's head. */
-const mergeCheck = async (
-  git: GitPort,
-  integration: string,
-  ticketHead: string,
-  exitCode: number
-): Promise<DoneCheck> => {
-  if (exitCode !== 0) return 'nonzero-exit'
-  if (!(await git.contains(integration, ticketHead))) return 'not-merged'
-  return 'passed'
+  if (passed) log(`implemented #${ticket}`)
+  return passed
 }
 
 /** The minimal PR body: `Closes #<spec>`, then one `Closes #<ticket>` line per ticket in the run. */
@@ -357,7 +389,7 @@ const openPr = async (run: Run) => {
   if (run.state.pr !== undefined) return
   run.state.pr = await run.ports.tracker.openDraftPr({
     head: run.branch,
-    base: 'main',
+    base: BASE_BRANCH,
     title: `feat: implement spec #${run.spec}`,
     body: closesBody(run)
   })
@@ -367,40 +399,34 @@ const openPr = async (run: Run) => {
 
 /**
  * Runs a merger in the integration worktree to merge an implemented ticket's branch: the ticket's
- * earlier merger resumed when it didn't complete, otherwise a fresh one. On a pass the ticket is
- * `done` and its worktree removed; on a failure it stays `implemented`, with the merger's outcome
- * recorded. The first pass opens the draft PR. Resolves to whether the merge passed.
+ * earlier merger resumed when it didn't complete, otherwise a fresh one. It passes when it exits 0
+ * and the integration branch contains the ticket branch's head. On a pass the ticket is `done` and
+ * its worktree removed; on a failure it stays `implemented`, with the merger's outcome recorded.
+ * The first pass opens the draft PR. Resolves to whether the merge passed.
  */
 const merge = async (run: Run, ticket: number): Promise<boolean> => {
-  const { git, claude, log } = run.ports
+  const { git, log } = run.ports
   const branch = ticketBranch(run.spec, ticket)
-  const logFile = logPath(run.paths.logs, 'merger', ticket)
   const ticketHead = await git.head(branch)
   const entry = run.state.tickets[ticket]
-  const next = nextSession(entry.merger, mergerPrompt(pointers(run), { ticket, branch }))
-  const { session } = next
-  entry.merger = session
-  run.save()
-
-  log(`${next.resume ? 'resumed' : 'launched'} #${ticket} merger (log ${logFile})`)
-  const exitCode = await claude.run({
+  const passed = await runSession(run, {
     role: 'merger',
+    ticket,
     cwd: run.state.integrationWorktree,
-    prompt: next.prompt,
-    sessionId: session.id,
-    resume: next.resume,
-    logFile
+    prompt: mergerPrompt(pointers(run), { ticket, branch }),
+    previous: entry.merger,
+    record: (session) => {
+      entry.merger = session
+    },
+    check: (exitCode) =>
+      exited(exitCode, async () =>
+        (await git.contains(run.branch, ticketHead)) ? 'passed' : 'not-merged'
+      ),
+    settle: (check) => {
+      if (check === 'passed') entry.status = 'done'
+    }
   })
-
-  const check = await mergeCheck(git, run.branch, ticketHead, exitCode)
-  session.outcome = { exitCode, check }
-  if (check !== 'passed') {
-    run.save()
-    log(`failed #${ticket} merger: ${check} (log ${logFile})`)
-    return false
-  }
-  entry.status = 'done'
-  run.save()
+  if (!passed) return false
   await git.removeWorktree(worktreePath(run.root, branch))
   log(`merged #${ticket}`)
   await openPr(run)
@@ -415,8 +441,7 @@ const merge = async (run: Run, ticket: number): Promise<boolean> => {
 const finish = async (run: Run): Promise<boolean> => {
   const p = pointers(run)
   const bodyFile = run.paths.prBody
-  const described = (exitCode: number): DoneCheck =>
-    exitCode !== 0 ? 'nonzero-exit' : existsSync(bodyFile) ? 'passed' : 'no-pr-body'
+  const described = async (): Promise<DoneCheck> => (existsSync(bodyFile) ? 'passed' : 'no-pr-body')
   return (
     (await sessionStep(run, 'review', 'reviewer', reviewerPrompt(p))) &&
     (await sessionStep(run, 'fix', 'fixer', fixerPrompt(p))) &&
@@ -444,7 +469,7 @@ const withCloses = (run: Run, body: string) => {
  * from it, marks the PR ready and removes the integration worktree (the branch is kept).
  */
 const markReady = async (run: Run): Promise<boolean> => {
-  if (run.state.steps?.ready?.status === 'done') return true
+  if (stepDone(run, 'ready')) return true
   const { tracker, git, log } = run.ports
   await openPr(run)
   const pr = run.state.pr as number

@@ -164,10 +164,9 @@ const succeeds: Behave = (session, git) => {
   return 0
 }
 
-const ticket = (number: number, blockedBy: Ticket['blockedBy'] = [], open = true): Ticket => ({
+const ticket = (number: number, blockedBy: Ticket['blockedBy'] = []): Ticket => ({
   number,
   title: `Ticket ${number}`,
-  open,
   blockedBy
 })
 

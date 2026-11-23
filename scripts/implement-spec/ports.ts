@@ -30,7 +30,6 @@ export const createTracker = (cwd: string): TrackerPort => ({
           return {
             number: issue.number,
             title: issue.title,
-            open: true,
             blockedBy: blockers.map((blocker): Blocker => ({
               number: blocker.number,
               open: blocker.state === 'open'
