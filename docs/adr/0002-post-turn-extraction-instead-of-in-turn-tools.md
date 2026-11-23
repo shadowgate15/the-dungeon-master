@@ -2,6 +2,8 @@
 
 Status: superseded by ADR 0003 (scenes replace Turns). It was accepted and implemented in #189.
 
+Superseded by ADR 0007 (hybrid knowledge model, with visibility as data): World memory and extraction are gone (spec #313).
+
 ## Context
 
 The DM needs durable memory of the NPCs and facts it establishes, so they survive across Sessions. The obvious design is in-turn tools: the DM calls `create_npc` or `record_fact` while narrating. The target models are small and local. They already have one tool to use correctly (`request_roll`), and every extra tool call during a turn is a chance to emit invalid arguments, narrate and call at once, or loop. A rejected call inside a turn costs retries against the rejection budget that the player is waiting behind, and a turn that fails after a tool ran leaves memory written for narration that was discarded.
