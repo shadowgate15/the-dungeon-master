@@ -53,20 +53,30 @@ How much story a Campaign is meant to hold, one of: one-shot, short, medium, lon
 _Avoid_: Duration, Session count, size
 
 **Character**:
-A player's hero, created at level 1 from the D&D 5e SRD 5.1 and stored as the player's choices only: race, class, background, ability scores, picked skills, spells and equipment, and narrative details. Everything computed from those choices (modifiers, hit points, armor class, saves, spell slots) is derived and never stored. A Character stands alone, owned by the player, and is linked to Campaigns separately. A Character is either active or archived.
+A player's hero, created at level 1 from the D&D 5e SRD 5.1 and stored as the player's choices plus its play state. The choices are race, class, background, ability scores, picked skills, spells and equipment, and narrative details. Everything computed from those choices (modifiers, maximum hit points, armor class, saves, spell slot totals) is derived and never stored. Every Character belongs to exactly one Campaign and has a Controlling Player and a Character status.
 _Avoid_: Player character sheet, PC, hero, avatar
 
-**Archived Character**:
-A Character set aside by its author. It is hidden from the main Character list, shown under the Archived view, and is read-only until restored: it can be viewed but not edited. Archiving is reversible; deleting a Character is not, and a Character that has played any Session cannot be deleted (archive it instead), so Session transcripts are never lost. Unlike a Campaign, a Character depends on nothing, so nothing else, including anything about its Campaigns, can make it read-only.
-_Avoid_: Disabled Character, hidden Character, retired Character
+**Controlling Player**:
+The Player who acts for a Character. In solo play it is always the one Player.
+_Avoid_: Owner
+
+**Character status**:
+Whether a Character is alive, dead or departed (gone from the Party but still on record). It replaces archiving: a Character is never hidden, only marked.
+_Avoid_: Archived Character, retired Character
+
+**Play state**:
+The parts of a Character that change in play: current and temporary hit points, spent spell slots, spent Hit Dice, feature uses, conditions, coin, inventory, concentration, death saves and whereabouts. Saving a Character from the wizard sets it to its starting values: full hit points, nothing spent, the starting equipment and the background's starting gold.
+
+**Party**:
+A Campaign's Characters. The Party step of Campaign creation lists them, saved Characters and Character drafts alike, and opens the wizard on any of them.
 
 **Character creation wizard**:
 The step-by-step flow in which a player builds a Character: Concept (name, race, class, background and personal details), ability scores, skills and proficiencies, equipment, spells (only for classes that cast at level 1), then review and save. Concept must be valid before the later steps open, and a Character can only be saved once every step is valid. The player may revisit and change an earlier step; choices that no longer fit are flagged, not removed. The same wizard is used to edit an existing Character.
 _Avoid_: Character form, character builder
 
 **Character draft**:
-The unsaved state of a Character while the wizard is open. It lives only in the browser and is discarded on abandon or reload; nothing is stored until the Character is saved.
-_Avoid_: Saved draft, work in progress
+A Character still being built in the wizard. It is stored with its Campaign, together with the step it is on, so a reload loses nothing; it joins the Party only when it is saved, which needs every step to be valid. Abandoning it discards it.
+_Avoid_: Work in progress
 
 **Ability Score Method**:
 One of the three ways a Character's six base ability scores are set: **standard array** (the fixed values 15, 14, 13, 12, 10, 8, each assigned to one ability), **point buy** (a 27-point budget spent on scores from 8 to 15, up to the budget) or **rolling** (six rolls of four six-sided dice with the lowest dropped, assigned freely). None of the three is in the SRD; they are rules the app defines itself. The player chooses the method and the assignment; the AI never chooses the method. Through a Field AI control it may only arrange the values the chosen method gives (the fixed array, or the rolled set) across the abilities, or spend the point-buy budget, never invent values. Code makes any rolls and the Character keeps the rolled dice, so the assigned scores can be checked against them. Racial bonuses are applied on top of the base scores, never part of them.

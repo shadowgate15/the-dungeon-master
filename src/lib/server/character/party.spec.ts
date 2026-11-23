@@ -115,4 +115,54 @@ describe('Party', () => {
 
     expect(party.character(saved.id)).toMatchObject({ draft: { name: 'Bran' } })
   })
+
+  it('saves a rolling Character with its dice', () => {
+    const party = library.party(campaignId)
+    const abilityRolls = [
+      [6, 5, 3, 1],
+      [6, 6, 6, 1],
+      [4, 4, 4, 4],
+      [3, 3, 2, 1],
+      [5, 4, 4, 2],
+      [2, 2, 2, 2]
+    ]
+    const draft = fighter({
+      abilityMethod: 'rolling',
+      abilityRolls,
+      baseScores: { str: 18, dex: 14, con: 13, int: 12, wis: 8, cha: 6 }
+    })
+
+    const saved = party.saveDraft(party.startDraft().id, { draft, step: 'review' })
+
+    expect(party.character(saved.id).character).toMatchObject({
+      abilityMethod: 'roll',
+      abilityRolls
+    })
+  })
+
+  it('saves a Character with a custom background', () => {
+    const party = library.party(campaignId)
+    const picks = { ...fighter().picks }
+    delete picks['background/acolyte/language-0']
+    const draft = fighter({
+      background: 'custom',
+      customBackgroundName: 'Wanderer',
+      customBackgroundFeature: 'You know the roads.',
+      picks: {
+        ...picks,
+        'background/custom/skills-0': ['skill-arcana', 'skill-history'],
+        'background/custom/toolsOrLanguages-0': ['thieves-tools', 'elvish']
+      },
+      equipment: Object.fromEntries(
+        [0, 1, 2, 3].map((i) => [`class/fighter/equipment-${i}`, { option: 0, wild: [] }])
+      )
+    })
+
+    const saved = party.saveDraft(party.startDraft().id, { draft, step: 'review' })
+
+    expect(party.character(saved.id).character).toMatchObject({
+      customBackgroundName: 'Wanderer',
+      customBackgroundFeature: 'You know the roads.'
+    })
+  })
 })

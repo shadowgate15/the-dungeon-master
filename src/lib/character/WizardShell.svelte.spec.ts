@@ -19,7 +19,7 @@ import subraces from '#lib/rules/data/subraces.json'
 import traits from '#lib/rules/data/traits.json'
 import type { WizardRules } from './draft.ts'
 import WizardShell from './WizardShell.harness.svelte'
-import { CharacterWizard } from './wizard.svelte.ts'
+import { CharacterWizard, type WizardTarget } from './wizard.svelte.ts'
 
 const rules = {
   alignments,
@@ -140,7 +140,7 @@ describe('WizardShell with the Concept step', () => {
     await page.getByRole('button', { name: 'Abandon' }).click()
     const dialog = page.getByRole('dialog', { name: 'Abandon this Character?' })
     await expect.element(dialog).toBeVisible()
-    await expect.element(dialog).toHaveTextContent(/only in this browser/)
+    await expect.element(dialog).toHaveTextContent(/discards the draft/)
     await dialog.getByRole('button', { name: 'Keep editing' }).click()
 
     await expect.poll(() => document.querySelector('dialog')?.open).toBe(false)
@@ -160,7 +160,7 @@ describe('WizardShell with the Concept step', () => {
   })
 })
 
-function readyWizard(characterId: string | null = null) {
+function readyWizard(target: WizardTarget | null = null) {
   const wizard = new CharacterWizard(rules)
   wizard.update({
     name: 'Brannoch',
@@ -171,14 +171,37 @@ function readyWizard(characterId: string | null = null) {
     baseScores: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 }
   })
   wizard.dirty = true
-  if (!characterId) return wizard
-  return new CharacterWizard(rules, undefined, wizard.draft, characterId)
+  if (!target) return wizard
+  return new CharacterWizard(rules, undefined, wizard.draft, target)
 }
 
 function renderReview(wizard: CharacterWizard) {
   wizard.current = 'review'
   render(WizardShell, { wizard, backHref: '/', onabandon: () => {} })
 }
+
+describe('WizardShell with a draft stored with the Campaign', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('writes each change and the current step to the Campaign, then shows it as saved', async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const wizard = new CharacterWizard(rules, undefined, undefined, { campaign: 'c1', draft: 'd1' })
+    render(WizardShell, { wizard, backHref: '/', onabandon: () => {} })
+
+    await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Wren')
+
+    await expect.element(page.getByText('Draft saved')).toBeVisible()
+    const [url, init] = fetchMock.mock.calls.at(-1) as unknown as [
+      string,
+      { method: string; body: string }
+    ]
+    expect(url).toBe('/api/campaigns/c1/drafts/d1')
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(init.body)).toMatchObject({ step: 'concept', draft: { name: 'Wren' } })
+    expect(wizard.dirty).toBe(false)
+  })
+})
 
 describe('WizardShell footer on the Review step', () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -191,40 +214,44 @@ describe('WizardShell footer on the Review step', () => {
     expect(page.getByRole('button', { name: 'Save Character' }).elements()).toHaveLength(1)
   })
 
-  it('posts the mapped CharacterInput and, when the save fails, shows the error and keeps the draft', async () => {
+  it('saves a stored draft with its step and, when the save fails, shows the error and keeps the draft', async () => {
     const fetchMock = vi.fn(async () =>
       Response.json({ error: 'Name is required' }, { status: 400 })
     )
     vi.stubGlobal('fetch', fetchMock)
-    const wizard = readyWizard()
+    const wizard = readyWizard({ campaign: 'c1', draft: 'd1' })
     renderReview(wizard)
 
     await page.getByRole('button', { name: 'Save Character' }).click()
 
     await expect.element(page.getByRole('alert')).toHaveTextContent('Name is required')
     expect(wizard.draft.name).toBe('Brannoch')
-    expect(wizard.dirty).toBe(true)
-    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }]
-    expect(JSON.parse(init.body)).toMatchObject({
-      name: 'Brannoch',
-      abilityMethod: 'standard-array',
-      scores: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 }
-    })
+    const [url, init] = fetchMock.mock.calls.at(-1) as unknown as [
+      string,
+      { method: string; body: string }
+    ]
+    expect(url).toBe('/api/campaigns/c1/drafts/d1/save')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toMatchObject({ step: 'review', draft: { name: 'Brannoch' } })
   })
 
-  it('offers Save changes and puts to the saved Character when editing one', async () => {
+  it('offers Save changes and puts the draft to the saved Character when editing one', async () => {
     const fetchMock = vi.fn(async () =>
-      Response.json({ error: 'An archived Character cannot be edited' }, { status: 400 })
+      Response.json({ error: 'Character not found' }, { status: 400 })
     )
     vi.stubGlobal('fetch', fetchMock)
-    renderReview(readyWizard('abc-123'))
+    renderReview(readyWizard({ campaign: 'c1', character: 'abc-123' }))
 
     await page.getByRole('button', { name: 'Save changes' }).click()
 
-    await expect.element(page.getByRole('alert')).toHaveTextContent('cannot be edited')
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { method: string }]
-    expect(url).toBe('/api/characters/abc-123')
+    await expect.element(page.getByRole('alert')).toHaveTextContent('not found')
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      { method: string; body: string }
+    ]
+    expect(url).toBe('/api/campaigns/c1/characters/abc-123')
     expect(init.method).toBe('PUT')
+    expect(JSON.parse(init.body)).toMatchObject({ name: 'Brannoch' })
   })
 
   it('disables Save and Back while the save is in flight', async () => {
@@ -233,7 +260,7 @@ describe('WizardShell footer on the Review step', () => {
       'fetch',
       vi.fn(() => new Promise<Response>((resolve) => (finish = resolve)))
     )
-    renderReview(readyWizard())
+    renderReview(readyWizard({ campaign: 'c1', draft: 'd1' }))
 
     await page.getByRole('button', { name: 'Save Character' }).click()
 
