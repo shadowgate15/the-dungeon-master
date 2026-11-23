@@ -36,3 +36,6 @@ e2e.db
 
 # implement-spec run state
 /.implement-spec/
+
+# e2e Campaign folders and user-level state
+/.e2e/

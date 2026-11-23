@@ -10,7 +10,20 @@ const ember: CampaignListItem = {
   premise: 'Escort a relic across the ash plains.',
   tone: 'tense',
   length: 'short',
-  updatedAt: Date.UTC(2026, 10, 2)
+  updatedAt: Date.UTC(2026, 10, 2),
+  status: 'active',
+  path: '/home/p/dm-campaigns/ember-road'
+}
+
+const lost: CampaignListItem = {
+  id: 'c9',
+  name: 'Lost Vale',
+  premise: null,
+  tone: null,
+  length: null,
+  updatedAt: null,
+  status: 'missing',
+  path: '/home/p/dm-campaigns/lost-vale'
 }
 
 const props = (over: Record<string, unknown> = {}) => ({
@@ -38,6 +51,15 @@ describe('CampaignTable', () => {
     await expect
       .element(page.getByRole('link', { name: 'Ember Road' }))
       .toHaveAttribute('href', '/campaigns/c1')
+  })
+
+  it('marks a Missing Campaign, shows where it was looked for and does not link it', async () => {
+    render(CampaignTable, props({ campaigns: [lost] }))
+
+    const row = page.getByRole('row', { name: /Lost Vale/ })
+    await expect.element(row.getByText('Missing', { exact: true })).toBeVisible()
+    await expect.element(row.getByText('Not found at /home/p/dm-campaigns/lost-vale')).toBeVisible()
+    await expect.element(page.getByRole('link', { name: 'Lost Vale' })).not.toBeInTheDocument()
   })
 
   it('links the Active and Archived views with their counts, marking the current one', async () => {

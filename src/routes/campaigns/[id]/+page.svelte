@@ -1,63 +1,72 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
   import { resolve } from '$app/paths'
+  import CampaignSeedCard from '#lib/campaign/CampaignSeedCard.svelte'
+  import CreationStepper from '#lib/campaign/CreationStepper.svelte'
+  import { emptyCampaignSeed, type CampaignSeedCard as Seed } from '#lib/campaign/seed.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
-  import Select from '#lib/ui/Select.svelte'
+  import Panel from '#lib/ui/Panel.svelte'
 
   let { data, form } = $props()
 
-  const newCharacterHref = $derived(
-    `${resolve('/characters/new')}?campaign=${encodeURIComponent(data.campaign.id)}`
-  )
+  // A failed save keeps what the Player typed; otherwise the card starts from the saved Seed.
+  // svelte-ignore state_referenced_locally
+  let seed = $state<Seed>({
+    ...emptyCampaignSeed(),
+    ...(data.seed ?? {}),
+    ...(form && 'seed' in form ? form.seed : {})
+  })
+  let saved = $state(false)
+  const archived = $derived(data.campaign.status === 'archived')
 </script>
 
 <svelte:head><title>{data.campaign.name}</title></svelte:head>
 
 <main class="mx-auto max-w-3xl space-y-6 p-6">
   <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
-  <header>
+  <header class="space-y-1">
     <h1 class="font-display text-2xl">{data.campaign.name}</h1>
-    <p class="text-muted">{data.campaign.premise}</p>
+    <p class="text-xs text-muted">{data.campaign.path}</p>
   </header>
 
-  {#if data.campaign.archived}
-    <Alert variant="warning">This Campaign is archived. Restore it to change it.</Alert>
-  {/if}
-  {#if form && 'error' in form && form.error}
-    <Alert variant="danger">{form.error}</Alert>
-  {/if}
+  {#if data.campaign.status === 'missing'}
+    <Alert variant="warning">
+      This Campaign's folder is missing. Re-add it from the Campaign library to open it.
+    </Alert>
+  {:else}
+    <CreationStepper current="Seed" unavailable={['Party', 'Begin']} />
 
-  <section aria-label="Character" class="space-y-2">
-    <h2 class="font-display text-lg">Character</h2>
-    {#if data.linkedCharacter}
-      <p>Playing as <strong>{data.linkedCharacter.name}</strong>.</p>
-    {:else}
-      <p class="text-muted">No Character linked yet.</p>
+    {#if archived}
+      <Alert variant="warning">This Campaign is archived. Restore it to change it.</Alert>
     {/if}
-    {#if data.characters.length === 0}
-      <p class="text-sm">
-        You have no Characters yet. <Link href={newCharacterHref}>Create one</Link>.
-      </p>
-    {:else if !data.campaign.archived}
-      <form method="POST" action="?/linkCharacter" use:enhance class="flex items-end gap-2">
-        <label class="flex-1 text-sm">
-          Character
-          <Select name="characterId" value={data.linkedCharacter?.id ?? data.characters[0].id}>
-            {#each data.characters as c (c.id)}
-              <option value={c.id}>{c.name}</option>
-            {/each}
-          </Select>
-        </label>
-        <Button type="submit" variant="secondary">Link Character</Button>
+
+    <Panel title="Seed">
+      <form
+        method="POST"
+        action="?/saveSeed"
+        class="space-y-3"
+        use:enhance={() => {
+          saved = false
+          return async ({ result, update }) => {
+            await update({ reset: false })
+            saved = result.type === 'success'
+          }
+        }}
+        oninput={() => (saved = false)}
+      >
+        <CampaignSeedCard bind:seed disabled={archived} />
+        {#if form && 'error' in form && form.error}
+          <Alert variant="danger">{form.error}</Alert>
+        {/if}
+        {#if !archived}
+          <div class="flex items-center gap-3">
+            <Button type="submit">Save Seed</Button>
+            {#if saved}<span class="text-sm text-muted">Saved</span>{/if}
+          </div>
+        {/if}
       </form>
-      {#if data.linkedCharacter}
-        <form method="POST" action="?/unlinkCharacter" use:enhance>
-          <Button type="submit" variant="secondary">Unlink Character</Button>
-        </form>
-      {/if}
-      <p class="text-sm"><Link href={newCharacterHref}>Create a new Character</Link></p>
-    {/if}
-  </section>
+    </Panel>
+  {/if}
 </main>

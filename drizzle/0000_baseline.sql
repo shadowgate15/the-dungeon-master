@@ -1,3 +1,110 @@
+CREATE TABLE `campaign` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`premise` text,
+	`tone` text,
+	`length` text,
+	`world_name` text,
+	`genre_flavor` text,
+	`scale` text,
+	`magic_level` text,
+	`tech_level` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`archived_at` integer,
+	CONSTRAINT "campaign_tone_check" CHECK(tone IS NULL OR tone IN ('heroic', 'lighthearted', 'tense', 'dark', 'mysterious', 'epic')),
+	CONSTRAINT "campaign_length_check" CHECK(length IS NULL OR length IN ('one-shot', 'short', 'medium', 'long')),
+	CONSTRAINT "campaign_genre_flavor_check" CHECK(genre_flavor IS NULL OR genre_flavor IN ('high fantasy', 'dark fantasy', 'sword and sorcery', 'mythic', 'gothic horror', 'science fantasy', 'science fiction', 'post-apocalyptic')),
+	CONSTRAINT "campaign_scale_check" CHECK(scale IS NULL OR scale IN ('single region', 'continent', 'multiple continents', 'planar')),
+	CONSTRAINT "campaign_magic_level_check" CHECK(magic_level IS NULL OR magic_level IN ('none', 'low', 'moderate', 'high', 'ubiquitous')),
+	CONSTRAINT "campaign_tech_level_check" CHECK(tech_level IS NULL OR tech_level IN ('stone age', 'ancient', 'medieval', 'renaissance', 'industrial', 'modern', 'futuristic'))
+);
+--> statement-breakpoint
+CREATE TABLE `character` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`alignment` text,
+	`appearance` text,
+	`personality` text,
+	`ideal` text,
+	`bond` text,
+	`flaw` text,
+	`backstory` text,
+	`level` integer DEFAULT 1 NOT NULL,
+	`race_id` integer NOT NULL,
+	`subrace_id` integer,
+	`class_id` integer NOT NULL,
+	`subclass_id` integer,
+	`background_id` integer NOT NULL,
+	`custom_background_name` text,
+	`custom_background_feature` text,
+	`ability_method` text NOT NULL,
+	`str` integer NOT NULL,
+	`dex` integer NOT NULL,
+	`con` integer NOT NULL,
+	`int` integer NOT NULL,
+	`wis` integer NOT NULL,
+	`cha` integer NOT NULL,
+	`ability_rolls` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`archived_at` integer,
+	FOREIGN KEY (`race_id`) REFERENCES `race`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`subrace_id`) REFERENCES `subrace`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`class_id`) REFERENCES `class`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`subclass_id`) REFERENCES `subclass`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`background_id`) REFERENCES `background`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "character_level_check" CHECK(level BETWEEN 1 AND 20),
+	CONSTRAINT "character_alignment_check" CHECK(alignment IS NULL OR alignment IN ('lawful-good', 'neutral-good', 'chaotic-good', 'lawful-neutral', 'neutral', 'chaotic-neutral', 'lawful-evil', 'neutral-evil', 'chaotic-evil')),
+	CONSTRAINT "character_ability_method_check" CHECK(ability_method IS NULL OR ability_method IN ('standard-array', 'point-buy', 'roll')),
+	CONSTRAINT "character_str_check" CHECK("str" BETWEEN 1 AND 30),
+	CONSTRAINT "character_dex_check" CHECK("dex" BETWEEN 1 AND 30),
+	CONSTRAINT "character_con_check" CHECK("con" BETWEEN 1 AND 30),
+	CONSTRAINT "character_int_check" CHECK("int" BETWEEN 1 AND 30),
+	CONSTRAINT "character_wis_check" CHECK("wis" BETWEEN 1 AND 30),
+	CONSTRAINT "character_cha_check" CHECK("cha" BETWEEN 1 AND 30)
+);
+--> statement-breakpoint
+CREATE TABLE `character_choice` (
+	`character_id` text NOT NULL,
+	`choice_key` text NOT NULL,
+	`option_slug` text NOT NULL,
+	PRIMARY KEY(`character_id`, `choice_key`, `option_slug`),
+	FOREIGN KEY (`character_id`) REFERENCES `character`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `character_choice_character_idx` ON `character_choice` (`character_id`);--> statement-breakpoint
+CREATE TABLE `character_equipment` (
+	`character_id` text NOT NULL,
+	`choice_key` text NOT NULL,
+	`item_id` integer NOT NULL,
+	`quantity` integer DEFAULT 1 NOT NULL,
+	PRIMARY KEY(`character_id`, `choice_key`, `item_id`),
+	FOREIGN KEY (`character_id`) REFERENCES `character`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`item_id`) REFERENCES `equipment`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "character_equipment_quantity_check" CHECK(quantity >= 1)
+);
+--> statement-breakpoint
+CREATE TABLE `character_skill` (
+	`character_id` text NOT NULL,
+	`skill_id` integer NOT NULL,
+	`source` text NOT NULL,
+	PRIMARY KEY(`character_id`, `skill_id`),
+	FOREIGN KEY (`character_id`) REFERENCES `character`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`skill_id`) REFERENCES `skill`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "character_skill_source_check" CHECK(source IS NULL OR source IN ('class', 'race', 'background'))
+);
+--> statement-breakpoint
+CREATE TABLE `character_spell` (
+	`character_id` text NOT NULL,
+	`spell_id` integer NOT NULL,
+	`source` text NOT NULL,
+	PRIMARY KEY(`character_id`, `spell_id`),
+	FOREIGN KEY (`character_id`) REFERENCES `character`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`spell_id`) REFERENCES `spell`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "character_spell_source_check" CHECK(source IS NULL OR source IN ('class', 'race', 'background'))
+);
+--> statement-breakpoint
 CREATE TABLE `ability` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`slug` text NOT NULL,
@@ -185,6 +292,14 @@ CREATE TABLE `class` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `class_slug_unique` ON `class` (`slug`);--> statement-breakpoint
+CREATE TABLE `condition` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`slug` text NOT NULL,
+	`name` text NOT NULL,
+	`description` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `condition_slug_unique` ON `condition` (`slug`);--> statement-breakpoint
 CREATE TABLE `damage_type` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`slug` text NOT NULL,
@@ -295,6 +410,19 @@ CREATE TABLE `language` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `language_slug_unique` ON `language` (`slug`);--> statement-breakpoint
+CREATE TABLE `magic_item` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`slug` text NOT NULL,
+	`name` text NOT NULL,
+	`category_id` integer NOT NULL,
+	`rarity` text NOT NULL,
+	`variant_of_id` integer,
+	`description` text NOT NULL,
+	FOREIGN KEY (`category_id`) REFERENCES `equipment_category`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`variant_of_id`) REFERENCES `magic_item`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `magic_item_slug_unique` ON `magic_item` (`slug`);--> statement-breakpoint
 CREATE TABLE `magic_school` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`slug` text NOT NULL,
@@ -303,6 +431,61 @@ CREATE TABLE `magic_school` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `magic_school_slug_unique` ON `magic_school` (`slug`);--> statement-breakpoint
+CREATE TABLE `monster` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`slug` text NOT NULL,
+	`name` text NOT NULL,
+	`size` text NOT NULL,
+	`type` text NOT NULL,
+	`subtype` text,
+	`alignment` text NOT NULL,
+	`armor_class` text NOT NULL,
+	`hit_points` integer NOT NULL,
+	`hit_dice` text NOT NULL,
+	`hit_points_roll` text NOT NULL,
+	`speed` text NOT NULL,
+	`str` integer NOT NULL,
+	`dex` integer NOT NULL,
+	`con` integer NOT NULL,
+	`int` integer NOT NULL,
+	`wis` integer NOT NULL,
+	`cha` integer NOT NULL,
+	`damage_vulnerabilities` text NOT NULL,
+	`damage_resistances` text NOT NULL,
+	`damage_immunities` text NOT NULL,
+	`senses` text NOT NULL,
+	`languages` text NOT NULL,
+	`challenge_rating` real NOT NULL,
+	`proficiency_bonus` integer NOT NULL,
+	`xp` integer NOT NULL,
+	`special_abilities` text NOT NULL,
+	`actions` text NOT NULL,
+	`legendary_actions` text NOT NULL,
+	`reactions` text NOT NULL,
+	`forms` text NOT NULL,
+	`description` text
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `monster_slug_unique` ON `monster` (`slug`);--> statement-breakpoint
+CREATE INDEX `monster_challenge_rating_idx` ON `monster` (`challenge_rating`);--> statement-breakpoint
+CREATE TABLE `monster_condition_immunity` (
+	`monster_id` integer NOT NULL,
+	`condition_id` integer NOT NULL,
+	PRIMARY KEY(`monster_id`, `condition_id`),
+	FOREIGN KEY (`monster_id`) REFERENCES `monster`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`condition_id`) REFERENCES `condition`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE TABLE `monster_proficiency` (
+	`monster_id` integer NOT NULL,
+	`proficiency_id` integer NOT NULL,
+	`position` integer NOT NULL,
+	`value` integer NOT NULL,
+	PRIMARY KEY(`monster_id`, `proficiency_id`),
+	FOREIGN KEY (`monster_id`) REFERENCES `monster`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`proficiency_id`) REFERENCES `proficiency`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
 CREATE TABLE `proficiency` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`slug` text NOT NULL,
@@ -351,6 +534,16 @@ CREATE TABLE `race_trait` (
 	FOREIGN KEY (`trait_id`) REFERENCES `trait`(`id`) ON UPDATE no action ON DELETE restrict
 );
 --> statement-breakpoint
+CREATE TABLE `rule_section` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`slug` text NOT NULL,
+	`name` text NOT NULL,
+	`rule` text NOT NULL,
+	`rule_name` text NOT NULL,
+	`description` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `rule_section_slug_unique` ON `rule_section` (`slug`);--> statement-breakpoint
 CREATE TABLE `rules_dataset` (
 	`id` integer PRIMARY KEY NOT NULL,
 	`dataset_version` text NOT NULL,
@@ -501,4 +694,13 @@ CREATE TABLE `weapon_property` (
 	`description` text NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `weapon_property_slug_unique` ON `weapon_property` (`slug`);
+CREATE UNIQUE INDEX `weapon_property_slug_unique` ON `weapon_property` (`slug`);--> statement-breakpoint
+-- Full-text index over the SRD rules kinds a handle can name (spells, monsters, conditions, magic
+-- items, rules sections). Derived data: seedRulesData rebuilds it from the rules tables.
+CREATE VIRTUAL TABLE `rules_search` USING fts5(
+	`handle` UNINDEXED,
+	`kind` UNINDEXED,
+	`name`,
+	`body`,
+	tokenize = 'porter unicode61 remove_diacritics 2'
+);
