@@ -3,6 +3,7 @@ import { execFile, spawn } from 'node:child_process'
 import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { promisify } from 'node:util'
+import { usageLimitReset } from './usage-limit.ts'
 import type { Blocker, ClaudePort, GitPort, Ticket, TrackerPort } from './run-spec.ts'
 
 const execFileAsync = promisify(execFile)
@@ -115,8 +116,9 @@ const readFrom = (file: string, from: number) => {
 /**
  * Runs `claude -p` unattended (permission checks bypassed, default model, session saved so it can
  * be resumed), with the prompt on stdin and all output appended to the session's log file.
- * Resolves to the exit code; a `claude` that can't be started resolves to 127, and a resume that
- * finds no saved conversation resolves to `no-session`.
+ * Resolves to the exit code; a `claude` that can't be started resolves to 127, a resume that
+ * finds no saved conversation resolves to `no-session`, and a session stopped by a usage limit
+ * resolves to when that limit resets.
  */
 export const createClaude = (): ClaudePort => ({
   run: ({ cwd, prompt, sessionId, resume, logFile }) =>
@@ -141,8 +143,11 @@ export const createClaude = (): ClaudePort => ({
         if (finished) return
         finished = true
         closeSync(out)
-        const lost = resume && code !== 0 && NO_CONVERSATION.test(readFrom(logFile, start))
-        resolve(lost ? 'no-session' : code)
+        if (code === 0) return resolve(code)
+        const output = readFrom(logFile, start)
+        if (resume && NO_CONVERSATION.test(output)) return resolve('no-session')
+        const resetsAt = usageLimitReset(output, Date.now())
+        resolve(resetsAt === null ? code : { usageLimitResetsAt: resetsAt })
       }
       child.on('error', () => finish(127))
       child.on('close', (code) => finish(code ?? 1))

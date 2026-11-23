@@ -17,6 +17,13 @@ const parse = (args: string[]) => {
   return { spec, explore: flags.includes('--explore') }
 }
 
+/** Sleeps until `time`, in steps short enough for `setTimeout`'s 32-bit delay. */
+const waitUntil = async (time: number) => {
+  for (let left = time - Date.now(); left > 0; left = time - Date.now()) {
+    await new Promise((resolve) => setTimeout(resolve, Math.min(left, 60 * 60 * 1000)))
+  }
+}
+
 const parsed = parse(process.argv.slice(2))
 if (!parsed) {
   console.error(USAGE)
@@ -31,7 +38,8 @@ const result = await runSpec(
     tracker: createTracker(root),
     git: createGit(root),
     claude: createClaude(),
-    log: (line) => console.log(line)
+    log: (line) => console.log(line),
+    waitUntil
   }
 )
 process.exit(result.ok ? 0 : 1)

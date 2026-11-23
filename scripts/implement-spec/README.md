@@ -21,7 +21,9 @@ Run it from any checkout or worktree of this repository. It resolves the main re
 
 9. Finishing the run, only once every ticket is `done`: a reviewer session runs `/code-review` on `main...implement-spec/<spec#>` and writes its findings to `notes/review.md`; a fixer session fixes all of them with `tdd`; a PR-writer session writes the PR description with the `pr` skill to `pr-body.md` in the run directory. All three run in the integration worktree. The script then pushes the integration branch, appends any `Closes #<spec#>` or `Closes #<ticket#>` line missing from that file, replaces the PR body from it, marks the PR ready and removes the integration worktree (the branch is kept). Each finished step (`review`, `fix`, `pr-description`, `ready`) is recorded under `steps` in the state file and skipped on a re-run. A session that exits non-zero (or a PR writer that leaves no `pr-body.md`: `no-pr-body`) fails its step, names its log and ends the run with the PR still a draft.
 
-The run exits non-zero when any implementer, merger or end-of-run step failed. A run with a failed ticket skips the end-of-run steps, so the PR stays a draft with its minimal body and nothing else is written to GitHub. It ends by printing `failed tickets:` followed by one line per failed ticket, with the session that failed, its check and its log. Nothing is retried within a run.
+The run exits non-zero when any implementer, merger or end-of-run step failed. A run with a failed ticket skips the end-of-run steps, so the PR stays a draft with its minimal body and nothing else is written to GitHub. It ends by printing `failed tickets:` followed by one line per failed ticket, with the session that failed, its check and its log. Apart from waiting out a usage limit (below), nothing is retried within a run.
+
+If a session stops because the account hit a Claude usage limit (its output says `You've hit your … limit · resets <time> (<zone>)`), the session isn't failed. The script prints `usage limit hit by …, waiting until …`, sleeps until a minute after the reset time, then resumes the same session with a continue prompt saying it stopped at the usage limit, and runs its done check as usual. A limit with no reset time the script can read waits an hour. Other sessions keep running while one waits.
 
 If a `git` or `gh` call around an implementer or merger throws (adding a worktree, reading a head, the done check), only that session fails, with the check `error` and the error's message on the console and in its outcome. An implementer error fails its ticket and independent tickets carry on; a merger error counts as a failed merger.
 
@@ -64,4 +66,5 @@ To start over, delete `.implement-spec/<spec#>/`, the integration worktree and t
 - `run-spec.ts`: `runSpec(spec, options, ports)`, the whole run behind the tracker, git and claude ports.
 - `prompts.ts`: each role's prompt, pointers plus the role's instructions.
 - `ports.ts`: the real ports, thin wrappers over `gh`, `git` and `claude`.
+- `usage-limit.ts`: reads a usage-limit message and the time it resets.
 - `run-spec.spec.ts`: whole runs against fake ports and a temp repository root.

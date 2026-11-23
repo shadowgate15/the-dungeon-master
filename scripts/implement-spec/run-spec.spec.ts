@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   runSpec,
+  USAGE_LIMIT_GRACE_MS,
   type ClaudeExit,
   type ClaudePort,
   type GitPort,
@@ -191,13 +192,17 @@ const portsFor = (tickets: Ticket[], behave: Behave = succeeds) => {
   const tracker = fakeTracker(tickets)
   const git = fakeGit(root)
   const claude = fakeClaude(git, behave)
+  const waits: number[] = []
   const ports: Ports = {
     tracker: tracker.tracker,
     git: git.git,
     claude: claude.claude,
-    log: (line) => lines.push(line)
+    log: (line) => lines.push(line),
+    waitUntil: async (time) => {
+      waits.push(time)
+    }
   }
-  return { ports, tracker, git, claude }
+  return { ports, tracker, git, claude, waits }
 }
 
 const integrationWorktrees = (git: FakeGit) =>
@@ -1134,6 +1139,51 @@ describe('runSpec', () => {
         outcome: { check: 'passed' }
       })
       expect(lines).toContainEqual(expect.stringMatching(/no saved session.*#1 implementer/))
+    })
+
+    it('waits for a usage limit to reset, then resumes the same session', async () => {
+      const resetsAt = Date.parse('2026-11-24T05:20:00Z')
+      let limited = true
+      const { ports, claude, waits } = portsFor([ticket(1)], (session, fake) => {
+        if (session.role === 'implementer' && limited) {
+          limited = false
+          return { usageLimitResetsAt: resetsAt }
+        }
+        return succeeds(session, fake)
+      })
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(waits).toEqual([resetsAt + USAGE_LIMIT_GRACE_MS])
+      const [first, resumed] = claude.sessions.filter(({ role }) => role === 'implementer')
+      expect(resumed).toMatchObject({ sessionId: first.sessionId, resume: true, cwd: first.cwd })
+      expect(resumed.prompt).toContain('usage limit')
+      expect(resumed.prompt).toContain(first.prompt)
+      expect(readState(100).tickets[1].status).toBe('done')
+      expect(lines).toContainEqual(expect.stringMatching(/usage limit hit by #1 implementer/))
+    })
+
+    it('starts fresh when a session stopped by a usage limit was never saved by claude', async () => {
+      let limited = true
+      const { ports, claude } = portsFor([ticket(1)], (session, fake) => {
+        if (session.role !== 'implementer') return succeeds(session, fake)
+        if (limited) {
+          limited = false
+          return { usageLimitResetsAt: 0 }
+        }
+        if (session.resume) return 'no-session'
+        return succeeds(session, fake)
+      })
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      const [first, resumed, fresh] = claude.sessions.filter(({ role }) => role === 'implementer')
+      expect(resumed).toMatchObject({ sessionId: first.sessionId, resume: true })
+      expect(fresh.resume).toBe(false)
+      expect(fresh.sessionId).not.toBe(first.sessionId)
+      expect(fresh.prompt).toContain('usage limit')
     })
 
     it('re-queues tickets left implemented in the order their implementers finished', async () => {

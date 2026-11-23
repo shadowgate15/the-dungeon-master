@@ -65,10 +65,11 @@ export type ClaudeSession = {
 }
 
 /**
- * How a session ended: its exit code, or `no-session` when it was to be resumed but `claude` has
- * no saved conversation with its ID (the run stopped before `claude` saved it).
+ * How a session ended: its exit code; `no-session` when it was to be resumed but `claude` has
+ * no saved conversation with its ID (the run stopped before `claude` saved it); or
+ * `usageLimitResetsAt` (epoch milliseconds) when it stopped because the account hit a usage limit.
  */
-export type ClaudeExit = number | 'no-session'
+export type ClaudeExit = number | 'no-session' | { usageLimitResetsAt: number }
 
 export type ClaudePort = {
   /** Runs one session to its end and resolves to how it ended. */
@@ -80,7 +81,15 @@ export type Ports = {
   git: GitPort
   claude: ClaudePort
   log: (line: string) => void
+  /** Resolves once the clock reaches `time` (epoch milliseconds). */
+  waitUntil: (time: number) => Promise<void>
 }
+
+/** How long after a usage limit resets the script waits before resuming the session it stopped. */
+export const USAGE_LIMIT_GRACE_MS = 60 * 1000
+
+/** Why a session resumed after waiting out a usage limit didn't complete, for its continue prompt. */
+const USAGE_LIMIT_REASON = 'it stopped because the Claude usage limit was reached'
 
 export type RunOptions = { explore?: boolean }
 
@@ -309,26 +318,45 @@ const runSession = async (run: Run, spec: SessionSpec): Promise<boolean> => {
   await spec.prepare?.()
 
   log(`${next.resume ? 'resumed' : 'launched'} ${label} (log ${logFile})`)
-  const launch = (resume: boolean) =>
+  const launch = (resume: boolean, prompt: string) =>
     claude.run({
       role: spec.role,
       cwd: spec.cwd,
-      prompt: next.prompt,
+      prompt,
       sessionId: session.id,
       resume,
       logFile
     })
-  let exit = await launch(next.resume)
-  if (exit === 'no-session') {
-    // The run stopped before claude saved the session: start a fresh one with the same continue
-    // prompt, as its directory may hold work the lost session did.
-    session = { id: randomUUID() }
-    spec.record(session)
-    run.save()
-    log(`no saved session to resume for ${label}, launched fresh (log ${logFile})`)
-    exit = await launch(false)
+  let resume = next.resume
+  let prompt = next.prompt
+  let exitCode: number
+  for (;;) {
+    const exit = await launch(resume, prompt)
+    if (exit === 'no-session' && resume) {
+      // The run stopped before claude saved the session: start a fresh one with the same continue
+      // prompt, as its directory may hold work the lost session did.
+      session = { id: randomUUID() }
+      spec.record(session)
+      run.save()
+      log(`no saved session to resume for ${label}, launched fresh (log ${logFile})`)
+      resume = false
+      continue
+    }
+    if (typeof exit === 'object') {
+      // The account hit a usage limit: wait for it to reset, then resume the same session.
+      const until = exit.usageLimitResetsAt + USAGE_LIMIT_GRACE_MS
+      log(
+        `usage limit hit by ${label}, waiting until ${new Date(until).toLocaleString()} to resume`
+      )
+      await run.ports.waitUntil(until)
+      log(`resumed ${label} after the usage limit reset (log ${logFile})`)
+      resume = true
+      prompt = continuePrompt(USAGE_LIMIT_REASON, spec.prompt)
+      continue
+    }
+    exitCode = exit === 'no-session' ? 1 : exit
+    break
   }
-  const exitCode = exit === 'no-session' ? 1 : exit
 
   const check = await spec.check(exitCode)
   session.outcome = { exitCode, check }
