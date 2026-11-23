@@ -37,7 +37,7 @@ Requirements: [Claude Code](https://claude.com/claude-code) and Node 26 or later
    claude plugin install the-dungeon-master@the-dungeon-master
    ```
 
-2. Start Claude Code once in any folder. The plugin's SessionStart hook puts the `dm` command on your PATH.
+2. Start Claude Code once in any folder. The plugin's SessionStart hook writes the `dm` command to `~/.local/bin/dm`, so make sure `~/.local/bin` is on your PATH. The shim looks up the installed plugin on every run, so it keeps working across plugin updates.
 3. Create a Campaign in the web UI. This creates its folder and registers it with the server.
 4. Start a sitting from the Campaign folder:
 
@@ -45,7 +45,7 @@ Requirements: [Claude Code](https://claude.com/claude-code) and Node 26 or later
    cd <campaign folder> && dm
    ```
 
-   The terminal shows Claude Code's trust, MCP consent and dev-channels prompts. Play happens in the browser.
+   `dm` starts the game server if it isn't running (or restarts one left over from an older plugin version), registers the folder and starts `claude` with the plugin's `dm` agent. The terminal shows Claude Code's trust, MCP consent and dev-channels prompts. Play happens in the browser. Run outside a Campaign folder, `dm` starts the server and points you to the web UI.
 
 5. End the sitting with End Session in the UI. To stop the game server, run `dm stop` or use the stop control in the UI.
 
@@ -85,4 +85,8 @@ pnpm check        # type-check
 pnpm lint         # prettier + eslint
 pnpm test         # unit + e2e tests
 pnpm storybook    # component workbench
+pnpm build:bridge # rebuild the committed bridge and launcher bundles in plugin/bin
+pnpm build:plugin # rebuild everything the plugin ships, including the server in plugin/server
 ```
+
+The plugin in `plugin/` is installed as committed: it has no `package.json`, so Claude Code runs no dependency install. `pnpm build:plugin` writes the adapter-node server build, its migrations and a vendored better-sqlite3 (with its prebuilt binaries) into `plugin/server/`. Rebuild and commit it whenever the server changes.

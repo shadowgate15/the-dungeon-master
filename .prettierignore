@@ -13,5 +13,6 @@ bun.lockb
 /vendor/
 /src/lib/rules/data/
 
-# The generated bridge bundle (pnpm build:bridge)
-/plugin/bin/dm-bridge.mjs
+# The generated plugin bundles and server build (pnpm build:plugin)
+/plugin/bin/*.mjs
+/plugin/server/

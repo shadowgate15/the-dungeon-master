@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { DUNGEON_MASTER_HOME, DUNGEON_MASTER_PORT } from '$app/env/private'
+import { DUNGEON_MASTER_HOME, DUNGEON_MASTER_PORT, DUNGEON_MASTER_VERSION } from '$app/env/private'
 import { library, sessions } from '../campaign'
 import { userStateDir } from '../campaign/paths'
 import { writeRuntimeFile } from '../runtime'
@@ -22,7 +22,12 @@ export const bridgeApi = createBridgeApi({ library, host, channels, sessions, to
 /** The known localhost port, unless overridden for tests. */
 export const port = Number(DUNGEON_MASTER_PORT || 4777)
 
-/** Writes the runtime file (port, token, pid) so the bridge can find this server. */
+/** Writes the runtime file (port, token, pid, version) so the bridge and launcher find this server. */
 export function announceServer() {
-  writeRuntimeFile(userStateDir({ DUNGEON_MASTER_HOME }), { port, token, pid: process.pid })
+  writeRuntimeFile(userStateDir({ DUNGEON_MASTER_HOME }), {
+    port,
+    token,
+    pid: process.pid,
+    version: DUNGEON_MASTER_VERSION || undefined
+  })
 }
