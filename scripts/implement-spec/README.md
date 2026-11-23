@@ -38,7 +38,21 @@ With `--explore`, one explorer `claude -p` session runs in the integration workt
 
 ## Re-running
 
-Running the command again for the same spec reuses the integration branch, its worktree and the state file. Tickets already in the state keep their status; tickets added to the spec since the last run are added as `pending`. To start over, delete `.implement-spec/<spec#>/`, the integration worktree and the `implement-spec/<spec#>` branch.
+Running the command again for the same spec reuses the integration branch, its worktree, the state file and the PR. Tickets already in the state keep their status; tickets added to the spec since the last run are added as `pending`.
+
+Every `claude` session starts with a fresh script-generated `--session-id`, written to the state file before it launches, and never with `--no-session-persistence`. A re-run resumes every session that didn't complete, instead of starting it fresh: one left running when the previous run stopped, or one that ended failed. It runs `claude -p --resume <id>` in the session's original directory (the ticket worktree for an implementer, the integration worktree for the explorer, mergers and end-of-run roles) and logs to the same file, with a short continue prompt: the previous session didn't complete, the reason the script recorded (interrupted, the exit code, or the failed done check), then the original prompt with its pointers. When it exits, the same done check runs again. Each resume prints `resumed …` in place of `launched …`.
+
+In order, a re-run:
+
+1. Resumes the explorer, with `--explore`, if it didn't complete.
+2. Resumes each merger that didn't complete, one at a time, before anything else launches. If one fails again, the run stops there.
+3. Queues tickets left `implemented` with no merger for merging.
+4. Resumes implementers that didn't complete, their tickets going back to `running`, alongside launching the ready frontier. A resumed ticket's dependents launch once it merges.
+5. Resumes the first end-of-run step that didn't complete; finished steps are skipped.
+
+A re-run after the PR was marked ready (`steps.ready` is `done`) does nothing: it prints that the spec is finished and exits 0, without reading GitHub or recreating the integration worktree.
+
+To start over, delete `.implement-spec/<spec#>/`, the integration worktree and the `implement-spec/<spec#>` branch.
 
 ## Code
 

@@ -95,3 +95,15 @@ export const prWriterPrompt = (pointers: Pointers, { bodyFile }: { bodyFile: str
     `2. Write the description, and only the description, to ${bodyFile}. End it with \`Closes #${pointers.spec}\` and one \`Closes #<ticket>\` line per ticket.`,
     'Do not push, open or edit pull requests, or change anything on GitHub.'
   ].join('\n')
+
+/**
+ * The prompt a resumed session gets: its previous session didn't complete, the reason the script
+ * recorded, then the original prompt with its pointers.
+ */
+export const continuePrompt = (reason: string, prompt: string) =>
+  [
+    `Your previous session for this work didn't complete: ${reason}.`,
+    'Pick up where it left off, fix whatever stopped it, and finish the task below.',
+    '',
+    prompt
+  ].join('\n')

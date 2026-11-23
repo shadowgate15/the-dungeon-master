@@ -888,6 +888,258 @@ describe('runSpec', () => {
     })
   })
 
+  describe('resuming on a re-run', () => {
+    const interrupted = new Error('run interrupted')
+
+    it('resumes an implementer left running with its saved session ID in its worktree, telling it why', async () => {
+      let crash = true
+      const { ports, claude } = portsFor(
+        [ticket(1), ticket(2, [{ number: 1, open: true }])],
+        (session, fake) => {
+          if (crash && session.role === 'implementer') {
+            crash = false
+            throw interrupted
+          }
+          return succeeds(session, fake)
+        }
+      )
+      await expect(runSpec(100, {}, ports)).rejects.toBe(interrupted)
+      expect(readState(100).tickets[1].status).toBe('running')
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      const [first, resumed] = claude.sessions
+      expect(resumed).toMatchObject({
+        role: 'implementer',
+        cwd: first.cwd,
+        sessionId: first.sessionId,
+        resume: true,
+        logFile: first.logFile
+      })
+      expect(resumed.prompt).toMatch(/didn't complete/)
+      expect(resumed.prompt).toMatch(/interrupted/)
+      expect(resumed.prompt).toContain(first.prompt)
+      expect(readState(100).tickets[1]).toMatchObject({
+        status: 'done',
+        session: { id: first.sessionId, outcome: { exitCode: 0, check: 'passed' } }
+      })
+      expect(lines).toContainEqual(expect.stringMatching(/resumed #1 implementer/))
+    })
+
+    it('resumes a failed implementer naming the failed check, holds it to the done check, then launches its dependents once it merges', async () => {
+      let attempts = 0
+      const { ports, claude } = portsFor(
+        [ticket(1), ticket(2, [{ number: 1, open: true }])],
+        (session, fake) => {
+          if (session.role === 'implementer' && session.cwd.endsWith('-1') && ++attempts < 3) {
+            return 0
+          }
+          return succeeds(session, fake)
+        }
+      )
+      expect((await runSpec(100, {}, ports)).ok).toBe(false)
+      expect(readState(100).tickets[1].status).toBe('failed')
+
+      // The resumed session again makes no commits: the done check still fails it.
+      expect((await runSpec(100, {}, ports)).ok).toBe(false)
+      expect(readState(100).tickets[1]).toMatchObject({
+        status: 'failed',
+        session: { outcome: { check: 'no-commits' } }
+      })
+      lines.length = 0
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      const [first, ...rest] = claude.sessions
+      expect(rest.slice(0, 2)).toEqual([
+        expect.objectContaining({ sessionId: first.sessionId, cwd: first.cwd, resume: true }),
+        expect.objectContaining({ sessionId: first.sessionId, cwd: first.cwd, resume: true })
+      ])
+      expect(rest[0].prompt).toContain('no-commits')
+      expect(rest[0].prompt).toContain(first.prompt)
+      expect(
+        claude.sessions.map(({ role, logFile }) => `${role} ${logFile.slice(-6, -4)}`)
+      ).toEqual([
+        'implementer -1',
+        'implementer -1',
+        'implementer -1',
+        'merger -1',
+        'implementer -2',
+        'merger -2',
+        'reviewer er',
+        'fixer er',
+        'pr-writer er'
+      ])
+      expect(lines).not.toContain('failed tickets:')
+    })
+
+    it('resumes a failed merger before launching anything, then merges tickets left implemented', async () => {
+      let mergerFails = true
+      const events: string[] = []
+      const tickets = [
+        ticket(1),
+        ticket(2, [{ number: 1, open: true }]),
+        ticket(3),
+        ticket(4, [{ number: 90, open: true }])
+      ]
+      const { ports, claude } = portsFor(tickets, async (session, fake) => {
+        const name = `${session.role}-${session.logFile.match(/-(\d+)\.log$/)?.[1]}`
+        events.push(`start ${name}`)
+        if (session.role === 'implementer' && session.cwd.endsWith('-3')) {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        }
+        const exitCode =
+          session.role === 'merger' && mergerFails ? 1 : await succeeds(session, fake)
+        events.push(`end ${name}`)
+        return exitCode
+      })
+      await runSpec(100, {}, ports)
+      expect(readState(100).tickets[3].status).toBe('implemented')
+      const failedMerger = claude.sessions.find(({ role }) => role === 'merger')
+      mergerFails = false
+      tickets[3].blockedBy = [{ number: 90, open: false }]
+      events.length = 0
+      lines.length = 0
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(events.slice(0, 2)).toEqual(['start merger-1', 'end merger-1'])
+      const resumed = claude.sessions.filter(({ role }) => role === 'merger')[1]
+      expect(resumed).toMatchObject({
+        sessionId: failedMerger?.sessionId,
+        cwd: failedMerger?.cwd,
+        resume: true
+      })
+      expect(resumed?.prompt).toMatch(/exited with code 1/)
+      expect(resumed?.prompt).toContain(failedMerger?.prompt)
+      expect(events.filter((event) => event.startsWith('start merger'))).toEqual([
+        'start merger-1',
+        'start merger-3',
+        'start merger-2',
+        'start merger-4'
+      ])
+      const state = readState(100)
+      expect([1, 2, 3, 4].map((n) => state.tickets[n].status)).toEqual([
+        'done',
+        'done',
+        'done',
+        'done'
+      ])
+      expect(
+        claude.sessions.filter(({ logFile }) => logFile.endsWith('implementer-3.log'))
+      ).toHaveLength(1)
+      expect(lines).toContainEqual(expect.stringMatching(/resumed #1 merger/))
+    })
+
+    it('resumes a failed end-of-run session in the integration worktree and finishes the run', async () => {
+      let fixerFails = true
+      const { ports, claude, tracker } = portsFor([ticket(1)], (session, fake) =>
+        session.role === 'fixer' && fixerFails ? 1 : succeeds(session, fake)
+      )
+      await runSpec(100, {}, ports)
+      const failedFixer = claude.sessions.find(({ role }) => role === 'fixer')
+      fixerFails = false
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      const rerun = claude.sessions.slice(claude.sessions.indexOf(failedFixer as Session) + 1)
+      expect(rerun.map(({ role }) => role)).toEqual(['fixer', 'pr-writer'])
+      expect(rerun[0]).toMatchObject({
+        sessionId: failedFixer?.sessionId,
+        cwd: failedFixer?.cwd,
+        resume: true
+      })
+      expect(rerun[0].prompt).toContain(failedFixer?.prompt)
+      expect(rerun[1].resume).toBe(false)
+      expect(tracker.ready).toEqual([500])
+      expect(readState(100).steps.fix).toMatchObject({
+        status: 'done',
+        session: { id: failedFixer?.sessionId, outcome: { check: 'passed' } }
+      })
+    })
+
+    it('resumes an explorer left running before any implementer launches', async () => {
+      let crash = true
+      const { ports, claude } = portsFor([ticket(1)], (session, fake) => {
+        if (crash && session.role === 'explorer') {
+          crash = false
+          throw interrupted
+        }
+        return succeeds(session, fake)
+      })
+      await expect(runSpec(100, { explore: true }, ports)).rejects.toBe(interrupted)
+
+      await runSpec(100, { explore: true }, ports)
+
+      const [first, resumed, next] = claude.sessions
+      expect(resumed).toMatchObject({
+        role: 'explorer',
+        sessionId: first.sessionId,
+        cwd: first.cwd,
+        resume: true
+      })
+      expect(resumed.prompt).toMatch(/interrupted/)
+      expect(next.role).toBe('implementer')
+    })
+
+    it('does no work on a re-run of a finished run', async () => {
+      const { ports, claude, git, tracker } = portsFor([ticket(1)])
+      await runSpec(100, {}, ports)
+      const stateAfterFirst = readState(100)
+      const counts = () => [
+        claude.sessions.length,
+        git.added.length,
+        git.removed.length,
+        tracker.reads.length,
+        tracker.prs.length,
+        tracker.bodies.length,
+        tracker.ready.length
+      ]
+      const before = counts()
+      lines.length = 0
+
+      const result = await runSpec(100, { explore: true }, ports)
+
+      expect(result.ok).toBe(true)
+      expect(counts()).toEqual(before)
+      expect(readState(100)).toEqual(stateAfterFirst)
+      expect(lines).toEqual([expect.stringMatching(/already finished.*PR #500/)])
+    })
+
+    it('starts every fresh session with a distinct session ID already in the state file', async () => {
+      const savedAtLaunch: boolean[] = []
+      const { ports, claude } = portsFor(
+        [ticket(1), ticket(2, [{ number: 1, open: true }]), ticket(3)],
+        (session, fake) => {
+          savedAtLaunch.push(JSON.stringify(readState(100)).includes(`"${session.sessionId}"`))
+          return succeeds(session, fake)
+        }
+      )
+
+      await runSpec(100, { explore: true }, ports)
+
+      expect(claude.sessions).toHaveLength(10)
+      expect(claude.sessions.every(({ resume }) => !resume)).toBe(true)
+      expect(new Set(claude.sessions.map(({ sessionId }) => sessionId)).size).toBe(10)
+      expect(savedAtLaunch).toEqual(Array(10).fill(true))
+    })
+
+    it('names the exit code when resuming an implementer that exited non-zero', async () => {
+      let attempts = 0
+      const { ports, claude } = portsFor([ticket(1)], (session, fake) =>
+        session.role === 'implementer' && ++attempts === 1 ? 3 : succeeds(session, fake)
+      )
+      await runSpec(100, {}, ports)
+
+      await runSpec(100, {}, ports)
+
+      expect(claude.sessions[1].prompt).toMatch(/exited with code 3/)
+    })
+  })
+
   describe('containing failures', () => {
     const logs = join('.implement-spec', '100', 'logs')
 
