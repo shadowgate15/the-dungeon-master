@@ -29,7 +29,15 @@
 <main class="mx-auto max-w-7xl space-y-6 p-6">
   <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
   <header class="space-y-1">
-    <h1 class="font-display text-2xl">{data.campaign.name}</h1>
+    <div class="flex items-center gap-3">
+      <h1 class="font-display text-2xl">{data.campaign.name}</h1>
+      {#if data.campaign.status !== 'missing'}
+        <Link
+          href={resolve('/campaigns/[id]/play', { id: data.campaign.id })}
+          class="ml-auto text-sm">Play console</Link
+        >
+      {/if}
+    </div>
     <p class="text-xs text-muted">{data.campaign.path}</p>
   </header>
 

@@ -296,4 +296,47 @@ export const characterDraft = sqliteTable('character_draft', {
   updatedAt: integer('updated_at').notNull()
 })
 
+/**
+ * A Floor: the DM waiting on the Players' Declarations. At most one is open per Campaign; until it
+ * closes its Declarations can be added, edited or withdrawn and the DM hears none of them.
+ */
+export const floor = sqliteTable('floor', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  campaignId: campaignOwner(),
+  state: text('state', { enum: ['open', 'closed'] })
+    .notNull()
+    .default('open'),
+  createdAt: integer('created_at').notNull(),
+  closedAt: integer('closed_at')
+})
+
+/**
+ * A Declaration on a Floor: what a Player says one Character does. It names exactly one Character
+ * and the Player who declared it. Withdrawing one deletes it; the DM never heard it.
+ */
+export const declaration = sqliteTable(
+  'declaration',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    floorId: text('floor_id')
+      .notNull()
+      .references(() => floor.id, { onDelete: 'cascade' }),
+    characterId: text('character_id')
+      .notNull()
+      .references(() => character.id, { onDelete: 'cascade' }),
+    player: text('player').notNull(),
+    text: text('text').notNull(),
+    /** Send order on its Floor. */
+    position: integer('position').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [index('declaration_floor_idx').on(t.floorId)]
+)
+
 export * from './rules-schema'
+export * from './world-schema'

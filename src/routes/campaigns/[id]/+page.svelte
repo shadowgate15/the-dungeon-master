@@ -35,6 +35,10 @@
       <h1 class="font-display text-2xl">{data.campaign.name}</h1>
       {#if data.campaign.status !== 'missing'}
         <DmBadge attached={sessions.data.includes(data.campaign.id)} />
+        <Link
+          href={resolve('/campaigns/[id]/play', { id: data.campaign.id })}
+          class="ml-auto text-sm">Play console</Link
+        >
       {/if}
     </div>
     <p class="text-xs text-muted">{data.campaign.path}</p>

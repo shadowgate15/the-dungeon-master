@@ -23,7 +23,7 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-<header class="flex items-center justify-end gap-4 border-b border-border px-4 py-2">
+<header class="flex h-12 items-center justify-end gap-4 border-b border-border px-4">
   <a href={resolve('/credits')} class="text-sm underline">Credits</a>
   <ThemeToggle theme={data.theme} redirectTo={page.url.pathname + page.url.search} />
 </header>

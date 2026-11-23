@@ -23,12 +23,16 @@ export type ToolDescriptor = {
   inputSchema: Record<string, unknown>
 }
 
-/** A refusal the DM can act on: what went wrong and the call to make next. */
+/**
+ * A refusal the DM can act on: what went wrong and the call to make next. `details` adds
+ * structured data to the payload (such as the matches a near-duplicate refusal found).
+ */
 export class ToolError extends Error {
   constructor(
     readonly code: string,
     message: string,
-    readonly next: string
+    readonly next: string,
+    readonly details?: Record<string, unknown>
   ) {
     super(message)
   }
@@ -67,8 +71,14 @@ export function expectVersion(
   }
 }
 
-/** What a tool's `run` sees. Inside a mutating call, `db` is the call's transaction. */
-export type ToolContext = { db: Queryable }
+/** What code stamps on every Event: the open Session and the in-fiction minute. */
+export type Stamp = { sessionId: string | null; minute: number }
+
+/**
+ * What a tool's `run` sees. Inside a mutating call, `db` is the call's transaction and
+ * `stamp.eventId` is the id of the one Event the call will log (null for reads).
+ */
+export type ToolContext = { db: Queryable; stamp: Stamp & { eventId: number | null } }
 
 /** The one Event a mutating call logs. Code stamps the Session and in-fiction time. */
 export type ToolEvent = {
