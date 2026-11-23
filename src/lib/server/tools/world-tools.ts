@@ -107,5 +107,49 @@ export const worldTools = [
         }
       }
     }
+  }),
+
+  writeTool({
+    name: 'add_fact',
+    description:
+      "Add a Fact about an Entity. Pass the subject's version. valid_from is the in-fiction minute it became true (default now; null = since before the Campaign). Name in supersedes the current Facts it replaces: code closes them at valid_from. Nothing is superseded automatically.",
+    input: z.object({
+      subject: handle,
+      version: z.int(),
+      claim: z.string().trim().min(1),
+      valid_from: minute.optional(),
+      supersedes: z.array(z.int()).default([])
+    }),
+    run: (ctx, input) => {
+      const result = createWorld(ctx).addFact(input)
+      return {
+        result,
+        event: {
+          kind: 'fact_added',
+          summary: `Fact ${result.fact} about ${input.subject}`,
+          data: { fact: result.fact, subject: input.subject, superseded: result.superseded },
+          dmOnly
+        }
+      }
+    }
+  }),
+
+  writeTool({
+    name: 'supersede',
+    description:
+      'Record a supersession noticed later: Fact `by` replaces Fact `old`, which closes at the start of `by`.',
+    input: z.object({ old: z.int(), by: z.int() }),
+    run: (ctx, { old, by }) => {
+      const result = createWorld(ctx).supersede(old, by)
+      return {
+        result,
+        event: {
+          kind: 'fact_superseded',
+          summary: `Fact ${old} superseded by Fact ${by}`,
+          data: { old, by },
+          dmOnly
+        }
+      }
+    }
   })
 ]

@@ -183,6 +183,51 @@ export function createWorld({ db, stamp }: ToolContext) {
     }
   }
 
+  function findFact(id: number): FactRow {
+    const found = db.select().from(fact).where(eq(fact.id, id)).get()
+    if (!found) {
+      throw new ToolError(
+        'unknown_fact',
+        `No Fact has the id ${id}`,
+        'Check the id against a recent open'
+      )
+    }
+    return found
+  }
+
+  /** A Fact that a supersession or retirement may still change. */
+  function currentFact(id: number): FactRow {
+    const found = findFact(id)
+    if (!isCurrent(found)) {
+      const state =
+        found.retiredAt !== null ? 'retired' : `superseded by Fact ${found.supersededBy}`
+      throw new ToolError(
+        'not_current',
+        `Fact ${id} is already ${state}`,
+        `Open ${found.subject} with history to see its Facts`
+      )
+    }
+    return found
+  }
+
+  /**
+   * Closes `old` at the start of `by`. A Fact never begins before the one it supersedes; one that
+   * held since before the Campaign may only be superseded by another such Fact or a later one.
+   */
+  function close(tool: string, old: FactRow, by: { id: number; validFrom: number | null }) {
+    if (old.id === by.id) throw ToolError.invalidInput(tool, 'A Fact cannot supersede itself')
+    if (old.validFrom !== null && (by.validFrom === null || by.validFrom < old.validFrom)) {
+      throw ToolError.invalidInput(
+        tool,
+        `Fact ${old.id} holds from minute ${old.validFrom}; what supersedes it cannot begin earlier`
+      )
+    }
+    db.update(fact)
+      .set({ supersededBy: by.id, validTo: by.validFrom })
+      .where(eq(fact.id, old.id))
+      .run()
+  }
+
   /** Entities whose Page or current Facts link to `handle`. */
   function linkersOf(handle: string): string[] {
     const rows = db.select().from(worldLink).where(eq(worldLink.toHandle, handle)).all()
@@ -411,6 +456,40 @@ export function createWorld({ db, stamp }: ToolContext) {
           `Fact ${f.id} ("${renderLinks(f.claim, all)}") restates ${field}; the field owns it now, so supersede or retire the Fact`
       )
       return { handle, field, old, new: value, version: next, warnings }
+    },
+
+    addFact(input: {
+      subject: string
+      version: number
+      claim: string
+      valid_from?: number | null
+      supersedes: number[]
+    }) {
+      writable(input.subject, input.version)
+      const olds = [...new Set(input.supersedes)].map(currentFact)
+      const made = insertFact(input.subject, input)
+      for (const old of olds) close('add_fact', old, made.row)
+      const version = bump(input.subject)
+      const others = [...new Set(olds.map((o) => o.subject))].filter((h) => h !== input.subject)
+      for (const other of others) bump(other)
+      for (const h of [input.subject, ...others]) reindex(h)
+      return {
+        fact: made.row.id,
+        subject: input.subject,
+        version,
+        valid_from: made.row.validFrom,
+        superseded: olds.map((o) => o.id),
+        unresolved: made.unresolved
+      }
+    },
+
+    supersede(oldId: number, byId: number) {
+      const old = currentFact(oldId)
+      const by = currentFact(byId)
+      close('supersede', old, by)
+      const version = bump(old.subject)
+      reindex(old.subject)
+      return { old: old.id, by: by.id, valid_to: by.validFrom, subject: old.subject, version }
     },
 
     search(query: string, type?: EntityType) {

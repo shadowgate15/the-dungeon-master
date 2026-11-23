@@ -244,3 +244,172 @@ describe('the tool list', () => {
     }
   })
 })
+
+describe('facts', () => {
+  beforeEach(() => {
+    ok('establish', mira)
+    ok('establish', { type: 'faction', name: 'Red Lanterns' })
+  })
+
+  it('adds a Fact under the subject version, indexes its links, and logs one event', () => {
+    const added = ok('add_fact', {
+      subject: 'npc:mira-voss',
+      version: 1,
+      claim: 'Mira pays tribute to [[Red Lanterns]]',
+      valid_from: 120
+    })
+    expect(added).toMatchObject({ subject: 'npc:mira-voss', version: 2, superseded: [] })
+    expect(ok('open', { handle: 'npc:mira-voss' }).facts).toEqual([
+      {
+        id: added.fact,
+        claim: 'Mira pays tribute to [[Red Lanterns]]',
+        valid_from: 120,
+        valid_to: null,
+        state: 'current'
+      }
+    ])
+    expect(ok('open', { handle: 'faction:red-lanterns' }).backlinks).toEqual([
+      { handle: 'npc:mira-voss', name: 'Mira Voss', via: added.fact }
+    ])
+    expect(ok('search', { query: 'tribute' }).results[0].handle).toBe('npc:mira-voss')
+    expect(host.events(folder).at(-1)).toMatchObject({ tool: 'add_fact', dmOnly: true })
+  })
+
+  it('defaults valid_from to now, and null means since before the Campaign', () => {
+    const now = ok('add_fact', { subject: 'npc:mira-voss', version: 1, claim: 'Mira limps' })
+    const ever = ok('add_fact', {
+      subject: 'npc:mira-voss',
+      version: 2,
+      claim: 'Mira was born in Varn',
+      valid_from: null
+    })
+    const facts = ok('open', { handle: 'npc:mira-voss' }).facts
+    expect(facts.find((f: { id: number }) => f.id === now.fact).valid_from).toBe(0)
+    expect(facts.find((f: { id: number }) => f.id === ever.fact).valid_from).toBeNull()
+  })
+
+  it('refuses a Fact without the current subject version', () => {
+    expect(refused('add_fact', { subject: 'npc:mira-voss', version: 9, claim: 'x' })).toMatchObject(
+      { code: 'stale_version', next: 'open npc:mira-voss' }
+    )
+  })
+
+  it('closes a superseded Fact at the new valid_from and leaves other Facts alone', () => {
+    const loyal = ok('add_fact', {
+      subject: 'npc:mira-voss',
+      version: 1,
+      claim: 'Mira is loyal to [[Red Lanterns]]',
+      valid_from: 10
+    })
+    const limps = ok('add_fact', {
+      subject: 'npc:mira-voss',
+      version: 2,
+      claim: 'Mira limps',
+      valid_from: 10
+    })
+    const turned = ok('add_fact', {
+      subject: 'npc:mira-voss',
+      version: 3,
+      claim: 'Mira informs on the Red Lanterns',
+      valid_from: 300,
+      supersedes: [loyal.fact]
+    })
+    expect(turned.superseded).toEqual([loyal.fact])
+
+    // A contradicting Fact that names nothing supersedes nothing.
+    ok('add_fact', {
+      subject: 'npc:mira-voss',
+      version: 4,
+      claim: 'Mira walks fine',
+      valid_from: 400
+    })
+
+    const current = ok('open', { handle: 'npc:mira-voss' }).facts.map((f: { id: number }) => f.id)
+    expect(current).toContain(limps.fact)
+    expect(current).not.toContain(loyal.fact)
+
+    const all = ok('open', { handle: 'npc:mira-voss', history: true }).facts
+    expect(all.find((f: { id: number }) => f.id === loyal.fact)).toMatchObject({
+      state: 'superseded',
+      valid_from: 10,
+      valid_to: 300,
+      superseded_by: turned.fact
+    })
+    // Superseded Fact links no longer count as backlinks.
+    expect(ok('open', { handle: 'faction:red-lanterns' }).backlinks).toEqual([])
+  })
+
+  it('refuses to supersede a Fact that is not current, or with a start before it', () => {
+    const a = ok('add_fact', { subject: 'npc:mira-voss', version: 1, claim: 'A', valid_from: 50 })
+    expect(
+      refused('add_fact', {
+        subject: 'npc:mira-voss',
+        version: 2,
+        claim: 'B',
+        valid_from: 40,
+        supersedes: [a.fact]
+      }).code
+    ).toBe('invalid_input')
+    ok('add_fact', {
+      subject: 'npc:mira-voss',
+      version: 2,
+      claim: 'B',
+      valid_from: 60,
+      supersedes: [a.fact]
+    })
+    expect(
+      refused('add_fact', {
+        subject: 'npc:mira-voss',
+        version: 3,
+        claim: 'C',
+        supersedes: [a.fact]
+      }).code
+    ).toBe('not_current')
+    expect(
+      refused('add_fact', { subject: 'npc:mira-voss', version: 3, claim: 'C', supersedes: [999] })
+        .code
+    ).toBe('unknown_fact')
+  })
+
+  it('records a supersession noticed later with supersede', () => {
+    const old = ok('add_fact', {
+      subject: 'npc:mira-voss',
+      version: 1,
+      claim: 'Mira is a fence',
+      valid_from: 5
+    })
+    const later = ok('add_fact', {
+      subject: 'npc:mira-voss',
+      version: 2,
+      claim: 'Mira runs the guild',
+      valid_from: 90
+    })
+    expect(ok('supersede', { old: old.fact, by: later.fact })).toMatchObject({
+      old: old.fact,
+      by: later.fact,
+      valid_to: 90
+    })
+    expect(host.events(folder).at(-1)).toMatchObject({ tool: 'supersede', dmOnly: true })
+    const all = ok('open', { handle: 'npc:mira-voss', history: true }).facts
+    expect(all.find((f: { id: number }) => f.id === old.fact)).toMatchObject({
+      state: 'superseded',
+      valid_to: 90
+    })
+    expect(refused('supersede', { old: old.fact, by: later.fact }).code).toBe('not_current')
+  })
+
+  it('warns when a set field is restated by a current Fact', () => {
+    ok('add_fact', { subject: 'npc:mira-voss', version: 1, claim: 'Mira is dead, drowned' })
+    const set = ok('set_field', {
+      handle: 'npc:mira-voss',
+      version: 2,
+      field: 'status',
+      value: 'dead'
+    })
+    expect(set).toMatchObject({ old: 'alive', new: 'dead', version: 3 })
+    expect(set.warnings).toEqual([expect.stringContaining('Mira is dead, drowned')])
+    expect(
+      refused('set_field', { handle: 'npc:mira-voss', version: 3, field: 'mood', value: 'x' }).code
+    ).toBe('invalid_input')
+  })
+})
