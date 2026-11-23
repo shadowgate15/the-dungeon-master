@@ -101,4 +101,42 @@ describe('RulesRepository', () => {
     expect(repo.background('acolyte')).toMatchObject({ appAuthored: false })
     expect(repo.background('acolyte')!.options.some((o) => o.kind === 'ideal')).toBe(true)
   })
+
+  describe('entry by handle', () => {
+    it('resolves a monster handle to its full stat block', () => {
+      const goblin = repo.entry('monster:goblin')!
+
+      expect(goblin).toMatchObject({ handle: 'monster:goblin', kind: 'monster', name: 'Goblin' })
+      expect(goblin.entry).toMatchObject({
+        hitPoints: 7,
+        armorClass: [{ type: 'armor', value: 15 }],
+        abilityScores: { dex: 14 },
+        challengeRating: 0.25
+      })
+      expect(goblin.kind === 'monster' && goblin.entry.actions).toHaveLength(2)
+    })
+
+    it('resolves conditions, spells, magic items and rules sections', () => {
+      expect(repo.entry('condition:prone')).toMatchObject({ kind: 'condition', name: 'Prone' })
+      expect(repo.entry('spell:fireball')).toMatchObject({
+        kind: 'spell',
+        entry: { level: 3, school: 'evocation' }
+      })
+      expect(repo.entry('magic-item:bag-of-holding')).toMatchObject({
+        kind: 'magic-item',
+        entry: { rarity: 'Uncommon', category: 'wondrous-items' }
+      })
+      expect(repo.entry('rule:cover')).toMatchObject({
+        kind: 'rule',
+        name: 'Cover',
+        entry: { rule: 'combat' }
+      })
+    })
+
+    it('returns null for an unknown kind, an unknown slug or a malformed handle', () => {
+      expect(repo.entry('monster:no-such-monster')).toBeNull()
+      expect(repo.entry('npc:mira-voss')).toBeNull()
+      expect(repo.entry('goblin')).toBeNull()
+    })
+  })
 })

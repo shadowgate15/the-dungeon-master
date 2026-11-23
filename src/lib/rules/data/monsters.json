@@ -14040,7 +14040,6 @@
     "conditionImmunities": [
       "blinded",
       "charmed",
-      "blinded",
       "frightened",
       "paralyzed",
       "petrified",
@@ -14480,9 +14479,9 @@
       "poison"
     ],
     "conditionImmunities": [
-      "poisoned",
       "charmed",
-      "exhaustion"
+      "exhaustion",
+      "poisoned"
     ],
     "senses": {
       "darkvision": "60 ft.",
@@ -14687,9 +14686,9 @@
       "poison"
     ],
     "conditionImmunities": [
-      "poisoned",
       "charmed",
-      "exhaustion"
+      "exhaustion",
+      "poisoned"
     ],
     "senses": {
       "darkvision": "60 ft.",
@@ -25009,7 +25008,6 @@
     "conditionImmunities": [
       "blinded",
       "charmed",
-      "blinded",
       "exhaustion",
       "frightened",
       "prone"
@@ -28370,7 +28368,6 @@
     "conditionImmunities": [
       "blinded",
       "charmed",
-      "blinded",
       "frightened",
       "paralyzed",
       "petrified",
@@ -29427,7 +29424,6 @@
     ],
     "conditionImmunities": [
       "blinded",
-      "blinded",
       "exhaustion"
     ],
     "senses": {
@@ -29613,7 +29609,6 @@
     "damageResistances": [],
     "damageImmunities": [],
     "conditionImmunities": [
-      "blinded",
       "blinded",
       "frightened"
     ],
@@ -29809,8 +29804,8 @@
       "poison"
     ],
     "conditionImmunities": [
-      "poisoned",
-      "exhaustion"
+      "exhaustion",
+      "poisoned"
     ],
     "senses": {
       "darkvision": "60 ft.",
@@ -34062,7 +34057,6 @@
     "damageResistances": [],
     "damageImmunities": [],
     "conditionImmunities": [
-      "blinded",
       "blinded",
       "frightened"
     ],

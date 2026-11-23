@@ -79,6 +79,14 @@ describe('Rules Data normalizer', () => {
       'Nimble Escape'
     ])
     expect(bySlug(dataset.monsters, 'adult-red-dragon').legendaryActions.length).toBeGreaterThan(0)
+    // Upstream lists Blinded twice for a few blindsighted creatures.
+    expect(bySlug(dataset.monsters, 'ochre-jelly').conditionImmunities).toEqual([
+      'blinded',
+      'charmed',
+      'exhaustion',
+      'frightened',
+      'prone'
+    ])
   })
 
   it('carries conditions, magic items with their variants, and rules sections under their rule', () => {

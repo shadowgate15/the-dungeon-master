@@ -218,7 +218,7 @@ function monster(m: any): Monster {
     damageVulnerabilities: m.damage_vulnerabilities,
     damageResistances: m.damage_resistances,
     damageImmunities: m.damage_immunities,
-    conditionImmunities: refs(m.condition_immunities),
+    conditionImmunities: [...new Set(refs(m.condition_immunities))].sort(),
     senses: m.senses,
     languages: m.languages,
     challengeRating: m.challenge_rating,
@@ -241,7 +241,7 @@ function magicItems(items: any[]): MagicItem[] {
     name: i.name,
     category: ref(i.equipment_category),
     rarity: i.rarity.name,
-    variants: refs(i.variants),
+    variants: refs(i.variants).sort(),
     variantOf: variantOf.get(i.index) ?? null,
     description: lines(i.desc)
   }))

@@ -305,6 +305,77 @@ export function createRulesRepository(db: Database) {
       }))
   }
 
+  function monsters() {
+    const proficiency = slugs(db.select().from(t.proficiency).all())
+    const condition = slugs(db.select().from(t.condition).all())
+    const profs = group(
+      db.select().from(t.monsterProficiency).orderBy(asc(t.monsterProficiency.position)).all(),
+      (r) => r.monsterId
+    )
+    const immunities = group(db.select().from(t.monsterConditionImmunity).all(), (r) => r.monsterId)
+    return db
+      .select()
+      .from(t.monster)
+      .orderBy(asc(t.monster.slug))
+      .all()
+      .map(({ str, dex, con, int, wis, cha, ...m }) => ({
+        ...m,
+        abilityScores: { str, dex, con, int, wis, cha },
+        proficiencies: (profs.get(m.id) ?? []).map((p) => ({
+          proficiency: proficiency.get(p.proficiencyId)!,
+          value: p.value
+        })),
+        conditionImmunities: (immunities.get(m.id) ?? [])
+          .map((c) => condition.get(c.conditionId)!)
+          .sort()
+      }))
+  }
+
+  function magicItems() {
+    const category = slugs(db.select().from(t.equipmentCategory).all())
+    const rows = db.select().from(t.magicItem).orderBy(asc(t.magicItem.slug)).all()
+    const item = slugs(rows)
+    const variants = group(
+      rows.filter((r) => r.variantOfId !== null),
+      (r) => r.variantOfId!
+    )
+    return rows.map(({ categoryId, variantOfId, ...i }) => ({
+      ...i,
+      category: category.get(categoryId)!,
+      variantOf: variantOfId ? item.get(variantOfId)! : null,
+      variants: (variants.get(i.id) ?? []).map((v) => v.slug)
+    }))
+  }
+
+  const conditions = () => db.select().from(t.condition).orderBy(asc(t.condition.slug)).all()
+  const ruleSections = () => db.select().from(t.ruleSection).orderBy(asc(t.ruleSection.slug)).all()
+
+  /** Each rules kind a handle can name, and how to read its entries. */
+  const kinds = {
+    spell: () => spells(),
+    monster: monsters,
+    condition: conditions,
+    'magic-item': magicItems,
+    rule: ruleSections
+  }
+  type Kind = keyof typeof kinds
+  type Entry = {
+    [K in Kind]: {
+      handle: string
+      kind: K
+      name: string
+      entry: ReturnType<(typeof kinds)[K]>[number]
+    }
+  }[Kind]
+
+  /** Resolves a rules handle (`monster:goblin`, `condition:prone`) to its entry, or null. */
+  function entry(handle: string): Entry | null {
+    const [kind, slug, ...rest] = handle.split(':')
+    if (rest.length || !slug || !Object.hasOwn(kinds, kind)) return null
+    const found = kinds[kind as Kind]().find((e) => e.slug === slug)
+    return found ? ({ handle, kind, name: found.name, entry: found } as Entry) : null
+  }
+
   return {
     datasetInfo: () =>
       db.select().from(t.rulesDataset).where(eq(t.rulesDataset.id, 1)).get() ?? null,
@@ -336,6 +407,11 @@ export function createRulesRepository(db: Database) {
     equipmentItem: (slug: string) => equipment().find((e) => e.slug === slug) ?? null,
     backgrounds,
     background: (slug: string) => backgrounds().find((b) => b.slug === slug) ?? null,
+    monsters,
+    conditions,
+    magicItems,
+    ruleSections,
+    entry,
     abilityScoreMethods: () =>
       db.select().from(t.abilityScoreMethod).orderBy(asc(t.abilityScoreMethod.id)).all()
   }

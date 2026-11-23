@@ -134,6 +134,13 @@
       "when": 1795231117874,
       "tag": "0018_scene_open_call",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1795394712828,
+      "tag": "0019_srd_lookup_data",
+      "breakpoints": true
     }
   ]
 }

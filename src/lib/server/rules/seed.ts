@@ -76,6 +76,8 @@ export function seedRulesData(
 
     // Join and choice tables are rebuilt; clear them children-first.
     for (const table of [
+      t.monsterConditionImmunity,
+      t.monsterProficiency,
       t.choiceOptionItem,
       t.choiceOption,
       t.choiceGroup,
@@ -445,6 +447,50 @@ export function seedRulesData(
         }))
       )
     )
+
+    // --- Monsters, conditions, magic items, rules sections
+    const condition = upsert(t.condition, dataset.conditions)
+    const monster = upsert(
+      t.monster,
+      dataset.monsters.map(({ abilityScores, ...m }) => ({
+        ...omit(m, 'proficiencies', 'conditionImmunities'),
+        ...abilityScores
+      }))
+    )
+    insert(
+      t.monsterProficiency,
+      dataset.monsters.flatMap((m) =>
+        m.proficiencies.map((p, position) => ({
+          monsterId: need(monster, m.slug, 'monster'),
+          proficiencyId: need(proficiency, p.proficiency, 'proficiency'),
+          position,
+          value: p.value
+        }))
+      )
+    )
+    insert(
+      t.monsterConditionImmunity,
+      dataset.monsters.flatMap((m) =>
+        m.conditionImmunities.map((c) => ({
+          monsterId: need(monster, m.slug, 'monster'),
+          conditionId: need(condition, c, 'condition')
+        }))
+      )
+    )
+    const magicItem = upsert(
+      t.magicItem,
+      dataset.magicItems.map((i) => ({
+        ...omit(i, 'category', 'variants', 'variantOf'),
+        categoryId: need(equipmentCategory, i.category, 'equipment category')
+      }))
+    )
+    for (const i of dataset.magicItems) {
+      tx.update(t.magicItem)
+        .set({ variantOfId: i.variantOf ? need(magicItem, i.variantOf, 'magic item') : null })
+        .where(sql`${t.magicItem.id} = ${need(magicItem, i.slug, 'magic item')}`)
+        .run()
+    }
+    upsert(t.ruleSection, dataset.ruleSections)
 
     // --- Backgrounds and app-authored rules
     const background = upsert(

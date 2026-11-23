@@ -496,11 +496,11 @@
     "category": "wondrous-items",
     "rarity": "Varies",
     "variants": [
+      "belt-of-giant-strength-cloud",
+      "belt-of-giant-strength-fire",
+      "belt-of-giant-strength-frost",
       "belt-of-giant-strength-hill",
       "belt-of-giant-strength-stone",
-      "belt-of-giant-strength-frost",
-      "belt-of-giant-strength-fire",
-      "belt-of-giant-strength-cloud",
       "belt-of-giant-strength-storm"
     ],
     "variantOf": null,
@@ -2275,10 +2275,10 @@
     "category": "wondrous-items",
     "rarity": "Varies",
     "variants": [
-      "horn-of-valhalla-silver",
       "horn-of-valhalla-brass",
       "horn-of-valhalla-bronze",
-      "horn-of-valhalla-iron"
+      "horn-of-valhalla-iron",
+      "horn-of-valhalla-silver"
     ],
     "variantOf": null,
     "description": [
@@ -3302,11 +3302,11 @@
     "category": "potion",
     "rarity": "Varies",
     "variants": [
-      "potion-of-giant-strength-hill",
-      "potion-of-giant-strength-frost",
-      "potion-of-giant-strength-stone",
-      "potion-of-giant-strength-fire",
       "potion-of-giant-strength-cloud",
+      "potion-of-giant-strength-fire",
+      "potion-of-giant-strength-frost",
+      "potion-of-giant-strength-hill",
+      "potion-of-giant-strength-stone",
       "potion-of-giant-strength-storm"
     ],
     "variantOf": null,
@@ -4525,7 +4525,6 @@
     "category": "scroll",
     "rarity": "Varies",
     "variants": [
-      "spell-scroll-cantrip",
       "spell-scroll-1st",
       "spell-scroll-2nd",
       "spell-scroll-3rd",
@@ -4534,7 +4533,8 @@
       "spell-scroll-6th",
       "spell-scroll-7th",
       "spell-scroll-8th",
-      "spell-scroll-9th"
+      "spell-scroll-9th",
+      "spell-scroll-cantrip"
     ],
     "variantOf": null,
     "description": [
