@@ -2,7 +2,17 @@
    Upstream JSON is untyped and polymorphic. The zod schema is the contract: `normalize` output is
    parsed against it (see run.ts and the normalizer tests), so loose input types stop here. */
 import { ABILITY_SCORE_METHODS, CUSTOM_BACKGROUND } from '../app-authored.ts'
-import type { Background, ChoiceGroup, OptionItem, RulesDataset, Spell, Trait } from '../schema.ts'
+import type {
+  Background,
+  ChoiceGroup,
+  MagicItem,
+  Monster,
+  OptionItem,
+  RuleSection,
+  RulesDataset,
+  Spell,
+  Trait
+} from '../schema.ts'
 import { DATASET_META, type UPSTREAM_FILES } from './source.ts'
 
 export type Upstream = Record<keyof typeof UPSTREAM_FILES, any[]>
@@ -180,6 +190,80 @@ function spellcastingByLevel(l: any) {
   }
 }
 
+function monster(m: any): Monster {
+  return {
+    slug: m.index,
+    name: m.name,
+    size: m.size,
+    type: m.type,
+    subtype: m.subtype ?? null,
+    alignment: m.alignment,
+    armorClass: json(m.armor_class),
+    hitPoints: m.hit_points,
+    hitDice: m.hit_dice,
+    hitPointsRoll: m.hit_points_roll,
+    speed: m.speed,
+    abilityScores: {
+      str: m.strength,
+      dex: m.dexterity,
+      con: m.constitution,
+      int: m.intelligence,
+      wis: m.wisdom,
+      cha: m.charisma
+    },
+    proficiencies: m.proficiencies.map((p: any) => ({
+      proficiency: ref(p.proficiency),
+      value: p.value
+    })),
+    damageVulnerabilities: m.damage_vulnerabilities,
+    damageResistances: m.damage_resistances,
+    damageImmunities: m.damage_immunities,
+    conditionImmunities: refs(m.condition_immunities),
+    senses: m.senses,
+    languages: m.languages,
+    challengeRating: m.challenge_rating,
+    proficiencyBonus: m.proficiency_bonus,
+    xp: m.xp,
+    specialAbilities: json(m.special_abilities) ?? [],
+    actions: json(m.actions) ?? [],
+    legendaryActions: json(m.legendary_actions) ?? [],
+    reactions: json(m.reactions) ?? [],
+    forms: refs(m.forms),
+    description: m.desc ?? null
+  }
+}
+
+function magicItems(items: any[]): MagicItem[] {
+  const variantOf = new Map<string, string>()
+  for (const i of items) for (const v of refs(i.variants)) variantOf.set(v, i.index)
+  return items.map((i) => ({
+    slug: i.index,
+    name: i.name,
+    category: ref(i.equipment_category),
+    rarity: i.rarity.name,
+    variants: refs(i.variants),
+    variantOf: variantOf.get(i.index) ?? null,
+    description: lines(i.desc)
+  }))
+}
+
+/** Rules sections, each under the top-level rule that lists it as a subsection. */
+function ruleSections(rules: any[], sections: any[]): RuleSection[] {
+  const parent = new Map<string, any>()
+  for (const r of rules) for (const s of r.subsections) parent.set(ref(s), r)
+  return sections.map((s) => {
+    const rule = parent.get(s.index)
+    if (!rule) throw new Error(`Rules section without a rule: ${s.index}`)
+    return {
+      slug: s.index,
+      name: s.name,
+      rule: rule.index,
+      ruleName: rule.name,
+      description: s.desc
+    }
+  })
+}
+
 export function normalize(up: Upstream): RulesDataset {
   const languageSlugs = up.languages.map(ref)
   const equipmentSlugs = new Set(up.equipment.map(ref))
@@ -333,7 +417,7 @@ export function normalize(up: Upstream): RulesDataset {
       up.equipmentCategories.map((c) => ({
         slug: c.index,
         name: c.name,
-        // Upstream categories also list magic items, which are not part of this dataset yet.
+        // Upstream categories also list magic items; those carry their category themselves.
         items: [...new Set(refs(c.equipment).filter((i) => equipmentSlugs.has(i)))].sort()
       }))
     ),
@@ -474,6 +558,12 @@ export function normalize(up: Upstream): RulesDataset {
       }))
     ),
     spells: bySlug(spells),
+    monsters: bySlug(up.monsters.map(monster)),
+    conditions: bySlug(
+      up.conditions.map((c) => ({ slug: c.index, name: c.name, description: lines(c.desc) }))
+    ),
+    magicItems: bySlug(magicItems(up.magicItems)),
+    ruleSections: bySlug(ruleSections(up.rules, up.ruleSections)),
     backgrounds: bySlug([...acolyte, CUSTOM_BACKGROUND]),
     abilityScoreMethods: ABILITY_SCORE_METHODS
   }
