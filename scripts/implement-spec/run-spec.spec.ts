@@ -1033,6 +1033,37 @@ describe('runSpec', () => {
       expect(lines).toContainEqual(expect.stringMatching(/resumed #1 merger/))
     })
 
+    it('re-queues tickets left implemented in the order their implementers finished', async () => {
+      let mergerFails = true
+      const finishDelay: Record<string, number> = { '1': 20, '2': 10, '3': 0 }
+      const { ports, claude } = portsFor(
+        [ticket(1), ticket(2), ticket(3)],
+        async (session, fake) => {
+          if (session.role === 'implementer') {
+            const n = session.cwd.slice(-1)
+            await new Promise((resolve) => setTimeout(resolve, finishDelay[n]))
+          }
+          if (session.role === 'merger' && mergerFails) return 1
+          return succeeds(session, fake)
+        }
+      )
+      await runSpec(100, {}, ports)
+      expect([1, 2].map((n) => readState(100).tickets[n].status)).toEqual([
+        'implemented',
+        'implemented'
+      ])
+      mergerFails = false
+      const before = claude.sessions.length
+
+      expect((await runSpec(100, {}, ports)).ok).toBe(true)
+
+      const mergers = claude.sessions
+        .slice(before)
+        .filter(({ role }) => role === 'merger')
+        .map(({ logFile }) => logFile.slice(-6, -4))
+      expect(mergers).toEqual(['-3', '-2', '-1'])
+    })
+
     it('resumes a failed end-of-run session in the integration worktree and finishes the run', async () => {
       let fixerFails = true
       const { ports, claude, tracker } = portsFor([ticket(1)], (session, fake) =>

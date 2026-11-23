@@ -107,6 +107,11 @@ export type TicketState = {
   session?: SessionState
   /** The merger session that merges the ticket branch into the integration branch. */
   merger?: SessionState
+  /**
+   * The ticket's place in the merge queue: 1 for the first implementer to pass in the spec's runs,
+   * 2 for the next, and so on. A re-run queues tickets left `implemented` by it.
+   */
+  finishOrder?: number
 }
 
 /**
@@ -372,6 +377,10 @@ const implement = async (run: Run, ticket: number): Promise<boolean> => {
       }),
     settle: (check) => {
       entry.status = check === 'passed' ? 'implemented' : 'failed'
+      if (check === 'passed') {
+        const orders = Object.values(run.state.tickets).map(({ finishOrder }) => finishOrder ?? 0)
+        entry.finishOrder = Math.max(0, ...orders) + 1
+      }
     }
   })
   if (passed) log(`implemented #${ticket}`)
@@ -509,9 +518,11 @@ const drive = async (run: Run, tickets: Ticket[]): Promise<boolean> => {
     work.then(settle, settle)
   }
 
+  /** Tickets an earlier run left that `keep` picks, in the order their implementers finished. */
   const earlier = (keep: (entry: TicketState) => boolean) =>
     Object.entries(run.state.tickets)
       .filter(([, entry]) => keep(entry))
+      .sort(([, a], [, b]) => (a.finishOrder ?? 0) - (b.finishOrder ?? 0))
       .map(([key]) => Number(key))
 
   for (const ticket of earlier((entry) => entry.status === 'implemented' && !!entry.merger)) {
