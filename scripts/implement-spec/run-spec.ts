@@ -47,6 +47,8 @@ export type GitPort = {
   contains: (branch: string, commit: string) => Promise<boolean>
   /** Removes the worktree at `path`, keeping its branch. */
   removeWorktree: (path: string) => Promise<void>
+  /** Pushes `branch` to `origin`, creating or updating the remote branch of the same name. */
+  push: (branch: string) => Promise<void>
 }
 
 /** The roles a `claude` session can play in a run. */
@@ -426,8 +428,12 @@ const closesBody = (run: Run) =>
     .map((number) => `Closes #${number}`)
     .join('\n')
 
-/** Opens the draft PR from the integration branch, unless this or an earlier run already did. */
-const openPr = async (run: Run) => {
+/**
+ * Pushes the integration branch, so the PR shows its latest commits, then opens the draft PR from
+ * it, unless this or an earlier run already did.
+ */
+const publish = async (run: Run) => {
+  await run.ports.git.push(run.branch)
   if (run.state.pr !== undefined) return
   run.state.pr = await run.ports.tracker.openDraftPr({
     head: run.branch,
@@ -444,7 +450,7 @@ const openPr = async (run: Run) => {
  * earlier merger resumed when it didn't complete, otherwise a fresh one. It passes when it exits 0
  * and the integration branch contains the ticket branch's head. On a pass the ticket is `done` and
  * its worktree removed; on a failure it stays `implemented`, with the merger's outcome recorded.
- * The first pass opens the draft PR. Resolves to whether the merge passed.
+ * Each pass pushes the integration branch, and the first opens the draft PR. Resolves to whether the merge passed.
  */
 const merge = async (run: Run, ticket: number): Promise<boolean> => {
   const { git, log } = run.ports
@@ -471,7 +477,7 @@ const merge = async (run: Run, ticket: number): Promise<boolean> => {
   if (!passed) return false
   await git.removeWorktree(worktreePath(run.root, branch))
   log(`merged #${ticket}`)
-  await openPr(run)
+  await publish(run)
   return true
 }
 
@@ -507,15 +513,15 @@ const withCloses = (run: Run, body: string) => {
 }
 
 /**
- * The `ready` step: appends any missing `Closes` lines to the PR body file, replaces the PR body
- * from it, marks the PR ready and removes the integration worktree (the branch is kept). Each part
- * is safe to repeat, and marking the PR ready is recorded, so a re-run after a throw part-way
+ * The `ready` step: pushes the integration branch (with the fixer's commits), appends any missing
+ * `Closes` lines to the PR body file, replaces the PR body from it, marks the PR ready and removes
+ * the integration worktree (the branch is kept). Each part is safe to repeat, and marking the PR ready is recorded, so a re-run after a throw part-way
  * through finishes the step.
  */
 const markReady = async (run: Run): Promise<boolean> => {
   if (stepDone(run, 'ready')) return true
   const { tracker, git, log } = run.ports
-  await openPr(run)
+  await publish(run)
   const pr = run.state.pr as number
   const bodyFile = run.paths.prBody
   writeFileSync(bodyFile, withCloses(run, readFileSync(bodyFile, 'utf8')))

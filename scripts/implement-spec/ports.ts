@@ -90,6 +90,9 @@ export const createGit = (cwd: string): GitPort => {
       ),
     removeWorktree: async (path) => {
       await git(['worktree', 'remove', path])
+    },
+    push: async (branch) => {
+      await git(['push', '--set-upstream', 'origin', branch])
     }
   }
 }

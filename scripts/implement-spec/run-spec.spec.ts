@@ -56,6 +56,8 @@ const fakeGit = (root: string) => {
   const worktrees = new Map<string, string>()
   const added: { path: string; branch: string; base?: string }[] = []
   const removed: string[] = []
+  /** Every push, with the commit the branch pointed at when it was pushed. */
+  const pushed: { branch: string; commit: string }[] = []
   let made = 0
   const ancestry = (commit: string) => {
     const seen = new Set<string>()
@@ -102,9 +104,12 @@ const fakeGit = (root: string) => {
     removeWorktree: async (path) => {
       if (!worktrees.delete(path)) throw new Error(`no worktree at ${path}`)
       removed.push(path)
+    },
+    push: async (branch) => {
+      pushed.push({ branch, commit: tip(branch) })
     }
   }
-  return { git, branches, worktrees, added, removed, commit }
+  return { git, branches, worktrees, added, removed, pushed, commit }
 }
 
 type FakeGit = ReturnType<typeof fakeGit>
@@ -708,6 +713,37 @@ describe('runSpec', () => {
       expect(lines).toContainEqual(expect.stringMatching(/PR #500/))
     })
 
+    it('pushes the integration branch before opening the PR', async () => {
+      const order: string[] = []
+      const { ports } = portsFor([ticket(1)])
+      const { push } = ports.git
+      ports.git.push = async (branch) => (order.push(`push ${branch}`), push(branch))
+      const { openDraftPr } = ports.tracker
+      ports.tracker.openDraftPr = async (pr) => (order.push(`open ${pr.head}`), openDraftPr(pr))
+
+      await runSpec(100, {}, ports)
+
+      expect(order.slice(0, 2)).toEqual(['push implement-spec/100', 'open implement-spec/100'])
+    })
+
+    it('pushes the integration branch after every merge, so the PR shows each one', async () => {
+      const tips: string[] = []
+      const { ports, git } = portsFor(
+        [ticket(1), ticket(2, [{ number: 1, open: true }])],
+        (session, fake) => {
+          const exit = succeeds(session, fake)
+          if (session.role === 'merger')
+            tips.push(fake.branches.get('implement-spec/100') as string)
+          return exit
+        }
+      )
+
+      await runSpec(100, {}, ports)
+
+      const merges = git.pushed.slice(0, 2)
+      expect(merges).toEqual(tips.map((commit) => ({ branch: 'implement-spec/100', commit })))
+    })
+
     it('has a body closing the spec and every ticket', async () => {
       const { ports, tracker } = portsFor([
         ticket(1),
@@ -789,17 +825,27 @@ describe('runSpec', () => {
       const { setPrBody, markPrReady } = ports.tracker
       ports.tracker.setPrBody = async (pr, file) => (order.push('body'), setPrBody(pr, file))
       ports.tracker.markPrReady = async (pr) => (order.push('ready'), markPrReady(pr))
-      const { removeWorktree } = ports.git
+      const { removeWorktree, push } = ports.git
       ports.git.removeWorktree = async (path) => (
         order.push(`remove ${path}`),
         removeWorktree(path)
       )
+      ports.git.push = async (branch) => (order.push(`push ${branch}`), push(branch))
 
       const result = await runSpec(100, {}, ports)
 
       expect(result.ok).toBe(true)
       const integration = join(root, '.claude', 'worktrees', 'implement-spec-100')
-      expect(order.slice(-3)).toEqual(['body', 'ready', `remove ${integration}`])
+      expect(order.slice(-4)).toEqual([
+        'push implement-spec/100',
+        'body',
+        'ready',
+        `remove ${integration}`
+      ])
+      expect(git.pushed.at(-1)).toEqual({
+        branch: 'implement-spec/100',
+        commit: git.branches.get('implement-spec/100')
+      })
       expect(tracker.bodies).toEqual([{ pr: 500, body: expect.any(String) }])
       const [{ body }] = tracker.bodies
       expect(body.startsWith(prDescription)).toBe(true)
