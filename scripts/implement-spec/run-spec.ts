@@ -575,6 +575,27 @@ const reportFailures = (run: Run) => {
   for (const line of failures) run.ports.log(line)
 }
 
+/**
+ * After a drive with no failure, prints every open ticket that isn't `done`, ascending, with the
+ * blockers that kept it from launching: open on GitHub and not done in this run (a blocker outside
+ * the spec, or a stuck ticket). Tickets closed on GitHub since an earlier run aren't read, so they
+ * never count. Resolves to whether any ticket was stuck.
+ */
+const reportStuck = (run: Run, tickets: Ticket[]) => {
+  const stuck = tickets
+    .filter(({ number }) => run.state.tickets[number]?.status !== 'done')
+    .sort((a, b) => a.number - b.number)
+  if (stuck.length === 0) return false
+  run.ports.log('stuck tickets:')
+  for (const { number, blockedBy } of stuck) {
+    const blockers = blockedBy
+      .filter((blocker) => blocker.open && run.state.tickets[blocker.number]?.status !== 'done')
+      .map((blocker) => `#${blocker.number}`)
+    run.ports.log(`  #${number} blocked by ${blockers.join(', ')}`)
+  }
+  return true
+}
+
 export const runSpec = async (
   spec: number,
   options: RunOptions,
@@ -592,6 +613,10 @@ export const runSpec = async (
   }
 
   const tickets = await tracker.readSpec(spec)
+  if (tickets.length === 0) {
+    log(`spec #${spec} has no open tickets`)
+    return { ok: false, frontier: [] }
+  }
   const branch = integrationBranch(spec)
   const worktree = await prepareIntegration(git, root, branch)
 
@@ -617,8 +642,7 @@ export const runSpec = async (
 
   const ok = await drive(run, tickets)
   reportFailures(run)
-  if (!ok || !Object.values(state.tickets).every(({ status }) => status === 'done')) {
-    return { ok, frontier }
-  }
+  if (!ok) return { ok, frontier }
+  if (reportStuck(run, tickets)) return { ok: false, frontier }
   return { ok: await finish(run), frontier }
 }

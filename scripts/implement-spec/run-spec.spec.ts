@@ -215,9 +215,10 @@ describe('runSpec', () => {
 
     expect(result.frontier).toEqual([1, 2])
     expect(tracker.reads).toEqual([100])
-    expect(lines.join('\n')).toMatch(/#1\b/)
-    expect(lines.join('\n')).toMatch(/#2\b/)
-    expect(lines.join('\n')).not.toMatch(/#3\b|#4\b/)
+    const ready = lines.filter((line) => line.startsWith('ready ')).join('\n')
+    expect(ready).toMatch(/#1\b/)
+    expect(ready).toMatch(/#2\b/)
+    expect(ready).not.toMatch(/#3\b|#4\b/)
   })
 
   it('cuts the integration branch from main into its own worktree under the repository root', async () => {
@@ -1141,6 +1142,48 @@ describe('runSpec', () => {
 
   describe('containing failures', () => {
     const logs = join('.implement-spec', '100', 'logs')
+
+    it('fails a run that stalls with no failure, naming each ticket left stuck and its open blockers', async () => {
+      const { ports, claude, tracker } = portsFor([
+        ticket(1),
+        ticket(2, [{ number: 90, open: true }]),
+        ticket(3, [{ number: 2, open: true }])
+      ])
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(false)
+      expect(claude.sessions.map(({ role }) => role)).toEqual(['implementer', 'merger'])
+      expect(tracker.ready).toEqual([])
+      const summary = lines.slice(lines.indexOf('stuck tickets:'))
+      expect(summary).toEqual(['stuck tickets:', '  #2 blocked by #90', '  #3 blocked by #2'])
+    })
+
+    it('ignores a ticket closed on GitHub since an earlier run, finishing once every open ticket is done', async () => {
+      const tickets = [ticket(1), ticket(2, [{ number: 90, open: true }])]
+      const { ports, tracker } = portsFor(tickets)
+      expect((await runSpec(100, {}, ports)).ok).toBe(false)
+      tickets.pop()
+      lines.length = 0
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(tracker.ready).toEqual([500])
+      expect(lines).not.toContainEqual(expect.stringMatching(/#2 blocked/))
+    })
+
+    it('fails a spec with no open tickets without cutting a branch or running any session', async () => {
+      const { ports, claude, git, tracker } = portsFor([])
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result).toEqual({ ok: false, frontier: [] })
+      expect(claude.sessions).toEqual([])
+      expect(git.added).toEqual([])
+      expect(tracker.prs).toEqual([])
+      expect(lines).toEqual(['spec #100 has no open tickets'])
+    })
 
     it('costs only the failed ticket and its transitive dependents, skipping the end of the run and leaving the PR a draft', async () => {
       const { ports, claude, tracker } = portsFor(
