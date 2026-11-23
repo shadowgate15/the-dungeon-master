@@ -297,3 +297,4 @@ export const characterDraft = sqliteTable('character_draft', {
 })
 
 export * from './rules-schema'
+export * from './world-schema'
