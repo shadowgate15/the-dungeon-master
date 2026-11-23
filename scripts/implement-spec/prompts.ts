@@ -56,3 +56,42 @@ export const explorerPrompt = (pointers: Pointers) =>
     `3. Write your findings as Markdown files in ${pointers.notes}, so implementers can focus on implementing instead of exploring. Point to files and interfaces rather than copying them.`,
     'Do not push, open pull requests, or change anything on GitHub.'
   ].join('\n')
+
+/** Where the reviewer writes its findings, inside the notes directory, for the fixer to read. */
+export const reviewFindings = (pointers: Pointers) => `${pointers.notes}/review.md`
+
+export const reviewerPrompt = (pointers: Pointers) =>
+  [
+    `You are the reviewer for spec #${pointers.spec}. Every ticket has been merged into the integration branch.`,
+    ...pointerLines(pointers),
+    `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`,
+    '',
+    `1. Call the Skill tool with \`code-review\` on \`main...${pointers.integrationBranch}\`, against the spec and its tickets.`,
+    `2. Write every finding to ${reviewFindings(pointers)}, each with the file, the problem and the fix it needs, so a fixer can act on them without re-reviewing.`,
+    'Do not change any code, push, open pull requests, or change anything on GitHub.'
+  ].join('\n')
+
+export const fixerPrompt = (pointers: Pointers) =>
+  [
+    `You are the fixer for spec #${pointers.spec}.`,
+    ...pointerLines(pointers),
+    `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`,
+    `Review findings: ${reviewFindings(pointers)}.`,
+    '',
+    '1. Read the review findings.',
+    '2. Call the Skill tool with `tdd` and fix every finding in one coherent pass.',
+    '3. Commit your work with conventional commit messages.',
+    '4. Run the lint, type-check and unit tests, and fix anything that fails.',
+    'Do not push, open pull requests, or change anything on GitHub.'
+  ].join('\n')
+
+export const prWriterPrompt = (pointers: Pointers, { bodyFile }: { bodyFile: string }) =>
+  [
+    `You are the PR writer for spec #${pointers.spec}.`,
+    ...pointerLines(pointers),
+    `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`,
+    '',
+    `1. Call the Skill tool with \`pr\` and write the pull request description for \`main...${pointers.integrationBranch}\`.`,
+    `2. Write the description, and only the description, to ${bodyFile}. End it with \`Closes #${pointers.spec}\` and one \`Closes #<ticket>\` line per ticket.`,
+    'Do not push, open or edit pull requests, or change anything on GitHub.'
+  ].join('\n')

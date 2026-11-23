@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -11,13 +11,26 @@ import {
   type TrackerPort
 } from './run-spec.ts'
 
+const prDescription = '## Summary\n\nImplements the spec.\n\nCloses #100\nCloses #1'
+
 type DraftPr = Parameters<TrackerPort['openDraftPr']>[0] & { number: number }
 
-/** A fake tracker serving a fixed graph, counting how often it is read and recording the PRs it opens. */
+/**
+ * A fake tracker serving a fixed graph, counting how often it is read and recording the PRs it
+ * opens, every body it sets (read from the file when it is set) and which PRs it marks ready.
+ */
 const fakeTracker = (tickets: Ticket[]) => {
   const reads: number[] = []
   const prs: DraftPr[] = []
+  const bodies: { pr: number; body: string }[] = []
+  const ready: number[] = []
   const tracker: TrackerPort = {
+    setPrBody: async (pr, bodyFile) => {
+      bodies.push({ pr, body: readFileSync(bodyFile, 'utf8') })
+    },
+    markPrReady: async (pr) => {
+      ready.push(pr)
+    },
     readSpec: async (spec) => {
       reads.push(spec)
       return tickets
@@ -28,7 +41,7 @@ const fakeTracker = (tickets: Ticket[]) => {
       return number
     }
   }
-  return { tracker, reads, prs }
+  return { tracker, reads, prs, bodies, ready }
 }
 
 /**
@@ -129,9 +142,27 @@ const mergesCleanly: Behave = (session, git) => {
   return 0
 }
 
-/** Every role succeeds: implementers commit, mergers merge. */
-const succeeds: Behave = (session, git) =>
-  session.role === 'merger' ? mergesCleanly(session, git) : implementsCleanly(session, git)
+/** A PR writer that writes `body` to the PR body file its prompt names, and exits 0. */
+const writesPrBody =
+  (body: string): Behave =>
+  (session) => {
+    const file = session.prompt.match(/\S+pr-body\.md/)?.[0]
+    if (file === undefined) throw new Error('PR writer prompt names no PR body file')
+    writeFileSync(file, body)
+    return 0
+  }
+
+/**
+ * Every role succeeds: implementers and the fixer commit, mergers merge, the PR writer writes a
+ * description with every `Closes` line, and the reviewer exits 0.
+ */
+const succeeds: Behave = (session, git) => {
+  if (session.role === 'merger') return mergesCleanly(session, git)
+  if (session.role === 'pr-writer') return writesPrBody(prDescription)(session, git)
+  if (session.role === 'implementer' || session.role === 'fixer')
+    return implementsCleanly(session, git)
+  return 0
+}
 
 const ticket = (number: number, blockedBy: Ticket['blockedBy'] = [], open = true): Ticket => ({
   number,
@@ -383,12 +414,16 @@ describe('runSpec', () => {
       const result = await runSpec(100, {}, ports)
 
       expect(result.ok).toBe(true)
-      expect(claude.sessions.map(({ role, logFile }) => [role, logFile])).toEqual(
-        [1, 2, 3].flatMap((n) => [
+      expect(claude.sessions.map(({ role, logFile }) => [role, logFile])).toEqual([
+        ...[1, 2, 3].flatMap((n) => [
           ['implementer', join(root, '.implement-spec', '100', 'logs', `implementer-${n}.log`)],
           ['merger', join(root, '.implement-spec', '100', 'logs', `merger-${n}.log`)]
+        ]),
+        ...['reviewer', 'fixer', 'pr-writer'].map((role) => [
+          role,
+          join(root, '.implement-spec', '100', 'logs', `${role}.log`)
         ])
-      )
+      ])
       const state = readState(100)
       expect([1, 2, 3].map((n) => state.tickets[n].status)).toEqual(['done', 'done', 'done'])
       for (const n of [1, 2, 3]) {
@@ -423,8 +458,11 @@ describe('runSpec', () => {
       expect(merger?.sessionId).not.toBe(claude.sessions[0].sessionId)
       expect(stateAtMerge?.tickets[1].merger).toEqual({ id: merger?.sessionId })
       expect(ticketWorktreeAtMerge).toBe('implement-spec/100-1')
-      expect(git.removed).toEqual([join(root, '.claude', 'worktrees', 'implement-spec-100-1')])
-      expect(git.worktrees.has(integration.path)).toBe(true)
+      // The ticket worktree goes right after its merge; the integration worktree only once the PR is ready.
+      expect(git.removed).toEqual([
+        join(root, '.claude', 'worktrees', 'implement-spec-100-1'),
+        integration.path
+      ])
       expect(readState(100).tickets[1]).toMatchObject({
         status: 'done',
         merger: { outcome: { exitCode: 0, check: 'passed' } }
@@ -487,7 +525,14 @@ describe('runSpec', () => {
       await runSpec(100, { explore: true }, ports)
 
       const runDir = join(root, '.implement-spec', '100')
-      expect(claude.sessions.map(({ role }) => role)).toEqual(['explorer', 'implementer', 'merger'])
+      expect(claude.sessions.map(({ role }) => role)).toEqual([
+        'explorer',
+        'implementer',
+        'merger',
+        'reviewer',
+        'fixer',
+        'pr-writer'
+      ])
       const [explorer, implementer] = claude.sessions
       expect(explorer).toMatchObject({
         cwd: join(root, '.claude', 'worktrees', 'implement-spec-100'),
@@ -504,7 +549,7 @@ describe('runSpec', () => {
 
       await runSpec(100, {}, ports)
 
-      expect(claude.sessions.map(({ role }) => role)).toEqual(['implementer', 'merger'])
+      expect(claude.sessions.some(({ role }) => role === 'explorer')).toBe(false)
       expect(readState(100).steps?.explore).toBeUndefined()
     })
 
@@ -543,7 +588,8 @@ describe('runSpec', () => {
       const { ports, tracker } = portsFor(
         [ticket(1), ticket(2, [{ number: 1, open: true }])],
         (session, fake) => {
-          prsAt[`${session.role}-${session.logFile.match(/(\d+)\.log$/)?.[1]}`] = tracker.prs.length
+          const ticketLog = session.logFile.match(/(\d+)\.log$/)?.[1]
+          if (ticketLog !== undefined) prsAt[`${session.role}-${ticketLog}`] = tracker.prs.length
           return succeeds(session, fake)
         }
       )
@@ -596,6 +642,151 @@ describe('runSpec', () => {
 
       expect(tracker.prs).toEqual([])
       expect(readState(100).pr).toBeUndefined()
+    })
+  })
+
+  describe('the end of the run', () => {
+    const runDir = () => join(root, '.implement-spec', '100')
+    const endRoles = ['reviewer', 'fixer', 'pr-writer']
+
+    it('runs the reviewer, fixer and PR writer in that order in the integration worktree once every ticket is done', async () => {
+      const { ports, claude } = portsFor([ticket(1), ticket(2, [{ number: 1, open: true }])])
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(claude.sessions.map(({ role }) => role)).toEqual([
+        'implementer',
+        'merger',
+        'implementer',
+        'merger',
+        ...endRoles
+      ])
+      const end = claude.sessions.slice(4)
+      for (const session of end) {
+        expect(session).toMatchObject({
+          cwd: join(root, '.claude', 'worktrees', 'implement-spec-100'),
+          resume: false,
+          logFile: join(runDir(), 'logs', `${session.role}.log`)
+        })
+        expect(session.prompt).toMatch(/#100\b/)
+        expect(session.prompt).toContain(join(runDir(), 'notes'))
+      }
+      const [reviewer, fixer, prWriter] = end
+      expect(reviewer.prompt).toContain('code-review')
+      expect(reviewer.prompt).toContain('main...implement-spec/100')
+      expect(fixer.prompt).toMatch(/\btdd\b/)
+      expect(prWriter.prompt).toContain(join(runDir(), 'pr-body.md'))
+      expect(new Set(claude.sessions.map(({ sessionId }) => sessionId)).size).toBe(7)
+    })
+
+    it('appends the Closes lines the description is missing, replaces the PR body, marks the PR ready and removes the integration worktree', async () => {
+      const order: string[] = []
+      const { ports, tracker, git } = portsFor(
+        [ticket(1), ticket(2, [{ number: 1, open: true }]), ticket(3)],
+        succeeds
+      )
+      const { setPrBody, markPrReady } = ports.tracker
+      ports.tracker.setPrBody = async (pr, file) => (order.push('body'), setPrBody(pr, file))
+      ports.tracker.markPrReady = async (pr) => (order.push('ready'), markPrReady(pr))
+      const { removeWorktree } = ports.git
+      ports.git.removeWorktree = async (path) => (
+        order.push(`remove ${path}`),
+        removeWorktree(path)
+      )
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      const integration = join(root, '.claude', 'worktrees', 'implement-spec-100')
+      expect(order.slice(-3)).toEqual(['body', 'ready', `remove ${integration}`])
+      expect(tracker.bodies).toEqual([{ pr: 500, body: expect.any(String) }])
+      const [{ body }] = tracker.bodies
+      expect(body.startsWith(prDescription)).toBe(true)
+      const closes = body.split('\n').filter((line) => line.startsWith('Closes'))
+      expect(closes.sort()).toEqual(['Closes #1', 'Closes #100', 'Closes #2', 'Closes #3'])
+      expect(tracker.ready).toEqual([500])
+      expect(git.worktrees.has(integration)).toBe(false)
+      expect(lines).toContainEqual(expect.stringMatching(/PR #500 ready/))
+    })
+
+    it('keeps a description that already closes everything as written', async () => {
+      const { ports, tracker } = portsFor([ticket(1)])
+
+      await runSpec(100, {}, ports)
+
+      expect(tracker.bodies.map(({ body }) => body.trimEnd())).toEqual([prDescription])
+    })
+
+    it('records every finished end-of-run step in the state file', async () => {
+      const { ports, claude } = portsFor([ticket(1)])
+
+      await runSpec(100, {}, ports)
+
+      const id = (role: string) =>
+        claude.sessions.find((session) => session.role === role)?.sessionId
+      expect(readState(100).steps).toEqual({
+        review: {
+          status: 'done',
+          session: { id: id('reviewer'), outcome: { exitCode: 0, check: 'passed' } }
+        },
+        fix: {
+          status: 'done',
+          session: { id: id('fixer'), outcome: { exitCode: 0, check: 'passed' } }
+        },
+        'pr-description': {
+          status: 'done',
+          session: { id: id('pr-writer'), outcome: { exitCode: 0, check: 'passed' } }
+        },
+        ready: { status: 'done' }
+      })
+    })
+
+    it('runs no end-of-run step while a ticket is not done, and leaves the PR a draft', async () => {
+      const { ports, claude, tracker } = portsFor([
+        ticket(1),
+        ticket(2, [{ number: 90, open: true }])
+      ])
+
+      await runSpec(100, {}, ports)
+
+      expect(claude.sessions.map(({ role }) => role)).toEqual(['implementer', 'merger'])
+      expect(tracker.bodies).toEqual([])
+      expect(tracker.ready).toEqual([])
+      expect(readState(100).steps).toBeUndefined()
+    })
+
+    it('stops before the next step when an end-of-run session fails, naming its log', async () => {
+      const { ports, claude, tracker } = portsFor([ticket(1)], (session, fake) =>
+        session.role === 'fixer' ? 1 : succeeds(session, fake)
+      )
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(false)
+      expect(claude.sessions.map(({ role }) => role).slice(-2)).toEqual(['reviewer', 'fixer'])
+      expect(tracker.ready).toEqual([])
+      expect(readState(100).steps.fix.status).toBe('failed')
+      expect(lines.find((line) => /failed/.test(line))).toContain(
+        join(runDir(), 'logs', 'fixer.log')
+      )
+    })
+
+    it('fails the PR description step when the PR writer leaves no body file', async () => {
+      const { ports, tracker } = portsFor([ticket(1)], (session, fake) =>
+        session.role === 'pr-writer' ? 0 : succeeds(session, fake)
+      )
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(false)
+      expect(existsSync(join(runDir(), 'pr-body.md'))).toBe(false)
+      expect(readState(100).steps['pr-description']).toMatchObject({
+        status: 'failed',
+        session: { outcome: { exitCode: 0, check: 'no-pr-body' } }
+      })
+      expect(tracker.bodies).toEqual([])
+      expect(tracker.ready).toEqual([])
     })
   })
 })

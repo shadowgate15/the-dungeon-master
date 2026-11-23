@@ -3,7 +3,15 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { explorerPrompt, implementerPrompt, mergerPrompt, type Pointers } from './prompts.ts'
+import {
+  explorerPrompt,
+  fixerPrompt,
+  implementerPrompt,
+  mergerPrompt,
+  prWriterPrompt,
+  reviewerPrompt,
+  type Pointers
+} from './prompts.ts'
 
 /** An issue that blocks a ticket, with its state on GitHub. */
 export type Blocker = { number: number; open: boolean }
@@ -16,6 +24,10 @@ export type TrackerPort = {
   readSpec: (spec: number) => Promise<Ticket[]>
   /** Opens a draft PR from `head` into `base` and resolves to its number. */
   openDraftPr: (pr: { head: string; base: string; title: string; body: string }) => Promise<number>
+  /** Replaces a PR's body with the contents of `bodyFile`. */
+  setPrBody: (pr: number, bodyFile: string) => Promise<void>
+  /** Marks a draft PR ready for review. */
+  markPrReady: (pr: number) => Promise<void>
 }
 
 export type GitPort = {
@@ -74,10 +86,11 @@ export type TicketStatus = 'pending' | 'running' | 'implemented' | 'done' | 'fai
 /**
  * A session's done check: `passed`, or the first check that failed. Implementers can fail
  * `nonzero-exit`, `no-commits` or `missing-launch-commit`; mergers `nonzero-exit` or `not-merged`
- * (the integration branch doesn't contain the ticket branch's head).
+ * (the integration branch doesn't contain the ticket branch's head); the PR writer `nonzero-exit`
+ * or `no-pr-body` (it wrote no PR body file).
  */
 export type DoneCheck =
-  'passed' | 'nonzero-exit' | 'no-commits' | 'missing-launch-commit' | 'not-merged'
+  'passed' | 'nonzero-exit' | 'no-commits' | 'missing-launch-commit' | 'not-merged' | 'no-pr-body'
 
 /** How a session ended: its exit code and the done check the script ran on it. */
 export type SessionOutcome = { exitCode: number; check: DoneCheck }
@@ -95,11 +108,15 @@ export type TicketState = {
   merger?: SessionState
 }
 
-/** A step of the run not tied to a ticket. `explore` runs before any implementer, when asked for. */
-export type StepName = 'explore'
+/**
+ * A step of the run not tied to a ticket. `explore` runs before any implementer, when asked for.
+ * The end of the run, once every ticket is `done`: `review`, `fix` and `pr-description` are role
+ * sessions; `ready` replaces the PR body, marks the PR ready and removes the integration worktree.
+ */
+export type StepName = 'explore' | 'review' | 'fix' | 'pr-description' | 'ready'
 
-/** A step's status and its session. A `done` step is never run again. */
-export type StepState = { status: 'running' | 'done' | 'failed'; session: SessionState }
+/** A step's status and its session (every step but `ready` has one). A `done` step is never run again. */
+export type StepState = { status: 'running' | 'done' | 'failed'; session?: SessionState }
 
 /** The run's persisted state, rewritten after every transition. */
 export type RunState = {
@@ -120,7 +137,8 @@ export const runPaths = (root: string, spec: number) => {
     dir,
     state: join(dir, 'state.json'),
     notes: join(dir, 'notes'),
-    logs: join(dir, 'logs')
+    logs: join(dir, 'logs'),
+    prBody: join(dir, 'pr-body.md')
   }
 }
 
@@ -184,35 +202,50 @@ const pointers = (run: Run): Pointers => ({
 })
 
 /**
- * Runs the explorer in the integration worktree, unless an earlier run finished exploring.
- * Resolves to whether exploration is done.
+ * Runs one role session for a step in the integration worktree, unless an earlier run finished
+ * the step. It passes on exit 0, or with `check` deciding beyond that. Resolves to whether the
+ * step is done.
  */
-const explore = async (run: Run): Promise<boolean> => {
+const sessionStep = async (
+  run: Run,
+  name: StepName,
+  role: Role,
+  prompt: string,
+  check: (exitCode: number) => DoneCheck = (exitCode) =>
+    exitCode === 0 ? 'passed' : 'nonzero-exit'
+): Promise<boolean> => {
   const { claude, log } = run.ports
-  if (run.state.steps?.explore?.status === 'done') return true
-  const logFile = logPath(run.paths.logs, 'explorer')
+  if (run.state.steps?.[name]?.status === 'done') return true
+  const logFile = logPath(run.paths.logs, role)
   const session: SessionState = { id: randomUUID() }
   const step: StepState = { status: 'running', session }
-  run.state.steps = { ...run.state.steps, explore: step }
+  run.state.steps = { ...run.state.steps, [name]: step }
   run.save()
 
-  log(`launched explorer (log ${logFile})`)
+  log(`launched ${role} (log ${logFile})`)
   const exitCode = await claude.run({
-    role: 'explorer',
+    role,
     cwd: run.state.integrationWorktree,
-    prompt: explorerPrompt(pointers(run)),
+    prompt,
     sessionId: session.id,
     resume: false,
     logFile
   })
 
-  const check: DoneCheck = exitCode === 0 ? 'passed' : 'nonzero-exit'
-  session.outcome = { exitCode, check }
-  step.status = check === 'passed' ? 'done' : 'failed'
+  const result = check(exitCode)
+  session.outcome = { exitCode, check: result }
+  step.status = result === 'passed' ? 'done' : 'failed'
   run.save()
-  if (check === 'passed') log(`explored (notes ${run.paths.notes})`)
-  else log(`failed explorer: ${check} (log ${logFile})`)
-  return check === 'passed'
+  if (result !== 'passed') log(`failed ${role}: ${result} (log ${logFile})`)
+  return result === 'passed'
+}
+
+/** Runs the explorer, unless an earlier run finished exploring. Resolves to whether exploration is done. */
+const explore = async (run: Run): Promise<boolean> => {
+  if (run.state.steps?.explore?.status === 'done') return true
+  const done = await sessionStep(run, 'explore', 'explorer', explorerPrompt(pointers(run)))
+  if (done) run.ports.log(`explored (notes ${run.paths.notes})`)
+  return done
 }
 
 /** The first done check an implementer fails, or `passed`. */
@@ -334,6 +367,58 @@ const merge = async (run: Run, ticket: number): Promise<boolean> => {
   return true
 }
 
+/**
+ * Finishes a run whose tickets are all `done`: reviewer, fixer, PR writer, then the PR body is
+ * replaced from the PR writer's file and the PR marked ready. Each finished step is recorded, so a
+ * re-run picks up at the first unfinished one. Resolves to whether the run finished.
+ */
+const finish = async (run: Run): Promise<boolean> => {
+  const p = pointers(run)
+  const bodyFile = run.paths.prBody
+  const described = (exitCode: number): DoneCheck =>
+    exitCode !== 0 ? 'nonzero-exit' : existsSync(bodyFile) ? 'passed' : 'no-pr-body'
+  return (
+    (await sessionStep(run, 'review', 'reviewer', reviewerPrompt(p))) &&
+    (await sessionStep(run, 'fix', 'fixer', fixerPrompt(p))) &&
+    (await sessionStep(
+      run,
+      'pr-description',
+      'pr-writer',
+      prWriterPrompt(p, { bodyFile }),
+      described
+    )) &&
+    (await markReady(run))
+  )
+}
+
+/** `body` with every line of the minimal `Closes` body it lacks appended. */
+const withCloses = (run: Run, body: string) => {
+  const missing = closesBody(run)
+    .split('\n')
+    .filter((line) => !new RegExp(`^\\s*${line}\\b`, 'im').test(body))
+  return missing.length === 0 ? body : `${body.trimEnd()}\n\n${missing.join('\n')}\n`
+}
+
+/**
+ * The `ready` step: appends any missing `Closes` lines to the PR body file, replaces the PR body
+ * from it, marks the PR ready and removes the integration worktree (the branch is kept).
+ */
+const markReady = async (run: Run): Promise<boolean> => {
+  if (run.state.steps?.ready?.status === 'done') return true
+  const { tracker, git, log } = run.ports
+  await openPr(run)
+  const pr = run.state.pr as number
+  const bodyFile = run.paths.prBody
+  writeFileSync(bodyFile, withCloses(run, readFileSync(bodyFile, 'utf8')))
+  await tracker.setPrBody(pr, bodyFile)
+  await tracker.markPrReady(pr)
+  await git.removeWorktree(run.state.integrationWorktree)
+  run.state.steps = { ...run.state.steps, ready: { status: 'done' } }
+  run.save()
+  log(`PR #${pr} ready`)
+  return true
+}
+
 export const runSpec = async (
   spec: number,
   options: RunOptions,
@@ -376,6 +461,9 @@ export const runSpec = async (
       continue
     }
     if (!(await merge(run, next))) return { ok: false, frontier }
+  }
+  if (ok && Object.values(state.tickets).every(({ status }) => status === 'done')) {
+    ok = await finish(run)
   }
   return { ok, frontier }
 }

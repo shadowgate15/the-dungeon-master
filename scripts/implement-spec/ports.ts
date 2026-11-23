@@ -48,6 +48,12 @@ export const createTracker = (cwd: string): TrackerPort => ({
     const number = Number(url.trim().match(/\/pull\/(\d+)/)?.[1])
     if (!Number.isInteger(number)) throw new Error(`gh pr create printed no PR URL: ${url}`)
     return number
+  },
+  setPrBody: async (pr, bodyFile) => {
+    await run('gh', ['pr', 'edit', String(pr), '--body-file', bodyFile], cwd)
+  },
+  markPrReady: async (pr) => {
+    await run('gh', ['pr', 'ready', String(pr)], cwd)
   }
 })
 

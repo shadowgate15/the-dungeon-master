@@ -19,7 +19,9 @@ Run it from any checkout or worktree of this repository. It resolves the main re
 7. Runs the done check on the implementer: it exited 0, its branch has commits beyond the launch commit, and the branch still contains the launch commit. A pass marks the ticket `implemented`; anything else marks it `failed`, keeps its worktree, and names the failed check and the log on the console. A failed ticket's dependents never launch; independent tickets carry on.
 8. Merging an implemented ticket: records a fresh session ID and runs a merger `claude -p` session in the integration worktree to merge the ticket branch. It passes when it exits 0 and the integration branch contains the ticket branch's head. A pass marks the ticket `done` and removes its worktree (the branch is kept). The first pass also opens a draft PR from the integration branch into `main`, with the body `Closes #<spec#>` followed by one `Closes #<ticket#>` line per ticket, and records its number in the state file; a re-run reuses that PR. The script never closes issues itself: merging the PR does. A failure (`nonzero-exit` or `not-merged`) leaves the ticket `implemented` with its worktree, names the log, and stops the run.
 
-The run exits non-zero when any implementer or merger failed.
+9. Finishing the run, only once every ticket is `done`: a reviewer session runs `/code-review` on `main...implement-spec/<spec#>` and writes its findings to `notes/review.md`; a fixer session fixes all of them with `tdd`; a PR-writer session writes the PR description with the `pr` skill to `pr-body.md` in the run directory. All three run in the integration worktree. The script then appends any `Closes #<spec#>` or `Closes #<ticket#>` line missing from that file, replaces the PR body from it, marks the PR ready and removes the integration worktree (the branch is kept). Each finished step (`review`, `fix`, `pr-description`, `ready`) is recorded under `steps` in the state file and skipped on a re-run. A session that exits non-zero (or a PR writer that leaves no `pr-body.md`: `no-pr-body`) fails its step, names its log and ends the run with the PR still a draft.
+
+The run exits non-zero when any implementer, merger or end-of-run step failed.
 
 With `--explore`, one explorer `claude -p` session runs in the integration worktree before any implementer and writes Markdown notes to the run's `notes/` directory, which every later prompt points at. Its session and status are recorded under `steps.explore` in the state file; once it is `done`, re-runs skip it. A failed explorer (non-zero exit) ends the run before any implementer launches. Without the flag no explorer runs.
 
@@ -27,11 +29,12 @@ With `--explore`, one explorer `claude -p` session runs in the integration workt
 
 `.implement-spec/<spec#>/` at the main repository root, gitignored:
 
-| Path         | Contents                                                                                                                                                                                                    |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `state.json` | The integration branch and worktree, each ticket's status, launch commit, and implementer and merger sessions (ID and outcome), each step not tied to a ticket (`steps.explore`), and the PR number (`pr`). |
-| `notes/`     | Shared notes for the run's sessions, including the explorer's.                                                                                                                                              |
-| `logs/`      | One log per session: `<role>-<ticket#>.log`, or `<role>.log` for a role not tied to a ticket (`explorer.log`).                                                                                              |
+| Path         | Contents                                                                                                                                                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state.json` | The integration branch and worktree, each ticket's status, launch commit, and implementer and merger sessions (ID and outcome), each step not tied to a ticket (`steps.explore`, `review`, `fix`, `pr-description`, `ready`), and the PR number (`pr`). |
+| `notes/`     | Shared notes for the run's sessions, including the explorer's.                                                                                                                                                                                          |
+| `pr-body.md` | The PR description the PR writer wrote, with any missing `Closes` lines appended.                                                                                                                                                                       |
+| `logs/`      | One log per session: `<role>-<ticket#>.log`, or `<role>.log` for a role not tied to a ticket (`explorer.log`, `reviewer.log`, `fixer.log`, `pr-writer.log`).                                                                                            |
 
 ## Re-running
 
