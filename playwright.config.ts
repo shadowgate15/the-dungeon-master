@@ -19,6 +19,8 @@ export default defineConfig({
       DATABASE_URL,
       DUNGEON_MASTER_HOME: E2E_HOME,
       DUNGEON_MASTER_CAMPAIGNS: E2E_CAMPAIGNS,
+      // The runtime file the bridge reads must name the preview server's port.
+      DUNGEON_MASTER_PORT: '4173',
       // Seeded dice, so e2e rolls are deterministic.
       DICE_SEED: '1'
     }

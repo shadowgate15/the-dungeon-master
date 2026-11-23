@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm'
 import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import { campaign } from '../db/schema'
 import { campaignSeedCard, parseCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
-import { campaignDatabasePath } from './paths'
+import { campaignDatabasePath, canonicalFolder } from './paths'
 import { createRegistry } from './registry'
 
 export type Campaign = typeof campaign.$inferSelect
@@ -161,10 +161,10 @@ export function createCampaignLibrary({ home, now = Date.now }: Options) {
      * a registered Campaign (or its database is gone). How game tools find their Campaign.
      */
     databaseFor(input: string): Database | undefined {
-      const folder = path.resolve(input)
-      const entry = registry.list().find((e) => e.path === folder)
-      if (!entry || !readCampaign(folder)) return undefined
-      return database(folder)
+      const folder = canonicalFolder(input)
+      const entry = registry.list().find((e) => canonicalFolder(e.path) === folder)
+      if (!entry || !readCampaign(entry.path)) return undefined
+      return database(entry.path)
     },
 
     /** A no-op when already archived. */

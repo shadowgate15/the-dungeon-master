@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { Database } from '../db/connect'
+import type { Queryable } from '../db/connect'
 
 /**
  * The shared contract every game tool follows: short snake_case names, per-Entity versions on
@@ -68,7 +68,7 @@ export function expectVersion(
 }
 
 /** What a tool's `run` sees. Inside a mutating call, `db` is the call's transaction. */
-export type ToolContext = { db: Database }
+export type ToolContext = { db: Queryable }
 
 /** The one Event a mutating call logs. Code stamps the Session and in-fiction time. */
 export type ToolEvent = {

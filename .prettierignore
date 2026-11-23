@@ -12,3 +12,6 @@ bun.lockb
 # Vendored upstream data and its generated, committed normalization
 /vendor/
 /src/lib/rules/data/
+
+# The generated bridge bundle (pnpm build:bridge)
+/plugin/bin/dm-bridge.mjs

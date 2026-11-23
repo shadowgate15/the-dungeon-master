@@ -1,7 +1,7 @@
 import { asc } from 'drizzle-orm'
 import { z } from 'zod'
 import type { CampaignLibrary } from '../campaign/library'
-import type { Database } from '../db/connect'
+import type { Database, Queryable } from '../db/connect'
 import { event } from '../db/schema'
 import {
   PLUGIN_NAME,
@@ -18,7 +18,7 @@ type Options = {
   library: CampaignLibrary
   tools: GameTool[]
   /** Reads the Campaign's current stamp. No Sessions or clock yet: offline, minute 0. */
-  stamp?: (db: Database) => Stamp
+  stamp?: (db: Queryable) => Stamp
   now?: () => number
 }
 
@@ -82,8 +82,8 @@ export function createToolHost({
     }
     if (!tool.mutates) return tool.run({ db }, parsed.data)
     return db.transaction((tx) => {
-      const { result, skill, event: logged } = tool.run({ db: tx as Database }, parsed.data)
-      const { sessionId, minute } = stamp(tx as Database)
+      const { result, skill, event: logged } = tool.run({ db: tx }, parsed.data)
+      const { sessionId, minute } = stamp(tx)
       tx.insert(event)
         .values({
           sessionId,

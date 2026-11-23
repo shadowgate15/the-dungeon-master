@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -16,4 +17,17 @@ export function defaultCampaignRoot(env: Env = process.env): string {
 /** A Campaign folder's database, inside its `.dm/` directory. */
 export function campaignDatabasePath(folder: string): string {
   return path.join(folder, '.dm', 'campaign.db')
+}
+
+/**
+ * A folder's canonical path, with symlinks resolved, so the same Campaign folder matches however
+ * it was reached (a process's cwd is always the real path).
+ */
+export function canonicalFolder(folder: string): string {
+  const resolved = path.resolve(folder)
+  try {
+    return fs.realpathSync(resolved)
+  } catch {
+    return resolved
+  }
 }
