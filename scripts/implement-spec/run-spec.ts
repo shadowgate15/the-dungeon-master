@@ -150,6 +150,8 @@ export type RunState = {
   steps?: Partial<Record<StepName, StepState>>
   /** The draft PR from the integration branch, opened after the first merge. */
   pr?: number
+  /** Set once the `ready` step has marked the PR ready, so a re-run of that step doesn't again. */
+  prReady?: boolean
 }
 
 /** Where a spec's run lives: state, notes, logs and the PR body, under the main repository root. */
@@ -506,7 +508,9 @@ const withCloses = (run: Run, body: string) => {
 
 /**
  * The `ready` step: appends any missing `Closes` lines to the PR body file, replaces the PR body
- * from it, marks the PR ready and removes the integration worktree (the branch is kept).
+ * from it, marks the PR ready and removes the integration worktree (the branch is kept). Each part
+ * is safe to repeat, and marking the PR ready is recorded, so a re-run after a throw part-way
+ * through finishes the step.
  */
 const markReady = async (run: Run): Promise<boolean> => {
   if (stepDone(run, 'ready')) return true
@@ -516,7 +520,11 @@ const markReady = async (run: Run): Promise<boolean> => {
   const bodyFile = run.paths.prBody
   writeFileSync(bodyFile, withCloses(run, readFileSync(bodyFile, 'utf8')))
   await tracker.setPrBody(pr, bodyFile)
-  await tracker.markPrReady(pr)
+  if (!run.state.prReady) {
+    await tracker.markPrReady(pr)
+    run.state.prReady = true
+    run.save()
+  }
   await git.removeWorktree(run.state.integrationWorktree)
   run.state.steps = { ...run.state.steps, ready: { status: 'done' } }
   run.save()

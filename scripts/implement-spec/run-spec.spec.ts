@@ -30,6 +30,7 @@ const fakeTracker = (tickets: Ticket[]) => {
       bodies.push({ pr, body: readFileSync(bodyFile, 'utf8') })
     },
     markPrReady: async (pr) => {
+      if (ready.includes(pr)) throw new Error(`PR #${pr} is already ready`)
       ready.push(pr)
     },
     readSpec: async (spec) => {
@@ -1170,6 +1171,26 @@ describe('runSpec', () => {
       })
       expect(resumed.prompt).toMatch(/interrupted/)
       expect(next.role).toBe('implementer')
+    })
+
+    it('finishes a re-run after the ready step threw once the PR was already marked ready', async () => {
+      const { ports, git, tracker } = portsFor([ticket(1)])
+      const removeWorktree = git.git.removeWorktree
+      let broken = true
+      git.git.removeWorktree = async (path) => {
+        if (broken && path.endsWith('implement-spec-100')) throw new Error('worktree busy')
+        return removeWorktree(path)
+      }
+      await expect(runSpec(100, {}, ports)).rejects.toThrow('worktree busy')
+      expect(tracker.ready).toEqual([500])
+      broken = false
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(tracker.ready).toEqual([500])
+      expect(readState(100).steps.ready).toEqual({ status: 'done' })
+      expect(git.worktrees.size).toBe(0)
     })
 
     it('does no work on a re-run of a finished run', async () => {
