@@ -1,6 +1,7 @@
 import { and, asc, eq, max } from 'drizzle-orm'
 import { canAct } from '#lib/character/acting.ts'
 import { SOLO_PLAYER } from '#lib/character/enums.ts'
+import type { OpenFloor, PendingDeclaration } from '#lib/play/floor.ts'
 import type { Database } from '../db/connect'
 import { campaign, character, declaration, floor } from '../db/schema'
 
@@ -9,18 +10,6 @@ export class DeclarationRefusedError extends Error {}
 
 /** The open Floor holds no Declaration with this id. */
 export class DeclarationNotFoundError extends Error {}
-
-/** A Declaration on the open Floor, as the Player sees it in the pending tray. */
-export type PendingDeclaration = {
-  id: string
-  character: string
-  characterName: string
-  player: string
-  text: string
-}
-
-/** The open Floor: the Declarations on it in send order. */
-export type OpenFloor = { declarations: PendingDeclaration[] }
 
 /** Declarations are a sentence or a short paragraph, not an essay. */
 export const DECLARATION_MAX = 2000

@@ -2,8 +2,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { emptyDraft, type CharacterDraft } from '#lib/character/draft.ts'
 import { SOLO_PLAYER } from '#lib/character/enums.ts'
+import { addCharacter, fighterDraft } from '../character/test-characters'
 import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
 import { DeclarationNotFoundError, DeclarationRefusedError } from './floor'
 
@@ -23,34 +23,7 @@ beforeEach(() => {
 
 afterEach(() => library.close())
 
-/** A Human Fighter with every wizard step answered. */
-const fighter = (name: string): CharacterDraft => ({
-  ...emptyDraft(),
-  name,
-  race: 'human',
-  class: 'fighter',
-  background: 'acolyte',
-  abilityMethod: 'standard-array',
-  baseScores: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 },
-  picks: {
-    'class/fighter/proficiency-0': ['skill-athletics', 'skill-intimidation'],
-    'class/fighter/fightingStyle-0': ['fighter-fighting-style-defense'],
-    'race/human/language-0': ['dwarvish'],
-    'background/acolyte/language-0': ['elvish', 'halfling']
-  },
-  equipment: {
-    ...Object.fromEntries(
-      [0, 1, 2, 3].map((i) => [`class/fighter/equipment-${i}`, { option: 0, wild: [] }])
-    ),
-    'background/acolyte/equipment-0': { option: 0, wild: ['amulet'] }
-  }
-})
-
-function addCharacter(name: string) {
-  const party = library.party(campaignId)
-  const { id } = party.startDraft()
-  return party.saveDraft(id, { draft: fighter(name), step: 'review' }).id
-}
+const addFighter = (name: string) => addCharacter(library, campaignId, fighterDraft(name))
 
 describe('Floor', () => {
   it('starts open with nothing on it', () => {
@@ -58,8 +31,8 @@ describe('Floor', () => {
   })
 
   it('keeps sent Declarations in send order, each naming one Character and its Player', () => {
-    const wren = addCharacter('Wren')
-    const bram = addCharacter('Bram')
+    const wren = addFighter('Wren')
+    const bram = addFighter('Bram')
     const floor = library.floor(campaignId)
 
     floor.send({ character: wren, text: 'I keep my back to the stairs.' })
@@ -86,7 +59,7 @@ describe('Floor', () => {
   })
 
   it('edits and withdraws a pending Declaration', () => {
-    const wren = addCharacter('Wren')
+    const wren = addFighter('Wren')
     const floor = library.floor(campaignId)
     const first = floor.send({ character: wren, text: 'I pick the lock.' })
     const second = floor.send({ character: wren, text: 'I listen at the door.' })
@@ -98,7 +71,7 @@ describe('Floor', () => {
   })
 
   it('keeps the tray across a reopen of the Campaign', () => {
-    const wren = addCharacter('Wren')
+    const wren = addFighter('Wren')
     library.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })
     library.close()
 
@@ -113,7 +86,7 @@ describe('Floor', () => {
   })
 
   it('refuses a Declaration with no words, or for a Character who is not there', () => {
-    const wren = addCharacter('Wren')
+    const wren = addFighter('Wren')
     const floor = library.floor(campaignId)
 
     expect(() => floor.send({ character: wren, text: '   ' })).toThrow(DeclarationRefusedError)
