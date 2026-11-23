@@ -14,15 +14,22 @@ import { tryDraftToCharacterInput } from './save.ts'
 import { computeSteps, STEPS, type StepDefinition, type StepId, type StepState } from './steps.ts'
 
 /**
- * The wizard's reactive state: the browser-only Character draft, the derived resolved features and
+ * Where the wizard keeps its work: a Character draft stored with a Campaign (a new Character), or
+ * a saved Character of a Campaign being edited.
+ */
+export type WizardTarget =
+  { campaign: string; draft: string } | { campaign: string; character: string }
+
+/**
+ * The wizard's reactive state: the Character draft, the derived resolved features and
  * stats, and the step rail. One instance per open wizard. Steps read it
  * and call `update`; they never write `draft` directly, so change rules always run.
  */
 export class CharacterWizard {
   readonly rules: WizardRules
   readonly #defs: readonly StepDefinition[]
-  /** The saved Character being edited (review saves with PUT), or null for a new one. */
-  readonly characterId: string | null
+  /** Where the draft is written and saved; null keeps it in memory only (tests, stories). */
+  readonly target: WizardTarget | null
 
   draft = $state<CharacterDraft>(emptyDraft())
   /** Messages about choices cleared by the last changes; shown above the stats strip. */
@@ -45,19 +52,22 @@ export class CharacterWizard {
   characterInput: CharacterInput | null
 
   /**
-   * @param initial a saved Character's draft (edit page): the wizard opens on it with nothing
-   *   unsaved. Omit for a new Character.
-   * @param characterId the id of the Character `initial` came from.
+   * @param initial a stored draft or a saved Character's draft: the wizard opens on it with
+   *   nothing unsaved. Omit for an empty one.
+   * @param target where `initial` came from and where the wizard writes.
+   * @param step the step a stored draft was last on.
    */
   constructor(
     rules: WizardRules,
     defs: readonly StepDefinition[] = STEPS,
     initial?: CharacterDraft,
-    characterId: string | null = null
+    target: WizardTarget | null = null,
+    step: StepId = 'concept'
   ) {
     this.rules = rules
-    this.characterId = characterId
+    this.target = target
     if (initial) this.draft = initial
+    this.current = step
     this.#defs = defs
     this.resolved = $derived(resolveFeatures(rules, resolverDraft(this.draft)))
     this.stats = $derived(
@@ -75,6 +85,11 @@ export class CharacterWizard {
         this.#defs
       )
     )
+  }
+
+  /** The saved Character being edited, or null for a new one. */
+  get characterId(): string | null {
+    return this.target && 'character' in this.target ? this.target.character : null
   }
 
   /** Applies a change to the draft, then the keep/clear rules; cleared choices become notices. */

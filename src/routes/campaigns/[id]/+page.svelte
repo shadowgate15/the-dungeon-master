@@ -45,7 +45,14 @@
       This Campaign's folder is missing. Re-add it from the Campaign library to open it.
     </Alert>
   {:else}
-    <CreationStepper current="Seed" unavailable={['Party', 'Begin']} />
+    <CreationStepper
+      current="Seed"
+      hrefs={{
+        Seed: resolve('/campaigns/[id]', { id: data.campaign.id }),
+        Party: resolve('/campaigns/[id]/party', { id: data.campaign.id })
+      }}
+      unavailable={['Begin']}
+    />
 
     {#if archived}
       <Alert variant="warning">This Campaign is archived. Restore it to change it.</Alert>
