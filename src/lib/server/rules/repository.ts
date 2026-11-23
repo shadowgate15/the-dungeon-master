@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, sql } from 'drizzle-orm'
 import type { ChoiceGroup } from '../../rules/schema'
 import type { Database } from '../db/connect'
 import * as t from '../db/rules-schema'
@@ -8,6 +8,11 @@ import * as t from '../db/rules-schema'
  * and carry their relations as slugs, so callers never join tables themselves.
  */
 export type RulesRepository = ReturnType<typeof createRulesRepository>
+
+/** The rules kinds a handle can name: `spell:fireball`, `monster:goblin`, `rule:cover`... */
+export type RulesKind = 'spell' | 'monster' | 'condition' | 'magic-item' | 'rule'
+
+export type SearchResult = { handle: string; kind: RulesKind; name: string; snippet: string }
 
 type OwnerType = (typeof t.choiceGroup.$inferSelect)['ownerType']
 
@@ -305,6 +310,108 @@ export function createRulesRepository(db: Database) {
       }))
   }
 
+  function monsters() {
+    const proficiency = slugs(db.select().from(t.proficiency).all())
+    const condition = slugs(db.select().from(t.condition).all())
+    const profs = group(
+      db.select().from(t.monsterProficiency).orderBy(asc(t.monsterProficiency.position)).all(),
+      (r) => r.monsterId
+    )
+    const immunities = group(db.select().from(t.monsterConditionImmunity).all(), (r) => r.monsterId)
+    return db
+      .select()
+      .from(t.monster)
+      .orderBy(asc(t.monster.slug))
+      .all()
+      .map(({ str, dex, con, int, wis, cha, ...m }) => ({
+        ...m,
+        abilityScores: { str, dex, con, int, wis, cha },
+        proficiencies: (profs.get(m.id) ?? []).map((p) => ({
+          proficiency: proficiency.get(p.proficiencyId)!,
+          value: p.value
+        })),
+        conditionImmunities: (immunities.get(m.id) ?? [])
+          .map((c) => condition.get(c.conditionId)!)
+          .sort()
+      }))
+  }
+
+  function magicItems() {
+    const category = slugs(db.select().from(t.equipmentCategory).all())
+    const rows = db.select().from(t.magicItem).orderBy(asc(t.magicItem.slug)).all()
+    const item = slugs(rows)
+    const variants = group(
+      rows.filter((r) => r.variantOfId !== null),
+      (r) => r.variantOfId!
+    )
+    return rows.map(({ categoryId, variantOfId, ...i }) => ({
+      ...i,
+      category: category.get(categoryId)!,
+      variantOf: variantOfId ? item.get(variantOfId)! : null,
+      variants: (variants.get(i.id) ?? []).map((v) => v.slug)
+    }))
+  }
+
+  const conditions = () => db.select().from(t.condition).orderBy(asc(t.condition.slug)).all()
+  const ruleSections = () => db.select().from(t.ruleSection).orderBy(asc(t.ruleSection.slug)).all()
+
+  /** Each rules kind a handle can name, and how to read its entries. */
+  const kinds = {
+    spell: () => spells(),
+    monster: monsters,
+    condition: conditions,
+    'magic-item': magicItems,
+    rule: ruleSections
+  }
+  type Kind = keyof typeof kinds
+  type Entry = {
+    [K in Kind]: {
+      handle: string
+      kind: K
+      name: string
+      entry: ReturnType<(typeof kinds)[K]>[number]
+    }
+  }[Kind]
+
+  /** Resolves a rules handle (`monster:goblin`, `condition:prone`) to its entry, or null. */
+  function entry(handle: string): Entry | null {
+    const [kind, slug, ...rest] = handle.split(':')
+    if (rest.length || !slug || !Object.hasOwn(kinds, kind)) return null
+    const found = kinds[kind as Kind]().find((e) => e.slug === slug)
+    return found ? ({ handle, kind, name: found.name, entry: found } as Entry) : null
+  }
+
+  /**
+   * Ranked matches for a free-text query across every rules kind. An entry named exactly by the
+   * query comes first; then entries holding every word, then entries holding any, by relevance
+   * (a word in the name weighs more than one in the text). Words match other forms of themselves
+   * ("grappling" finds Grappled).
+   */
+  function search(query: string, { limit = 10 }: { limit?: number } = {}): SearchResult[] {
+    const words = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+    if (!words.length) return []
+    const terms = words.map((w) => `"${w}"`)
+    const name = words.join(' ')
+    const run = (match: string, max: number) =>
+      db.all<SearchResult>(sql`
+        SELECT handle, kind, name,
+          snippet(rules_search, 3, '', '', '…', 16) AS snippet
+        FROM rules_search
+        WHERE rules_search MATCH ${match}
+        ORDER BY lower(name) = ${name} DESC, bm25(rules_search, 0, 0, 10, 1)
+        LIMIT ${max}
+      `)
+    const results = run(terms.join(' AND '), limit)
+    if (results.length < limit && terms.length > 1) {
+      const seen = new Set(results.map((r) => r.handle))
+      for (const r of run(terms.join(' OR '), limit)) {
+        if (results.length >= limit) break
+        if (!seen.has(r.handle)) results.push(r)
+      }
+    }
+    return results
+  }
+
   return {
     datasetInfo: () =>
       db.select().from(t.rulesDataset).where(eq(t.rulesDataset.id, 1)).get() ?? null,
@@ -336,6 +443,12 @@ export function createRulesRepository(db: Database) {
     equipmentItem: (slug: string) => equipment().find((e) => e.slug === slug) ?? null,
     backgrounds,
     background: (slug: string) => backgrounds().find((b) => b.slug === slug) ?? null,
+    monsters,
+    conditions,
+    magicItems,
+    ruleSections,
+    entry,
+    search,
     abilityScoreMethods: () =>
       db.select().from(t.abilityScoreMethod).orderBy(asc(t.abilityScoreMethod.id)).all()
   }

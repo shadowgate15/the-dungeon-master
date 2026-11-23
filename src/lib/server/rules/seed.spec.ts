@@ -35,7 +35,12 @@ const snapshot = () => ({
   spells: repo.spells(),
   equipment: repo.equipment(),
   features: repo.features(),
-  backgrounds: repo.backgrounds()
+  backgrounds: repo.backgrounds(),
+  monsters: repo.monsters(),
+  conditions: repo.conditions(),
+  magicItems: repo.magicItems(),
+  ruleSections: repo.ruleSections(),
+  search: repo.search('dragon breath')
 })
 
 describe('seedRulesData', () => {
@@ -45,6 +50,25 @@ describe('seedRulesData', () => {
     expect(repo.races()).toHaveLength(data.races.length)
     expect(repo.classes()).toHaveLength(12)
     expect(repo.spells()).toHaveLength(319)
+    expect(repo.monsters()).toHaveLength(334)
+    expect(repo.conditions()).toHaveLength(15)
+    expect(repo.magicItems()).toHaveLength(362)
+    expect(repo.ruleSections()).toHaveLength(33)
+  })
+
+  it('serves every monster, magic item and rules section exactly as the committed data has it', () => {
+    seed()
+
+    const strip = <R extends { id?: number }>(rows: R[]) =>
+      rows.map((r) => {
+        const copy = { ...r }
+        delete copy.id
+        return copy
+      })
+    expect(strip(repo.monsters())).toEqual(data.monsters)
+    expect(strip(repo.conditions())).toEqual(data.conditions)
+    expect(strip(repo.magicItems())).toEqual(data.magicItems)
+    expect(strip(repo.ruleSections())).toEqual(data.ruleSections)
   })
 
   it('is idempotent: seeding twice changes nothing, including ids', () => {
