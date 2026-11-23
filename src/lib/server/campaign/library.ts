@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import { campaign } from '../db/schema'
 import { createParty, type Party } from '../character/party'
+import { createFloor, type Floor } from '../floor/floor'
 import { seedRulesData } from '../rules/seed'
 import { campaignSeedCard, parseCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
 import { campaignDatabasePath, canonicalFolder } from './paths'
@@ -173,6 +174,11 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
     /** The Campaign's Characters and Character drafts. */
     party(id: string): Party {
       return createParty(database(find(id).folder), now)
+    },
+
+    /** The Campaign's open Floor and the Declarations on it. */
+    floor(id: string): Floor {
+      return createFloor(database(find(id).folder), now)
     },
 
     /**
