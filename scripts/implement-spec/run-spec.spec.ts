@@ -9,6 +9,7 @@ import {
   type ClaudePort,
   type GitPort,
   type Ports,
+  type RunState,
   type Ticket,
   type TrackerPort
 } from './run-spec.ts'
@@ -180,10 +181,16 @@ const ticket = (number: number, blockedBy: Ticket['blockedBy'] = []): Ticket => 
 
 let root: string
 let lines: string[]
+/** The fake clock behind the `now` port; sessions move it forward to take time. */
+let clock: { at: number }
+
+const START = Date.parse('2026-11-23T14:00:00Z')
+const MINUTE = 60 * 1000
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'implement-spec-'))
   lines = []
+  clock = { at: START }
 })
 
 afterEach(() => rmSync(root, { recursive: true, force: true }))
@@ -193,7 +200,12 @@ const portsFor = (tickets: Ticket[], behave: Behave = succeeds) => {
   const git = fakeGit(root)
   const claude = fakeClaude(git, behave)
   const waits: number[] = []
+  /** Every state the run handed the progress port, copied as it was then. */
+  const shown: RunState[] = []
   const ports: Ports = {
+    now: () => clock.at,
+    pid: 4242,
+    progress: (state) => shown.push(structuredClone(state)),
     tracker: tracker.tracker,
     git: git.git,
     claude: claude.claude,
@@ -202,7 +214,7 @@ const portsFor = (tickets: Ticket[], behave: Behave = succeeds) => {
       waits.push(time)
     }
   }
-  return { ports, tracker, git, claude, waits }
+  return { ports, tracker, git, claude, waits, shown }
 }
 
 const integrationWorktrees = (git: FakeGit) =>
@@ -267,8 +279,10 @@ describe('runSpec', () => {
     const stateAfterFirst = readState(100)
     const second = await runSpec(100, {}, ports)
 
+    const stateAfterSecond = readState(100)
+    expect(stateAfterSecond.runs).toHaveLength(2)
     expect(integrationWorktrees(git)).toHaveLength(1)
-    expect(readState(100)).toEqual(stateAfterFirst)
+    expect({ ...stateAfterSecond, runs: [] }).toEqual({ ...stateAfterFirst, runs: [] })
     expect(second.frontier).toEqual(first.frontier)
   })
 
@@ -361,7 +375,11 @@ describe('runSpec', () => {
 
       const [{ sessionId }] = claude.sessions.filter(({ role }) => role === 'implementer')
       expect(sessionId).toMatch(/^[0-9a-f-]{36}$/)
-      expect(stateAtLaunch?.tickets[1].session).toEqual({ id: sessionId })
+      expect(stateAtLaunch?.tickets[1].session).toEqual({
+        id: sessionId,
+        startedAt: START,
+        attempts: 1
+      })
     })
 
     it('moves the ticket on to merging when the done check passes, with one console line per event', async () => {
@@ -472,7 +490,11 @@ describe('runSpec', () => {
       expect(merger).toMatchObject({ cwd: integration.path, resume: false })
       expect(merger?.prompt).toContain('implement-spec/100-1')
       expect(merger?.sessionId).not.toBe(claude.sessions[0].sessionId)
-      expect(stateAtMerge?.tickets[1].merger).toEqual({ id: merger?.sessionId })
+      expect(stateAtMerge?.tickets[1].merger).toEqual({
+        id: merger?.sessionId,
+        startedAt: START,
+        attempts: 1
+      })
       expect(ticketWorktreeAtMerge).toBe('implement-spec/100-1')
       // The ticket worktree goes right after its merge; the integration worktree only once the PR is ready.
       expect(git.removed).toEqual([
@@ -876,18 +898,19 @@ describe('runSpec', () => {
 
       const id = (role: string) =>
         claude.sessions.find((session) => session.role === role)?.sessionId
+      const timed = { startedAt: START, endedAt: START, attempts: 1 }
       expect(readState(100).steps).toEqual({
         review: {
           status: 'done',
-          session: { id: id('reviewer'), outcome: { exitCode: 0, check: 'passed' } }
+          session: { id: id('reviewer'), ...timed, outcome: { exitCode: 0, check: 'passed' } }
         },
         fix: {
           status: 'done',
-          session: { id: id('fixer'), outcome: { exitCode: 0, check: 'passed' } }
+          session: { id: id('fixer'), ...timed, outcome: { exitCode: 0, check: 'passed' } }
         },
         'pr-description': {
           status: 'done',
-          session: { id: id('pr-writer'), outcome: { exitCode: 0, check: 'passed' } }
+          session: { id: id('pr-writer'), ...timed, outcome: { exitCode: 0, check: 'passed' } }
         },
         ready: { status: 'done' }
       })
@@ -938,6 +961,179 @@ describe('runSpec', () => {
       })
       expect(tracker.bodies).toEqual([])
       expect(tracker.ready).toEqual([])
+    })
+  })
+
+  describe('timing', () => {
+    it('records when each session started and ended, and that it ran once', async () => {
+      const { ports } = portsFor([ticket(1)], (session, fake) => {
+        clock.at += session.role === 'implementer' ? 12 * MINUTE : 2 * MINUTE
+        return succeeds(session, fake)
+      })
+
+      await runSpec(100, {}, ports)
+
+      expect(readState(100).tickets[1]).toMatchObject({
+        session: { startedAt: START, endedAt: START + 12 * MINUTE, attempts: 1 },
+        merger: { startedAt: START + 12 * MINUTE, endedAt: START + 14 * MINUTE, attempts: 1 }
+      })
+    })
+
+    it('saves the usage-limit wait while it lasts, then counts the resume as a second attempt', async () => {
+      const resetsAt = START + 60 * MINUTE
+      let limited = true
+      const { ports } = portsFor([ticket(1)], (session, fake) => {
+        clock.at += 5 * MINUTE
+        if (session.role === 'implementer' && limited) {
+          limited = false
+          return { usageLimitResetsAt: resetsAt }
+        }
+        return succeeds(session, fake)
+      })
+      let waiting: unknown
+      ports.waitUntil = async (time) => {
+        waiting = readState(100).tickets[1].session
+        clock.at = time
+      }
+
+      await runSpec(100, {}, ports)
+
+      const until = resetsAt + USAGE_LIMIT_GRACE_MS
+      expect(waiting).toMatchObject({ waitingUntil: until, endedAt: START + 5 * MINUTE })
+      const session = readState(100).tickets[1].session
+      expect(session).toMatchObject({
+        attempts: 2,
+        activeMs: 5 * MINUTE,
+        startedAt: until,
+        endedAt: until + 5 * MINUTE
+      })
+      expect(session.waitingUntil).toBeUndefined()
+    })
+
+    it("counts a resume on a re-run as another attempt, keeping the earlier attempt's time", async () => {
+      let fails = true
+      const { ports } = portsFor([ticket(1)], (session, fake) => {
+        clock.at += 3 * MINUTE
+        if (session.role === 'implementer' && fails) return 0
+        return succeeds(session, fake)
+      })
+      await runSpec(100, {}, ports)
+      fails = false
+
+      await runSpec(100, {}, ports)
+
+      expect(readState(100).tickets[1].session).toMatchObject({ attempts: 2, activeMs: 3 * MINUTE })
+    })
+    it("closes a session a stopped run left open at the run's last save, keeping its time", async () => {
+      const { ports } = portsFor([ticket(1)], (session, fake) => {
+        clock.at += 3 * MINUTE
+        return session.role === 'implementer' && session.resume !== true
+          ? 0
+          : succeeds(session, fake)
+      })
+      await runSpec(100, {}, ports)
+      // As if the run had been killed mid-attempt, waiting out a usage limit, at its last save.
+      const path = join(root, '.implement-spec', '100', 'state.json')
+      const stopped = readState(100)
+      const { session } = stopped.tickets[1]
+      session.startedAt = START
+      delete session.endedAt
+      delete session.outcome
+      session.waitingUntil = START + 60 * MINUTE
+      stopped.tickets[1].status = 'running'
+      stopped.runs = [{ startedAt: START, endedAt: START + 4 * MINUTE, pid: 4242 }]
+      writeFileSync(path, JSON.stringify(stopped))
+
+      await runSpec(100, {}, ports)
+
+      expect(readState(100).tickets[1].session).toMatchObject({ attempts: 2, activeMs: 4 * MINUTE })
+      expect(readState(100).tickets[1].session.waitingUntil).toBeUndefined()
+    })
+  })
+
+  describe('the run record', () => {
+    const runLog = () =>
+      readFileSync(join(root, '.implement-spec', '100', 'run.log'), 'utf8')
+        .trimEnd()
+        .split('\n')
+
+    it("caches each ticket's title and blockers in the state file", async () => {
+      const { ports } = portsFor([ticket(1), ticket(2, [{ number: 1, open: true }])])
+
+      await runSpec(100, {}, ports)
+
+      expect(readState(100).graph).toEqual([
+        { number: 1, title: 'Ticket 1', blockedBy: [] },
+        { number: 2, title: 'Ticket 2', blockedBy: [{ number: 1, open: true }] }
+      ])
+    })
+
+    it('records when each run started and when it last did anything', async () => {
+      const stuck = ticket(2, [{ number: 90, open: true }])
+      const { ports } = portsFor([ticket(1), stuck], (session, fake) => {
+        clock.at += 10 * MINUTE
+        return succeeds(session, fake)
+      })
+      await runSpec(100, {}, ports)
+      clock.at = START + 120 * MINUTE
+
+      await runSpec(100, {}, ports)
+
+      expect(readState(100).runs).toEqual([
+        { startedAt: START, endedAt: START + 20 * MINUTE, pid: 4242 },
+        { startedAt: START + 120 * MINUTE, endedAt: START + 120 * MINUTE, pid: 4242 }
+      ])
+    })
+
+    it('appends every console line to run.log with its time, under a header per run', async () => {
+      const { ports } = portsFor([ticket(1)], (session, fake) => {
+        clock.at += MINUTE
+        return session.role === 'merger' && clock.at < START + 3 * MINUTE
+          ? 1
+          : succeeds(session, fake)
+      })
+      await runSpec(100, {}, ports)
+      await runSpec(100, {}, ports)
+
+      const log = runLog()
+      expect(log[0]).toBe('2026-11-23T14:00:00.000Z --- run started')
+      expect(log).toContainEqual('2026-11-23T14:01:00.000Z implemented #1')
+      expect(log).toContainEqual(expect.stringMatching(/--- run started, resume of 1 session$/))
+      expect(log.filter((line) => !line.includes('---'))).toHaveLength(lines.length)
+    })
+
+    it('says in run.log why each session resumed', async () => {
+      let fails = true
+      const { ports } = portsFor([ticket(1)], (session, fake) =>
+        session.role === 'implementer' && fails ? 0 : succeeds(session, fake)
+      )
+      await runSpec(100, {}, ports)
+      fails = false
+
+      await runSpec(100, {}, ports)
+
+      expect(runLog()).toContainEqual(
+        expect.stringMatching(
+          /resumed #1 implementer because it exited 0 but failed the done check: no-commits \(log /
+        )
+      )
+    })
+  })
+
+  describe('progress', () => {
+    it('hands the progress port the state after every change, ending with the saved state', async () => {
+      const { ports, shown } = portsFor([ticket(1)])
+
+      await runSpec(100, {}, ports)
+
+      const statuses = shown.map((state) => state.tickets[1].status)
+      expect(statuses.filter((status, i) => status !== statuses[i - 1])).toEqual([
+        'pending',
+        'running',
+        'implemented',
+        'done'
+      ])
+      expect(shown.at(-1)).toEqual(readState(100))
     })
   })
 
@@ -1290,7 +1486,7 @@ describe('runSpec', () => {
     })
 
     it('does no work on a re-run of a finished run', async () => {
-      const { ports, claude, git, tracker } = portsFor([ticket(1)])
+      const { ports, claude, git, tracker, shown } = portsFor([ticket(1)])
       await runSpec(100, {}, ports)
       const stateAfterFirst = readState(100)
       const counts = () => [
@@ -1304,6 +1500,7 @@ describe('runSpec', () => {
       ]
       const before = counts()
       lines.length = 0
+      shown.length = 0
 
       const result = await runSpec(100, { explore: true }, ports)
 
@@ -1311,6 +1508,7 @@ describe('runSpec', () => {
       expect(counts()).toEqual(before)
       expect(readState(100)).toEqual(stateAfterFirst)
       expect(lines).toEqual([expect.stringMatching(/already finished.*PR #500/)])
+      expect(shown).toEqual([stateAfterFirst])
     })
 
     it('starts every fresh session with a distinct session ID already in the state file', async () => {

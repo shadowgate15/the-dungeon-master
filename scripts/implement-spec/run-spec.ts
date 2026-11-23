@@ -1,7 +1,14 @@
 // Runs a spec's task graph from start (or resume) to finish. Every side effect goes through the
 // injected ports, so tests drive whole runs against fakes and a temp repository root.
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import {
   continuePrompt,
@@ -81,6 +88,12 @@ export type Ports = {
   git: GitPort
   claude: ClaudePort
   log: (line: string) => void
+  /** The current time, in epoch milliseconds. */
+  now: () => number
+  /** This process's ID, saved with each run so `--status` can tell whether it is still going. */
+  pid: number
+  /** Receives the run state after every change, to draw progress from. */
+  progress: (state: RunState) => void
   /** Resolves once the clock reaches `time` (epoch milliseconds). */
   waitUntil: (time: number) => Promise<void>
 }
@@ -123,8 +136,21 @@ export type DoneCheck =
  */
 export type SessionOutcome = { exitCode?: number; check: DoneCheck; error?: string }
 
-/** A role session's ID, saved before it launches, and its outcome once it has ended. */
-export type SessionState = { id: string; outcome?: SessionOutcome }
+/**
+ * A role session's ID, saved before it launches, and its outcome once it has ended. Times are epoch
+ * milliseconds: `startedAt` and `endedAt` bound its latest attempt, `activeMs` sums the attempts
+ * before it, and `attempts` counts every launch of the work, resumes and fresh restarts included.
+ * `waitingUntil` is set while the run waits out a usage limit before resuming it.
+ */
+export type SessionState = {
+  id: string
+  outcome?: SessionOutcome
+  startedAt?: number
+  endedAt?: number
+  activeMs?: number
+  attempts?: number
+  waitingUntil?: number
+}
 
 export type TicketState = {
   status: TicketStatus
@@ -163,7 +189,14 @@ export type RunState = {
   pr?: number
   /** Set once the `ready` step has marked the PR ready, so a re-run of that step doesn't again. */
   prReady?: boolean
+  /** The spec's open tickets as the latest run read them, so the chart can be drawn without `gh`. */
+  graph?: Ticket[]
+  /** Each run of the command that did work: when it started, and when it last saved the state. */
+  runs?: RunSpan[]
 }
+
+/** One run of the command, in epoch milliseconds, and the process that ran it. */
+export type RunSpan = { startedAt: number; endedAt: number; pid?: number }
 
 /** Where a spec's run lives: state, notes, logs and the PR body, under the main repository root. */
 export const runPaths = (root: string, spec: number) => {
@@ -173,7 +206,8 @@ export const runPaths = (root: string, spec: number) => {
     state: join(dir, 'state.json'),
     notes: join(dir, 'notes'),
     logs: join(dir, 'logs'),
-    prBody: join(dir, 'pr-body.md')
+    prBody: join(dir, 'pr-body.md'),
+    runLog: join(dir, 'run.log')
   }
 }
 
@@ -224,6 +258,21 @@ const readyTickets = (tickets: Ticket[], state: RunState) =>
     )
     .map((ticket) => ticket.number)
 
+/** A session that didn't complete, so this run will resume it. */
+const unfinished = (session: SessionState | undefined) =>
+  session !== undefined && session.outcome?.check !== 'passed'
+
+/** How many sessions an earlier run left unfinished: implementers, mergers and steps. */
+const unfinishedSessions = (state: RunState) =>
+  Object.values(state.tickets).filter(
+    (entry) =>
+      (unfinishedImplementer(entry) && unfinished(entry.session)) ||
+      (entry.status === 'implemented' && unfinished(entry.merger))
+  ).length +
+  Object.values(state.steps ?? {}).filter(
+    (step) => step.status !== 'done' && unfinished(step.session)
+  ).length
+
 /** Everything a run's steps share. `save` persists `state`, and is called after every transition. */
 type Run = {
   spec: number
@@ -232,6 +281,8 @@ type Run = {
   branch: string
   state: RunState
   save: () => void
+  /** Prints a console line and appends it, with its time, to run.log. */
+  log: (line: string) => void
   ports: Ports
 }
 
@@ -261,11 +312,11 @@ const unfinishedReason = ({ outcome }: SessionState) => {
  */
 const nextSession = (previous: SessionState | undefined, prompt: string) => {
   if (previous === undefined || previous.outcome?.check === 'passed') {
-    return { session: { id: randomUUID() } as SessionState, resume: false, prompt }
+    return { session: { id: randomUUID() } as SessionState, resume: false, prompt, reason: '' }
   }
-  const resumedPrompt = continuePrompt(unfinishedReason(previous), prompt)
+  const reason = unfinishedReason(previous)
   delete previous.outcome
-  return { session: previous, resume: true, prompt: resumedPrompt }
+  return { session: previous, resume: true, prompt: continuePrompt(reason, prompt), reason }
 }
 
 /** A ticket whose implementer didn't complete: left `running` by a stopped run, or `failed`. */
@@ -281,6 +332,38 @@ const exited = async (
   exitCode: number,
   rest: () => Promise<DoneCheck> = async () => 'passed'
 ): Promise<DoneCheck> => (exitCode !== 0 ? 'nonzero-exit' : rest())
+
+/** Every session in the run state. */
+const allSessions = (state: RunState) =>
+  [
+    ...Object.values(state.tickets).flatMap((entry) => [entry.session, entry.merger]),
+    ...Object.values(state.steps ?? {}).map((step) => step.session)
+  ].filter((session): session is SessionState => session !== undefined)
+
+/**
+ * Ends the attempts a stopped run left open (mid-attempt or waiting out a usage limit) at that
+ * run's last save, the latest time it is known to have been going.
+ */
+const closeStopped = (state: RunState) => {
+  const lastSave = state.runs?.at(-1)?.endedAt
+  for (const session of allSessions(state)) {
+    delete session.waitingUntil
+    if (session.startedAt !== undefined && session.endedAt === undefined) {
+      session.endedAt = Math.max(session.startedAt, lastSave ?? session.startedAt)
+    }
+  }
+}
+
+/** Starts a new attempt of `session` at `now`, folding its previous attempt into `activeMs`. */
+const beginAttempt = (session: SessionState, now: number) => {
+  const { startedAt, endedAt } = session
+  if (startedAt !== undefined && endedAt !== undefined) {
+    session.activeMs = (session.activeMs ?? 0) + (endedAt - startedAt)
+  }
+  session.attempts = (session.attempts ?? 0) + 1
+  session.startedAt = now
+  delete session.endedAt
+}
 
 /** One role session, as `runSession` runs it. */
 type SessionSpec = {
@@ -308,7 +391,8 @@ type SessionSpec = {
  * check. Resolves to whether the check passed.
  */
 const runSession = async (run: Run, spec: SessionSpec): Promise<boolean> => {
-  const { claude, log } = run.ports
+  const { claude } = run.ports
+  const { log } = run
   const logFile = logPath(run.paths.logs, spec.role, spec.ticket)
   const label = spec.ticket === undefined ? spec.role : `#${spec.ticket} ${spec.role}`
   const next = nextSession(spec.previous, spec.prompt)
@@ -316,8 +400,14 @@ const runSession = async (run: Run, spec: SessionSpec): Promise<boolean> => {
   spec.record(session)
   run.save()
   await spec.prepare?.()
+  beginAttempt(session, run.ports.now())
+  run.save()
 
-  log(`${next.resume ? 'resumed' : 'launched'} ${label} (log ${logFile})`)
+  log(
+    next.resume
+      ? `resumed ${label} because ${next.reason} (log ${logFile})`
+      : `launched ${label} (log ${logFile})`
+  )
   const launch = (resume: boolean, prompt: string) =>
     claude.run({
       role: spec.role,
@@ -332,10 +422,13 @@ const runSession = async (run: Run, spec: SessionSpec): Promise<boolean> => {
   let exitCode: number
   for (;;) {
     const exit = await launch(resume, prompt)
+    session.endedAt = run.ports.now()
     if (exit === 'no-session' && resume) {
       // The run stopped before claude saved the session: start a fresh one with the same continue
       // prompt, as its directory may hold work the lost session did.
-      session = { id: randomUUID() }
+      const { startedAt, endedAt, activeMs, attempts } = session
+      session = { id: randomUUID(), startedAt, endedAt, activeMs, attempts }
+      beginAttempt(session, run.ports.now())
       spec.record(session)
       run.save()
       log(`no saved session to resume for ${label}, launched fresh (log ${logFile})`)
@@ -348,7 +441,12 @@ const runSession = async (run: Run, spec: SessionSpec): Promise<boolean> => {
       log(
         `usage limit hit by ${label}, waiting until ${new Date(until).toLocaleString()} to resume`
       )
+      session.waitingUntil = until
+      run.save()
       await run.ports.waitUntil(until)
+      delete session.waitingUntil
+      beginAttempt(session, run.ports.now())
+      run.save()
       log(`resumed ${label} after the usage limit reset (log ${logFile})`)
       resume = true
       prompt = continuePrompt(USAGE_LIMIT_REASON, spec.prompt)
@@ -399,7 +497,7 @@ const sessionStep = async (
 /** Runs the explorer, unless an earlier run finished exploring. Resolves to whether exploration is done. */
 const explore = async (run: Run): Promise<boolean> => {
   const done = await sessionStep(run, 'explore', 'explorer', explorerPrompt(pointers(run)))
-  if (done) run.ports.log(`explored (notes ${run.paths.notes})`)
+  if (done) run.log(`explored (notes ${run.paths.notes})`)
   return done
 }
 
@@ -411,7 +509,8 @@ const explore = async (run: Run): Promise<boolean> => {
  * integration tip and a fresh implementer runs there. Resolves to whether the ticket passed.
  */
 const implement = async (run: Run, ticket: number): Promise<boolean> => {
-  const { git, log } = run.ports
+  const { git } = run.ports
+  const { log } = run
   const branch = ticketBranch(run.spec, ticket)
   const cwd = worktreePath(run.root, branch)
   const previous = run.state.tickets[ticket]
@@ -470,7 +569,7 @@ const publish = async (run: Run) => {
     body: closesBody(run)
   })
   run.save()
-  run.ports.log(`opened draft PR #${run.state.pr}`)
+  run.log(`opened draft PR #${run.state.pr}`)
 }
 
 /**
@@ -481,7 +580,8 @@ const publish = async (run: Run) => {
  * Each pass pushes the integration branch, and the first opens the draft PR. Resolves to whether the merge passed.
  */
 const merge = async (run: Run, ticket: number): Promise<boolean> => {
-  const { git, log } = run.ports
+  const { git } = run.ports
+  const { log } = run
   const branch = ticketBranch(run.spec, ticket)
   const ticketHead = await git.head(branch)
   const entry = run.state.tickets[ticket]
@@ -548,7 +648,8 @@ const withCloses = (run: Run, body: string) => {
  */
 const markReady = async (run: Run): Promise<boolean> => {
   if (stepDone(run, 'ready')) return true
-  const { tracker, git, log } = run.ports
+  const { tracker, git } = run.ports
+  const { log } = run
   await publish(run)
   const pr = run.state.pr as number
   const bodyFile = run.paths.prBody
@@ -589,7 +690,7 @@ const contain = async (
     if (role === 'implementer') entry.status = 'failed'
     run.save()
     const logFile = logPath(run.paths.logs, role, ticket)
-    run.ports.log(`failed #${ticket} ${role}: error: ${error} (log ${logFile})`)
+    run.log(`failed #${ticket} ${role}: error: ${error} (log ${logFile})`)
     return false
   }
 }
@@ -683,8 +784,8 @@ const reportFailures = (run: Run) => {
     return []
   })
   if (failures.length === 0) return
-  run.ports.log('failed tickets:')
-  for (const line of failures) run.ports.log(line)
+  run.log('failed tickets:')
+  for (const line of failures) run.log(line)
 }
 
 /**
@@ -693,17 +794,21 @@ const reportFailures = (run: Run) => {
  * the spec, or a stuck ticket). Tickets closed on GitHub since an earlier run aren't read, so they
  * never count. Resolves to whether any ticket was stuck.
  */
+/** A ticket's blockers still open on GitHub and not yet `done` in the run, by number. */
+export const openBlockers = ({ blockedBy }: Pick<Ticket, 'blockedBy'>, state: RunState) =>
+  blockedBy
+    .filter((blocker) => blocker.open && state.tickets[blocker.number]?.status !== 'done')
+    .map((blocker) => blocker.number)
+
 const reportStuck = (run: Run, tickets: Ticket[]) => {
   const stuck = tickets
     .filter(({ number }) => run.state.tickets[number]?.status !== 'done')
     .sort((a, b) => a.number - b.number)
   if (stuck.length === 0) return false
-  run.ports.log('stuck tickets:')
+  run.log('stuck tickets:')
   for (const { number, blockedBy } of stuck) {
-    const blockers = blockedBy
-      .filter((blocker) => blocker.open && run.state.tickets[blocker.number]?.status !== 'done')
-      .map((blocker) => `#${blocker.number}`)
-    run.ports.log(`  #${number} blocked by ${blockers.join(', ')}`)
+    const blockers = openBlockers({ blockedBy }, run.state).map((blocker) => `#${blocker}`)
+    run.log(`  #${number} blocked by ${blockers.join(', ')}`)
   }
   return true
 }
@@ -713,14 +818,25 @@ export const runSpec = async (
   options: RunOptions,
   ports: Ports
 ): Promise<RunResult> => {
-  const { tracker, git, log } = ports
+  const { tracker, git } = ports
   const root = await git.repoRoot()
   const paths = runPaths(root, spec)
   for (const dir of [paths.dir, paths.notes, paths.logs]) mkdirSync(dir, { recursive: true })
+  const appendRunLog = (line: string) =>
+    appendFileSync(paths.runLog, `${new Date(ports.now()).toISOString()} ${line}\n`)
+  const log = (line: string) => {
+    appendRunLog(line)
+    ports.log(line)
+  }
 
   const saved = loadState(paths.state)
+  const resuming = saved ? unfinishedSessions(saved) : 0
+  appendRunLog(
+    `--- run started${resuming > 0 ? `, resume of ${resuming} session${resuming === 1 ? '' : 's'}` : ''}`
+  )
   if (saved?.steps?.ready?.status === 'done') {
     log(`spec #${spec} already finished: PR #${saved.pr} is ready`)
+    ports.progress(saved)
     return { ok: true, frontier: [] }
   }
 
@@ -739,9 +855,18 @@ export const runSpec = async (
     tickets: {}
   }
   state.integrationWorktree = worktree
+  state.graph = tickets
+  closeStopped(state)
+  const startedAt = ports.now()
+  state.runs = [...(state.runs ?? []), { startedAt, endedAt: startedAt, pid: ports.pid }]
   for (const ticket of tickets) state.tickets[ticket.number] ??= { status: 'pending' }
-  const save = () => saveState(paths.state, state)
-  const run: Run = { spec, root, paths, branch, state, save, ports }
+  const span = state.runs[state.runs.length - 1]
+  const save = () => {
+    span.endedAt = ports.now()
+    saveState(paths.state, state)
+    ports.progress(state)
+  }
+  const run: Run = { spec, root, paths, branch, state, save, log, ports }
   save()
 
   if (options.explore && !(await explore(run))) return { ok: false, frontier: [] }
