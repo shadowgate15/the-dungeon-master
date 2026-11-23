@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { DUNGEON_MASTER_HOME, DUNGEON_MASTER_PORT } from '$app/env/private'
-import { library } from '../campaign'
+import { library, sessions } from '../campaign'
 import { userStateDir } from '../campaign/paths'
 import { writeRuntimeFile } from '../runtime'
 import { gameTools } from '../tools'
@@ -17,7 +17,7 @@ export const host = createToolHost({ library, tools: gameTools })
 /** Channel events for the DM, per Campaign folder. */
 export const channels = createChannels()
 
-export const bridgeApi = createBridgeApi({ host, channels, token })
+export const bridgeApi = createBridgeApi({ library, host, channels, sessions, token })
 
 /** The known localhost port, unless overridden for tests. */
 export const port = Number(DUNGEON_MASTER_PORT || 4777)

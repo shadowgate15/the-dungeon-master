@@ -30,12 +30,17 @@ export class CampaignExistsError extends Error {}
 /** An archived Campaign is read-only until restored. */
 export class CampaignArchivedError extends Error {}
 
+/** Archive, delete and unregister wait until the Campaign's live session ends. */
+export class SessionLiveError extends Error {}
+
 /** The folder has no `.dm/` Campaign database. */
 export class NotACampaignFolderError extends Error {}
 
 type Options = {
   /** The user-level state directory, which holds the registry. */
   home: string
+  /** Whether the Campaign has a live session; such a Campaign can't be archived or removed. */
+  live?: (id: string) => boolean
   now?: () => number
 }
 
@@ -43,7 +48,7 @@ type Options = {
  * Every Campaign the server knows: each lives in its own folder, with its database in `.dm/`, and
  * the registry in the user-level state directory lists the folders.
  */
-export function createCampaignLibrary({ home, now = Date.now }: Options) {
+export function createCampaignLibrary({ home, live = () => false, now = Date.now }: Options) {
   const registry = createRegistry(home)
   const open = new Map<string, Database>()
 
@@ -79,6 +84,12 @@ export function createCampaignLibrary({ home, now = Date.now }: Options) {
     const found = readCampaign(entry.path)
     if (!found) throw new CampaignMissingError(`${entry.name} is missing from ${entry.path}`)
     return { folder: entry.path, found }
+  }
+
+  function refuseWhileLive(id: string, name: string) {
+    if (live(id)) {
+      throw new SessionLiveError(`${name} has a live session. End it before changing the Campaign.`)
+    }
   }
 
   function update(id: string, values: Partial<Campaign>): Campaign {
@@ -161,15 +172,22 @@ export function createCampaignLibrary({ home, now = Date.now }: Options) {
      * a registered Campaign (or its database is gone). How game tools find their Campaign.
      */
     databaseFor(input: string): Database | undefined {
+      const entry = this.entryAt(input)
+      return entry && database(entry.path)
+    },
+
+    /** The registered Campaign in this folder, or undefined (unregistered, or its database gone). */
+    entryAt(input: string): { id: string; name: string; path: string } | undefined {
       const folder = canonicalFolder(input)
       const entry = registry.list().find((e) => canonicalFolder(e.path) === folder)
       if (!entry || !readCampaign(entry.path)) return undefined
-      return database(entry.path)
+      return entry
     },
 
     /** A no-op when already archived. */
     archive(id: string): Campaign {
       const { found } = find(id)
+      refuseWhileLive(id, found.name)
       return found.archivedAt === null ? update(id, { archivedAt: now() }) : found
     },
 
@@ -185,6 +203,7 @@ export function createCampaignLibrary({ home, now = Date.now }: Options) {
      */
     delete(id: string): Campaign {
       const { folder, found } = find(id)
+      refuseWhileLive(id, found.name)
       forget(folder)
       fs.rmSync(path.dirname(campaignDatabasePath(folder)), { recursive: true, force: true })
       if (fs.readdirSync(folder).length === 0) fs.rmdirSync(folder)
@@ -196,6 +215,7 @@ export function createCampaignLibrary({ home, now = Date.now }: Options) {
     unregister(id: string): void {
       const entry = registry.get(id)
       if (!entry) throw new CampaignNotFoundError('Campaign not found')
+      refuseWhileLive(id, entry.name)
       forget(entry.path)
       registry.remove(id)
     },

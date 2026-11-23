@@ -10,6 +10,7 @@ import {
   CampaignNotFoundError,
   createCampaignLibrary,
   NotACampaignFolderError,
+  SessionLiveError,
   type CampaignLibrary
 } from './library'
 
@@ -29,6 +30,25 @@ afterEach(() => library.close())
 const folder = (name: string) => path.join(root, name)
 
 describe('Campaign library', () => {
+  describe('while a session is live', () => {
+    it('refuses archive, delete and unregister, and changes nothing', () => {
+      const live = new Set<string>()
+      const guarded = createCampaignLibrary({ home, live: (id) => live.has(id) })
+      const { id } = guarded.create({ name: 'Ember Road', folder: folder('ember') })
+      live.add(id)
+
+      expect(() => guarded.archive(id)).toThrow(SessionLiveError)
+      expect(() => guarded.delete(id)).toThrow(SessionLiveError)
+      expect(() => guarded.unregister(id)).toThrow(SessionLiveError)
+      expect(guarded.get(id)).toMatchObject({ status: 'active' })
+      expect(fs.existsSync(path.join(folder('ember'), '.dm'))).toBe(true)
+
+      live.delete(id)
+      expect(guarded.archive(id)).toMatchObject({ archivedAt: expect.any(Number) })
+      guarded.close()
+    })
+  })
+
   describe('create', () => {
     it('refuses a blank name and creates nothing', () => {
       expect(() => library.create({ name: '  ', folder: folder('blank') })).toThrow(
