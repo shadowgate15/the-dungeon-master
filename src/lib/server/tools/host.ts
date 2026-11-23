@@ -1,4 +1,4 @@
-import { asc } from 'drizzle-orm'
+import { asc, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type { CampaignLibrary } from '../campaign/library'
 import type { Database, Queryable } from '../db/connect'
@@ -7,12 +7,12 @@ import {
   PLUGIN_NAME,
   ToolError,
   type GameTool,
+  type Stamp,
   type ToolDescriptor,
   type ToolResult
 } from './contract'
 
-/** What code stamps on every Event: the open Session and the in-fiction minute. */
-export type Stamp = { sessionId: string | null; minute: number }
+export type { Stamp }
 
 type Options = {
   library: CampaignLibrary
@@ -39,9 +39,15 @@ const json = (value: unknown): ToolResult => ({
 })
 
 const failure = (e: ToolError): ToolResult => ({
-  ...json({ code: e.code, message: e.message, next: e.next }),
+  ...json({ code: e.code, message: e.message, next: e.next, ...e.details }),
   isError: true
 })
+
+/** The id the next Event will get. The log is append-only, so ids are never reused. */
+function nextEventId(db: Queryable): number {
+  const last = db.get<{ id: number | null }>(sql`SELECT max(${event.id}) AS id FROM ${event}`)
+  return (last?.id ?? 0) + 1
+}
 
 /** The output of a tool that enters a situation, pointing at the skill to load. */
 function withSkill(result: Record<string, unknown>, skill: string | undefined) {
@@ -80,12 +86,18 @@ export function createToolHost({
     if (!parsed.success) {
       throw ToolError.invalidInput(tool.name, z.prettifyError(parsed.error))
     }
-    if (!tool.mutates) return tool.run({ db }, parsed.data)
+    if (!tool.mutates) return tool.run({ db, stamp: { ...stamp(db), eventId: null } }, parsed.data)
     return db.transaction((tx) => {
-      const { result, skill, event: logged } = tool.run({ db: tx }, parsed.data)
       const { sessionId, minute } = stamp(tx)
+      const eventId = nextEventId(tx)
+      const {
+        result,
+        skill,
+        event: logged
+      } = tool.run({ db: tx, stamp: { sessionId, minute, eventId } }, parsed.data)
       tx.insert(event)
         .values({
+          id: eventId,
           sessionId,
           minute,
           tool: tool.name,

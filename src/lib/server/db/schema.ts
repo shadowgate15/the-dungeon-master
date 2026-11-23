@@ -213,3 +213,4 @@ export const characterChoice = sqliteTable(
 )
 
 export * from './rules-schema'
+export * from './world-schema'
