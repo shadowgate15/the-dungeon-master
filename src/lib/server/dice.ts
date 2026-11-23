@@ -12,7 +12,20 @@ export interface Dice {
   d20(): number
   /** Rolls an `NdM+K` expression such as `2d6+3`, `1d20-1` or `4d6`; throws on anything else. */
   rollExpression(expression: string): ExpressionRoll
+  /** A d20 roll; advantage and disadvantage roll two and keep the higher or lower. */
+  rollD20(options?: D20Options): D20Roll
 }
+
+export type D20Mode = 'normal' | 'advantage' | 'disadvantage'
+
+export type D20Options =
+  | { mode?: 'normal' }
+  | { mode: 'advantage' | 'disadvantage'; /** Why the roll has it, shown to the Player. */ reason: string }
+
+/** Both d20s on advantage or disadvantage (one on a normal roll), the one kept and the reason. */
+export type D20Roll =
+  | { mode: 'normal'; dice: [number]; kept: number }
+  | { mode: 'advantage' | 'disadvantage'; reason: string; dice: [number, number]; kept: number }
 
 /** A parsed `NdM+K` expression. */
 export interface DiceExpression {
@@ -56,8 +69,16 @@ function mulberry32(seed: number): () => number {
   }
 }
 
-export function createDice(seed?: number): Dice {
-  const random = seed === undefined ? Math.random : mulberry32(seed)
+/** A seed, or a `Math.random`-shaped source (for loaded dice in tests). */
+export type DiceSource = number | { random: () => number }
+
+export function createDice(source?: DiceSource): Dice {
+  const random =
+    source === undefined
+      ? Math.random
+      : typeof source === 'number'
+        ? mulberry32(source)
+        : source.random
   const roll = (sides: number) => 1 + Math.floor(random() * sides)
   const rollExpression = (expression: string): ExpressionRoll => {
     const parsed = parseDiceExpression(expression)
@@ -65,7 +86,16 @@ export function createDice(seed?: number): Dice {
     const total = dice.reduce((sum, die) => sum + die, parsed.modifier)
     return { expression, ...parsed, dice, total }
   }
-  return { random, roll, d20: () => roll(20), rollExpression }
+  const rollD20 = (options: D20Options = {}): D20Roll => {
+    if (options.mode === undefined || options.mode === 'normal') {
+      const die = roll(20)
+      return { mode: 'normal', dice: [die], kept: die }
+    }
+    const dice: [number, number] = [roll(20), roll(20)]
+    const kept = options.mode === 'advantage' ? Math.max(...dice) : Math.min(...dice)
+    return { mode: options.mode, reason: options.reason, dice, kept }
+  }
+  return { random, roll, d20: () => roll(20), rollExpression, rollD20 }
 }
 
 const envSeed = process.env.DICE_SEED

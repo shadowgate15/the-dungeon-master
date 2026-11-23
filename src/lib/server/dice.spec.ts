@@ -73,3 +73,34 @@ describe('dice expressions', () => {
     }
   )
 })
+
+describe('advantage and disadvantage', () => {
+  /** A roller whose d20s come up in the given order. */
+  const loaded = (...faces: number[]) => {
+    const queue = [...faces]
+    return createDice({ random: () => ((queue.shift() ?? 1) - 1) / 20 })
+  }
+
+  it('rolls two d20s on advantage and keeps the higher, recording both and the reason', () => {
+    const result = loaded(4, 17).rollD20({ mode: 'advantage', reason: 'the guard is asleep' })
+
+    expect(result).toEqual({
+      mode: 'advantage',
+      reason: 'the guard is asleep',
+      dice: [4, 17],
+      kept: 17
+    })
+  })
+
+  it('rolls two d20s on disadvantage and keeps the lower', () => {
+    const result = loaded(4, 17).rollD20({ mode: 'disadvantage', reason: 'blinded' })
+
+    expect(result.dice).toEqual([4, 17])
+    expect(result.kept).toBe(4)
+    expect(result.reason).toBe('blinded')
+  })
+
+  it('rolls one d20 on a normal roll', () => {
+    expect(loaded(9, 3).rollD20()).toEqual({ mode: 'normal', dice: [9], kept: 9 })
+  })
+})
