@@ -23,34 +23,38 @@ Run it from any checkout or worktree of this repository. It resolves the main re
 
 The run exits non-zero when any implementer, merger or end-of-run step failed. A run with a failed ticket skips the end-of-run steps, so the PR stays a draft with its minimal body and nothing else is written to GitHub. It ends by printing `failed tickets:` followed by one line per failed ticket, with the session that failed, its check and its log. Nothing is retried within a run.
 
+If a `git` or `gh` call around an implementer or merger throws (adding a worktree, reading a head, the done check), only that session fails, with the check `error` and the error's message on the console and in its outcome. An implementer error fails its ticket and independent tickets carry on; a merger error counts as a failed merger.
+
+A run in which nothing failed but some open ticket never became `done` (a blocker outside the spec is still open) also exits non-zero and skips the end-of-run steps. It prints `stuck tickets:` followed by one line per stuck ticket with its open blockers. Tickets closed on GitHub since an earlier run aren't read, so they never count as stuck. A spec with no open tickets exits non-zero straight away, printing `spec #<spec#> has no open tickets`, without cutting a branch or running a session.
+
 With `--explore`, one explorer `claude -p` session runs in the integration worktree before any implementer and writes Markdown notes to the run's `notes/` directory, which every later prompt points at. Its session and status are recorded under `steps.explore` in the state file; once it is `done`, re-runs skip it. A failed explorer (non-zero exit) ends the run before any implementer launches. Without the flag no explorer runs.
 
 ## The run directory
 
 `.implement-spec/<spec#>/` at the main repository root, gitignored:
 
-| Path         | Contents                                                                                                                                                                                                                                                |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `state.json` | The integration branch and worktree, each ticket's status, launch commit, and implementer and merger sessions (ID and outcome), each step not tied to a ticket (`steps.explore`, `review`, `fix`, `pr-description`, `ready`), and the PR number (`pr`). |
-| `notes/`     | Shared notes for the run's sessions, including the explorer's.                                                                                                                                                                                          |
-| `pr-body.md` | The PR description the PR writer wrote, with any missing `Closes` lines appended.                                                                                                                                                                       |
-| `logs/`      | One log per session: `<role>-<ticket#>.log`, or `<role>.log` for a role not tied to a ticket (`explorer.log`, `reviewer.log`, `fixer.log`, `pr-writer.log`).                                                                                            |
+| Path         | Contents                                                                                                                                                                                                                                                                                                                                 |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state.json` | The integration branch and worktree, each ticket's status, launch commit, implementer and merger sessions (ID and outcome) and place in the merge queue (`finishOrder`), each step not tied to a ticket (`steps.explore`, `review`, `fix`, `pr-description`, `ready`), the PR number (`pr`) and whether it was marked ready (`prReady`). |
+| `notes/`     | Shared notes for the run's sessions, including the explorer's.                                                                                                                                                                                                                                                                           |
+| `pr-body.md` | The PR description the PR writer wrote, with any missing `Closes` lines appended.                                                                                                                                                                                                                                                        |
+| `logs/`      | One log per session: `<role>-<ticket#>.log`, or `<role>.log` for a role not tied to a ticket (`explorer.log`, `reviewer.log`, `fixer.log`, `pr-writer.log`).                                                                                                                                                                             |
 
 ## Re-running
 
 Running the command again for the same spec reuses the integration branch, its worktree, the state file and the PR. Tickets already in the state keep their status; tickets added to the spec since the last run are added as `pending`.
 
-Every `claude` session starts with a fresh script-generated `--session-id`, written to the state file before it launches, and never with `--no-session-persistence`. A re-run resumes every session that didn't complete, instead of starting it fresh: one left running when the previous run stopped, or one that ended failed. It runs `claude -p --resume <id>` in the session's original directory (the ticket worktree for an implementer, the integration worktree for the explorer, mergers and end-of-run roles) and logs to the same file, with a short continue prompt: the previous session didn't complete, the reason the script recorded (interrupted, the exit code, or the failed done check), then the original prompt with its pointers. When it exits, the same done check runs again. Each resume prints `resumed …` in place of `launched …`.
+Every `claude` session starts with a fresh script-generated `--session-id`, written to the state file before it launches, and never with `--no-session-persistence`. A re-run resumes every session that didn't complete, instead of starting it fresh: one left running when the previous run stopped, or one that ended failed. It runs `claude -p --resume <id>` in the session's original directory (the ticket worktree for an implementer, the integration worktree for the explorer, mergers and end-of-run roles) and logs to the same file, with a short continue prompt: the previous session didn't complete, the reason the script recorded (interrupted, the exit code, the failed done check, or the error), then the original prompt with its pointers. When it exits, the same done check runs again. Each resume prints `resumed …` in place of `launched …`. If `claude` has no saved conversation for the ID (the run stopped before `claude` saved it, so `--resume` prints `No conversation found`), the script starts a fresh session in the same directory with a new ID, saved before it launches, and the same continue prompt, printing `no saved session to resume for …, launched fresh`.
 
 In order, a re-run:
 
 1. Resumes the explorer, with `--explore`, if it didn't complete.
 2. Resumes each merger that didn't complete, one at a time, before anything else launches. If one fails again, the run stops there.
-3. Queues tickets left `implemented` with no merger for merging.
+3. Queues tickets left `implemented` with no merger for merging, in the order their implementers finished.
 4. Resumes implementers that didn't complete, their tickets going back to `running`, alongside launching the ready frontier. A resumed ticket's dependents launch once it merges.
 5. Resumes the first end-of-run step that didn't complete; finished steps are skipped.
 
-A re-run after the PR was marked ready (`steps.ready` is `done`) does nothing: it prints that the spec is finished and exits 0, without reading GitHub or recreating the integration worktree.
+A re-run after the PR was marked ready (`steps.ready` is `done`) does nothing: it prints that the spec is finished and exits 0, without reading GitHub or recreating the integration worktree. A re-run after the `ready` step stopped part-way repeats it safely: once the PR is marked ready (`prReady`), it is not marked again.
 
 To start over, delete `.implement-spec/<spec#>/`, the integration worktree and the `implement-spec/<spec#>` branch.
 
