@@ -2,6 +2,8 @@
 
 Status: accepted. Supersedes the Director pipeline of ADR 0003; the Scene, Mode and Event log stand.
 
+Superseded by ADR 0006 (one DM agent with tools replaces the Exchange pipeline).
+
 ## Context
 
 ADR 0003 made the model a menu-picker: after a player action, the Director chose the next step (narrate, NPC speaks, roll, move, yield) until it yielded or hit a step cap. That kept each model request small, but nothing owned the question the game turns on: what happens when the player tries this? The Director could yield with no reply, so the player acted and nothing came back. Rolls came from a menu rather than from the action. A clicked exit only pre-filled text. Play felt like operating a system, not talking to a DM.
