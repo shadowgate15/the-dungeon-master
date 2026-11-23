@@ -4,7 +4,7 @@
 //   pnpm implement-spec <spec#> --status
 import { existsSync, readFileSync } from 'node:fs'
 import { createLogUpdate } from 'log-update'
-import { anyLive, render } from './chart.ts'
+import { render } from './chart.ts'
 import { createClaude, createGit, createTracker } from './ports.ts'
 import { runPaths, runSpec, type RunState } from './run-spec.ts'
 
@@ -41,15 +41,30 @@ if (!parsed) {
 const tty = process.stdout.isTTY === true
 const color = tty && !('NO_COLOR' in process.env)
 
-/** The chart for `state`, sized to the terminal (unbounded when output isn't one). */
-const frame = (state: RunState, verdict: boolean) =>
+/**
+ * The chart for `state`, sized to the terminal (unbounded when output isn't one). A run that is
+ * `live` has its clocks ticking; one that isn't ends with its verdict.
+ */
+const frame = (state: RunState, live: boolean) =>
   render(state, state.graph ?? [], {
     now: Date.now(),
     width: tty ? Math.max(40, process.stdout.columns || 80) : 120,
     height: tty ? Math.max(8, (process.stdout.rows || 24) - 1) : Infinity,
     color,
-    verdict
+    live,
+    verdict: !live
   })
+
+/** Whether process `pid` is still running (signal 0 only checks it exists). */
+const alive = (pid: number | undefined) => {
+  if (pid === undefined) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
 
 const root = await createGit(process.cwd()).repoRoot()
 const tracker = createTracker(root)
@@ -62,24 +77,27 @@ if (parsed.status) {
   }
   const state = JSON.parse(readFileSync(path, 'utf8')) as RunState
   state.graph ??= await tracker.readSpec(parsed.spec)
-  console.log(frame(state, !anyLive(state)))
+  console.log(frame(state, alive(state.runs?.at(-1)?.pid)))
   process.exit(0)
 }
 
 // On a terminal the chart replaces the console lines once it is first drawn (run.log keeps them
-// all); before that, such as for a finished spec or one with no open tickets, lines print as usual.
+// all); before that, such as for a spec with no open tickets, lines print as usual.
 const chart = tty ? createLogUpdate(process.stdout) : undefined
 let latest: RunState | undefined
 const draw = () => {
-  if (chart && latest) chart(frame(latest, false))
+  if (chart && latest) chart(frame(latest, true))
 }
 const ticker = chart ? setInterval(draw, 1000) : undefined
 process.stdout.on('resize', draw)
 
-/** Leaves the last frame on screen, with the verdict, and restores the cursor. */
+/**
+ * Leaves the last frame on screen, with the verdict, and restores the cursor. Sessions still open
+ * (on Ctrl-C) show as interrupted, as a re-run will treat them.
+ */
 const settle = () => {
   if (ticker) clearInterval(ticker)
-  if (chart && latest) chart(frame(latest, true))
+  if (chart && latest) chart(frame(latest, false))
   chart?.done()
 }
 process.on('SIGINT', () => {
@@ -99,6 +117,7 @@ try {
         if (!chart || !latest) console.log(line)
       },
       now: Date.now,
+      pid: process.pid,
       progress: (state) => {
         latest = state
         draw()

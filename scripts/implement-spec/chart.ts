@@ -1,8 +1,9 @@
 // Draws a spec run's progress as text: the ticket graph in dependency layers, each ticket's status
 // and times, and the end-of-run steps. Pure: the same state, tickets and options give the same frame.
-import { join } from 'node:path'
 import {
   logPath,
+  openBlockers,
+  runPaths,
   type Role,
   type RunState,
   type SessionState,
@@ -20,25 +21,33 @@ export type ChartOptions = {
   height: number
   /** Colors the status glyphs with ANSI escapes. */
   color: boolean
+  /**
+   * Whether the latest run is still going. When it isn't, a session it left open was cut short:
+   * shown as interrupted and timed to the run's last save.
+   */
+  live: boolean
   /** The time zone for clock times, such as when a usage limit resets; the local one by default. */
   timeZone?: string
   /** Ends the frame with the run's one-line verdict. */
   verdict?: boolean
 }
 
-type Glyph = 'pending' | 'running' | 'waiting' | 'implemented' | 'done' | 'failed'
+/** How a row looks: each has its own glyph and color. */
+type RowStatus =
+  'pending' | 'running' | 'waiting' | 'implemented' | 'done' | 'failed' | 'interrupted'
 
-const GLYPHS: Record<Glyph, { mark: string; color: number }> = {
+const MARKS: Record<RowStatus, { mark: string; color: number }> = {
   pending: { mark: '·', color: 2 },
   running: { mark: '◐', color: 33 },
   waiting: { mark: '⏸', color: 33 },
   implemented: { mark: '●', color: 36 },
   done: { mark: '✓', color: 32 },
-  failed: { mark: '✗', color: 31 }
+  failed: { mark: '✗', color: 31 },
+  interrupted: { mark: '✗', color: 31 }
 }
 
-/** A row of the chart: its glyph, its label (the part cut to fit) and its detail. */
-type Row = { glyph: Glyph; label: string; detail: string }
+/** A row of the chart: how it looks, its label (the part cut to fit) and its detail. */
+type Row = { status: RowStatus; label: string; detail: string }
 
 /** One block of rows under a heading; `layer` is set for ticket layers, which may collapse. */
 type Section = { heading: string; rows: Row[]; layer?: number }
@@ -50,8 +59,18 @@ const END_STEPS: { name: StepName; role?: Role }[] = [
   { name: 'ready' }
 ]
 
+/** What every row needs besides its own entry. */
+type Context = {
+  state: RunState
+  options: ChartOptions
+  /** Where an open session's time runs to: now while the run is live, else its last save. */
+  openUntil: number
+  /** A role's log, relative to the repository root. */
+  log: (role: Role, ticket?: number) => string
+}
+
 /** `45s`, `12m` or `1h 52m`. */
-export const duration = (ms: number) => {
+const duration = (ms: number) => {
   const seconds = Math.max(0, Math.floor(ms / 1000))
   if (seconds < 60) return `${seconds}s`
   const minutes = Math.floor(seconds / 60)
@@ -59,23 +78,32 @@ export const duration = (ms: number) => {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }
 
-/** Whether a session is mid-attempt: started and not yet ended. */
-const live = (session: SessionState | undefined) =>
-  session?.startedAt !== undefined && session.endedAt === undefined
-
-/** A session's active time over every attempt, up to `now` for the attempt in progress. */
-const activeTime = (session: SessionState, now: number) => {
-  if (session.startedAt === undefined) return undefined
-  return (session.activeMs ?? 0) + (session.endedAt ?? now) - session.startedAt
+/**
+ * Where a session is: `live` mid-attempt, `waiting` out a usage limit, `interrupted` when it was
+ * either of those as a run that is no longer going stopped, or undefined when it isn't open.
+ */
+const sessionPhase = (session: SessionState | undefined, context: Context) => {
+  if (session?.startedAt === undefined) return undefined
+  const waiting = session.waitingUntil !== undefined
+  if (!waiting && session.endedAt !== undefined) return undefined
+  if (!context.options.live) return 'interrupted'
+  return waiting ? 'waiting' : 'live'
 }
 
-/** `impl 12m`, with the attempt when there was more than one; `—` for a time not recorded. */
-const timed = (name: string, session: SessionState | undefined, now: number) => {
-  if (session === undefined) return undefined
-  const time = activeTime(session, now)
+/** `12m (attempt 2)`: a session's active time over every attempt, `—` when not recorded. */
+const took = (session: SessionState, context: Context) => {
+  const { startedAt } = session
+  const time =
+    startedAt === undefined
+      ? '—'
+      : duration((session.activeMs ?? 0) + (session.endedAt ?? context.openUntil) - startedAt)
   const attempt = (session.attempts ?? 1) > 1 ? ` (attempt ${session.attempts})` : ''
-  return `${name} ${time === undefined ? '—' : duration(time)}${attempt}`
+  return `${time}${attempt}`
 }
+
+/** `impl 12m`, or undefined for no session. */
+const timed = (name: string, session: SessionState | undefined, context: Context) =>
+  session && `${name} ${took(session, context)}`
 
 /** The parts of a detail that exist, joined. */
 const joined = (...parts: (string | undefined | false)[]) =>
@@ -103,139 +131,159 @@ const layers = (tickets: Ticket[]) => {
   return depth
 }
 
-/** The time it resumes, as `14:05 (23m)`. */
-const resumes = (until: number, options: ChartOptions) => {
+/** `usage limit · resumes 14:05 (23m)`. */
+const usageLimit = (until: number, options: ChartOptions) => {
   const clock = new Intl.DateTimeFormat('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: options.timeZone
   }).format(until)
-  return `resumes ${clock} (${duration(until - options.now)})`
+  return `usage limit · resumes ${clock} (${duration(until - options.now)})`
 }
 
-const ticketRow = (
-  ticket: Ticket,
-  entry: TicketState,
-  state: RunState,
-  queue: number[],
-  options: ChartOptions
-): Row => {
-  const { now } = options
-  const label = `#${ticket.number} ${ticket.title}`
-  const logs = join('.implement-spec', String(state.spec), 'logs')
-  const log = (role: Role) => logPath(logs, role, ticket.number)
-  const impl = timed('impl', entry.session, now)
-  const merge = timed('merge', entry.merger, now)
-  const waiting = [entry.session, entry.merger].find((session) => session?.waitingUntil)
-  if (waiting?.waitingUntil !== undefined) {
-    const role = waiting === entry.merger ? 'merger' : 'implementer'
+/** A row for a session that is waiting out a usage limit or was interrupted, else undefined. */
+const openSessionRow = (
+  label: string,
+  session: SessionState | undefined,
+  context: Context,
+  interrupted: string,
+  rest: (string | undefined)[]
+): Row | undefined => {
+  const phase = sessionPhase(session, context)
+  if (phase === 'waiting' && session?.waitingUntil !== undefined) {
+    const [log] = rest.slice(-1)
     return {
-      glyph: 'waiting',
+      status: 'waiting',
       label,
-      detail: joined('usage limit', resumes(waiting.waitingUntil, options), log(role))
+      detail: joined(usageLimit(session.waitingUntil, context.options), log)
     }
   }
+  if (phase === 'interrupted') {
+    return { status: 'interrupted', label, detail: joined(interrupted, ...rest) }
+  }
+  return undefined
+}
+
+/** The check a merger failed, or undefined when it passed or hasn't finished. */
+const failedMerge = (entry: TicketState) => {
+  const check = entry.merger?.outcome?.check
+  return check !== undefined && check !== 'passed' ? check : undefined
+}
+
+const ticketRow = (ticket: Ticket, entry: TicketState, queue: number[], context: Context): Row => {
+  const label = `#${ticket.number} ${ticket.title}`
+  const log = (role: Role) => context.log(role, ticket.number)
+  const impl = timed('impl', entry.session, context)
+  const merge = timed('merge', entry.merger, context)
+  const open =
+    openSessionRow(label, entry.merger, context, 'merge interrupted', [
+      impl,
+      merge,
+      log('merger')
+    ]) ?? openSessionRow(label, entry.session, context, 'interrupted', [impl, log('implementer')])
+  if (open) return open
   switch (entry.status) {
     case 'pending': {
-      const open = ticket.blockedBy
-        .filter((blocker) => blocker.open && state.tickets[blocker.number]?.status !== 'done')
-        .map((blocker) => `#${blocker.number}`)
+      const blockers = openBlockers(ticket, context.state).map((blocker) => `#${blocker}`)
       return {
-        glyph: 'pending',
+        status: 'pending',
         label,
-        detail: joined('pending', open.length > 0 && `blocked by ${open.join(' ')}`)
+        detail: joined('pending', blockers.length > 0 && `blocked by ${blockers.join(' ')}`)
       }
     }
     case 'running':
-      return { glyph: 'running', label, detail: joined(impl, log('implementer')) }
+      return { status: 'running', label, detail: joined(impl, log('implementer')) }
     case 'failed':
       return {
-        glyph: 'failed',
+        status: 'failed',
         label,
         detail: joined(entry.session?.outcome?.check, impl, log('implementer'))
       }
     case 'implemented': {
-      if (live(entry.merger)) {
-        return { glyph: 'running', label, detail: joined(impl, merge, log('merger')) }
+      if (sessionPhase(entry.merger, context) === 'live') {
+        return { status: 'running', label, detail: joined(impl, merge, log('merger')) }
       }
-      const check = entry.merger?.outcome?.check
-      if (check !== undefined && check !== 'passed') {
-        return { glyph: 'failed', label, detail: joined(`merge ${check}`, impl, log('merger')) }
+      const check = failedMerge(entry)
+      if (check !== undefined) {
+        return { status: 'failed', label, detail: joined(`merge ${check}`, impl, log('merger')) }
       }
       return {
-        glyph: 'implemented',
+        status: 'implemented',
         label,
         detail: joined(`queued ${queue.indexOf(ticket.number) + 1}`, impl)
       }
     }
     case 'done':
-      return { glyph: 'done', label, detail: joined(impl, merge) }
+      return { status: 'done', label, detail: joined(impl, merge) }
   }
 }
 
-const stepRow = (state: RunState, name: StepName, role: Role | undefined, now: number): Row => {
-  const step = state.steps?.[name]
-  const session = step?.session
-  const log = role && logPath(join('.implement-spec', String(state.spec), 'logs'), role)
-  if (step === undefined) return { glyph: 'pending', label: name, detail: '' }
-  const time = session && activeTime(session, now)
-  const attempt = (session?.attempts ?? 1) > 1 ? ` (attempt ${session?.attempts})` : ''
-  const took = session && `${time === undefined ? '—' : duration(time)}${attempt}`
-  if (session?.waitingUntil !== undefined) {
-    return { glyph: 'waiting', label: name, detail: joined('usage limit', log) }
-  }
-  if (step.status === 'done') return { glyph: 'done', label: name, detail: took ?? '' }
+const stepRow = (name: StepName, role: Role | undefined, context: Context): Row => {
+  const step = context.state.steps?.[name]
+  if (step === undefined) return { status: 'pending', label: name, detail: '' }
+  const { session } = step
+  const log = role && context.log(role)
+  const time = session && took(session, context)
+  const open = openSessionRow(name, session, context, 'interrupted', [time, log])
+  if (open) return open
+  if (step.status === 'done') return { status: 'done', label: name, detail: time ?? '' }
   if (step.status === 'failed') {
-    return { glyph: 'failed', label: name, detail: joined(session?.outcome?.check, took, log) }
+    return { status: 'failed', label: name, detail: joined(session?.outcome?.check, time, log) }
   }
-  return { glyph: 'running', label: name, detail: joined(took, log) }
+  return { status: 'running', label: name, detail: joined(time, log) }
 }
 
-/** Whether any session is mid-attempt or waiting, so the latest run is still going. */
-export const anyLive = (state: RunState) => {
-  const sessions = [
-    ...Object.values(state.tickets).flatMap((entry) => [entry.session, entry.merger]),
-    ...Object.values(state.steps ?? {}).map((step) => step.session)
-  ]
-  return sessions.some((session) => live(session) || session?.waitingUntil !== undefined)
+/** The time every run took, the latest counted up to `now` while it is live; undefined if never recorded. */
+const totalTime = (state: RunState, options: ChartOptions) => {
+  const runs = state.runs
+  if (runs === undefined || runs.length === 0) return undefined
+  return runs.reduce((sum, run, i) => {
+    const end = i === runs.length - 1 && options.live ? options.now : run.endedAt
+    return sum + end - run.startedAt
+  }, 0)
 }
 
-/** The time every run took, the latest counted up to `now` while it is still going. */
-const totalTime = (state: RunState, now: number) => {
-  const runs = state.runs ?? []
-  const going = anyLive(state)
-  return runs.reduce(
-    (sum, run, i) => sum + ((i === runs.length - 1 && going ? now : run.endedAt) - run.startedAt),
-    0
-  )
+const total = (state: RunState, options: ChartOptions) => {
+  const time = totalTime(state, options)
+  return time === undefined ? '—' : duration(time)
 }
 
-const header = (state: RunState, now: number) =>
+const header = (state: RunState, options: ChartOptions) =>
   joined(
     `spec #${state.spec}`,
     state.pr !== undefined && `PR #${state.pr} ${state.prReady ? 'ready' : 'draft'}`,
-    duration(totalTime(state, now))
+    total(state, options)
   )
 
-const verdict = (state: RunState, tickets: Ticket[], now: number) => {
-  const total = duration(totalTime(state, now))
-  if (state.steps?.ready?.status === 'done') return `✓ PR #${state.pr} ready · ${total}`
-  const failed =
-    tickets.filter(({ number }) => {
-      const entry = state.tickets[number]
-      if (entry?.status === 'failed') return true
-      const check = entry?.status === 'implemented' ? entry.merger?.outcome?.check : undefined
-      return check !== undefined && check !== 'passed'
-    }).length + Object.values(state.steps ?? {}).filter((step) => step.status === 'failed').length
-  const stuck = tickets.filter(({ number }) => state.tickets[number]?.status === 'pending').length
-  const counts = [failed > 0 && `${failed} failed`, stuck > 0 && `${stuck} stuck`]
-    .filter(Boolean)
+/** Counts as `2 failed, 3 stuck`, leaving out the zeros. */
+const counted = (counts: [number, string][]) =>
+  counts
+    .filter(([count]) => count > 0)
+    .map(([count, what]) => `${count} ${what}`)
     .join(', ')
-  return `✗ ${counts || 'unfinished'} · re-run to resume · ${total}`
+
+/**
+ * `✓ PR #412 ready · 1h 52m`, or what kept the run from finishing: failed and interrupted rows,
+ * pending tickets `stuck` behind an open blocker, and pending tickets `not started`.
+ */
+const verdict = (state: RunState, tickets: Ticket[], rows: Row[], options: ChartOptions) => {
+  const time = total(state, options)
+  if (state.steps?.ready?.status === 'done') return `✓ PR #${state.pr} ready · ${time}`
+  const pending = tickets.filter(
+    ({ number }) => (state.tickets[number]?.status ?? 'pending') === 'pending'
+  )
+  const stuck = pending.filter((ticket) => openBlockers(ticket, state).length > 0).length
+  const counts = counted([
+    [rows.filter((row) => row.status === 'failed').length, 'failed'],
+    [rows.filter((row) => row.status === 'interrupted').length, 'interrupted'],
+    [stuck, 'stuck'],
+    [pending.length - stuck, 'not started']
+  ])
+  return `✗ ${counts || 'unfinished'} — re-run to resume · ${time}`
 }
 
-const paint = (glyph: Glyph, color: boolean) => {
-  const { mark, color: code } = GLYPHS[glyph]
+const paint = (status: RowStatus, color: boolean) => {
+  const { mark, color: code } = MARKS[status]
   return color ? `\x1b[${code}m${mark}\x1b[0m` : mark
 }
 
@@ -251,7 +299,14 @@ const clip = (text: string, width: number) =>
  * each, top first, and what still doesn't fit is cut with a count of the rows left out.
  */
 export const render = (state: RunState, tickets: Ticket[], options: ChartOptions): string => {
-  const { now, width, height, color } = options
+  const { width, height, color } = options
+  const logs = runPaths('.', state.spec).logs
+  const context: Context = {
+    state,
+    options,
+    openUntil: options.live ? options.now : (state.runs?.at(-1)?.endedAt ?? options.now),
+    log: (role, ticket) => logPath(logs, role, ticket)
+  }
   const depth = layers(tickets)
   const queue = Object.entries(state.tickets)
     .filter(([, entry]) => entry.status === 'implemented' && entry.merger === undefined)
@@ -260,7 +315,7 @@ export const render = (state: RunState, tickets: Ticket[], options: ChartOptions
 
   const sections: Section[] = []
   if (state.steps?.explore) {
-    sections.push({ heading: 'explore', rows: [stepRow(state, 'explore', 'explorer', now)] })
+    sections.push({ heading: 'explore', rows: [stepRow('explore', 'explorer', context)] })
   }
   const deepest = Math.max(-1, ...depth.values())
   for (let layer = 0; layer <= deepest; layer++) {
@@ -268,53 +323,46 @@ export const render = (state: RunState, tickets: Ticket[], options: ChartOptions
       .filter(({ number }) => depth.get(number) === layer)
       .sort((a, b) => a.number - b.number)
       .map((ticket) =>
-        ticketRow(
-          ticket,
-          state.tickets[ticket.number] ?? { status: 'pending' },
-          state,
-          queue,
-          options
-        )
+        ticketRow(ticket, state.tickets[ticket.number] ?? { status: 'pending' }, queue, context)
       )
     sections.push({ heading: `layer ${layer}`, rows, layer })
   }
   sections.push({
     heading: 'finish',
-    rows: END_STEPS.map(({ name, role }) => stepRow(state, name, role, now))
+    rows: END_STEPS.map(({ name, role }) => stepRow(name, role, context))
   })
+  const rows = sections.flatMap((section) => section.rows)
 
-  const fixed = 1 + (options.verdict ? 1 : 0)
-  const size = (all: Section[]) =>
-    fixed +
-    all.reduce((sum, section) => sum + (section.rows.length > 0 ? 1 + section.rows.length : 1), 0)
+  const outerLines = 1 + (options.verdict ? 1 : 0)
+  const lineCount = (all: Section[]) =>
+    outerLines + all.reduce((sum, section) => sum + 1 + section.rows.length, 0)
   for (const section of sections) {
-    if (size(sections) <= height) break
+    if (lineCount(sections) <= height) break
     if (section.layer === undefined || section.rows.length === 0) continue
-    if (!section.rows.every((row) => row.glyph === 'done')) continue
-    section.heading = `${paint('done', color)} layer ${section.layer} · ${section.rows.length} done`
+    if (!section.rows.every((row) => row.status === 'done')) continue
+    section.heading = `${paint('done', color)} layer ${section.layer}: ${section.rows.length} done`
     section.rows = []
   }
 
-  const detailed = sections.flatMap((section) => section.rows.filter((row) => row.detail))
-  const labels = detailed.map((row) => row.label)
-  const details = detailed.map((row) => row.detail)
-  const longestDetail = Math.max(0, ...details.map((detail) => detail.length))
-  const room = width - 4 - (longestDetail > 0 ? 2 + longestDetail : 0)
-  const column = Math.min(Math.max(0, ...labels.map((label) => label.length)), Math.max(12, room))
+  const rowsWithDetail = sections.flatMap((section) => section.rows.filter((row) => row.detail))
+  const longestDetail = Math.max(0, ...rowsWithDetail.map((row) => row.detail.length))
+  const labelRoom = width - 4 - (longestDetail > 0 ? 2 + longestDetail : 0)
+  const longestLabel = Math.max(0, ...rowsWithDetail.map((row) => row.label.length))
+  const column = Math.min(longestLabel, Math.max(12, labelRoom))
 
   const line = (row: Row) => {
     const text = row.detail ? `${clip(row.label, column).padEnd(column)}  ${row.detail}` : row.label
-    return `  ${paint(row.glyph, color)} ${clip(text, width - 4)}`
+    return `  ${paint(row.status, color)} ${clip(text, width - 4)}`
   }
   const body = sections.flatMap((section) => [section.heading, ...section.rows.map(line)])
-  const budget = Math.max(1, height - fixed)
+  const budget = Math.max(1, height - outerLines)
   const shown =
     body.length <= budget
       ? body
       : [...body.slice(0, budget - 1), `  … ${body.length - (budget - 1)} more lines`]
   return [
-    clip(header(state, now), width),
+    clip(header(state, options), width),
     ...shown,
-    ...(options.verdict ? [clip(verdict(state, tickets, now), width)] : [])
+    ...(options.verdict ? [clip(verdict(state, tickets, rows, options), width)] : [])
   ].join('\n')
 }

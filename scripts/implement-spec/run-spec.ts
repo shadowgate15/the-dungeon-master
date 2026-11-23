@@ -90,6 +90,8 @@ export type Ports = {
   log: (line: string) => void
   /** The current time, in epoch milliseconds. */
   now: () => number
+  /** This process's ID, saved with each run so `--status` can tell whether it is still going. */
+  pid: number
   /** Receives the run state after every change, to draw progress from. */
   progress: (state: RunState) => void
   /** Resolves once the clock reaches `time` (epoch milliseconds). */
@@ -193,8 +195,8 @@ export type RunState = {
   runs?: RunSpan[]
 }
 
-/** One run of the command, in epoch milliseconds. */
-export type RunSpan = { startedAt: number; endedAt: number }
+/** One run of the command, in epoch milliseconds, and the process that ran it. */
+export type RunSpan = { startedAt: number; endedAt: number; pid?: number }
 
 /** Where a spec's run lives: state, notes, logs and the PR body, under the main repository root. */
 export const runPaths = (root: string, spec: number) => {
@@ -310,11 +312,11 @@ const unfinishedReason = ({ outcome }: SessionState) => {
  */
 const nextSession = (previous: SessionState | undefined, prompt: string) => {
   if (previous === undefined || previous.outcome?.check === 'passed') {
-    return { session: { id: randomUUID() } as SessionState, resume: false, prompt }
+    return { session: { id: randomUUID() } as SessionState, resume: false, prompt, reason: '' }
   }
-  const resumedPrompt = continuePrompt(unfinishedReason(previous), prompt)
+  const reason = unfinishedReason(previous)
   delete previous.outcome
-  return { session: previous, resume: true, prompt: resumedPrompt }
+  return { session: previous, resume: true, prompt: continuePrompt(reason, prompt), reason }
 }
 
 /** A ticket whose implementer didn't complete: left `running` by a stopped run, or `failed`. */
@@ -330,6 +332,27 @@ const exited = async (
   exitCode: number,
   rest: () => Promise<DoneCheck> = async () => 'passed'
 ): Promise<DoneCheck> => (exitCode !== 0 ? 'nonzero-exit' : rest())
+
+/** Every session in the run state. */
+const allSessions = (state: RunState) =>
+  [
+    ...Object.values(state.tickets).flatMap((entry) => [entry.session, entry.merger]),
+    ...Object.values(state.steps ?? {}).map((step) => step.session)
+  ].filter((session): session is SessionState => session !== undefined)
+
+/**
+ * Ends the attempts a stopped run left open (mid-attempt or waiting out a usage limit) at that
+ * run's last save, the latest time it is known to have been going.
+ */
+const closeStopped = (state: RunState) => {
+  const lastSave = state.runs?.at(-1)?.endedAt
+  for (const session of allSessions(state)) {
+    delete session.waitingUntil
+    if (session.startedAt !== undefined && session.endedAt === undefined) {
+      session.endedAt = Math.max(session.startedAt, lastSave ?? session.startedAt)
+    }
+  }
+}
 
 /** Starts a new attempt of `session` at `now`, folding its previous attempt into `activeMs`. */
 const beginAttempt = (session: SessionState, now: number) => {
@@ -380,7 +403,11 @@ const runSession = async (run: Run, spec: SessionSpec): Promise<boolean> => {
   beginAttempt(session, run.ports.now())
   run.save()
 
-  log(`${next.resume ? 'resumed' : 'launched'} ${label} (log ${logFile})`)
+  log(
+    next.resume
+      ? `resumed ${label} because ${next.reason} (log ${logFile})`
+      : `launched ${label} (log ${logFile})`
+  )
   const launch = (resume: boolean, prompt: string) =>
     claude.run({
       role: spec.role,
@@ -767,6 +794,12 @@ const reportFailures = (run: Run) => {
  * the spec, or a stuck ticket). Tickets closed on GitHub since an earlier run aren't read, so they
  * never count. Resolves to whether any ticket was stuck.
  */
+/** A ticket's blockers still open on GitHub and not yet `done` in the run, by number. */
+export const openBlockers = ({ blockedBy }: Pick<Ticket, 'blockedBy'>, state: RunState) =>
+  blockedBy
+    .filter((blocker) => blocker.open && state.tickets[blocker.number]?.status !== 'done')
+    .map((blocker) => blocker.number)
+
 const reportStuck = (run: Run, tickets: Ticket[]) => {
   const stuck = tickets
     .filter(({ number }) => run.state.tickets[number]?.status !== 'done')
@@ -774,9 +807,7 @@ const reportStuck = (run: Run, tickets: Ticket[]) => {
   if (stuck.length === 0) return false
   run.log('stuck tickets:')
   for (const { number, blockedBy } of stuck) {
-    const blockers = blockedBy
-      .filter((blocker) => blocker.open && run.state.tickets[blocker.number]?.status !== 'done')
-      .map((blocker) => `#${blocker.number}`)
+    const blockers = openBlockers({ blockedBy }, run.state).map((blocker) => `#${blocker}`)
     run.log(`  #${number} blocked by ${blockers.join(', ')}`)
   }
   return true
@@ -791,20 +822,21 @@ export const runSpec = async (
   const root = await git.repoRoot()
   const paths = runPaths(root, spec)
   for (const dir of [paths.dir, paths.notes, paths.logs]) mkdirSync(dir, { recursive: true })
-  const record = (line: string) =>
+  const appendRunLog = (line: string) =>
     appendFileSync(paths.runLog, `${new Date(ports.now()).toISOString()} ${line}\n`)
   const log = (line: string) => {
-    record(line)
+    appendRunLog(line)
     ports.log(line)
   }
 
   const saved = loadState(paths.state)
   const resuming = saved ? unfinishedSessions(saved) : 0
-  record(
-    `--- run started${resuming > 0 ? `, resuming ${resuming} session${resuming === 1 ? '' : 's'}` : ''}`
+  appendRunLog(
+    `--- run started${resuming > 0 ? `, resume of ${resuming} session${resuming === 1 ? '' : 's'}` : ''}`
   )
   if (saved?.steps?.ready?.status === 'done') {
     log(`spec #${spec} already finished: PR #${saved.pr} is ready`)
+    ports.progress(saved)
     return { ok: true, frontier: [] }
   }
 
@@ -824,8 +856,9 @@ export const runSpec = async (
   }
   state.integrationWorktree = worktree
   state.graph = tickets
+  closeStopped(state)
   const startedAt = ports.now()
-  state.runs = [...(state.runs ?? []), { startedAt, endedAt: startedAt }]
+  state.runs = [...(state.runs ?? []), { startedAt, endedAt: startedAt, pid: ports.pid }]
   for (const ticket of tickets) state.tickets[ticket.number] ??= { status: 'pending' }
   const span = state.runs[state.runs.length - 1]
   const save = () => {

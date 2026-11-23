@@ -36,6 +36,7 @@ const options = (extra: Partial<ChartOptions> = {}): ChartOptions => ({
   width: 100,
   height: 40,
   color: false,
+  live: true,
   timeZone: 'UTC',
   ...extra
 })
@@ -50,23 +51,21 @@ describe('render', () => {
       4: { status: 'pending' }
     })
 
-    expect(render(state, tickets, options())).toBe(
-      [
-        'spec #100 · 0s',
-        'layer 0',
-        '  · #1 Ticket 1  pending',
-        '  · #4 Ticket 4  pending · blocked by #90',
-        'layer 1',
-        '  · #2 Ticket 2  pending · blocked by #1',
-        'layer 2',
-        '  · #3 Ticket 3  pending · blocked by #1 #2',
-        'finish',
-        '  · review',
-        '  · fix',
-        '  · pr-description',
-        '  · ready'
-      ].join('\n')
-    )
+    expect(render(state, tickets, options())).toMatchInlineSnapshot(`
+      "spec #100 · 30m
+      layer 0
+        · #1 Ticket 1  pending
+        · #4 Ticket 4  pending · blocked by #90
+      layer 1
+        · #2 Ticket 2  pending · blocked by #1
+      layer 2
+        · #3 Ticket 3  pending · blocked by #1 #2
+      finish
+        · review
+        · fix
+        · pr-description
+        · ready"
+    `)
   })
 
   it("shows each ticket's status with its times, attempts, queue place and log", () => {
@@ -95,32 +94,67 @@ describe('render', () => {
       },
       {
         pr: 500,
-        steps: { explore: { status: 'done', session: ran(0, 3, { outcome: passed }) } },
+        steps: {
+          explore: { status: 'done', session: ran(0, 3, { outcome: passed }) },
+          review: { status: 'running', session: ran(10, 12, { waitingUntil: START + 40 * MINUTE }) }
+        },
         runs: [{ startedAt: START, endedAt: START + 10 * MINUTE }]
       }
     )
 
-    expect(render(state, tickets, options({ width: 120 }))).toBe(
-      [
-        'spec #100 · PR #500 draft · 30m',
-        'explore',
-        '  ✓ explore      3m',
-        'layer 0',
-        '  ✓ #1 Ticket 1  impl 12m · merge 2m',
-        '  ◐ #2 Ticket 2  impl 13m (attempt 2) · .implement-spec/100/logs/implementer-2.log',
-        '  ✗ #3 Ticket 3  no-commits · impl 5m · .implement-spec/100/logs/implementer-3.log',
-        '  ● #4 Ticket 4  queued 2 · impl 8m',
-        '  ● #5 Ticket 5  queued 1 · impl 6m',
-        '  ◐ #6 Ticket 6  impl 9m · merge 5m · .implement-spec/100/logs/merger-6.log',
-        '  ⏸ #7 Ticket 7  usage limit · resumes 14:53 (23m) · .implement-spec/100/logs/implementer-7.log',
-        '  ✗ #8 Ticket 8  merge not-merged · impl 4m · .implement-spec/100/logs/merger-8.log',
-        'finish',
-        '  · review',
-        '  · fix',
-        '  · pr-description',
-        '  · ready'
-      ].join('\n')
+    expect(render(state, tickets, options({ width: 120 }))).toMatchInlineSnapshot(`
+      "spec #100 · PR #500 draft · 30m
+      explore
+        ✓ explore      3m
+      layer 0
+        ✓ #1 Ticket 1  impl 12m · merge 2m
+        ◐ #2 Ticket 2  impl 13m (attempt 2) · .implement-spec/100/logs/implementer-2.log
+        ✗ #3 Ticket 3  no-commits · impl 5m · .implement-spec/100/logs/implementer-3.log
+        ● #4 Ticket 4  queued 2 · impl 8m
+        ● #5 Ticket 5  queued 1 · impl 6m
+        ◐ #6 Ticket 6  impl 9m · merge 5m · .implement-spec/100/logs/merger-6.log
+        ⏸ #7 Ticket 7  usage limit · resumes 14:53 (23m) · .implement-spec/100/logs/implementer-7.log
+        ✗ #8 Ticket 8  merge not-merged · impl 4m · .implement-spec/100/logs/merger-8.log
+      finish
+        ⏸ review       usage limit · resumes 14:40 (10m) · .implement-spec/100/logs/reviewer.log
+        · fix
+        · pr-description
+        · ready"
+    `)
+  })
+
+  it('shows sessions a stopped run left open as interrupted, timed to its last save', () => {
+    const tickets = [ticket(1), ticket(2), ticket(3)]
+    const state = stateWith(
+      {
+        1: { status: 'running', session: ran(0) },
+        2: { status: 'implemented', session: ran(0, 9, { outcome: passed }), merger: ran(10) },
+        3: { status: 'running', session: ran(0, 5, { waitingUntil: START + 60 * MINUTE }) }
+      },
+      { runs: [{ startedAt: START, endedAt: START + 20 * MINUTE }] }
     )
+
+    expect(
+      render(state, tickets, options({ width: 120, live: false, verdict: true })).split('\n')
+    ).toEqual([
+      'spec #100 · 20m',
+      'layer 0',
+      '  ✗ #1 Ticket 1  interrupted · impl 20m · .implement-spec/100/logs/implementer-1.log',
+      '  ✗ #2 Ticket 2  merge interrupted · impl 9m · merge 10m · .implement-spec/100/logs/merger-2.log',
+      '  ✗ #3 Ticket 3  interrupted · impl 5m · .implement-spec/100/logs/implementer-3.log',
+      'finish',
+      '  · review',
+      '  · fix',
+      '  · pr-description',
+      '  · ready',
+      '✗ 3 interrupted — re-run to resume · 20m'
+    ])
+  })
+
+  it('shows a dash for the total time of a run from before times were recorded', () => {
+    const state = stateWith({ 1: { status: 'pending' } }, { runs: undefined })
+
+    expect(render(state, [ticket(1)], options()).split('\n')[0]).toBe('spec #100 · —')
   })
 
   it('cuts a title that would push its row past the terminal width', () => {
@@ -141,47 +175,50 @@ describe('render', () => {
       4: { status: 'pending' }
     })
 
-    expect(render(state, tickets, options({ height: 11 })).split('\n')).toEqual([
-      'spec #100 · 0s',
-      '✓ layer 0 · 2 done',
-      'layer 1',
-      '  ✓ #3 Ticket 3',
-      'layer 2',
-      '  · #4 Ticket 4  pending',
-      'finish',
-      '  · review',
-      '  · fix',
-      '  · pr-description',
-      '  · ready'
-    ])
-    expect(render(state, tickets, options({ height: 8 })).split('\n')).toEqual([
-      'spec #100 · 0s',
-      '✓ layer 0 · 2 done',
-      '✓ layer 1 · 1 done',
-      'layer 2',
-      '  · #4 Ticket 4  pending',
-      'finish',
-      '  · review',
-      '  … 3 more lines'
-    ])
+    expect(render(state, tickets, options({ height: 11 }))).toMatchInlineSnapshot(`
+      "spec #100 · 30m
+      ✓ layer 0: 2 done
+      layer 1
+        ✓ #3 Ticket 3
+      layer 2
+        · #4 Ticket 4  pending
+      finish
+        · review
+        · fix
+        · pr-description
+        · ready"
+    `)
+    expect(render(state, tickets, options({ height: 8 }))).toMatchInlineSnapshot(`
+      "spec #100 · 30m
+      ✓ layer 0: 2 done
+      ✓ layer 1: 1 done
+      layer 2
+        · #4 Ticket 4  pending
+      finish
+        · review
+        … 3 more lines"
+    `)
   })
 
-  it('ends with the verdict when asked: the ready PR, or what failed and what is stuck', () => {
+  it('ends with the verdict when asked: the ready PR, or what failed, is stuck or never started', () => {
     const runs = [{ startedAt: START, endedAt: START + 112 * MINUTE }]
     const finished = stateWith(
       { 1: { status: 'done' } },
       { pr: 500, prReady: true, runs, steps: { ready: { status: 'done' } } }
     )
-    const failed = stateWith({ 1: { status: 'failed' }, 2: { status: 'pending' } }, { runs })
+    const failed = stateWith(
+      { 1: { status: 'failed' }, 2: { status: 'pending' }, 3: { status: 'pending' } },
+      { runs }
+    )
 
     const last = (state: RunState, tickets: Ticket[]) =>
-      render(state, tickets, options({ verdict: true }))
+      render(state, tickets, options({ live: false, verdict: true }))
         .split('\n')
         .at(-1)
 
     expect(last(finished, [ticket(1)])).toBe('✓ PR #500 ready · 1h 52m')
-    expect(last(failed, [ticket(1), ticket(2, [1])])).toBe(
-      '✗ 1 failed, 1 stuck · re-run to resume · 1h 52m'
+    expect(last(failed, [ticket(1), ticket(2, [1]), ticket(3)])).toBe(
+      '✗ 1 failed, 1 stuck, 1 not started — re-run to resume · 1h 52m'
     )
   })
 

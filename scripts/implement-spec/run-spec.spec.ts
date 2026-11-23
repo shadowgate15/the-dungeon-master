@@ -204,6 +204,7 @@ const portsFor = (tickets: Ticket[], behave: Behave = succeeds) => {
   const shown: RunState[] = []
   const ports: Ports = {
     now: () => clock.at,
+    pid: 4242,
     progress: (state) => shown.push(structuredClone(state)),
     tracker: tracker.tracker,
     git: git.git,
@@ -1023,6 +1024,31 @@ describe('runSpec', () => {
 
       expect(readState(100).tickets[1].session).toMatchObject({ attempts: 2, activeMs: 3 * MINUTE })
     })
+    it("closes a session a stopped run left open at the run's last save, keeping its time", async () => {
+      const { ports } = portsFor([ticket(1)], (session, fake) => {
+        clock.at += 3 * MINUTE
+        return session.role === 'implementer' && session.resume !== true
+          ? 0
+          : succeeds(session, fake)
+      })
+      await runSpec(100, {}, ports)
+      // As if the run had been killed mid-attempt, waiting out a usage limit, at its last save.
+      const path = join(root, '.implement-spec', '100', 'state.json')
+      const stopped = readState(100)
+      const { session } = stopped.tickets[1]
+      session.startedAt = START
+      delete session.endedAt
+      delete session.outcome
+      session.waitingUntil = START + 60 * MINUTE
+      stopped.tickets[1].status = 'running'
+      stopped.runs = [{ startedAt: START, endedAt: START + 4 * MINUTE, pid: 4242 }]
+      writeFileSync(path, JSON.stringify(stopped))
+
+      await runSpec(100, {}, ports)
+
+      expect(readState(100).tickets[1].session).toMatchObject({ attempts: 2, activeMs: 4 * MINUTE })
+      expect(readState(100).tickets[1].session.waitingUntil).toBeUndefined()
+    })
   })
 
   describe('the run record', () => {
@@ -1054,8 +1080,8 @@ describe('runSpec', () => {
       await runSpec(100, {}, ports)
 
       expect(readState(100).runs).toEqual([
-        { startedAt: START, endedAt: START + 20 * MINUTE },
-        { startedAt: START + 120 * MINUTE, endedAt: START + 120 * MINUTE }
+        { startedAt: START, endedAt: START + 20 * MINUTE, pid: 4242 },
+        { startedAt: START + 120 * MINUTE, endedAt: START + 120 * MINUTE, pid: 4242 }
       ])
     })
 
@@ -1072,8 +1098,25 @@ describe('runSpec', () => {
       const log = runLog()
       expect(log[0]).toBe('2026-11-23T14:00:00.000Z --- run started')
       expect(log).toContainEqual('2026-11-23T14:01:00.000Z implemented #1')
-      expect(log).toContainEqual(expect.stringMatching(/--- run started, resuming 1 session$/))
+      expect(log).toContainEqual(expect.stringMatching(/--- run started, resume of 1 session$/))
       expect(log.filter((line) => !line.includes('---'))).toHaveLength(lines.length)
+    })
+
+    it('says in run.log why each session resumed', async () => {
+      let fails = true
+      const { ports } = portsFor([ticket(1)], (session, fake) =>
+        session.role === 'implementer' && fails ? 0 : succeeds(session, fake)
+      )
+      await runSpec(100, {}, ports)
+      fails = false
+
+      await runSpec(100, {}, ports)
+
+      expect(runLog()).toContainEqual(
+        expect.stringMatching(
+          /resumed #1 implementer because it exited 0 but failed the done check: no-commits \(log /
+        )
+      )
     })
   })
 
@@ -1443,7 +1486,7 @@ describe('runSpec', () => {
     })
 
     it('does no work on a re-run of a finished run', async () => {
-      const { ports, claude, git, tracker } = portsFor([ticket(1)])
+      const { ports, claude, git, tracker, shown } = portsFor([ticket(1)])
       await runSpec(100, {}, ports)
       const stateAfterFirst = readState(100)
       const counts = () => [
@@ -1457,6 +1500,7 @@ describe('runSpec', () => {
       ]
       const before = counts()
       lines.length = 0
+      shown.length = 0
 
       const result = await runSpec(100, { explore: true }, ports)
 
@@ -1464,6 +1508,7 @@ describe('runSpec', () => {
       expect(counts()).toEqual(before)
       expect(readState(100)).toEqual(stateAfterFirst)
       expect(lines).toEqual([expect.stringMatching(/already finished.*PR #500/)])
+      expect(shown).toEqual([stateAfterFirst])
     })
 
     it('starts every fresh session with a distinct session ID already in the state file', async () => {
