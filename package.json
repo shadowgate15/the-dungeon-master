@@ -19,6 +19,7 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "rules:normalize": "node src/lib/rules/build/run.ts",
+    "implement-spec": "node scripts/implement-spec/main.ts",
     "eval:exchange": "node scripts/exchange-eval/run.ts",
     "eval:exchange:grid": "node scripts/exchange-eval/grid.ts",
     "eval:exchange:report": "node scripts/exchange-eval/report.ts",
