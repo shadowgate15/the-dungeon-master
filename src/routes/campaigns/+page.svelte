@@ -4,29 +4,15 @@
   import { resolve } from '$app/paths'
   import CampaignTable from '#lib/campaign/CampaignTable.svelte'
   import NewCampaignDialog from '#lib/campaign/NewCampaignDialog.svelte'
-  import SectionNav from '#lib/SectionNav.svelte'
   import { enhance } from '$app/forms'
-  import ActionToast from '#lib/world/ActionToast.svelte'
+  import ActionToast from '#lib/campaign/ActionToast.svelte'
   import Button from '#lib/ui/Button.svelte'
-  import Link from '#lib/ui/Link.svelte'
 
   let { data, form } = $props()
 
   let confirmingDelete = $state<string | null>(null)
-  // An action URL replaces the query string, so keep the view and filter or the list would reset.
-  const actionUrl = (name: string) => {
-    const keep = [
-      data.view === 'archived' ? 'view=archived' : '',
-      data.worldFilter ? `world=${encodeURIComponent(data.worldFilter.id)}` : ''
-    ].filter(Boolean)
-    return `?/${name}${keep.length ? `&${keep.join('&')}` : ''}`
-  }
-  // Only an active World can be pre-selected in the New Campaign dialog.
-  const filterWorldIds = $derived(
-    data.worldFilter && data.worlds.some((w) => w.id === data.worldFilter?.id)
-      ? [data.worldFilter.id]
-      : []
-  )
+  // An action URL replaces the query string, so keep the view or the list would reset.
+  const actionUrl = (name: string) => `?/${name}${data.view === 'archived' ? '&view=archived' : ''}`
 
   let dialog = $state<NewCampaignDialog>()
   // A failed create reopens the dialog on the server render.
@@ -38,11 +24,9 @@
           name: String(form.name ?? ''),
           premise: String(form.premise ?? ''),
           tone: String(form.tone ?? ''),
-          length: String(form.length ?? ''),
-          worldIds: Array.isArray(form.worldIds) ? form.worldIds.map(String) : []
+          length: String(form.length ?? '')
         }
-      : // A list filtered by a World opens the dialog with that World chosen.
-        { worldIds: filterWorldIds }
+      : {}
   )
 </script>
 
@@ -57,9 +41,6 @@
       >
     </form>
   {:else}
-    {#if data.view === 'active'}
-      <Link href={resolve('/campaigns/[id]', { id: campaign.id })} class="mr-2 text-sm">Play</Link>
-    {/if}
     <form
       method="POST"
       action={actionUrl(data.view === 'active' ? 'archive' : 'restore')}
@@ -82,14 +63,13 @@
 {/snippet}
 
 <main class="mx-auto max-w-6xl space-y-4 p-6">
-  <SectionNav current="campaigns" />
   <div class="flex items-center justify-between">
     <h1 class="font-display text-2xl">Campaigns</h1>
     <Button
       href="{resolve('/campaigns')}?new"
       onclick={(e: MouseEvent) => {
         e.preventDefault()
-        dialog?.show(filterWorldIds)
+        dialog?.show()
       }}>New Campaign</Button
     >
   </div>
@@ -99,7 +79,6 @@
     view={data.view}
     activeCount={data.activeCount}
     archivedCount={data.archivedCount}
-    worldFilter={data.worldFilter}
     actions={rowActions}
   />
 </main>
@@ -108,7 +87,6 @@
 
 <NewCampaignDialog
   bind:this={dialog}
-  worlds={data.worlds}
   initial={failedValues}
   error={createFailed && form ? form.error : undefined}
   open={serverOpen}

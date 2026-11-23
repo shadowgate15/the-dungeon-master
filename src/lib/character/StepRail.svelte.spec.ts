@@ -54,19 +54,6 @@ describe('StepRail', () => {
       .toHaveAttribute('title', 'Too many skills.')
   })
 
-  it('shows a dot only on steps with pending suggestions', async () => {
-    render(StepRail, {
-      ...props,
-      steps: steps.map((s) => (s.id === 'abilities' ? { ...s, suggestions: 2 } : s))
-    })
-
-    await expect.element(page.getByTestId('suggestion-dot')).toBeInTheDocument()
-    expect(page.getByTestId('suggestion-dot').elements()).toHaveLength(1)
-    await expect
-      .element(page.getByRole('button', { name: /Ability scores.*incomplete.*AI has suggestions/ }))
-      .toBeVisible()
-  })
-
   it('selects a step and asks to abandon', async () => {
     const onselect = vi.fn()
     const onabandon = vi.fn()

@@ -2,15 +2,6 @@
 
 Conventions for this repo. Anything enforced by tooling (Prettier, ESLint, `svelte-check`) is not repeated here.
 
-## TanStack AI
-
-Use TanStack AI (`@tanstack/ai` and its adapters) for all AI work: model calls, streaming, tool calling, and the transport that carries a stream to the browser.
-
-- **Reach for its helpers before hand-rolling.** Use `chat()` for calls and its response helpers (such as `toServerSentEventsResponse`) and client connection adapters for streaming. Don't write our own stream framing or provider clients.
-- **App events ride as `CUSTOM` chunks.** A session run streams our own pipeline events (thinking, step, stats, scene changes) through `toServerSentEventsResponse` as AG-UI `CUSTOM` chunks, and the browser reads them with `fetchServerSentEvents`. Don't add a second wire format. See `src/lib/server/session/run-response.ts` and `src/lib/session/play.ts`.
-- **Providers stay behind the seam.** Only `src/lib/server/ai/adapter.ts` imports a provider adapter; everything else goes through the chat port.
-- **Check its docs first.** When a need isn't covered by what the port exposes, look for a TanStack AI feature before building around it.
-
 ## TanStack Query
 
 Use `@tanstack/svelte-query` for client-side reads of server state.

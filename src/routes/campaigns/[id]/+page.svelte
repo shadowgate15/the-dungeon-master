@@ -1,39 +1,31 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
-  import { invalidateAll } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import ArcSection from '#lib/arc/ArcSection.svelte'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
   import Select from '#lib/ui/Select.svelte'
-  import SectionNav from '#lib/SectionNav.svelte'
 
   let { data, form } = $props()
 
-  const locked = $derived(data.campaign.archived || data.campaign.readOnly)
-  const arcAccepted = $derived(data.arc?.status === 'accepted')
-  let starting = $state(false)
-  const startFailed = $derived(Boolean(form && 'retry' in form && form.retry))
+  const newCharacterHref = $derived(
+    `${resolve('/characters/new')}?campaign=${encodeURIComponent(data.campaign.id)}`
+  )
 </script>
 
 <svelte:head><title>{data.campaign.name}</title></svelte:head>
 
 <main class="mx-auto max-w-3xl space-y-6 p-6">
-  <SectionNav current="campaigns" />
   <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
   <header>
     <h1 class="font-display text-2xl">{data.campaign.name}</h1>
     <p class="text-muted">{data.campaign.premise}</p>
   </header>
 
-  {#if locked}
-    <Alert variant="warning">
-      This Campaign is read-only, so it cannot be changed. Restore it, or the Worlds it uses, to
-      edit it.
-    </Alert>
+  {#if data.campaign.archived}
+    <Alert variant="warning">This Campaign is archived. Restore it to change it.</Alert>
   {/if}
-  {#if form && 'error' in form && form.error && !startFailed}
+  {#if form && 'error' in form && form.error}
     <Alert variant="danger">{form.error}</Alert>
   {/if}
 
@@ -44,16 +36,11 @@
     {:else}
       <p class="text-muted">No Character linked yet.</p>
     {/if}
-    {#if data.characterLocked}
-      <p class="text-sm text-muted">
-        The Character is fixed because this Campaign has a Session. It cannot be changed or
-        unlinked.
-      </p>
-    {:else if data.characters.length === 0}
+    {#if data.characters.length === 0}
       <p class="text-sm">
-        You have no Characters yet. <Link href={resolve('/characters/new')}>Create one</Link>.
+        You have no Characters yet. <Link href={newCharacterHref}>Create one</Link>.
       </p>
-    {:else if !locked}
+    {:else if !data.campaign.archived}
       <form method="POST" action="?/linkCharacter" use:enhance class="flex items-end gap-2">
         <label class="flex-1 text-sm">
           Character
@@ -70,69 +57,7 @@
           <Button type="submit" variant="secondary">Unlink Character</Button>
         </form>
       {/if}
-    {/if}
-  </section>
-
-  <ArcSection
-    campaignId={data.campaign.id}
-    length={data.campaign.length}
-    arc={data.arc}
-    canGenerate={data.arcAvailability.canGenerate}
-    readOnly={locked || data.arcAvailability.locked}
-    onchange={() => invalidateAll()}
-  />
-
-  <section aria-label="Sessions" class="space-y-2">
-    <h2 class="font-display text-lg">Sessions</h2>
-    {#if data.openSessionId}
-      <Button
-        href={resolve('/campaigns/[id]/sessions/[sessionId]', {
-          id: data.campaign.id,
-          sessionId: data.openSessionId
-        })}>Resume Session</Button
-      >
-    {:else}
-      {#if startFailed && form && 'error' in form}
-        <Alert variant="danger">{form.error}</Alert>
-      {/if}
-      <form
-        method="POST"
-        action="?/startSession"
-        use:enhance={() => {
-          starting = true
-          return async ({ update }) => {
-            await update()
-            starting = false
-          }
-        }}
-      >
-        <Button
-          type="submit"
-          disabled={locked || !data.linkedCharacter || !arcAccepted || starting}
-        >
-          {starting ? 'Preparing the opening Scene…' : startFailed ? 'Retry' : 'Start Session'}
-        </Button>
-      </form>
-      {#if !data.linkedCharacter && !locked}
-        <p class="text-sm text-muted">Link a Character to start a Session.</p>
-      {:else if !arcAccepted && !locked}
-        <p class="text-sm text-muted">Accept the Arc to start a Session.</p>
-      {/if}
-    {/if}
-    {#if data.sessions.length > 0}
-      <ul class="space-y-1 text-sm">
-        {#each [...data.sessions].reverse() as s (s.id)}
-          <li>
-            <Link
-              href={resolve('/campaigns/[id]/sessions/[sessionId]', {
-                id: data.campaign.id,
-                sessionId: s.id
-              })}>Session {s.number}</Link
-            >
-            <span class="text-muted">{s.endedAt === null ? 'open' : 'ended'}</span>
-          </li>
-        {/each}
-      </ul>
+      <p class="text-sm"><Link href={newCharacterHref}>Create a new Character</Link></p>
     {/if}
   </section>
 </main>

@@ -2,8 +2,11 @@ import { goto } from '$app/navigation'
 import { resolve } from '$app/paths'
 import type { CharacterWizard } from './wizard.svelte.ts'
 
-/** Posts (or, when editing, puts) the draft. Success lands on the summary; failure keeps the draft and sets `wizard.saveError`. */
-export async function submitDraft(wizard: CharacterWizard) {
+/**
+ * Posts (or, when editing, puts) the draft. Success goes to `returnHref`, an already-resolved
+ * path; failure keeps the draft and sets `wizard.saveError`.
+ */
+export async function submitDraft(wizard: CharacterWizard, returnHref: string) {
   const input = wizard.characterInput
   if (!input) return
   wizard.saving = true
@@ -22,9 +25,9 @@ export async function submitDraft(wizard: CharacterWizard) {
     if (response.ok && result.id) {
       // Saved: the draft is no longer unsaved, so leaving must not ask to discard it.
       wizard.dirty = false
-      // The path is resolved; `?saved` asks the summary for its success toast.
+      // The caller resolved the path.
       // eslint-disable-next-line svelte/no-navigation-without-resolve
-      await goto(`${resolve('/characters/[id]', { id: result.id })}?saved`)
+      await goto(returnHref)
       return
     }
     wizard.saveError = result.error ?? 'The Character could not be saved.'

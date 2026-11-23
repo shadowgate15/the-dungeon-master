@@ -1,26 +1,15 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
+import { asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { Database } from '../db/connect'
-import { campaign, campaignCharacter, character, session, world, worldCampaign } from '../db/schema'
-import { createWorldService, type World } from '../world/service'
-import { LENGTHS, PREMISE_SERVICE_MAX, TONES } from '#lib/campaign/enums.ts'
-import { NAME_MAX } from '#lib/world/seed.ts'
-
-const CHARACTER_LOCKED = "The Character is fixed once the Campaign's first Session exists"
-
-const hasSession = (
-  q: Database | Parameters<Parameters<Database['transaction']>[0]>[0],
-  id: string
-) =>
-  q.select({ id: session.id }).from(session).where(eq(session.campaignId, id)).get() !== undefined
+import { campaign, campaignCharacter, character } from '../db/schema'
+import { LENGTHS, NAME_MAX, PREMISE_SERVICE_MAX, TONES } from '#lib/campaign/enums.ts'
 
 export type Campaign = typeof campaign.$inferSelect
-export type CampaignWithWorlds = Campaign & { worlds: World[] }
 export type CampaignSeed = Pick<
   typeof campaign.$inferInsert,
   'name' | 'premise' | 'tone' | 'length'
 >
 
-/** The input breaks a Campaign rule (blank or over-long text, bad enum, bad World set, not editable). */
+/** The input breaks a Campaign rule (blank or over-long text, bad enum, not editable). */
 export class CampaignValidationError extends Error {}
 
 /** The Campaign does not exist. */
@@ -53,36 +42,6 @@ function validate(seed: CampaignSeed) {
 }
 
 export function createCampaignService(db: Database, now: () => number = Date.now) {
-  const worlds = createWorldService(db, now)
-
-  function linkedWorlds(campaignId: string): World[] {
-    return db
-      .select({ world })
-      .from(worldCampaign)
-      .innerJoin(world, eq(world.id, worldCampaign.worldId))
-      .where(eq(worldCampaign.campaignId, campaignId))
-      .orderBy(asc(world.name), asc(world.id))
-      .all()
-      .map((r) => r.world)
-  }
-
-  /** Dedupes and requires a non-empty set of existing, active Worlds. */
-  function checkWorldIds(worldIds: readonly string[]): string[] {
-    const ids = [...new Set(worldIds)]
-    if (ids.length === 0) throw new CampaignValidationError('A Campaign needs at least one World')
-    const active = db
-      .select({ id: world.id })
-      .from(world)
-      .where(and(inArray(world.id, ids), isNull(world.archivedAt)))
-      .all()
-      .map((r) => r.id)
-    const bad = ids.filter((id) => !active.includes(id))
-    if (bad.length > 0) {
-      throw new CampaignValidationError('Worlds must exist and not be archived')
-    }
-    return ids
-  }
-
   function setArchived(id: string, archivedAt: number | null): Campaign {
     const current = db.select().from(campaign).where(eq(campaign.id, id)).get()
     if (!current) throw new CampaignNotFoundError('Campaign not found')
@@ -97,73 +56,30 @@ export function createCampaignService(db: Database, now: () => number = Date.now
   }
 
   return {
-    /** Inserts the Campaign and its World links atomically. */
-    create(seed: CampaignSeed, worldIds: readonly string[]): Campaign {
+    create(seed: CampaignSeed): Campaign {
       const values = validate(seed)
-      return db.transaction((tx) => {
-        const ids = checkWorldIds(worldIds)
-        const at = now()
-        const created = tx
-          .insert(campaign)
-          .values({ ...values, createdAt: at, updatedAt: at })
-          .returning()
-          .get()
-        tx.insert(worldCampaign)
-          .values(ids.map((worldId) => ({ worldId, campaignId: created.id })))
-          .run()
-        return created
-      })
+      const at = now()
+      return db
+        .insert(campaign)
+        .values({ ...values, createdAt: at, updatedAt: at })
+        .returning()
+        .get()
     },
 
-    /** Replaces the Seed fields and the whole World set in one transaction; updated_at always moves. */
-    update(id: string, seed: CampaignSeed, worldIds: readonly string[]): Campaign {
-      const values = validate(seed)
-      return db.transaction((tx) => {
-        const current = tx.select().from(campaign).where(eq(campaign.id, id)).get()
-        if (!current) throw new CampaignNotFoundError('Campaign not found')
-        if (current.archivedAt !== null) {
-          throw new CampaignValidationError('An archived Campaign cannot be edited')
-        }
-        const blocking = worlds.archivedWorldsOfCampaign(id)
-        if (blocking.length > 0) {
-          throw new CampaignValidationError(
-            `Campaign is read-only while these Worlds are archived: ${blocking.map((w) => w.name).join(', ')}`
-          )
-        }
-        const ids = checkWorldIds(worldIds)
-        const updated = tx
-          .update(campaign)
-          .set({ ...values, updatedAt: now() })
-          .where(eq(campaign.id, id))
-          .returning()
-          .get()
-        tx.delete(worldCampaign).where(eq(worldCampaign.campaignId, id)).run()
-        tx.insert(worldCampaign)
-          .values(ids.map((worldId) => ({ worldId, campaignId: id })))
-          .run()
-        return updated
-      })
-    },
-
-    /** Always allowed, including while read-only; a no-op when already archived. */
+    /** A no-op when already archived. */
     archive(id: string): Campaign {
       return setArchived(id, now())
     },
 
-    /** Always allowed, including while a World is archived; a no-op when already active. */
+    /** A no-op when already active. */
     restore(id: string): Campaign {
       return setArchived(id, null)
     },
 
-    /** Hard delete; links cascade and Worlds are untouched. */
+    /** Hard delete; links cascade. */
     delete(id: string): void {
       const deleted = db.delete(campaign).where(eq(campaign.id, id)).returning().get()
       if (!deleted) throw new CampaignNotFoundError('Campaign not found')
-    },
-
-    /** The archived Worlds that make a Campaign read-only, so the UI can name them. */
-    blockingWorlds(id: string): World[] {
-      return worlds.archivedWorldsOfCampaign(id)
     },
 
     /** The Campaign's linked Character, if any. The app links one per Campaign. */
@@ -175,33 +91,23 @@ export function createCampaignService(db: Database, now: () => number = Date.now
         .get()?.id
     },
 
-    /** True once the Campaign's first Session exists; the linked Character is then fixed. */
-    characterLocked(campaignId: string): boolean {
-      return hasSession(db, campaignId)
-    },
-
-    /** Removes the Character link; rejected once the Campaign's first Session exists. */
+    /** Removes the Character link. */
     unlinkCharacter(campaignId: string): void {
       db.transaction((tx) => {
         if (!tx.select().from(campaign).where(eq(campaign.id, campaignId)).get()) {
           throw new CampaignNotFoundError('Campaign not found')
         }
-        if (hasSession(tx, campaignId)) throw new CampaignValidationError(CHARACTER_LOCKED)
         tx.delete(campaignCharacter).where(eq(campaignCharacter.campaignId, campaignId)).run()
       })
     },
 
-    /**
-     * Links the Character to the Campaign, replacing any earlier link. Rejected once the
-     * Campaign's first Session exists, so carry-over stays coherent.
-     */
+    /** Links the Character to the Campaign, replacing any earlier link. */
     linkCharacter(campaignId: string, characterId: string): void {
       db.transaction((tx) => {
         const camp = tx.select().from(campaign).where(eq(campaign.id, campaignId)).get()
         if (!camp) throw new CampaignNotFoundError('Campaign not found')
-        if (hasSession(tx, campaignId)) throw new CampaignValidationError(CHARACTER_LOCKED)
-        if (camp.archivedAt !== null || worlds.isCampaignReadOnly(campaignId)) {
-          throw new CampaignValidationError('This Campaign is read-only')
+        if (camp.archivedAt !== null) {
+          throw new CampaignValidationError('An archived Campaign cannot be changed')
         }
         const found = tx.select().from(character).where(eq(character.id, characterId)).get()
         if (!found) throw new CampaignValidationError('Character not found')
@@ -213,34 +119,16 @@ export function createCampaignService(db: Database, now: () => number = Date.now
       })
     },
 
-    isReadOnly(id: string): boolean {
-      return worlds.isCampaignReadOnly(id)
+    get(id: string): Campaign | undefined {
+      return db.select().from(campaign).where(eq(campaign.id, id)).get()
     },
 
-    get(id: string): CampaignWithWorlds | undefined {
-      const found = db.select().from(campaign).where(eq(campaign.id, id)).get()
-      return found && { ...found, worlds: linkedWorlds(id) }
-    },
-
-    /** Active Campaigns, oldest first, optionally only those set in one World. */
-    list(filter: { worldId?: string } = {}): Campaign[] {
-      const active = isNull(campaign.archivedAt)
-      const where = filter.worldId
-        ? and(
-            active,
-            inArray(
-              campaign.id,
-              db
-                .select({ id: worldCampaign.campaignId })
-                .from(worldCampaign)
-                .where(eq(worldCampaign.worldId, filter.worldId))
-            )
-          )
-        : active
+    /** Active Campaigns, oldest first. */
+    list(): Campaign[] {
       return db
         .select()
         .from(campaign)
-        .where(where)
+        .where(isNull(campaign.archivedAt))
         .orderBy(asc(campaign.createdAt), asc(sql`rowid`))
         .all()
     },

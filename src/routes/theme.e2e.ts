@@ -49,9 +49,9 @@ test.describe('theme toggle without JavaScript', () => {
   test.use({ javaScriptEnabled: false })
 
   test('sets the cookie, redirects back and renders the theme on the server', async ({ page }) => {
-    await page.goto('/?new')
+    await page.goto('/campaigns?new')
     await option(page, 'Dark').click()
-    await expect(page).toHaveURL(/\/\?new$/)
+    await expect(page).toHaveURL(/\/campaigns\?new$/)
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await expect(option(page, 'Dark')).toHaveAttribute('aria-pressed', 'true')
 

@@ -10,12 +10,12 @@
   // One wizard per visit; the draft is browser-only and gone on reload or abandon.
   // svelte-ignore state_referenced_locally
   const wizard = new CharacterWizard(data.rules)
+
+  const backHref = $derived(
+    data.campaign ? resolve('/campaigns/[id]', { id: data.campaign }) : resolve('/campaigns')
+  )
 </script>
 
 <svelte:head><title>New Character</title></svelte:head>
 
-<WizardShell
-  {wizard}
-  backHref={resolve('/characters')}
-  onabandon={() => goto(resolve('/characters'))}
-></WizardShell>
+<WizardShell {wizard} {backHref} onabandon={() => goto(backHref)}></WizardShell>

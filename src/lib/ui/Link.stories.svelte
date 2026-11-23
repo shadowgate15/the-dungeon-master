@@ -14,7 +14,7 @@
   <p class="text-sm">Return to <Link {...args}>the worlds list</Link>.</p>
 {/snippet}
 
-<Story name="Default" args={{ href: '/worlds' }} {template} />
+<Story name="Default" args={{ href: '/campaigns' }} {template} />
 <Story
   name="External"
   args={{ href: 'https://example.com', target: '_blank', rel: 'noreferrer' }}

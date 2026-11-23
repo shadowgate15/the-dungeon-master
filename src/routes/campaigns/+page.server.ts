@@ -5,45 +5,28 @@ import {
   CampaignNotFoundError,
   CampaignValidationError
 } from '#lib/server/campaign/service.ts'
-import { createWorldService } from '#lib/server/world/service.ts'
-import type { ActionNotice } from '#lib/world/ActionToast.svelte'
+import type { ActionNotice } from '#lib/campaign/ActionToast.svelte'
 import type { Actions, PageServerLoad } from './$types'
 
 const campaigns = createCampaignService(db)
-const worlds = createWorldService(db)
 
 export const load: PageServerLoad = ({ url }) => {
   const view: 'active' | 'archived' =
     url.searchParams.get('view') === 'archived' ? 'archived' : 'active'
-  // An unknown World id (a stale link) is ignored rather than emptying the list.
-  const filterWorld = worlds.get(url.searchParams.get('world') ?? '')
-  const worldFilter = filterWorld && { id: filterWorld.id, name: filterWorld.name }
-  const active = campaigns.list({ worldId: worldFilter?.id })
-  const withWorlds = (list: ReturnType<typeof campaigns.list>) =>
-    list.map((c) => ({ ...c, worlds: campaigns.get(c.id)?.worlds ?? [] }))
-  const archived = withWorlds(campaigns.listArchived()).filter(
-    (c) => !worldFilter || c.worlds.some((w) => w.id === worldFilter.id)
-  )
+  const active = campaigns.list()
+  const archived = campaigns.listArchived()
   return {
     view,
-    worldFilter,
-    campaigns: (view === 'archived' ? archived : withWorlds(active)).map((c) => ({
+    campaigns: (view === 'archived' ? archived : active).map((c) => ({
       id: c.id,
       name: c.name,
       premise: c.premise,
       tone: c.tone,
       length: c.length,
-      updatedAt: c.updatedAt,
-      worlds: c.worlds.map((w) => ({
-        id: w.id,
-        name: w.name,
-        archived: w.archivedAt !== null
-      }))
+      updatedAt: c.updatedAt
     })),
     activeCount: active.length,
-    archivedCount: archived.length,
-    // Only active Worlds may be newly linked.
-    worlds: worlds.list().map((w) => ({ id: w.id, name: w.name }))
+    archivedCount: archived.length
   }
 }
 
@@ -97,20 +80,11 @@ export const actions: Actions = {
       name: text('name'),
       premise: text('premise'),
       tone: text('tone'),
-      length: text('length'),
-      worldIds: data.getAll('worldId').map(String)
+      length: text('length')
     }
     try {
       // The service validates enum membership; the cast only bridges raw form strings.
-      campaigns.create(
-        {
-          name: values.name,
-          premise: values.premise,
-          tone: values.tone,
-          length: values.length
-        } as Parameters<typeof campaigns.create>[0],
-        values.worldIds
-      )
+      campaigns.create(values as Parameters<typeof campaigns.create>[0])
     } catch (error) {
       if (error instanceof CampaignValidationError)
         return fail(400, { ...values, error: error.message })
