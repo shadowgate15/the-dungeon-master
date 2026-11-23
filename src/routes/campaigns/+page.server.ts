@@ -3,12 +3,13 @@ import { resolve } from '$app/paths'
 import { CampaignSeedError } from '#lib/campaign/seed.ts'
 import type { ActionNotice } from '#lib/campaign/ActionToast.svelte'
 import type { CampaignListItem } from '#lib/campaign/CampaignTable.svelte'
-import { campaignRoot, library } from '#lib/server/campaign/index.ts'
+import { campaignRoot, library, sessions } from '#lib/server/campaign/index.ts'
 import {
   CampaignExistsError,
   CampaignMissingError,
   CampaignNotFoundError,
   NotACampaignFolderError,
+  SessionLiveError,
   type LibraryEntry
 } from '#lib/server/campaign/library.ts'
 import type { Actions, PageServerLoad } from './$types'
@@ -39,13 +40,17 @@ export const load: PageServerLoad = ({ url }) => {
     campaigns: (view === 'archived' ? archived : active).sort(byUpdated).map(item),
     activeCount: active.length,
     archivedCount: archived.length,
+    attached: sessions.list(),
     campaignRoot
   }
 }
 
+/** A refused action, as a notice: an unknown or Missing Campaign, or one with a live session. */
 const notFound = (e: unknown) => {
   if (e instanceof CampaignNotFoundError || e instanceof CampaignMissingError)
     return fail(404, { notice: { message: e.message } satisfies ActionNotice })
+  if (e instanceof SessionLiveError)
+    return fail(409, { notice: { message: e.message } satisfies ActionNotice })
   throw e
 }
 
