@@ -4,17 +4,15 @@
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Dialog from '#lib/ui/Dialog.svelte'
-  import CampaignSeedCard from './CampaignSeedCard.svelte'
-  import {
-    emptyCampaignSeed,
-    isCampaignSeedComplete,
-    type CampaignSeedCard as Seed
-  } from './seed.ts'
+  import Field from '#lib/ui/Field.svelte'
+  import TextInput from '#lib/ui/TextInput.svelte'
 
   type Props = {
+    /** The default root new Campaign folders go under. */
+    root: string
     /** Values to show on open: a failed no-JS submit. */
-    initial?: Partial<Seed>
-    /** Service validation error from the last create attempt, shown inline. */
+    initial?: { name?: string; folder?: string }
+    /** Error from the last create attempt, shown inline. */
     error?: string
     /** Render open (server render of `?new`, or a failed create). */
     open?: boolean
@@ -22,35 +20,59 @@
     onclose?: () => void
   }
 
-  let { initial = {}, error, open = false, onclose }: Props = $props()
+  let { root, initial = {}, error, open = false, onclose }: Props = $props()
 
   // svelte-ignore state_referenced_locally
-  let seed = $state<Seed>({ ...emptyCampaignSeed(), ...initial })
+  let name = $state(initial.name ?? '')
+  // svelte-ignore state_referenced_locally
+  let customFolder = $state<string | undefined>(initial.folder)
   // svelte-ignore state_referenced_locally
   let isOpen = $state(open)
 
-  /** Opens the modal with a fresh card. */
+  /** A folder name from the Campaign name: lowercase words joined by dashes. */
+  const slug = (text: string) =>
+    text
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+
+  const separator = $derived(root.includes('\\') && !root.includes('/') ? '\\' : '/')
+  // The folder follows the name until the Player edits it.
+  const suggested = $derived(`${root.replace(/[\\/]+$/, '')}${separator}${slug(name)}`)
+  const folder = $derived(customFolder ?? suggested)
+
+  /** Opens the modal with a fresh form. */
   export function show() {
-    seed = emptyCampaignSeed()
+    name = ''
+    customFolder = undefined
     isOpen = true
   }
 </script>
 
 <Dialog bind:open={isOpen} title="New Campaign" closeHref={resolve('/campaigns')} {onclose}>
-  <form
-    method="POST"
-    action="?/createCampaign"
-    use:enhance={() =>
-      async ({ result, update }) => {
-        await update()
-        if (result.type === 'success') isOpen = false
-      }}
-    class="space-y-3 lg:max-h-[70vh] lg:overflow-y-auto"
-  >
-    <CampaignSeedCard bind:seed />
+  <form method="POST" action="?/createCampaign" use:enhance class="space-y-3">
+    <Field label="Name">
+      {#snippet children(id, describedby)}
+        <TextInput {id} name="name" aria-describedby={describedby} bind:value={name} />
+      {/snippet}
+    </Field>
+    <Field label="Folder" hint="The Campaign lives in this folder. You can commit it with git.">
+      {#snippet children(id, describedby)}
+        <TextInput
+          {id}
+          name="folder"
+          aria-describedby={describedby}
+          value={folder}
+          oninput={(e: Event) => (customFolder = (e.currentTarget as HTMLInputElement).value)}
+        />
+      {/snippet}
+    </Field>
     {#if error}
       <Alert variant="danger">{error}</Alert>
     {/if}
-    <Button type="submit" disabled={!isCampaignSeedComplete(seed)}>Create Campaign</Button>
+    <Button type="submit" disabled={name.trim() === '' || folder.trim() === ''}>
+      Create Campaign
+    </Button>
   </form>
 </Dialog>

@@ -8,7 +8,9 @@
     premise: 'Escort a relic across the ash plains.',
     tone: 'tense',
     length: 'short',
-    updatedAt: Date.UTC(2026, 10, 2)
+    updatedAt: Date.UTC(2026, 10, 2),
+    status: 'active',
+    path: '/home/player/dm-campaigns/ember-road'
   }
   const calm: CampaignListItem = {
     ...ember,
@@ -16,7 +18,18 @@
     name: 'Lantern Vale',
     premise: 'A quiet valley hides an old promise.',
     tone: 'lighthearted',
-    length: 'long'
+    length: 'long',
+    path: '/home/player/dm-campaigns/lantern-vale'
+  }
+  const lost: CampaignListItem = {
+    id: 'c3',
+    name: 'Lost Vale',
+    premise: null,
+    tone: null,
+    length: null,
+    updatedAt: null,
+    status: 'missing',
+    path: '/home/player/dm-campaigns/lost-vale'
   }
 
   const { Story } = defineMeta({
@@ -28,4 +41,5 @@
 </script>
 
 <Story name="Active" />
+<Story name="With a Missing Campaign" args={{ campaigns: [ember, lost] }} />
 <Story name="Empty" args={{ campaigns: [], activeCount: 0 }} />

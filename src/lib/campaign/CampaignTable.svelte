@@ -2,16 +2,21 @@
   export type CampaignListItem = {
     id: string
     name: string
-    premise: string
-    tone: string
-    length: string
-    updatedAt: number
+    /** Unset Seed fields are null, and a Missing Campaign has only its cached name. */
+    premise: string | null
+    tone: string | null
+    length: string | null
+    updatedAt: number | null
+    status: 'active' | 'archived' | 'missing'
+    /** The Campaign folder. */
+    path: string
   }
 </script>
 
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import { resolve } from '$app/paths'
+  import Badge from '#lib/ui/Badge.svelte'
   import Link from '#lib/ui/Link.svelte'
   import SegmentedNav from '#lib/ui/SegmentedNav.svelte'
   import Table from '#lib/ui/Table.svelte'
@@ -62,17 +67,27 @@
       {#each campaigns as campaign (campaign.id)}
         <tr class="border-b border-border align-top">
           <td class="max-w-xs p-2">
-            <Link
-              href={resolve('/campaigns/[id]', { id: campaign.id })}
-              class="font-medium text-text">{campaign.name}</Link
-            >
-            <p class="truncate text-xs text-muted" title={campaign.premise}>
-              {campaign.premise}
-            </p>
+            {#if campaign.status === 'missing'}
+              <span class="font-medium">{campaign.name}</span>
+              <Badge variant="warning" size="sm">Missing</Badge>
+              <p class="truncate text-xs text-muted" title={campaign.path}>
+                Not found at {campaign.path}
+              </p>
+            {:else}
+              <Link
+                href={resolve('/campaigns/[id]', { id: campaign.id })}
+                class="font-medium text-text">{campaign.name}</Link
+              >
+              <p class="truncate text-xs text-muted" title={campaign.premise ?? undefined}>
+                {campaign.premise ?? ''}
+              </p>
+            {/if}
           </td>
-          <td class="p-2">{campaign.tone}</td>
-          <td class="p-2">{campaign.length}</td>
-          <td class="p-2 whitespace-nowrap text-muted">{day(campaign.updatedAt)}</td>
+          <td class="p-2">{campaign.tone ?? ''}</td>
+          <td class="p-2">{campaign.length ?? ''}</td>
+          <td class="p-2 whitespace-nowrap text-muted">
+            {campaign.updatedAt === null ? '' : day(campaign.updatedAt)}
+          </td>
           <td class="p-2 text-right">{@render actions?.(campaign)}</td>
         </tr>
       {:else}
