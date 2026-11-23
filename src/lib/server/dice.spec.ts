@@ -104,3 +104,25 @@ describe('advantage and disadvantage', () => {
     expect(loaded(9, 3).rollD20()).toEqual({ mode: 'normal', dice: [9], kept: 9 })
   })
 })
+
+describe('critical hits', () => {
+  it('doubles the dice of a damage expression but adds the modifier once', () => {
+    // Each face of a d6 from a source that returns (face - 1) / 6.
+    const faces = [3, 5, 1, 6]
+    const dice = createDice({ random: () => ((faces.shift() ?? 1) - 1) / 6 })
+
+    const result = dice.rollExpression('2d6+3', { crit: true })
+
+    expect(result.dice).toEqual([3, 5, 1, 6])
+    expect(result.modifier).toBe(3)
+    expect(result.total).toBe(18)
+    expect(result.crit).toBe(true)
+  })
+
+  it('rolls normally when the hit is not a crit', () => {
+    const result = createDice(5).rollExpression('2d6+3')
+
+    expect(result.dice).toHaveLength(2)
+    expect(result.crit).toBe(false)
+  })
+})

@@ -10,8 +10,11 @@ export interface Dice {
   /** One roll of a die with `sides` faces: an integer from 1 to `sides`. */
   roll(sides: number): number
   d20(): number
-  /** Rolls an `NdM+K` expression such as `2d6+3`, `1d20-1` or `4d6`; throws on anything else. */
-  rollExpression(expression: string): ExpressionRoll
+  /**
+   * Rolls an `NdM+K` expression such as `2d6+3`, `1d20-1` or `4d6`; throws on anything else.
+   * With `crit`, the dice are rolled twice and the modifier added once (SRD critical hit damage).
+   */
+  rollExpression(expression: string, options?: { crit?: boolean }): ExpressionRoll
   /** A d20 roll; advantage and disadvantage roll two and keep the higher or lower. */
   rollD20(options?: D20Options): D20Roll
 }
@@ -39,6 +42,8 @@ export interface ExpressionRoll extends DiceExpression {
   expression: string
   dice: number[]
   total: number
+  /** Whether the dice were doubled for a critical hit. */
+  crit: boolean
 }
 
 const MAX_COUNT = 100
@@ -80,11 +85,12 @@ export function createDice(source?: DiceSource): Dice {
         ? mulberry32(source)
         : source.random
   const roll = (sides: number) => 1 + Math.floor(random() * sides)
-  const rollExpression = (expression: string): ExpressionRoll => {
+  const rollExpression = (expression: string, { crit = false } = {}): ExpressionRoll => {
     const parsed = parseDiceExpression(expression)
-    const dice = Array.from({ length: parsed.count }, () => roll(parsed.sides))
+    const count = crit ? parsed.count * 2 : parsed.count
+    const dice = Array.from({ length: count }, () => roll(parsed.sides))
     const total = dice.reduce((sum, die) => sum + die, parsed.modifier)
-    return { expression, ...parsed, dice, total }
+    return { expression, ...parsed, dice, total, crit }
   }
   const rollD20 = (options: D20Options = {}): D20Roll => {
     if (options.mode === undefined || options.mode === 'normal') {
