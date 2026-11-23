@@ -368,6 +368,7 @@ const merge = async (run: Run, ticket: number): Promise<boolean> => {
 }
 
 /**
+/**
  * Finishes a run whose tickets are all `done`: reviewer, fixer, PR writer, then the PR body is
  * replaced from the PR writer's file and the PR marked ready. Each finished step is recorded, so a
  * re-run picks up at the first unfinished one. Resolves to whether the run finished.
@@ -419,6 +420,59 @@ const markReady = async (run: Run): Promise<boolean> => {
   return true
 }
 
+/**
+ * Launches every ready ticket at once, with no cap, and merges implemented tickets one at a time
+ * in the order their implementers finished. After each merge the frontier is recomputed and newly
+ * ready tickets launch straight away. A failed merger stops new launches and merges; sessions
+ * already running finish. Resolves to whether every launched ticket was merged.
+ */
+const drive = async (run: Run, tickets: Ticket[]): Promise<boolean> => {
+  let ok = true
+  let halted = false
+  let merging = false
+  const launched = new Set<number>()
+  const queue: number[] = []
+  const active = new Set<Promise<void>>()
+
+  const track = (work: Promise<void>) => {
+    active.add(work)
+    const settle = () => active.delete(work)
+    work.then(settle, settle)
+  }
+
+  const step = () => {
+    if (halted) return
+    for (const ticket of readyTickets(tickets, run.state)) {
+      if (launched.has(ticket)) continue
+      launched.add(ticket)
+      track(
+        implement(run, ticket).then((passed) => {
+          if (passed) queue.push(ticket)
+          else ok = false
+          step()
+        })
+      )
+    }
+    const next = merging ? undefined : queue.shift()
+    if (next === undefined) return
+    merging = true
+    track(
+      merge(run, next).then((merged) => {
+        merging = false
+        if (!merged) {
+          ok = false
+          halted = true
+        }
+        step()
+      })
+    )
+  }
+
+  step()
+  while (active.size > 0) await Promise.race(active)
+  return ok && queue.length === 0
+}
+
 export const runSpec = async (
   spec: number,
   options: RunOptions,
@@ -453,17 +507,9 @@ export const runSpec = async (
   }
   if (frontier.length === 0) log('nothing is ready')
 
-  // One ticket at a time: implement the first ready ticket, merge it, recompute the frontier.
-  let ok = true
-  for (let next = frontier[0]; next !== undefined; next = readyTickets(tickets, state)[0]) {
-    if (!(await implement(run, next))) {
-      ok = false
-      continue
-    }
-    if (!(await merge(run, next))) return { ok: false, frontier }
+  const ok = await drive(run, tickets)
+  if (!ok || !Object.values(state.tickets).every(({ status }) => status === 'done')) {
+    return { ok, frontier }
   }
-  if (ok && Object.values(state.tickets).every(({ status }) => status === 'done')) {
-    ok = await finish(run)
-  }
-  return { ok, frontier }
+  return { ok: await finish(run), frontier }
 }
