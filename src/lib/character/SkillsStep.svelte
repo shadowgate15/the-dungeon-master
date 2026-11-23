@@ -4,9 +4,9 @@
   import Button from '#lib/ui/Button.svelte'
   import Checkbox from '#lib/ui/Checkbox.svelte'
   import Field from '#lib/ui/Field.svelte'
-  import FieldAi from '#lib/ui/FieldAi.svelte'
-  import Select from '#lib/ui/Select.svelte'
   import Textarea from '#lib/ui/Textarea.svelte'
+  import TextInput from '#lib/ui/TextInput.svelte'
+  import Select from '#lib/ui/Select.svelte'
   import { LIMITS } from './draft.ts'
   import { groupIssues, groupLabel, skillsStepGroups } from './steps.ts'
   import type { CharacterWizard } from './wizard.svelte.ts'
@@ -80,29 +80,35 @@
   {#if draft.background === 'custom'}
     <section class="space-y-3" aria-label="Custom background">
       <h3 class="font-display text-lg">Custom background</h3>
-      <!-- Name first: the feature is generated given the name. -->
-      <FieldAi
-        {...wizard.aiField('customBackgroundName')}
-        label="Background name"
-        kind="text"
-        bind:value={
-          () => draft.customBackgroundName, (v) => wizard.update({ customBackgroundName: v })
-        }
-      />
+      <Field label="Background name">
+        {#snippet children(id, describedby)}
+          <TextInput
+            {id}
+            aria-describedby={describedby}
+            bind:value={
+              () => draft.customBackgroundName, (v) => wizard.update({ customBackgroundName: v })
+            }
+          />
+        {/snippet}
+      </Field>
       {#if draft.customBackgroundName.length > LIMITS.customBackgroundName}
         <p class="text-sm font-medium text-danger" role="alert">
           Over the {LIMITS.customBackgroundName} character limit.
         </p>
       {/if}
-      <FieldAi
-        {...wizard.aiField('customBackgroundFeature')}
-        label="Background feature"
-        kind="textarea"
-        rows={3}
-        bind:value={
-          () => draft.customBackgroundFeature, (v) => wizard.update({ customBackgroundFeature: v })
-        }
-      />
+      <Field label="Background feature">
+        {#snippet children(id, describedby)}
+          <Textarea
+            {id}
+            rows={3}
+            aria-describedby={describedby}
+            bind:value={
+              () => draft.customBackgroundFeature,
+              (v) => wizard.update({ customBackgroundFeature: v })
+            }
+          />
+        {/snippet}
+      </Field>
       <p class="text-sm text-muted">
         Both required. The feature is free text; it has no game mechanics.
       </p>
@@ -134,12 +140,6 @@
                 ({new Set(g.picks).size} of {g.choose})
               </span>
             </legend>
-            <FieldAi
-              {...wizard.aiField(`picks:${g.key}`)}
-              label={wizard.groupLabel(`picks:${g.key}`) || groupLabel(g)}
-              kind="group"
-              value={wizard.groupText(`picks:${g.key}`)}
-            />
             <div class="grid gap-x-4 gap-y-1 sm:grid-cols-2">
               {#each g.options as o (o.slug)}
                 {@const why = blocked(g, o.slug)}

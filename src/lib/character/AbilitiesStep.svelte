@@ -2,7 +2,7 @@
   import { cappedScore, MAX_ABILITY_SCORE, type AbilityKey } from '#lib/rules/derive-stats.ts'
   import Button from '#lib/ui/Button.svelte'
   import Checkbox from '#lib/ui/Checkbox.svelte'
-  import FieldAi from '#lib/ui/FieldAi.svelte'
+  import Field from '#lib/ui/Field.svelte'
   import Select from '#lib/ui/Select.svelte'
   import {
     ABILITY_KEYS,
@@ -32,12 +32,6 @@
       : method === 'rolling' && draft.abilityRolls
         ? rollTotals(draft.abilityRolls)
         : []
-  )
-
-  const summary = $derived(
-    ABILITY_KEYS.some((k) => draft.baseScores[k] === null)
-      ? ''
-      : ABILITY_KEYS.map((k) => `${ABILITY_LABELS[k]} ${draft.baseScores[k]}`).join(', ')
   )
 
   const METHODS: { id: DraftAbilityMethod; label: string; hint: string }[] = [
@@ -91,21 +85,25 @@
 
 <div class="space-y-5">
   <div class="space-y-1">
-    <FieldAi
-      {...wizard.aiField('abilityMethod')}
-      label="Ability score method"
-      kind="enum"
-      options={[
-        { value: '', label: 'Choose…' },
-        ...METHODS.map((m) => ({ value: m.id, label: m.label }))
-      ]}
-      bind:value={
-        () => method ?? '',
-        (v) => {
-          if (v && v !== method) chooseMethod(v as DraftAbilityMethod)
-        }
-      }
-    />
+    <Field label="Ability score method">
+      {#snippet children(id, describedby)}
+        <Select
+          {id}
+          aria-describedby={describedby}
+          bind:value={
+            () => method ?? '',
+            (v) => {
+              if (v && v !== method) chooseMethod(v as DraftAbilityMethod)
+            }
+          }
+        >
+          <option value="">Choose…</option>
+          {#each METHODS as m (m.id)}
+            <option value={m.id}>{m.label}</option>
+          {/each}
+        </Select>
+      {/snippet}
+    </Field>
     {#if method}
       <p class="text-sm text-muted">{METHODS.find((m) => m.id === method)?.hint}</p>
     {/if}
@@ -149,22 +147,6 @@
       {/if}
     </section>
   {/if}
-
-  <div class="space-y-1">
-    <!-- A read-only summary: the controls only write the whole arrangement. -->
-    <FieldAi
-      {...wizard.aiField('abilityScores')}
-      readonly
-      label="Ability scores"
-      kind="text"
-      bind:value={() => summary, () => {}}
-    />
-    <p class="text-sm text-muted">
-      {method === 'rolling' && !draft.abilityRolls
-        ? 'Arranging rolls a set first, then assigns the totals.'
-        : 'The AI assigns scores for the chosen method; it never sees or changes dice.'}
-    </p>
-  </div>
 
   {#if method && !(method === 'rolling' && !draft.abilityRolls)}
     <table class="w-full text-left text-sm">

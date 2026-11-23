@@ -1,5 +1,5 @@
-// Single source for the World seed enums. Feeds the form, the DB schema
-// (CHECK constraints) and, later, the AI structured-output schema.
+// The World seed enums. Only the old game schema's CHECK constraints read them now; they go
+// with the schema reset.
 
 export const GENRE_FLAVORS = [
   'high fantasy',
@@ -30,5 +30,3 @@ export type GenreFlavor = (typeof GENRE_FLAVORS)[number]
 export type Scale = (typeof SCALES)[number]
 export type MagicLevel = (typeof MAGIC_LEVELS)[number]
 export type TechLevel = (typeof TECH_LEVELS)[number]
-
-export const PREMISE_SOFT_CAP = 500

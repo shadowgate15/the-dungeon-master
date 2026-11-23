@@ -8,11 +8,7 @@
     premise: 'Escort a relic across the ash plains.',
     tone: 'tense',
     length: 'short',
-    updatedAt: Date.UTC(2026, 10, 2),
-    worlds: [
-      { id: 'w1', name: 'Ashfall', archived: false },
-      { id: 'w2', name: 'Bramble', archived: true }
-    ]
+    updatedAt: Date.UTC(2026, 10, 2)
   }
   const calm: CampaignListItem = {
     ...ember,
@@ -20,8 +16,7 @@
     name: 'Lantern Vale',
     premise: 'A quiet valley hides an old promise.',
     tone: 'lighthearted',
-    length: 'long',
-    worlds: [{ id: 'w1', name: 'Ashfall', archived: false }]
+    length: 'long'
   }
 
   const { Story } = defineMeta({
@@ -33,5 +28,4 @@
 </script>
 
 <Story name="Active" />
-<Story name="Filtered by World" args={{ worldFilter: { id: 'w1', name: 'Ashfall' } }} />
 <Story name="Empty" args={{ campaigns: [], activeCount: 0 }} />

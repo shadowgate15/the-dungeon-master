@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test'
-import { createWorld } from './world-helpers'
 
 async function openNewCampaign(page: Page) {
   await page.goto('/campaigns')
@@ -8,32 +7,20 @@ async function openNewCampaign(page: Page) {
   return page.getByRole('dialog', { name: 'New Campaign' })
 }
 
-test('Worlds and Campaigns link to each other from both pages', async ({ page }) => {
+test('the home page is the Campaign library', async ({ page }) => {
   await page.goto('/')
-  await page
-    .getByRole('navigation', { name: 'Sections' })
-    .getByRole('link', { name: 'Campaigns' })
-    .click()
+  await expect(page).toHaveURL(/\/campaigns$/)
   await expect(page.getByRole('heading', { name: 'Campaigns' })).toBeVisible()
-  await page
-    .getByRole('navigation', { name: 'Sections' })
-    .getByRole('link', { name: 'Worlds' })
-    .click()
-  await expect(page.getByRole('heading', { name: 'Worlds' })).toBeVisible()
 })
 
-test('creates a Campaign in the dialog and lists it with its Worlds', async ({ page }) => {
-  const stamp = Date.now()
-  const worldName = `Ashfall ${stamp}`
-  const name = `Ember Road ${stamp}`
-  await createWorld(page, worldName)
+test('creates a Campaign by hand in the dialog and lists it', async ({ page }) => {
+  const name = `Ember Road ${Date.now()}`
 
   const dialog = await openNewCampaign(page)
+  await expect(dialog.getByRole('button', { name: /Generate|feedback/ })).toHaveCount(0)
   const create = dialog.getByRole('button', { name: 'Create Campaign' })
   await expect(create).toBeDisabled()
-  await expect(dialog.getByText('A Campaign needs at least one World')).toBeVisible()
 
-  await dialog.getByLabel('Add World').selectOption({ label: worldName })
   await dialog.getByLabel('Name', { exact: true }).fill(name)
   await dialog.getByLabel('Premise', { exact: true }).fill('Escort a relic across the ash plains.')
   await dialog.getByLabel('Tone', { exact: true }).selectOption('tense')
@@ -44,18 +31,13 @@ test('creates a Campaign in the dialog and lists it with its Worlds', async ({ p
 
   await expect(dialog).toBeHidden()
   const row = page.getByRole('row', { name: new RegExp(name) })
-  await expect(row.getByText(worldName)).toBeVisible()
   await expect(row.getByRole('cell', { name: 'tense', exact: true })).toBeVisible()
 })
 
 test('a long premise warns but still saves', async ({ page }) => {
-  const stamp = Date.now()
-  const worldName = `Longworld ${stamp}`
-  const name = `Long ${stamp}`
-  await createWorld(page, worldName)
+  const name = `Long ${Date.now()}`
 
   const dialog = await openNewCampaign(page)
-  await dialog.getByLabel('Add World').selectOption({ label: worldName })
   await dialog.getByLabel('Name', { exact: true }).fill(name)
   await dialog.getByLabel('Premise', { exact: true }).fill('x'.repeat(520))
   await dialog.getByLabel('Tone', { exact: true }).selectOption('epic')
@@ -64,15 +46,4 @@ test('a long premise warns but still saves', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Create Campaign' }).click()
 
   await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible()
-})
-
-test('the picker locks the last chip', async ({ page }) => {
-  const worldName = `Locked ${Date.now()}`
-  await createWorld(page, worldName)
-
-  const dialog = await openNewCampaign(page)
-  await dialog.getByLabel('Add World').selectOption({ label: worldName })
-
-  await expect(dialog.getByRole('button', { name: `Remove ${worldName}` })).toBeDisabled()
-  await expect(dialog.getByText(/last World can't be removed/)).toBeVisible()
 })

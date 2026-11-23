@@ -48,6 +48,14 @@ function setup() {
 }
 
 describe('WizardShell with the Concept step', () => {
+  it('has no AI controls', async () => {
+    setup()
+
+    await expect.element(page.getByRole('textbox', { name: 'Name', exact: true })).toBeVisible()
+    await expect.element(page.getByRole('button', { name: /Generate/ })).not.toBeInTheDocument()
+    await expect.element(page.getByRole('button', { name: /feedback/ })).not.toBeInTheDocument()
+  })
+
   it('starts on Concept with the later steps locked', async () => {
     setup()
 
@@ -149,17 +157,6 @@ describe('WizardShell with the Concept step', () => {
       .click()
 
     expect(onabandon).toHaveBeenCalledOnce()
-  })
-
-  it('has no chat, and a Field AI control on the Concept fields', async () => {
-    setup()
-
-    await expect.element(page.getByRole('complementary')).not.toBeInTheDocument()
-    for (const label of ['Name', 'Race', 'Class', 'Background', 'Alignment', 'Backstory']) {
-      await expect
-        .element(page.getByRole('button', { name: `Generate ${label}`, exact: true }))
-        .toBeVisible()
-    }
   })
 })
 

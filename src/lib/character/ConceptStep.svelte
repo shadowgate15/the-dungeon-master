@@ -1,5 +1,8 @@
 <script lang="ts">
-  import FieldAi from '#lib/ui/FieldAi.svelte'
+  import Field from '#lib/ui/Field.svelte'
+  import Select from '#lib/ui/Select.svelte'
+  import Textarea from '#lib/ui/Textarea.svelte'
+  import TextInput from '#lib/ui/TextInput.svelte'
   import { LIMITS } from './draft.ts'
   import type { CharacterWizard } from './wizard.svelte.ts'
 
@@ -27,14 +30,34 @@
   ]
 </script>
 
+{#snippet select(
+  label: string,
+  options: { value: string; label: string }[],
+  value: string,
+  set: (v: string) => void
+)}
+  <Field {label}>
+    {#snippet children(id, describedby)}
+      <Select {id} aria-describedby={describedby} bind:value={() => value, set}>
+        {#each options as option (option.value)}
+          <option value={option.value}>{option.label}</option>
+        {/each}
+      </Select>
+    {/snippet}
+  </Field>
+{/snippet}
+
 <div class="space-y-4">
   <div>
-    <FieldAi
-      {...wizard.aiField('name')}
-      label="Name"
-      kind="text"
-      bind:value={() => draft.name, (v) => wizard.update({ name: v })}
-    />
+    <Field label="Name">
+      {#snippet children(id, describedby)}
+        <TextInput
+          {id}
+          aria-describedby={describedby}
+          bind:value={() => draft.name, (v) => wizard.update({ name: v })}
+        />
+      {/snippet}
+    </Field>
     <p class="mt-1 text-sm text-muted">
       Required. Names need not be unique.
       {#if draft.name.length > LIMITS.name}
@@ -44,72 +67,54 @@
   </div>
 
   <div class="grid gap-3 sm:grid-cols-2">
-    <FieldAi
-      {...wizard.aiField('race')}
-      label="Race"
-      kind="enum"
-      options={opts(rules.races)}
-      bind:value={() => draft.race ?? '', (v) => wizard.update({ race: v || null })}
-    />
+    {@render select('Race', opts(rules.races), draft.race ?? '', (v) =>
+      wizard.update({ race: v || null })
+    )}
 
     {#if subraces.length > 0}
-      <FieldAi
-        {...wizard.aiField('subrace')}
-        label="Subrace"
-        kind="enum"
-        options={opts(subraces)}
-        bind:value={() => draft.subrace ?? '', (v) => wizard.update({ subrace: v || null })}
-      />
+      {@render select('Subrace', opts(subraces), draft.subrace ?? '', (v) =>
+        wizard.update({ subrace: v || null })
+      )}
     {/if}
 
-    <FieldAi
-      {...wizard.aiField('class')}
-      label="Class"
-      kind="enum"
-      options={opts(rules.classes)}
-      bind:value={() => draft.class ?? '', (v) => wizard.update({ class: v || null })}
-    />
+    {@render select('Class', opts(rules.classes), draft.class ?? '', (v) =>
+      wizard.update({ class: v || null })
+    )}
 
     {#if subclassGroup}
-      <FieldAi
-        {...wizard.aiField('subclass')}
-        label="Subclass"
-        kind="enum"
-        options={opts(subclassGroup.options)}
-        bind:value={() => draft.subclass ?? '', (v) => wizard.update({ subclass: v || null })}
-      />
+      {@render select('Subclass', opts(subclassGroup.options), draft.subclass ?? '', (v) =>
+        wizard.update({ subclass: v || null })
+      )}
       {#if single}
         <p class="text-sm text-muted">The SRD offers only one, so it is selected for you.</p>
       {/if}
     {/if}
 
-    <FieldAi
-      {...wizard.aiField('background')}
-      label="Background"
-      kind="enum"
-      options={opts(rules.backgrounds)}
-      bind:value={() => draft.background ?? '', (v) => wizard.update({ background: v || null })}
-    />
+    {@render select('Background', opts(rules.backgrounds), draft.background ?? '', (v) =>
+      wizard.update({ background: v || null })
+    )}
 
-    <FieldAi
-      {...wizard.aiField('alignment')}
-      label="Alignment"
-      kind="enum"
-      options={opts(rules.alignments, { value: '', label: 'Unspecified' })}
-      bind:value={() => draft.alignment ?? '', (v) => wizard.update({ alignment: v || null })}
-    />
+    {@render select(
+      'Alignment',
+      opts(rules.alignments, { value: '', label: 'Unspecified' }),
+      draft.alignment ?? '',
+      (v) => wizard.update({ alignment: v || null })
+    )}
   </div>
 
   <h3 class="font-display text-lg">Details <span class="text-sm text-muted">(optional)</span></h3>
   {#each text as field (field.key)}
     <div>
-      <FieldAi
-        {...wizard.aiField(field.key)}
-        label={field.label}
-        kind="textarea"
-        rows={field.rows}
-        bind:value={() => draft[field.key], (v) => wizard.update({ [field.key]: v })}
-      />
+      <Field label={field.label}>
+        {#snippet children(id, describedby)}
+          <Textarea
+            {id}
+            rows={field.rows}
+            aria-describedby={describedby}
+            bind:value={() => draft[field.key], (v) => wizard.update({ [field.key]: v })}
+          />
+        {/snippet}
+      </Field>
       {#if draft[field.key].length > LIMITS[field.key]}
         <p class="mt-1 text-sm text-danger" role="alert">
           Over the {LIMITS[field.key]} character limit.

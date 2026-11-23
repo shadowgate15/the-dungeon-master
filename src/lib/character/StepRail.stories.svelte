@@ -28,7 +28,7 @@
     current: 'abilities',
     steps: [
       { id: 'concept', label: 'Concept', status: 'valid' },
-      { id: 'abilities', label: 'Ability scores', status: 'incomplete', suggestions: 2 },
+      { id: 'abilities', label: 'Ability scores', status: 'incomplete' },
       {
         id: 'skills',
         label: 'Skills & features',

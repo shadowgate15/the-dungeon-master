@@ -22,17 +22,28 @@ import {
   subclass,
   subrace
 } from './rules-schema'
-import {
-  BEAT_STATES,
-  MEMORY_RUN_KINDS,
-  MEMORY_RUN_OUTCOMES,
-  NPC_STATUSES,
-  STANCES,
-  type DroppedItem
-} from '../../memory/enums'
 import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '../../world/enums'
-import { EVENT_KINDS, MODES, ROLES, type SceneExit } from '../../session/enums'
-import type { Call } from '../../session/call'
+
+// The old game's vocabulary, kept here only for the CHECK constraints and JSON column types until
+// the schema reset replaces these tables. Nothing else reads it.
+const NPC_STATUSES = ['alive', 'dead', 'missing', 'departed'] as const
+const STANCES = ['hostile', 'wary', 'neutral', 'friendly', 'allied'] as const
+const BEAT_STATES = ['pending', 'reached', 'abandoned'] as const
+const MEMORY_RUN_KINDS = ['extraction', 'summary'] as const
+const MEMORY_RUN_OUTCOMES = ['success', 'failure'] as const
+const MODES = ['exploration', 'dialogue'] as const
+const ROLES = ['player', 'narrator', 'npc', 'code'] as const
+const EVENT_KINDS = [
+  'declaration',
+  'narration',
+  'npc-line',
+  'call-raised',
+  'call-answered',
+  'scene-changed',
+  'mode-changed'
+] as const
+type DroppedItem = { kind: string; reason: string }
+type SceneExit = { id: string; name: string }
 
 export const task = sqliteTable('task', {
   id: text('id')
@@ -289,8 +300,7 @@ export const sessionScene = sqliteTable(
     npcs: text('npcs', { mode: 'json' }).$type<string[]>().notNull(),
     mode: text('mode', { enum: MODES }).notNull(),
     dialogueNpcId: text('dialogue_npc_id'),
-    /** The Call the Exchange is waiting on (with its DC, never sent to the client). */
-    openCall: text('open_call', { mode: 'json' }).$type<Call>(),
+    openCall: text('open_call', { mode: 'json' }).$type<Record<string, unknown>>(),
     updatedAt: integer('updated_at').notNull()
   },
   () => [check('session_scene_mode_check', oneOf('mode', MODES))]
