@@ -4,6 +4,7 @@
   import { dev } from '$app/env'
   import { QueryClientProvider } from '@tanstack/svelte-query'
   import { createQueryClient } from '#lib/query/client.ts'
+  import { connectLiveUpdates } from '#lib/live/client.ts'
   import type { LayoutProps } from './$types'
 
   import ThemeToggle from '#lib/theme/ThemeToggle.svelte'
@@ -13,6 +14,9 @@
   let { children, data }: LayoutProps = $props()
 
   const queryClient = createQueryClient()
+
+  // Server state changes (a DM attaching, say) reach every page through one SSE stream.
+  $effect(() => connectLiveUpdates(queryClient))
 </script>
 
 <svelte:head>

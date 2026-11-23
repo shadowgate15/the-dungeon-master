@@ -17,6 +17,7 @@
   import type { Snippet } from 'svelte'
   import { resolve } from '$app/paths'
   import Badge from '#lib/ui/Badge.svelte'
+  import DmBadge from './DmBadge.svelte'
   import Link from '#lib/ui/Link.svelte'
   import SegmentedNav from '#lib/ui/SegmentedNav.svelte'
   import Table from '#lib/ui/Table.svelte'
@@ -26,11 +27,13 @@
     view: 'active' | 'archived'
     activeCount: number
     archivedCount: number
+    /** The ids of the Campaigns with a DM at the table. */
+    attached?: string[]
     /** Per-row controls for the Actions column. */
     actions?: Snippet<[CampaignListItem]>
   }
 
-  let { campaigns, view, activeCount, archivedCount, actions }: Props = $props()
+  let { campaigns, view, activeCount, archivedCount, attached = [], actions }: Props = $props()
 
   // ISO date: the same string on the server and in the browser, whatever the locale.
   const day = (ms: number) => new Date(ms).toISOString().slice(0, 10)
@@ -78,6 +81,7 @@
                 href={resolve('/campaigns/[id]', { id: campaign.id })}
                 class="font-medium text-text">{campaign.name}</Link
               >
+              <DmBadge attached={attached.includes(campaign.id)} size="sm" />
               <p class="truncate text-xs text-muted" title={campaign.premise ?? undefined}>
                 {campaign.premise ?? ''}
               </p>

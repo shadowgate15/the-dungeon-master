@@ -3,29 +3,36 @@ import type { AddressInfo } from 'node:net'
 import { Readable } from 'node:stream'
 import { BRIDGE_API, createBridgeApi } from '../lib/server/bridge/api'
 import { createChannels } from '../lib/server/bridge/channels'
+import { createSessions } from '../lib/server/bridge/sessions'
 import { createCampaignLibrary } from '../lib/server/campaign/library'
+import { createLiveUpdates, LIVE_STREAM } from '../lib/server/live'
 import { writeRuntimeFile } from '../lib/server/runtime'
 import { gameTools } from '../lib/server/tools'
 import { createToolHost } from '../lib/server/tools/host'
 
 /**
- * A game server for Vitest: the real Campaign library, tool host and bridge API over plain
- * node:http on a free port, with its runtime file in a temporary user-level directory.
+ * A game server for Vitest: the real Campaign library, tool host, bridge API and the browser's
+ * live updates stream over plain node:http on a free port, with its runtime file in a temporary user-level directory.
  */
 export async function startTestGameServer({ home }: { home: string }) {
-  const library = createCampaignLibrary({ home })
+  const sessions = createSessions()
+  const library = createCampaignLibrary({ home, live: (id) => sessions.attached(id) })
   const channels = createChannels()
   const host = createToolHost({ library, tools: gameTools })
   const token = 'test-token'
-  const api = createBridgeApi({ host, channels, token })
+  const api = createBridgeApi({ library, host, channels, sessions, token })
+  const live = createLiveUpdates({ sessions })
   const seen: string[] = []
 
   const server = http.createServer(async (req, res) => {
     const url = `http://${req.headers.host}${req.url}`
     seen.push(`${req.method} ${new URL(url).pathname}`)
-    if (!new URL(url).pathname.startsWith(BRIDGE_API)) return res.writeHead(404).end()
+    const pathname = new URL(url).pathname
+    const handle =
+      pathname === LIVE_STREAM ? () => live.stream() : pathname.startsWith(BRIDGE_API) ? api : null
+    if (!handle) return res.writeHead(404).end()
     const body = req.method === 'GET' ? undefined : (Readable.toWeb(req) as ReadableStream)
-    const response = await api(
+    const response = await handle(
       new Request(url, {
         method: req.method,
         headers: req.headers as Record<string, string>,
@@ -48,6 +55,7 @@ export async function startTestGameServer({ home }: { home: string }) {
     url: `http://127.0.0.1:${port}`,
     library,
     channels,
+    sessions,
     host,
 
     /** Requests the server has received, as `METHOD /path`. */

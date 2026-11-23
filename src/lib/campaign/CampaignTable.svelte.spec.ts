@@ -35,6 +35,16 @@ const props = (over: Record<string, unknown> = {}) => ({
 })
 
 describe('CampaignTable', () => {
+  it('shows whether the DM is at each Campaign’s table', async () => {
+    const salt = { ...ember, id: 'c2', name: 'Salt Marsh' }
+    render(CampaignTable, props({ campaigns: [ember, salt, lost], attached: ['c2'] }))
+
+    const row = (name: RegExp) => page.getByRole('row', { name })
+    await expect.element(row(/Ember Road/).getByText('DM away')).toBeVisible()
+    await expect.element(row(/Salt Marsh/).getByText('DM at the table')).toBeVisible()
+    await expect.element(row(/Lost Vale/).getByText(/DM /)).not.toBeInTheDocument()
+  })
+
   it('shows name with premise, tone, length and the updated date', async () => {
     render(CampaignTable, props())
 

@@ -7256,6 +7256,7 @@ var require_dist = __commonJS({
 });
 
 // src/bridge/bridge.ts
+import { randomUUID } from "node:crypto";
 import fs2 from "node:fs";
 import path3 from "node:path";
 
@@ -17092,6 +17093,7 @@ function campaignFolder(env, cwd) {
 async function startBridge({ env = process.env, cwd = process.cwd() } = {}) {
   const folder = campaignFolder(env, cwd);
   const home = userStateDir(env);
+  const session = randomUUID();
   const log = (...parts) => process.stderr.write(`[dm-bridge] ${parts.join(" ")}
 `);
   async function api(route, init) {
@@ -17100,7 +17102,11 @@ async function startBridge({ env = process.env, cwd = process.cwd() } = {}) {
     try {
       return await fetch(`http://localhost:${runtime.port}${API}/${route}`, {
         ...init,
-        headers: { authorization: `Bearer ${runtime.token}`, "content-type": "application/json" }
+        headers: {
+          authorization: `Bearer ${runtime.token}`,
+          "content-type": "application/json",
+          "x-dm-session": session
+        }
       });
     } catch {
       throw new ServerDown();
@@ -17149,9 +17155,16 @@ async function startBridge({ env = process.env, cwd = process.cwd() } = {}) {
     }
   });
   async function relayChannel(campaign) {
+    let refused = false;
     for (; ; ) {
       try {
         const res = await api(`events?campaign=${encodeURIComponent(campaign)}`);
+        if (res.status === 409) {
+          if (!refused) log((await res.json()).message);
+          refused = true;
+          throw new ServerDown();
+        }
+        refused = false;
         if (!res.ok || !res.body) throw new ServerDown();
         const decoder = new TextDecoder();
         let buffer = "";
