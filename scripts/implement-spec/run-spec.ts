@@ -62,9 +62,15 @@ export type ClaudeSession = {
   logFile: string
 }
 
+/**
+ * How a session ended: its exit code, or `no-session` when it was to be resumed but `claude` has
+ * no saved conversation with its ID (the run stopped before `claude` saved it).
+ */
+export type ClaudeExit = number | 'no-session'
+
 export type ClaudePort = {
-  /** Runs one session to its end and resolves to its exit code. */
-  run: (session: ClaudeSession) => Promise<number>
+  /** Runs one session to its end and resolves to how it ended. */
+  run: (session: ClaudeSession) => Promise<ClaudeExit>
 }
 
 export type Ports = {
@@ -280,20 +286,32 @@ const runSession = async (run: Run, spec: SessionSpec): Promise<boolean> => {
   const logFile = logPath(run.paths.logs, spec.role, spec.ticket)
   const label = spec.ticket === undefined ? spec.role : `#${spec.ticket} ${spec.role}`
   const next = nextSession(spec.previous, spec.prompt)
-  const { session } = next
+  let { session } = next
   spec.record(session)
   run.save()
   await spec.prepare?.()
 
   log(`${next.resume ? 'resumed' : 'launched'} ${label} (log ${logFile})`)
-  const exitCode = await claude.run({
-    role: spec.role,
-    cwd: spec.cwd,
-    prompt: next.prompt,
-    sessionId: session.id,
-    resume: next.resume,
-    logFile
-  })
+  const launch = (resume: boolean) =>
+    claude.run({
+      role: spec.role,
+      cwd: spec.cwd,
+      prompt: next.prompt,
+      sessionId: session.id,
+      resume,
+      logFile
+    })
+  let exit = await launch(next.resume)
+  if (exit === 'no-session') {
+    // The run stopped before claude saved the session: start a fresh one with the same continue
+    // prompt, as its directory may hold work the lost session did.
+    session = { id: randomUUID() }
+    spec.record(session)
+    run.save()
+    log(`no saved session to resume for ${label}, launched fresh (log ${logFile})`)
+    exit = await launch(false)
+  }
+  const exitCode = exit === 'no-session' ? 1 : exit
 
   const check = await spec.check(exitCode)
   session.outcome = { exitCode, check }

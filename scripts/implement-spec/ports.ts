@@ -1,6 +1,6 @@
 // The real tracker, git and claude ports: thin, untested wrappers over the `gh`, `git` and `claude` CLIs.
 import { execFile, spawn } from 'node:child_process'
-import { closeSync, mkdirSync, openSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { promisify } from 'node:util'
 import type { Blocker, ClaudePort, GitPort, Ticket, TrackerPort } from './run-spec.ts'
@@ -94,15 +94,32 @@ export const createGit = (cwd: string): GitPort => {
   }
 }
 
+/** What `claude --resume` prints when it has no saved conversation with the ID. */
+const NO_CONVERSATION = /No conversation found with session ID/i
+
+/** The text appended to `file` from byte `from` on. */
+const readFrom = (file: string, from: number) => {
+  const fd = openSync(file, 'r')
+  try {
+    const buffer = Buffer.alloc(Math.max(0, statSync(file).size - from))
+    readSync(fd, buffer, 0, buffer.length, from)
+    return buffer.toString('utf8')
+  } finally {
+    closeSync(fd)
+  }
+}
+
 /**
  * Runs `claude -p` unattended (permission checks bypassed, default model, session saved so it can
  * be resumed), with the prompt on stdin and all output appended to the session's log file.
- * Resolves to the exit code; a `claude` that can't be started resolves to 127.
+ * Resolves to the exit code; a `claude` that can't be started resolves to 127, and a resume that
+ * finds no saved conversation resolves to `no-session`.
  */
 export const createClaude = (): ClaudePort => ({
   run: ({ cwd, prompt, sessionId, resume, logFile }) =>
     new Promise((resolve) => {
       mkdirSync(dirname(logFile), { recursive: true })
+      const start = existsSync(logFile) ? statSync(logFile).size : 0
       const out = openSync(logFile, 'a')
       const child = spawn(
         'claude',
@@ -121,7 +138,8 @@ export const createClaude = (): ClaudePort => ({
         if (finished) return
         finished = true
         closeSync(out)
-        resolve(code)
+        const lost = resume && code !== 0 && NO_CONVERSATION.test(readFrom(logFile, start))
+        resolve(lost ? 'no-session' : code)
       }
       child.on('error', () => finish(127))
       child.on('close', (code) => finish(code ?? 1))

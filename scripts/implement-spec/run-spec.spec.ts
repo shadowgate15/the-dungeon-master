@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   runSpec,
+  type ClaudeExit,
   type ClaudePort,
   type GitPort,
   type Ports,
@@ -108,7 +109,7 @@ const fakeGit = (root: string) => {
 type FakeGit = ReturnType<typeof fakeGit>
 type Session = Parameters<ClaudePort['run']>[0]
 /** How a fake session behaves: it may act on the fake git as a real one would, and returns its exit code. */
-type Behave = (session: Session, git: FakeGit) => number | Promise<number>
+type Behave = (session: Session, git: FakeGit) => ClaudeExit | Promise<ClaudeExit>
 
 /** A fake claude answering every session with `behave`, recording each call. */
 const fakeClaude = (git: FakeGit, behave: Behave) => {
@@ -1031,6 +1032,38 @@ describe('runSpec', () => {
         claude.sessions.filter(({ logFile }) => logFile.endsWith('implementer-3.log'))
       ).toHaveLength(1)
       expect(lines).toContainEqual(expect.stringMatching(/resumed #1 merger/))
+    })
+
+    it('starts a fresh session with a new saved ID when the session to resume was never saved by claude', async () => {
+      const persisted = new Set<string>()
+      let crash = true
+      const savedAtLaunch: boolean[] = []
+      const { ports, claude } = portsFor([ticket(1)], (session, fake) => {
+        if (session.resume && !persisted.has(session.sessionId)) return 'no-session'
+        savedAtLaunch.push(JSON.stringify(readState(100)).includes(`"${session.sessionId}"`))
+        if (crash && session.role === 'implementer') {
+          crash = false
+          throw new Error('run interrupted before claude saved the session')
+        }
+        persisted.add(session.sessionId)
+        return succeeds(session, fake)
+      })
+      await expect(runSpec(100, {}, ports)).rejects.toThrow()
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      const [first, resumed, fresh] = claude.sessions
+      expect(resumed).toMatchObject({ sessionId: first.sessionId, resume: true })
+      expect(fresh).toMatchObject({ role: 'implementer', cwd: first.cwd, resume: false })
+      expect(fresh.sessionId).not.toBe(first.sessionId)
+      expect(fresh.prompt).toContain(first.prompt)
+      expect(savedAtLaunch.every(Boolean)).toBe(true)
+      expect(readState(100).tickets[1].session).toMatchObject({
+        id: fresh.sessionId,
+        outcome: { check: 'passed' }
+      })
+      expect(lines).toContainEqual(expect.stringMatching(/no saved session.*#1 implementer/))
     })
 
     it('re-queues tickets left implemented in the order their implementers finished', async () => {
