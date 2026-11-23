@@ -97,7 +97,7 @@ A spell a Character has for free from race, subrace or subclass, such as Tieflin
 _Avoid_: Bonus spell, free spell
 
 **Rules Data**:
-The D&D 5e SRD 5.1 reference content (races, classes, backgrounds, spells, equipment and so on) held in the database. It is read-only to the app and seeded from a pinned dataset. Characters refer to it rather than copy it.
+The D&D 5e SRD 5.1 reference content (races, classes, backgrounds, spells, equipment, monsters, conditions, magic items, rules sections and so on) held in the database. It is read-only to the app and seeded from a pinned dataset. Characters refer to it rather than copy it. Its spells, monsters, conditions, magic items and rules sections are each named by a handle (`spell:fireball`, `monster:goblin`, `condition:prone`, `magic-item:bag-of-holding`, `rule:cover`).
 _Avoid_: Reference data, compendium
 
 **Session**:
