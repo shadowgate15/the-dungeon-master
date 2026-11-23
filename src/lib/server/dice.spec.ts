@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDice } from './dice.ts'
+import { createCampaignDice, createDice } from './dice.ts'
 
 const rollTwenty = (seed?: number) => {
   const dice = createDice(seed)
@@ -95,9 +95,7 @@ describe('advantage and disadvantage', () => {
   it('rolls two d20s on disadvantage and keeps the lower', () => {
     const result = loaded(4, 17).rollD20({ mode: 'disadvantage', reason: 'blinded' })
 
-    expect(result.dice).toEqual([4, 17])
-    expect(result.kept).toBe(4)
-    expect(result.reason).toBe('blinded')
+    expect(result).toEqual({ mode: 'disadvantage', reason: 'blinded', dice: [4, 17], kept: 4 })
   })
 
   it('rolls one d20 on a normal roll', () => {
@@ -124,5 +122,49 @@ describe('critical hits', () => {
 
     expect(result.dice).toHaveLength(2)
     expect(result.crit).toBe(false)
+  })
+})
+
+describe('per-Campaign dice', () => {
+  const twenty = (dice: { d20(): number }) => Array.from({ length: 20 }, () => dice.d20())
+
+  it('gives two rollers with the same seed and Campaign identical sequences', () => {
+    expect(twenty(createCampaignDice(42).for('campaign-a'))).toEqual(
+      twenty(createCampaignDice(42).for('campaign-a'))
+    )
+  })
+
+  it('gives different Campaigns and different seeds different sequences', () => {
+    const a = twenty(createCampaignDice(42).for('campaign-a'))
+
+    expect(twenty(createCampaignDice(42).for('campaign-b'))).not.toEqual(a)
+    expect(twenty(createCampaignDice(43).for('campaign-a'))).not.toEqual(a)
+  })
+
+  it('never lets one Campaign consume another Campaign’s rolls', () => {
+    const alone = twenty(createCampaignDice(7).for('campaign-b'))
+    const shared = createCampaignDice(7)
+
+    twenty(shared.for('campaign-a'))
+    shared.for('campaign-a').rollExpression('8d6')
+
+    expect(twenty(shared.for('campaign-b'))).toEqual(alone)
+  })
+
+  it('keeps one roller per Campaign, so its sequence carries on', () => {
+    const campaigns = createCampaignDice(7)
+    const sequence = twenty(createCampaignDice(7).for('campaign-a'))
+
+    const first = Array.from({ length: 10 }, () => campaigns.for('campaign-a').d20())
+    const rest = Array.from({ length: 10 }, () => campaigns.for('campaign-a').d20())
+
+    expect([...first, ...rest]).toEqual(sequence)
+  })
+
+  it('rolls valid dice for every Campaign when unseeded', () => {
+    for (const roll of twenty(createCampaignDice().for('campaign-a'))) {
+      expect(roll).toBeGreaterThanOrEqual(1)
+      expect(roll).toBeLessThanOrEqual(20)
+    }
   })
 })

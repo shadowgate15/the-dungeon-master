@@ -1,8 +1,9 @@
 /**
  * Code is the only roller. `createDice(seed)` is deterministic for tests; without a seed it
- * uses `Math.random`. `dice` is the process-wide roller: seeded from the `DICE_SEED` environment
- * variable when set (e2e runs), random otherwise. `random` has the shape of `Math.random`, so
- * helpers such as `rollAbilityScores` can take it.
+ * uses `Math.random`. `campaignDice.for(campaignId)` is a Campaign's own roller, and `dice` the
+ * process-wide one; both are seeded from the `DICE_SEED` environment variable when set (e2e runs),
+ * random otherwise. `random` has the shape of `Math.random`, so helpers such as
+ * `rollAbilityScores` can take it.
  */
 export interface Dice {
   /** A float in [0, 1), like `Math.random`. */
@@ -21,9 +22,11 @@ export interface Dice {
 
 export type D20Mode = 'normal' | 'advantage' | 'disadvantage'
 
-export type D20Options =
-  | { mode?: 'normal' }
-  | { mode: 'advantage' | 'disadvantage'; /** Why the roll has it, shown to the Player. */ reason: string }
+/** Advantage or disadvantage and why the roll has it (shown to the Player); omit for a normal roll. */
+export interface D20Options {
+  mode: 'advantage' | 'disadvantage'
+  reason: string
+}
 
 /** Both d20s on advantage or disadvantage (one on a normal roll), the one kept and the reason. */
 export type D20Roll =
@@ -92,8 +95,8 @@ export function createDice(source?: DiceSource): Dice {
     const total = dice.reduce((sum, die) => sum + die, parsed.modifier)
     return { expression, ...parsed, dice, total, crit }
   }
-  const rollD20 = (options: D20Options = {}): D20Roll => {
-    if (options.mode === undefined || options.mode === 'normal') {
+  const rollD20 = (options?: D20Options): D20Roll => {
+    if (!options) {
       const die = roll(20)
       return { mode: 'normal', dice: [die], kept: die }
     }
@@ -104,11 +107,44 @@ export function createDice(source?: DiceSource): Dice {
   return { random, roll, d20: () => roll(20), rollExpression, rollD20 }
 }
 
-const envSeed = process.env.DICE_SEED
+/** FNV-1a over the Campaign id, mixed with the base seed: one independent seed per Campaign. */
+function campaignSeed(seed: number, campaignId: string): number {
+  let hash = (0x811c9dc5 ^ seed) >>> 0
+  for (let i = 0; i < campaignId.length; i++) {
+    hash = Math.imul(hash ^ campaignId.charCodeAt(i), 0x01000193) >>> 0
+  }
+  return hash
+}
 
-/** The process-wide roller; seeded by `DICE_SEED` when it is a number. */
-export const dice: Dice = createDice(
+/** One roller per Campaign, so parallel Campaigns (and tests) never consume each other's rolls. */
+export interface CampaignDice {
+  /** The Campaign's roller; the same instance on every call, so its sequence carries on. */
+  for(campaignId: string): Dice
+}
+
+/** With a seed, each Campaign's roller is seeded from it and the Campaign id; random otherwise. */
+export function createCampaignDice(seed?: number): CampaignDice {
+  const rollers = new Map<string, Dice>()
+  return {
+    for(campaignId) {
+      let roller = rollers.get(campaignId)
+      if (!roller) {
+        roller = createDice(seed === undefined ? undefined : campaignSeed(seed, campaignId))
+        rollers.set(campaignId, roller)
+      }
+      return roller
+    }
+  }
+}
+
+const envSeed = process.env.DICE_SEED
+const seed =
   envSeed !== undefined && envSeed !== '' && Number.isFinite(Number(envSeed))
     ? Number(envSeed)
     : undefined
-)
+
+/** The process-wide roller; seeded by `DICE_SEED` when it is a number. */
+export const dice: Dice = createDice(seed)
+
+/** The process-wide per-Campaign rollers; seeded by `DICE_SEED` when it is a number. */
+export const campaignDice: CampaignDice = createCampaignDice(seed)
