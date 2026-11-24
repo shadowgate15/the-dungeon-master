@@ -1,5 +1,6 @@
 import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import type { LiveMessage } from '#lib/live/messages.ts'
+import type { SceneView } from '#lib/play/scene.ts'
 import type { Timeline } from '#lib/play/timeline.ts'
 import type { ChannelEvent, Channels } from '../bridge/channels'
 import type { Sessions } from '../bridge/sessions'
@@ -9,6 +10,7 @@ import type { DoneOutcome } from '../floor/floor'
 import { callResultEvent, type CallResult } from './calls'
 
 export { DmBusyError } from '../floor/floor'
+export { SpotlightRefusedError } from './scene'
 
 type Options = {
   library: CampaignLibrary
@@ -92,6 +94,20 @@ export function createPlay({
     ) {
       const result = library.calls(campaignId).answer(callId, partId, text, player)
       return answered(campaignId, result)
+    },
+
+    /**
+     * A Player's "Cut to <Name>": one spotlight channel event to the DM. Doesn't await Narration.
+     * Refused (`SpotlightRefusedError`) for a Character who is already in the Scene.
+     */
+    spotlight(campaignId: string, character: string, player: string = SOLO_PLAYER): void {
+      const request = library.record(campaignId).spotlight(character, player)
+      channels.send(folderOf(campaignId), request)
+    },
+
+    /** The Scene as the Player's rail shows it. */
+    scene(campaignId: string): SceneView {
+      return library.record(campaignId).scene()
     },
 
     /** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */

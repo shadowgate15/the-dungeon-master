@@ -67,7 +67,11 @@ export const campaign = sqliteTable(
     /** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
     awaitingNarrationSince: integer('awaiting_narration_since'),
     /** The last Event the DM has heard about: change notices cover the Player's edits after it. */
-    noticedThrough: integer('noticed_through').notNull().default(0)
+    noticedThrough: integer('noticed_through').notNull().default(0),
+    /** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
+    clockMinute: integer('clock_minute').notNull().default(0),
+    /** The Scene: the handle of the Place the spotlight is on, or null before it is first set. */
+    scene: text('scene')
   },
   () => [
     check('campaign_tone_check', oneOf('tone', TONES)),
@@ -442,6 +446,22 @@ export const callPart = sqliteTable(
   },
   (t) => [index('call_part_call_idx').on(t.callId)]
 )
+
+/**
+ * A Declaration sent back to its Player's composer as unsent text: its Character left the Scene
+ * when the spotlight cut away before the Floor closed. The console loads it, then clears it.
+ */
+export const returnedDraft = sqliteTable('returned_draft', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id')
+    .notNull()
+    .references(() => character.id, { onDelete: 'cascade' }),
+  player: text('player').notNull(),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull()
+})
 
 export * from './rules-schema'
 export * from './world-schema'

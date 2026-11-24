@@ -1,11 +1,12 @@
-import { and, asc, eq, max } from 'drizzle-orm'
+import { and, asc, eq, max, sql } from 'drizzle-orm'
 import { canAct } from '#lib/character/acting.ts'
 import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import type { OpenFloor, PendingDeclaration } from '#lib/play/floor.ts'
-import type { Database } from '../db/connect'
-import { campaign, character, declaration, floor } from '../db/schema'
+import type { Database, Queryable } from '../db/connect'
+import { campaign, character, declaration, floor, returnedDraft } from '../db/schema'
 import { withdrawOpenCall } from '../play/calls'
 import { awaitingNarrationSince, logEvent, setAwaitingNarration } from '../play/log'
+import { inScene, scenePlace } from '../play/scene'
 
 /** The Character can't put a Declaration on the Floor (unknown, dead or departed, not theirs). */
 export class DeclarationRefusedError extends Error {}
@@ -27,6 +28,38 @@ export type DoneOutcome =
       /** The open Call the Declarations withdrew, if any. */
       withdrawnCall: string | null
     }
+
+/**
+ * The spotlight cut to `place`: every Declaration on the open Floor for a Character no longer in
+ * the Scene goes back to its Player's composer as unsent text, and the Floor reopens (nobody has
+ * pressed Done on the new Scene). Runs inside the cut's transaction; returns how many went back.
+ */
+export function returnStrandedDrafts(db: Queryable, place: string, at: number): number {
+  const open = db.select().from(floor).where(eq(floor.state, 'open')).get()
+  if (!open) return 0
+  const stranded = db
+    .select({
+      id: declaration.id,
+      characterId: declaration.characterId,
+      player: declaration.player,
+      text: declaration.text,
+      whereabouts: character.whereabouts
+    })
+    .from(declaration)
+    .innerJoin(character, eq(character.id, declaration.characterId))
+    .where(eq(declaration.floorId, open.id))
+    .orderBy(asc(declaration.position))
+    .all()
+    .filter((d) => d.whereabouts !== place)
+  for (const d of stranded) {
+    db.insert(returnedDraft)
+      .values({ characterId: d.characterId, player: d.player, text: d.text, createdAt: at })
+      .run()
+    db.delete(declaration).where(eq(declaration.id, d.id)).run()
+  }
+  db.update(floor).set({ done: [] }).where(eq(floor.id, open.id)).run()
+  return stranded.length
+}
 
 /** Declarations are a sentence or a short paragraph, not an essay. */
 export const DECLARATION_MAX = 2000
@@ -54,9 +87,14 @@ export function createFloor(db: Database, now: () => number = Date.now) {
     )
   }
 
-  /** The Players at the table: everyone with a Character who can act. */
+  /** The Players at the table: everyone with a Character in the Scene who can act. */
   function playersAtTable(): string[] {
-    const actors = db.select().from(character).all().filter(canAct)
+    const place = scenePlace(db)
+    const actors = db
+      .select()
+      .from(character)
+      .all()
+      .filter((c) => canAct(c) && inScene(place, c))
     return [...new Set(actors.map((c) => c.controllingPlayer))]
   }
 
@@ -81,10 +119,26 @@ export function createFloor(db: Database, now: () => number = Date.now) {
     if (!found) throw new DeclarationNotFoundError('Declaration not found on the open Floor')
   }
 
-  /** The open Floor (empty until something is sent). */
-  function current(): OpenFloor {
+  /** `player`'s drafts a cut sent back to the composer, oldest first. */
+  function returned(player: string) {
+    return db
+      .select({
+        id: returnedDraft.id,
+        character: returnedDraft.characterId,
+        characterName: character.name,
+        text: returnedDraft.text
+      })
+      .from(returnedDraft)
+      .innerJoin(character, eq(character.id, returnedDraft.characterId))
+      .where(eq(returnedDraft.player, player))
+      .orderBy(asc(returnedDraft.createdAt), asc(sql`${returnedDraft}.rowid`))
+      .all()
+  }
+
+  /** The open Floor (empty until something is sent), with `player`'s returned drafts. */
+  function current(player: string = SOLO_PLAYER): OpenFloor {
     const floorId = openFloorId()
-    if (!floorId) return { declarations: [] }
+    if (!floorId) return { declarations: [], returned: returned(player) }
     const declarations = db
       .select({
         id: declaration.id,
@@ -98,12 +152,17 @@ export function createFloor(db: Database, now: () => number = Date.now) {
       .where(eq(declaration.floorId, floorId))
       .orderBy(asc(declaration.position))
       .all()
-    return { declarations }
+    return { declarations, returned: returned(player) }
   }
 
   return {
-    /** The open Floor (empty until something is sent). */
+    /** The open Floor (empty until something is sent), with `player`'s returned drafts. */
     current,
+
+    /** The composer has loaded a returned draft: it is no longer held for the Player. */
+    clearReturned(id: string): void {
+      db.delete(returnedDraft).where(eq(returnedDraft.id, id)).run()
+    },
 
     /**
      * Puts a Declaration for one Character on the open Floor, opening it if none is. Refused for a
@@ -123,6 +182,9 @@ export function createFloor(db: Database, now: () => number = Date.now) {
         const actor = db.select().from(character).where(eq(character.id, characterId)).get()
         if (!actor) throw new DeclarationRefusedError('Character not found')
         if (!canAct(actor)) throw new DeclarationRefusedError(`${actor.name} can't act`)
+        if (!inScene(scenePlace(db), actor)) {
+          throw new DeclarationRefusedError(`${actor.name} is not in the Scene`)
+        }
         if (actor.controllingPlayer !== player) {
           throw new DeclarationRefusedError(`${actor.name} is not your Character`)
         }

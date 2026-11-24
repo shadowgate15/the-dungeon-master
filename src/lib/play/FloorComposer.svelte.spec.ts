@@ -122,3 +122,39 @@ describe('FloorComposer', () => {
     expect(h.onsend).toHaveBeenCalledWith('I wait.')
   })
 })
+
+describe('FloorComposer for a split Party', () => {
+  it('greys out Characters elsewhere and asks the DM to cut to one', async () => {
+    const oncut = vi.fn()
+    render(FloorComposer, {
+      acting: 'Wren',
+      declarations: [],
+      elsewhere: [{ id: 'c-bram', name: 'Bram', whereabouts: 'The Docks' }],
+      oncut,
+      ...handlers()
+    })
+
+    await expect.element(page.getByText('Bram · elsewhere: The Docks')).toBeVisible()
+    await page.getByRole('button', { name: 'Cut to Bram' }).click()
+
+    expect(oncut).toHaveBeenCalledWith('c-bram')
+  })
+
+  it('loads drafts a cut sent back into the box as unsent text', async () => {
+    const onreturned = vi.fn()
+    render(FloorComposer, {
+      acting: 'Bram',
+      declarations: [],
+      returned: [
+        { id: 'r1', character: 'c-wren', characterName: 'Wren', text: 'I check the cellar door.' }
+      ],
+      onreturned,
+      ...handlers()
+    })
+
+    await expect
+      .element(page.getByRole('textbox', { name: 'What does Bram do?' }))
+      .toHaveValue('I check the cellar door.')
+    expect(onreturned).toHaveBeenCalledWith(['r1'])
+  })
+})

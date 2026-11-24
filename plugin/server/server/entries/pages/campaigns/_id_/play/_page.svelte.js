@@ -5,8 +5,8 @@ import { n as createSessionsQuery, t as DmBadge } from "../../../../../chunks/Dm
 import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
 import { t as Badge } from "../../../../../chunks/Badge.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
-import { a as createTimelineQuery, i as createJournalQuery, n as callActions, o as floorActions, r as createFloorQuery, s as Journal, t as FloorChangeError } from "../../../../../chunks/floor-client.js";
-import { i as permissionQueryKey, o as createQuery } from "../../../../../chunks/messages.js";
+import { a as createSceneQuery, c as Journal, i as createJournalQuery, n as callActions, o as createTimelineQuery, r as createFloorQuery, s as floorActions, t as FloorChangeError } from "../../../../../chunks/floor-client.js";
+import { i as permissionQueryKey, s as createQuery } from "../../../../../chunks/messages.js";
 import { t as useQueryClient } from "../../../../../chunks/useQueryClient.js";
 import { t as Link } from "../../../../../chunks/Link.js";
 // src/lib/play/CallCard.svelte
@@ -228,7 +228,7 @@ function FloorComposer($$renderer, $$props) {
 		* closes the Floor (empty or not); Ctrl+Enter is Send & Done. While the DM is answering, drafting
 		* stays open but Done waits. A pure view; the console wires the callbacks to the server.
 		*/
-		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false } = $$props;
+		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false, elsewhere = [], oncut = () => {}, returned = [], onreturned = () => {} } = $$props;
 		let draft = "";
 		let editing = null;
 		const blocked = derived(() => disabled || acting === null);
@@ -320,7 +320,17 @@ function FloorComposer($$renderer, $$props) {
 					$$settled = false;
 				}
 			});
-			$$renderer.push(`<!----> <div class="flex items-center justify-end gap-2"><span class="mr-auto text-xs text-muted">Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span> `);
+			$$renderer.push(`<!----> `);
+			if (elsewhere.length) {
+				$$renderer.push(`<!--[0--><ul class="flex flex-wrap gap-2 text-xs" aria-label="Elsewhere"><!--[-->`);
+				const each_array_1 = ensure_array_like(elsewhere);
+				for (let $$index_1 = 0, $$length = each_array_1.length; $$index_1 < $$length; $$index_1++) {
+					let c = each_array_1[$$index_1];
+					$$renderer.push(`<li class="flex items-center gap-1 rounded-control bg-surface px-2 py-1 text-muted"><span>${escape_html(c.name)} · elsewhere${escape_html(c.whereabouts ? `: ${c.whereabouts}` : "")}</span> <button class="underline">Cut to ${escape_html(c.name)}</button></li>`);
+				}
+				$$renderer.push(`<!--]--></ul>`);
+			} else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> <div class="flex items-center justify-end gap-2"><span class="mr-auto text-xs text-muted">Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span> `);
 			Button($$renderer, {
 				size: "sm",
 				variant: "secondary",
@@ -349,6 +359,27 @@ function FloorComposer($$renderer, $$props) {
 			$$render_inner($$inner_renderer);
 		} while (!$$settled);
 		$$renderer.subsume($$inner_renderer);
+	});
+}
+// src/lib/play/SceneRail.svelte
+function SceneRail($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		/**
+		* The rail's top panel: the clock (time large, day below), the Scene's Place and the Characters
+		* present. A pure view of the Player-safe `SceneView`.
+		*/
+		let { scene } = $$props;
+		$$renderer.push(`<section aria-label="Clock and Scene" class="rounded-panel border border-border bg-surface p-3"><p class="font-display text-3xl">${escape_html(scene.clock.time)}</p> <p class="text-muted">day ${escape_html(scene.clock.day)}</p> `);
+		if (scene.place) {
+			$$renderer.push(`<!--[0--><p class="mt-2 font-medium">${escape_html(scene.place.name)}</p> <ul aria-label="Present" class="mt-1 flex flex-wrap gap-1 text-xs"><!--[-->`);
+			const each_array = ensure_array_like(scene.present);
+			for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
+				let c = each_array[$$index];
+				$$renderer.push(`<li class="rounded-control bg-raised px-2 py-0.5">${escape_html(c.name)}</li>`);
+			}
+			$$renderer.push(`<!--]--></ul>`);
+		} else $$renderer.push(`<!--[-1--><p class="mt-2 text-muted">The Scene is set once play begins.</p>`);
+		$$renderer.push(`<!--]--></section>`);
 	});
 }
 // src/lib/play/journal.ts
@@ -502,6 +533,7 @@ function _page($$renderer, $$props) {
 		const sessions = createSessionsQuery(() => data.attached);
 		const floor = createFloorQuery(() => data.campaign.id, () => data.floor);
 		const timeline = createTimelineQuery(() => data.campaign.id, () => data.timeline);
+		const scene = createSceneQuery(() => data.campaign.id, () => data.scene);
 		const journal = createJournalQuery(() => data.campaign.id, () => data.journal);
 		const actions = floorActions(() => data.campaign.id);
 		const calls = callActions(() => data.campaign.id);
@@ -521,7 +553,15 @@ function _page($$renderer, $$props) {
 			});
 		}
 		let picked = null;
-		const actors = derived(() => data.sheets.filter((s) => s.canAct));
+		const inScene = derived(() => new Set(scene.data.present.map((c) => c.id)));
+		const sheets = derived(() => data.sheets.map((s) => {
+			const away = scene.data.elsewhere.find((c) => c.id === s.id);
+			return {
+				...s,
+				whereabouts: away ? away.whereabouts ?? "elsewhere" : null
+			};
+		}));
+		const actors = derived(() => sheets().filter((s) => s.canAct && inScene().has(s.id)));
 		const acting = derived(() => actors().find((s) => s.id === picked) ?? actors()[0] ?? null);
 		const archived = derived(() => data.campaign.status === "archived");
 		let problem = null;
@@ -564,7 +604,7 @@ function _page($$renderer, $$props) {
 		});
 		$$renderer.push(`<!----></header> <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]" aria-label="Play console">`);
 		CharacterSheet($$renderer, {
-			sheets: data.sheets,
+			sheets: sheets(),
 			acting: acting()?.id ?? null,
 			onselect: (id) => picked = id
 		});
@@ -623,10 +663,16 @@ function _page($$renderer, $$props) {
 				onsend: (text) => acting() && attempt(() => actions.send(acting().id, text)),
 				ondone: done,
 				onedit: (id, text) => attempt(() => actions.edit(id, text)),
-				onwithdraw: (id) => attempt(() => actions.withdraw(id))
+				onwithdraw: (id) => attempt(() => actions.withdraw(id)),
+				elsewhere: scene.data.elsewhere,
+				oncut: (id) => attempt(() => actions.cut(id)),
+				returned: floor.data.returned,
+				onreturned: (ids) => attempt(() => actions.clearReturned(ids))
 			});
 		}
-		$$renderer.push(`<!--]--></section> <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm"><section class="rounded-panel border border-border bg-surface p-3"><h2 class="mb-1 text-xs font-semibold text-muted uppercase">Clock and Scene</h2> <p class="text-muted">The Scene is set once play begins.</p></section> <section aria-labelledby="knows-heading" class="rounded-panel border border-border bg-surface p-3"><h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">What ${escape_html(acting()?.name ?? "the Party")} knows</h2> `);
+		$$renderer.push(`<!--]--></section> <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm">`);
+		SceneRail($$renderer, { scene: scene.data });
+		$$renderer.push(`<!----> <section aria-labelledby="knows-heading" class="rounded-panel border border-border bg-surface p-3"><h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">What ${escape_html(acting()?.name ?? "the Party")} knows</h2> `);
 		Journal($$renderer, {
 			entries: acting() ? knownBy(journal.data, acting().id) : journal.data.entries,
 			holders: !acting()

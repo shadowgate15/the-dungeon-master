@@ -10,6 +10,7 @@ import { coreBlock } from '../play/core-block'
 import { createCalls, type Calls } from '../play/calls'
 import { logChange } from '../play/notices'
 import { logEvent, openSession, timeline } from '../play/log'
+import { playerScene, spotlightRequest } from '../play/scene'
 import { seedRulesData } from '../rules/seed'
 import { campaignSeedCard, parseCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
 import { campaignDatabasePath, canonicalFolder } from './paths'
@@ -211,7 +212,9 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
             db,
             { tool: 'stop', kind: 'turn_error', summary: text, data: { text } },
             { at: now() }
-          )
+          ),
+        scene: () => playerScene(db),
+        spotlight: (character: string, player: string) => spotlightRequest(db, character, player)
       }
     },
 

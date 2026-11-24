@@ -1,5 +1,5 @@
-import { A as pageRevision, Bt as isNull, C as event, D as entity, E as belief, Ft as and, Ht as or, It as eq, Jt as DUNGEON_MASTER_HOME, M as ENTITY_TYPES, Mt as SOLO_PLAYER, N as NPC_STATUSES, Nt as asc, O as entityAlias, Pt as desc, Rt as inArray, Ut as sql, Vt as like, Xt as DUNGEON_MASTER_VERSION, Yt as DUNGEON_MASTER_PORT, a as userStateDir, j as worldLink, k as fact, m as campaign, zt as isNotNull } from "./seed.js";
-import { A as expectVersion, B as SESSION_LIVE_MESSAGE, D as openCall, E as callResultEvent, L as isNearName, M as writeTool, O as PLUGIN_NAME, R as normalizeName, S as setAwaitingNarration, T as callInput, _ as createDmChannels, b as logEvent, c as CampaignNotFoundError, d as characterHolders, f as charactersInScene, i as sessions, j as readTool, k as ToolError, l as NotACampaignFolderError, n as library, r as live, v as currentStamp, x as nextEventId, y as logActivity, z as slug } from "./campaign.js";
+import { A as fact, Bt as isNotNull, C as event, D as belief, Ft as desc, Ht as like, It as and, Lt as eq, M as worldLink, N as ENTITY_TYPES, Nt as SOLO_PLAYER, O as entity, P as NPC_STATUSES, Pt as asc, Ut as or, Vt as isNull, Wt as sql, Xt as DUNGEON_MASTER_PORT, Yt as DUNGEON_MASTER_HOME, Zt as DUNGEON_MASTER_VERSION, a as userStateDir, h as character, j as pageRevision, k as entityAlias, m as campaign, zt as inArray } from "./seed.js";
+import { A as scenePlace, B as expectVersion, C as setAwaitingNarration, D as characterRefs, E as advanceClock, F as callInput, H as writeTool, I as callResultEvent, J as normalizeName, L as openCall, M as parseClock, O as currentMinute, R as PLUGIN_NAME, S as nextEventId, V as readTool, X as SESSION_LIVE_MESSAGE, Y as slug, b as logActivity, c as CampaignNotFoundError, d as characterHolders, f as charactersInScene, g as returnStrandedDrafts, i as sessions, j as formatClock, k as present, l as NotACampaignFolderError, n as library, q as isNearName, r as live, v as createDmChannels, w as ClockBackwardsError, x as logEvent, y as currentStamp, z as ToolError } from "./campaign.js";
 import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -981,6 +981,236 @@ var narrationTools = [writeTool({
 		};
 	}
 })];
+// src/lib/server/tools/scene-tools.ts
+/** A live Place, or `unknown_handle`. */
+function placeAt(db, handle) {
+	const found = db.select().from(entity).where(eq(entity.handle, handle)).get();
+	if (!found || found.type !== "place" || found.retiredAt !== null) throw ToolError.unknownHandle(handle);
+	return found;
+}
+function bump(db, handle, fields) {
+	return db.update(entity).set({
+		fields,
+		version: sql`${entity.version} + 1`
+	}).where(eq(entity.handle, handle)).returning({ version: entity.version }).get().version;
+}
+/** Whoever `who` names: Characters by `char:` handle, live NPCs by `npc:` handle. */
+function movers({ db }, who) {
+	const party = characterRefs(db);
+	return who.map((handle) => {
+		const member = party.find((c) => c.handle === handle);
+		if (member) return {
+			handle,
+			name: member.row.name,
+			at: member.row.whereabouts,
+			character: member.row.id
+		};
+		const npc = db.select().from(entity).where(eq(entity.handle, handle)).get();
+		if (!npc || npc.type !== "npc" || npc.retiredAt !== null) throw ToolError.unknownHandle(handle);
+		const at = typeof npc.fields.whereabouts === "string" ? npc.fields.whereabouts : null;
+		return {
+			handle,
+			name: npc.name,
+			at,
+			character: null
+		};
+	});
+}
+/** The Scene as the DM reads it: Place, clock, who is present and where the rest of the Party is. */
+function sceneView(db) {
+	const { place, characters, elsewhere, npcs } = present(db);
+	const minute = currentMinute(db);
+	return {
+		scene: place && {
+			handle: place.handle,
+			name: place.name
+		},
+		clock: formatClock(minute),
+		minute,
+		present: {
+			characters: characters.map((c) => ({
+				handle: c.handle,
+				name: c.row.name
+			})),
+			npcs: npcs.map((n) => ({
+				handle: n.handle,
+				name: n.name,
+				role: n.fields.role ?? null,
+				description: n.fields.description ?? null
+			}))
+		},
+		elsewhere: elsewhere.map((c) => ({
+			handle: c.handle,
+			name: c.row.name,
+			whereabouts: c.row.whereabouts
+		}))
+	};
+}
+var count = int().min(0);
+var advanceInput = strictObject({
+	minutes: count.optional(),
+	hours: count.optional(),
+	days: count.optional(),
+	to: union([count, string()]).optional().describe("A clock reading (\"day 3, 14:20\") or a minute, instead of minutes/hours/days")
+}).refine((d) => d.to === void 0 !== (d.minutes === void 0 && d.hours === void 0 && d.days === void 0), { message: "Pass minutes, hours or days, or to (not both)" });
+/** Where the spotlight is and what time it is. */
+var sceneTools = [
+	readTool({
+		name: "scene",
+		description: "Read the Scene: its Place, the clock, the Characters and NPCs present, and where each Character elsewhere is.",
+		input: strictObject({}),
+		run: ({ db }) => sceneView(db)
+	}),
+	writeTool({
+		name: "move",
+		description: "Set where Characters (char:…) and NPCs (npc:…) are. Pass to (a Place), or via (an exit of the Place they are at) to go through it. An exit whose destination is open needs to as well, and is fixed to it for good. Moving does not move the spotlight: call set_scene for that.",
+		input: strictObject({
+			who: array(string().min(1)).min(1),
+			to: string().min(1).optional().describe("Place handle"),
+			via: string().min(1).optional().describe("Exit name on the movers' Place")
+		}).refine((m) => m.to !== void 0 || m.via !== void 0, { message: "Pass to or via" }),
+		activity: (_, result) => {
+			const names = result.moved.filter((m) => m.handle.startsWith("char:")).map((m) => m.name);
+			return names.length ? `DM moves ${names.join(", ")}` : null;
+		},
+		run: (ctx, { who, to, via }) => {
+			const { db } = ctx;
+			const moving = movers(ctx, [...new Set(who)]);
+			let destination = to;
+			let fixed = null;
+			if (via !== void 0) {
+				const from = [...new Set(moving.map((m) => m.at))];
+				if (from.length !== 1 || from[0] === null) throw new ToolError("not_together", `To go via an exit, everyone must be at the same Place (${moving.map((m) => `${m.handle} at ${m.at ?? "nowhere"}`).join(", ")})`, "Move them separately, or pass to instead of via");
+				const place = placeAt(db, from[0]);
+				const exits = place.fields.exits ?? [];
+				const index = exits.findIndex((e) => e.name.toLowerCase() === via.toLowerCase());
+				if (index < 0) throw new ToolError("unknown_exit", `${place.handle} has no exit named "${via}" (exits: ${exits.map((e) => e.name).join(", ") || "none"})`, `Open ${place.handle} to see its exits`);
+				const exit = exits[index];
+				if (exit.to !== void 0) {
+					if (to !== void 0 && to !== exit.to) throw ToolError.invalidInput("move", `"${exit.name}" leads to ${exit.to}, not ${to}`);
+					destination = exit.to;
+				} else {
+					if (to === void 0) throw ToolError.invalidInput("move", `"${exit.name}" has no destination yet: pass to, and it leads there for good`);
+					placeAt(db, to);
+					const next = exits.map((e, i) => i === index ? {
+						...e,
+						to
+					} : e);
+					const version = bump(db, place.handle, {
+						...place.fields,
+						exits: next
+					});
+					fixed = {
+						place: place.handle,
+						exit: exit.name,
+						to,
+						version
+					};
+				}
+			}
+			const target = placeAt(db, destination);
+			for (const m of moving) if (m.character !== null) db.update(character).set({ whereabouts: target.handle }).where(eq(character.id, m.character)).run();
+			else {
+				const npc = db.select().from(entity).where(eq(entity.handle, m.handle)).get();
+				bump(db, m.handle, {
+					...npc.fields,
+					whereabouts: target.handle
+				});
+			}
+			const moved = moving.map((m) => ({
+				handle: m.handle,
+				name: m.name
+			}));
+			return {
+				result: {
+					moved,
+					to: {
+						handle: target.handle,
+						name: target.name
+					},
+					fixed
+				},
+				event: {
+					kind: "moved",
+					summary: `${moved.map((m) => m.name).join(", ")} to ${target.name}${via ? ` via ${via}` : ""}`,
+					data: {
+						who: moved.map((m) => m.handle),
+						to: target.handle,
+						via: via ?? null,
+						fixed
+					},
+					dmOnly: !moving.some((m) => m.character !== null)
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "set_scene",
+		description: "Move the spotlight to a Place. Refused unless a Character is there (move them first). Who is present follows from whereabouts. On a cut, Declarations for Characters no longer in the Scene go back to their Player as unsent text and the Floor reopens. Honour a spotlight request within a Floor or two, at a natural break.",
+		input: strictObject({ place: string().min(1).describe("Place handle") }),
+		activity: (_, result) => `DM sets the Scene: ${result.scene.name}`,
+		run: ({ db, now }, { place: handle }) => {
+			const place = placeAt(db, handle);
+			if (!characterRefs(db).filter((c) => c.row.status === "alive").some((c) => c.row.whereabouts === place.handle)) throw new ToolError("nobody_there", `No Character is at ${place.handle}`, `Call move with the Characters going to ${place.handle} first`);
+			const cut = scenePlace(db)?.handle !== place.handle;
+			db.update(campaign).set({ scene: place.handle }).run();
+			const returned = cut ? returnStrandedDrafts(db, place.handle, now) : 0;
+			const view = sceneView(db);
+			return {
+				result: {
+					...view,
+					scene: view.scene,
+					returned
+				},
+				event: {
+					kind: "scene_set",
+					summary: `Scene: ${place.name}`,
+					data: {
+						place: place.handle,
+						name: place.name,
+						returned
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "advance_time",
+		description: "Move the Campaign clock forward: by {minutes, hours, days} (they add up) or to a clock reading (\"day 3, 14:20\"). The clock never moves backwards. Keep split groups roughly in step: advance before a cut and narrate \"meanwhile\" for a group that fell behind.",
+		input: advanceInput,
+		activity: (_, result) => `Time passes: ${String(result.clock)}`,
+		run: ({ db }, input) => {
+			const from = currentMinute(db);
+			let to;
+			if (input.to !== void 0) {
+				const parsed = typeof input.to === "number" ? input.to : parseClock(input.to);
+				if (parsed === null) throw ToolError.invalidInput("advance_time", `"${input.to}" is not a clock reading like "day 3, 14:20"`);
+				to = parsed;
+			} else to = from + (input.minutes ?? 0) + (input.hours ?? 0) * 60 + (input.days ?? 0) * 24 * 60;
+			try {
+				advanceClock(db, to);
+			} catch (e) {
+				if (e instanceof ClockBackwardsError) throw new ToolError("clock_backwards", e.message, "Pass a later time, or leave the clock as it is");
+				throw e;
+			}
+			const clock = formatClock(to);
+			return {
+				result: {
+					minute: to,
+					clock
+				},
+				event: {
+					kind: "time_advanced",
+					summary: `Clock: ${clock}`,
+					data: {
+						from,
+						to
+					}
+				}
+			};
+		}
+	})
+];
 // src/lib/server/tools/seed-tools.ts
 /** The Seed is one Entity per Campaign, so its handle is fixed. */
 var HANDLE = "campaign";
@@ -1296,7 +1526,8 @@ var gameTools = [
 	...seedTools,
 	...worldTools,
 	...knowledgeTools,
-	...narrationTools
+	...narrationTools,
+	...sceneTools
 ];
 // src/lib/server/dice.ts
 var MAX_COUNT = 100;
@@ -1602,6 +1833,18 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		/** The Player answers a question Call; the last answer wakes the DM like a roll does. */
 		answer(campaignId, callId, partId, text, player = SOLO_PLAYER) {
 			return answered(campaignId, library.calls(campaignId).answer(callId, partId, text, player));
+		},
+		/**
+		* A Player's "Cut to <Name>": one spotlight channel event to the DM. Doesn't await Narration.
+		* Refused (`SpotlightRefusedError`) for a Character who is already in the Scene.
+		*/
+		spotlight(campaignId, character, player = SOLO_PLAYER) {
+			const request = library.record(campaignId).spotlight(character, player);
+			channels.send(folderOf(campaignId), request);
+		},
+		/** The Scene as the Player's rail shows it. */
+		scene(campaignId) {
+			return library.record(campaignId).scene();
 		},
 		/** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */
 		openSession(campaignId) {

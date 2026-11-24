@@ -231,3 +231,31 @@ describe('DM activity', () => {
     expect(play.timeline(campaignId).entries).toEqual([])
   })
 })
+
+describe('spotlight requests', () => {
+  it('asks the DM to cut to a Character elsewhere, without awaiting Narration', () => {
+    addFighter('Wren')
+    const bram = addFighter('Bram')
+    call('establish', { type: 'place', name: 'The Docks' })
+    call('establish', { type: 'place', name: 'Drowned Lantern' })
+    call('move', { who: ['char:wren'], to: 'place:drowned-lantern' })
+    call('move', { who: ['char:bram'], to: 'place:the-docks' })
+    call('set_scene', { place: 'place:drowned-lantern' })
+
+    play.spotlight(campaignId, bram)
+
+    expect(heard).toEqual([
+      {
+        content: 'Cut to Bram (char:bram), at place:the-docks',
+        meta: { kind: 'spotlight', character: 'char:bram', player: 'player' }
+      }
+    ])
+    expect(play.timeline(campaignId).awaitingSince).toBeNull()
+  })
+
+  it('is refused for a Character already in the Scene', () => {
+    const wren = addFighter('Wren')
+    expect(() => play.spotlight(campaignId, wren)).toThrow(/already in the Scene/)
+    expect(heard).toEqual([])
+  })
+})

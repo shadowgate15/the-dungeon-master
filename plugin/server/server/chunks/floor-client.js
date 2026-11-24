@@ -1,5 +1,5 @@
 import { c as ensure_array_like, g as attr, o as derived, y as escape_html } from "./server2.js";
-import { a as timelineQueryKey, n as floorQueryKey, o as createQuery, r as journalQueryKey, s as SvelteMap } from "./messages.js";
+import { a as sceneQueryKey, c as SvelteMap, n as floorQueryKey, o as timelineQueryKey, r as journalQueryKey, s as createQuery } from "./messages.js";
 import { t as useQueryClient } from "./useQueryClient.js";
 // src/lib/play/Journal.svelte
 function Journal($$renderer, $$props) {
@@ -81,6 +81,18 @@ function createTimelineQuery(campaign, initial) {
 		initialData: initial()
 	}));
 }
+/** The Campaign's Scene for the rail, starting from the server-rendered one. */
+function createSceneQuery(campaign, initial) {
+	return createQuery(() => ({
+		queryKey: sceneQueryKey(campaign()),
+		queryFn: async () => {
+			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/scene`);
+			if (!res.ok) throw new FloorChangeError("The Scene could not be loaded");
+			return await res.json();
+		},
+		initialData: initial()
+	}));
+}
 /** The Player's Journal, starting from the server-rendered one; live updates keep it fresh. */
 function createJournalQuery(campaign, initial) {
 	return createQuery(() => ({
@@ -125,6 +137,17 @@ function floorActions(campaign) {
 		async withdraw(id) {
 			await call(`${base()}/${encodeURIComponent(id)}`, { method: "DELETE" });
 		},
+		/** The composer loaded drafts a cut sent back; the server stops holding them. */
+		async clearReturned(ids) {
+			for (const id of ids) await call(`/api/campaigns/${encodeURIComponent(campaign())}/floor/returned/${encodeURIComponent(id)}`, { method: "DELETE" });
+		},
+		/** "Cut to <Name>": a spotlight request to the DM. Doesn't make the DM answer a turn. */
+		async cut(character) {
+			await call(`/api/campaigns/${encodeURIComponent(campaign())}/spotlight`, {
+				method: "POST",
+				body: JSON.stringify({ character })
+			});
+		},
 		/** Done: closes the Floor (once every Player has pressed it) and wakes the DM. */
 		async done() {
 			await call(`/api/campaigns/${encodeURIComponent(campaign())}/floor/done`, { method: "POST" });
@@ -150,6 +173,6 @@ function callActions(campaign) {
 		answer: (call, part, answer) => post(call, part, { answer })
 	};
 }
-export { createTimelineQuery as a, createJournalQuery as i, callActions as n, floorActions as o, createFloorQuery as r, Journal as s, FloorChangeError as t };
+export { createSceneQuery as a, Journal as c, createJournalQuery as i, callActions as n, createTimelineQuery as o, createFloorQuery as r, floorActions as s, FloorChangeError as t };
 
 //# sourceMappingURL=floor-client.js.map
