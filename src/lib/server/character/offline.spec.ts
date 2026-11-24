@@ -89,6 +89,12 @@ describe('allowed offline', () => {
     expect(library.archive(campaignId).archivedAt).not.toBeNull()
   })
 
+  it('starts over after Begin, before the first Narration', () => {
+    begin()
+    library.startOver(campaignId)
+    expect(db().select().from(campaign).get()!.begunAt).toBeNull()
+  })
+
   it('rewrites a Character in the wizard before Begin, during creation', () => {
     const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
     library
