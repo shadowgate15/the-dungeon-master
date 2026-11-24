@@ -194,6 +194,14 @@ export function createPlay({
       return { block: false }
     },
 
+    /**
+     * What SessionStart injects when a sitting opens: the core block, the "changed since last
+     * sitting" notice for offline edits (told once) and any turn left awaiting Narration.
+     */
+    sessionStart(campaignId: string): string {
+      return library.record(campaignId).opening()
+    },
+
     /** The DM's core block, for SessionStart and after compaction. */
     coreBlock(campaignId: string): string {
       return library.record(campaignId).coreBlock()

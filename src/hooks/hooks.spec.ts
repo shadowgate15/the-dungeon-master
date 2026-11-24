@@ -45,8 +45,9 @@ function hook(event: string, input: Record<string, unknown>): Promise<unknown> {
   })
 }
 
-/** Leaves a closed Floor awaiting Narration. */
+/** Leaves a closed Floor awaiting Narration, with a DM at the table to hear it. */
 function closeFloor() {
+  server.channels.listen(folder, () => {})
   const wren = addCharacter(server.library, campaignId, fighterDraft('Wren'))
   server.library.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })
   server.play.done(campaignId)

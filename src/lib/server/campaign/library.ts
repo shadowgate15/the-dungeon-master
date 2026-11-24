@@ -9,7 +9,7 @@ import { journal } from '../knowledge/journal'
 import { coreBlock } from '../play/core-block'
 import { createCalls, type Calls } from '../play/calls'
 import { sessionHistory } from '../play/sessions'
-import { logChange } from '../play/notices'
+import { logChange, openingNotice } from '../play/notices'
 import { logEvent, openSession, timeline } from '../play/log'
 import { playerScene, spotlightRequest } from '../play/scene'
 import { seedRulesData } from '../rules/seed'
@@ -197,7 +197,11 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
           dmSeedFields: found.dmSeedFields.filter((f) => !edited.has(f as never))
         })
         const summary = 'the Player edited the Campaign Seed'
-        logChange(tx, { handle: 'campaign', version: row.version, summary }, { at: now() })
+        logChange(
+          tx,
+          { handle: 'campaign', version: row.version, summary },
+          { at: now(), offline: !live(id) }
+        )
         return row
       })
       registry.put({ id, path: folder, name: saved.name })
@@ -216,7 +220,7 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
 
     /** The Campaign's Characters and Character drafts. */
     party(id: string): Party {
-      return createParty(database(find(id).folder), now)
+      return createParty(database(find(id).folder), now, { attended: () => live(id) })
     },
 
     /** The Campaign's open Floor and the Declarations on it. */
@@ -240,6 +244,16 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
         openSession: (bridge?: string) => openSession(db, now(), bridge),
         /** The DM's core block. */
         coreBlock: () => coreBlock({ party: createParty(db, now), db }),
+        /**
+         * What a sitting's opening injects: the core block, then what changed since the last
+         * sitting (told once) and any turn still awaiting Narration.
+         */
+        opening: () =>
+          db.transaction((tx) => {
+            const notice = openingNotice(tx)
+            const core = coreBlock({ party: createParty(db, now), db })
+            return notice ? `${core}\n\n${notice}` : core
+          }),
         /** Logs a turn that went wrong, as the Player sees it in the timeline. */
         turnError: (text: string) =>
           logEvent(
