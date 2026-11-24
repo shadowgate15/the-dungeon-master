@@ -1,6 +1,10 @@
 import { formatClock } from '#lib/play/clock.ts'
 import type { Party } from '../character/party'
 import type { Queryable } from '../db/connect'
+import { eq } from 'drizzle-orm'
+import { session } from '../db/schema'
+import { currentArc, driftCount } from '../story/arc'
+import { lastLint } from '../world/lint'
 import { slug } from '../world/names'
 import { hpState } from '#lib/play/hp-state.ts'
 import { initiativeOrder, liveCombat, waitingOnInitiative } from './combat'
@@ -10,7 +14,7 @@ import { playSheets } from './sheets'
 /**
  * The core block: the ~300 tokens the DM needs to be oriented, injected whole at SessionStart and
  * after compaction. No Page text and no Facts. One function per part, so each part can be re-sent
- * whole when it changes; later tickets add the clock and open Call, the Arc line and Combat.
+ * whole when it changes; later tickets add the clock and open Call and Combat.
  */
 export type CoreBlockSource = { party: Party; db: Queryable }
 
@@ -82,9 +86,40 @@ export function combatPart({ db }: CoreBlockSource): string | null {
   return [head, ...lines].join('\n')
 }
 
-/** When lint last ran. */
-export function lintPart(): string {
-  return 'Lint last ran: never.'
+/**
+ * The Arc line: the current Act (the Act of the first pending Beat) with its purpose, that Act's
+ * pending Beats by handle and title, the next Act's name, and the drift count. No descriptions.
+ */
+export function arcPart({ db }: CoreBlockSource): string {
+  const drift = `Declarations since the last Beat change: ${driftCount(db)}.`
+  const found = currentArc(db)
+  const at = found?.acts.findIndex((a) => a.beats.some((b) => b.state === 'pending')) ?? -1
+  if (!found || at === -1) return `Arc: No current Arc. ${drift}`
+  const current = found.acts[at]
+  const pending = current.beats
+    .filter((b) => b.state === 'pending')
+    .map((b) => `${b.handle} (${b.title})`)
+  const next = found.acts[at + 1]
+  return [
+    `Arc: Act ${current.number}, ${current.name}: ${current.purpose}`,
+    `- Pending: ${pending.join('; ')}`,
+    `- Next Act: ${next ? next.name : 'none, this is the final Act'}`,
+    `- ${drift}`
+  ].join('\n')
+}
+
+/** When lint last ran: the Session (if any) and in-fiction time of its last `lint_ran` Event. */
+export function lintPart({ db }: CoreBlockSource): string {
+  const last = lastLint(db)
+  if (!last) return 'Lint last ran: never.'
+  const number = last.sessionId
+    ? db
+        .select({ number: session.number })
+        .from(session)
+        .where(eq(session.id, last.sessionId))
+        .get()?.number
+    : undefined
+  return `Lint last ran: ${number ? `Session ${number}, ` : ''}${formatClock(last.minute)}.`
 }
 
 /** The whole core block. */
@@ -95,7 +130,8 @@ export function coreBlock(source: CoreBlockSource): string {
     partyPart(source),
     npcsPart(source),
     combatPart(source),
-    lintPart()
+    arcPart(source),
+    lintPart(source)
   ]
     .filter((part) => part !== null)
     .join('\n')

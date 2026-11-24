@@ -74,8 +74,16 @@ export async function runHook(
     return { decision: 'block', reason: check.reason }
   }
 
-  const block = (await api(env, `core-block?campaign=${encodeURIComponent(folder)}`)) as
-    { text: string } | undefined
+  // A new sitting (or a cleared or resumed one) hears what changed since the last; compaction
+  // only needs the core block back.
+  const block = (
+    input.source === 'compact'
+      ? await api(env, `core-block?campaign=${encodeURIComponent(folder)}`)
+      : await api(env, 'session-start', {
+          method: 'POST',
+          body: JSON.stringify({ campaign: folder })
+        })
+  ) as { text: string } | undefined
   const core = block?.text ?? 'The game server is not running: the core block is unavailable.'
   const additionalContext =
     input.source === 'compact'

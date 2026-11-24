@@ -69,7 +69,10 @@ async function runHook(name, input2, env = process.env) {
     if (!check?.block) return void 0;
     return { decision: "block", reason: check.reason };
   }
-  const block = await api(env, `core-block?campaign=${encodeURIComponent(folder)}`);
+  const block = input2.source === "compact" ? await api(env, `core-block?campaign=${encodeURIComponent(folder)}`) : await api(env, "session-start", {
+    method: "POST",
+    body: JSON.stringify({ campaign: folder })
+  });
   const core = block?.text ?? "The game server is not running: the core block is unavailable.";
   const additionalContext = input2.source === "compact" ? core : `${core}
 

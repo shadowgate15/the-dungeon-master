@@ -8,7 +8,9 @@
    * The pinned composer: the open Floor's pending tray above a box that adds a Declaration for the
    * acting Character. Every tray entry can be edited or withdrawn until the Floor closes. Done
    * closes the Floor (empty or not); Ctrl+Enter is Send & Done. While the DM is answering, drafting
-   * stays open but Done waits. A pure view; the console wires the callbacks to the server.
+   * stays open but Done waits. While the DM is away, a "DM away" bar with the command that brings
+   * the DM back replaces the send controls; drafting stays open. A pure view; the console wires the
+   * callbacks to the server.
    */
   let {
     acting,
@@ -23,6 +25,7 @@
     oncut = () => {},
     returned = [],
     onreturned = () => {},
+    away = null,
     turn = null
   }: {
     /** The acting Character's name, or null when no Character can act. */
@@ -44,9 +47,22 @@
     returned?: ReturnedDraft[]
     /** The box has loaded these returned drafts. */
     onreturned?: (ids: string[]) => void
+    /** No DM is at the table: the Campaign folder to run `dm` in. */
+    away?: { folder: string } | null
     /** In a Combat, whose turn it is: the box is locked to that Character, or blocked for a foe. */
     turn?: string | null
   } = $props()
+
+  /** The folder, quoted for a POSIX shell when it needs it. */
+  const quoted = (folder: string) =>
+    /^[\w@%+=:,./-]+$/.test(folder) ? folder : `'${folder.replaceAll("'", `'\\''`)}'`
+  const relaunch = $derived(away ? `cd ${quoted(away.folder)} && dm` : '')
+  let copied = $state(false)
+  async function copy() {
+    await navigator.clipboard.writeText(relaunch)
+    copied = true
+    setTimeout(() => (copied = false), 2000)
+  }
 
   let draft = $state('')
   let editing = $state<{ id: string; text: string } | null>(null)
@@ -69,13 +85,13 @@
 
   function send() {
     const text = draft.trim()
-    if (!text || blocked) return
+    if (!text || blocked || away) return
     onsend(text)
     draft = ''
   }
 
   function done() {
-    if (disabled || awaiting) return
+    if (disabled || awaiting || away) return
     const text = draft.trim()
     ondone(text && !blocked ? text : null)
     if (text && !blocked) draft = ''
@@ -129,6 +145,8 @@
                 <Button size="sm" type="submit">Save</Button>
               </div>
             </form>
+          {:else if away}
+            <span class="flex-1 whitespace-pre-wrap">{d.text}</span>
           {:else}
             <span class="flex-1 whitespace-pre-wrap">{d.text}</span>
             <button
@@ -163,18 +181,35 @@
       {#each elsewhere as c (c.id)}
         <li class="flex items-center gap-1 rounded-control bg-surface px-2 py-1 text-muted">
           <span>{c.name} · elsewhere{c.whereabouts ? `: ${c.whereabouts}` : ''}</span>
-          <button class="underline" onclick={() => oncut(c.id)}>Cut to {c.name}</button>
+          {#if !away}
+            <button class="underline" onclick={() => oncut(c.id)}>Cut to {c.name}</button>
+          {/if}
         </li>
       {/each}
     </ul>
   {/if}
-  <div class="flex items-center justify-end gap-2">
-    <span class="mr-auto text-xs text-muted"
-      >Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span
+  {#if away}
+    <div
+      role="status"
+      aria-label="DM away"
+      class="flex flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1 text-sm"
     >
-    <Button size="sm" variant="secondary" onclick={send} disabled={blocked || !draft.trim()}
-      >Send</Button
-    >
-    <Button size="sm" onclick={done} disabled={disabled || awaiting}>Done</Button>
-  </div>
+      <span class="font-medium">The DM is away.</span>
+      <span class="text-muted">Start a sitting to play on; your drafts wait here.</span>
+      <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs"
+        >{relaunch}</code
+      >
+      <Button size="sm" variant="secondary" onclick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
+    </div>
+  {:else}
+    <div class="flex items-center justify-end gap-2">
+      <span class="mr-auto text-xs text-muted"
+        >Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span
+      >
+      <Button size="sm" variant="secondary" onclick={send} disabled={blocked || !draft.trim()}
+        >Send</Button
+      >
+      <Button size="sm" onclick={done} disabled={disabled || awaiting}>Done</Button>
+    </div>
+  {/if}
 </div>

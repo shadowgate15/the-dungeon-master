@@ -135,12 +135,16 @@
     <CharacterSheet {sheets} acting={acting?.id ?? null} onselect={(id) => (picked = id)} />
 
     <section aria-label="Story" class="flex min-h-0 flex-col gap-2">
-      <Timeline entries={timeline.data.entries} awaitingSince={timeline.data.awaitingSince} />
+      <Timeline
+        entries={timeline.data.entries}
+        awaitingSince={timeline.data.awaitingSince}
+        away={!attached}
+      />
       {#if timeline.data.call && !archived}
         {@const open = timeline.data.call}
         <CallCard
           call={open}
-          disabled={rolling}
+          disabled={rolling || !attached}
           onroll={(part) => answerCall(() => calls.roll(open.id, part))}
           onanswer={(part, answer) => answerCall(() => calls.answer(open.id, part, answer))}
         />
@@ -169,6 +173,7 @@
           oncut={(id) => attempt(() => actions.cut(id))}
           returned={floor.data.returned}
           onreturned={(ids) => attempt(() => actions.clearReturned(ids))}
+          away={attached ? null : { folder: data.campaign.path }}
         />
       {/if}
     </section>

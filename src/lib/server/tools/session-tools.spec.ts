@@ -26,7 +26,9 @@ beforeEach(() => {
   folder = path.join(tmp, 'ember-road')
   campaignId = library.create({ name: 'Ember Road', folder }).id
   host = createToolHost({ library, tools: gameTools, now })
-  play = createPlay({ library, channels: createChannels(), publish: () => {} })
+  const channels = createChannels()
+  channels.listen(folder, () => {}) // the DM at the table
+  play = createPlay({ library, channels, publish: () => {} })
   wren = addCharacter(library, campaignId, fighterDraft('Wren'))
 })
 

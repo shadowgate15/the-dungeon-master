@@ -82,7 +82,9 @@ const SESSION_LIVE = {
  *   `{id, name, attached}`.
  * - `POST stop-check` with `{campaign, again}`: whether the Stop hook refuses to end the DM's turn,
  *   as `{block, reason}`.
- * - `GET  core-block?campaign=<folder>`: the DM's core block, as `{text}`, for SessionStart.
+ * - `GET  core-block?campaign=<folder>`: the DM's core block, as `{text}`, after compaction.
+ * - `POST session-start` with `{campaign}`: what a sitting's opening injects, as `{text}`: the core
+ *   block, then what changed since the last sitting (told once) and a turn awaiting Narration.
  * - `POST permission_request` with `{campaign, request_id, tool_name, description, input_preview}`:
  *   the session's permission prompt, shown to the Player; the verdict comes back on `events`.
  */
@@ -141,6 +143,13 @@ export function createBridgeApi({
       const entry = campaign && library.entryAt(campaign)
       if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404)
       return json(play.stopCheck(entry.id, again === true))
+    }
+
+    if (route === 'session-start' && request.method === 'POST') {
+      const { campaign } = (await request.json()) as { campaign?: string }
+      const entry = campaign && library.entryAt(campaign)
+      if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404)
+      return json({ text: play.sessionStart(entry.id) })
     }
 
     if (route === 'core-block' && request.method === 'GET') {

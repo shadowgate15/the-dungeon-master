@@ -231,6 +231,7 @@
     "name": "respond",
     "imports": [
       "_exports.js",
+      "_bridge.js",
       "_campaign.js"
     ]
   },

@@ -15,10 +15,12 @@ let play: Play
 let folder: string
 let campaignId: string
 let heard: ChannelEvent[]
+let attached: boolean
 
 beforeEach(() => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-notices-'))
-  library = createCampaignLibrary({ home: path.join(tmp, 'home') })
+  attached = true
+  library = createCampaignLibrary({ home: path.join(tmp, 'home'), live: () => attached })
   folder = path.join(tmp, 'ember-road')
   campaignId = library.create({ name: 'Ember Road', folder }).id
   const channels = createDmChannels(library)
@@ -76,6 +78,7 @@ describe('change notices', () => {
   })
 
   it('an offline edit, made before the Session opened, is not a channel notice', () => {
+    attached = false
     addCharacter(library, campaignId, fighterDraft('Wren'))
     library.saveSeed(campaignId, COMPLETE_SEED as never)
     play.openSession(campaignId)
@@ -83,5 +86,45 @@ describe('change notices', () => {
     play.done(campaignId)
 
     expect(heard[0].content).not.toContain('Changed outside the DM')
+  })
+})
+
+describe('changed since last sitting', () => {
+  it('the next opening tells the DM of each offline edit: handle, version and summary', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    play.openSession(campaignId)
+    attached = false
+    library.party(campaignId).updateDetails(wren, { notes: 'Owes Tam a favour.' })
+
+    attached = true
+    const opening = play.sessionStart(campaignId)
+
+    expect(opening).toContain('# Core block')
+    expect(opening).toContain('Changed since last sitting:')
+    expect(opening).toMatch(/^- char:wren v2: the Player edited Wren’s notes$/m)
+  })
+
+  it('tells the DM once: a later opening and the next channel event leave it out', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    attached = false
+    library.party(campaignId).updateDetails(wren, { notes: 'Owes Tam a favour.' })
+    attached = true
+    play.sessionStart(campaignId)
+    play.openSession(campaignId)
+
+    expect(play.sessionStart(campaignId)).not.toContain('Changed since last sitting')
+    play.done(campaignId)
+    expect(heard[0].content).not.toContain('Changed')
+  })
+
+  it('says nothing changed when nothing did', () => {
+    expect(play.sessionStart(campaignId)).not.toContain('Changed since last sitting')
+  })
+
+  it('asks for a Floor still awaiting Narration to be answered after the recap', () => {
+    addCharacter(library, campaignId, fighterDraft('Wren'))
+    play.done(campaignId)
+
+    expect(play.sessionStart(campaignId)).toMatch(/awaits Narration.*after the recap/)
   })
 })

@@ -4888,7 +4888,11 @@ var beat = sqliteTable("beat", {
 	state: text("state", { enum: BEAT_STATES }).notNull().default("pending"),
 	/** Why it was reached or abandoned. */
 	reason: text("reason"),
-	resolvedAt: integer("resolved_at")
+	resolvedAt: integer("resolved_at"),
+	/** The stamp of the change that resolved it: the Event, the Session and the in-fiction minute. */
+	resolvedEvent: integer("resolved_event"),
+	resolvedSession: text("resolved_session"),
+	resolvedMinute: integer("resolved_minute")
 }, (t) => [check("beat_state", sql`${t.state} IN ('pending', 'reached', 'abandoned')`)]);
 // src/lib/server/db/schema.ts
 var schema_exports = /* @__PURE__ */ __exportAll({
@@ -5004,6 +5008,8 @@ var campaign = sqliteTable("campaign", {
 	begunAt: integer("begun_at"),
 	/** The last Event the DM has heard about: change notices cover the Player's edits after it. */
 	noticedThrough: integer("noticed_through").notNull().default(0),
+	/** The last offline edit a sitting's opening has told the DM about ("changed since last sitting"). */
+	offlineNoticedThrough: integer("offline_noticed_through").notNull().default(0),
 	/** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
 	clockMinute: integer("clock_minute").notNull().default(0),
 	/** The Scene: the handle of the Place the spotlight is on, or null before it is first set. */
@@ -5062,6 +5068,8 @@ var character = sqliteTable("character", {
 	bond: text("bond"),
 	flaw: text("flaw"),
 	backstory: text("backstory"),
+	/** The Player's own notes on the Character; editable any time, with or without the DM. */
+	notes: text("notes"),
 	level: integer("level").notNull().default(1),
 	raceId: ref("race_id", () => race.id),
 	subraceId: optionalRef("subrace_id", () => subrace.id),
@@ -7257,6 +7265,6 @@ function seedRulesData(db, dataset = loadRulesDataset(), now = Date.now) {
 		}).run();
 	});
 }
-export { CUSTOM_BACKGROUND_FEATURE_MAX as $, act as A, NPC_STATUSES as B, conversationMessage as C, npcCombat as D, floor as E, entityAlias as F, equipment as G, alignment as H, fact as I, spell as J, race as K, pageRevision as L, beat as M, belief as N, returnedDraft as O, entity as P, BACKSTORY_MAX as Q, worldLink as R, characterSpell as S, event as T, background as U, abilityScoreMethod as V, classTable as W, subrace as X, subclass as Y, ABILITY_METHODS as Z, characterChoice as _, DATABASE_URL as _t, defaultCampaignRoot as a, eq as at, characterItem as b, DUNGEON_MASTER_PORT as bt, skills_default as c, inArray as ct, openDatabase as d, like as dt, CUSTOM_BACKGROUND_SLUG as et, activityLine as f, ne as ft, character as g, is as gt, campaign as h, Column as ht, canonicalFolder as i, and as it, arc as j, session as k, abilities_default as l, isNotNull as lt, callPart as m, sql as mt, createRulesRepository as n, asc as nt, userStateDir as o, gt as ot, call as p, or as pt, skill as q, campaignDatabasePath as r, desc as rt, loadRulesDataset as s, gte as st, seedRulesData as t, SOLO_PLAYER as tt, migrateDatabase as u, isNull as ut, characterDraft as v, DUNGEON_MASTER_CAMPAIGNS as vt, declaration as w, characterSkill as x, DUNGEON_MASTER_VERSION as xt, characterEquipment as y, DUNGEON_MASTER_HOME as yt, ENTITY_TYPES as z };
+export { CUSTOM_BACKGROUND_FEATURE_MAX as $, act as A, NPC_STATUSES as B, conversationMessage as C, npcCombat as D, floor as E, entityAlias as F, equipment as G, alignment as H, fact as I, spell as J, race as K, pageRevision as L, beat as M, belief as N, returnedDraft as O, entity as P, BACKSTORY_MAX as Q, worldLink as R, characterSpell as S, DUNGEON_MASTER_VERSION as St, event as T, background as U, abilityScoreMethod as V, classTable as W, subrace as X, subclass as Y, ABILITY_METHODS as Z, characterChoice as _, is as _t, defaultCampaignRoot as a, eq as at, characterItem as b, DUNGEON_MASTER_HOME as bt, skills_default as c, inArray as ct, openDatabase as d, like as dt, CUSTOM_BACKGROUND_SLUG as et, activityLine as f, lt as ft, character as g, Column as gt, campaign as h, sql as ht, canonicalFolder as i, and as it, arc as j, session as k, abilities_default as l, isNotNull as lt, callPart as m, or as mt, createRulesRepository as n, asc as nt, userStateDir as o, gt as ot, call as p, ne as pt, skill as q, campaignDatabasePath as r, desc as rt, loadRulesDataset as s, gte as st, seedRulesData as t, SOLO_PLAYER as tt, migrateDatabase as u, isNull as ut, characterDraft as v, DATABASE_URL as vt, declaration as w, characterSkill as x, DUNGEON_MASTER_PORT as xt, characterEquipment as y, DUNGEON_MASTER_CAMPAIGNS as yt, ENTITY_TYPES as z };
 
 //# sourceMappingURL=seed.js.map
