@@ -7,6 +7,7 @@ import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
 import { journal } from '../knowledge/journal'
 import { coreBlock } from '../play/core-block'
+import { sessionHistory } from '../play/sessions'
 import { logChange } from '../play/notices'
 import { logEvent, openSession, timeline } from '../play/log'
 import { seedRulesData } from '../rules/seed'
@@ -196,7 +197,9 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
       return {
         timeline: () => timeline(db),
         journal: () => journal(db),
-        openSession: () => openSession(db, now()),
+        /** The Player's read-only Session history. */
+        sessionHistory: () => sessionHistory(db),
+        openSession: (bridge?: string) => openSession(db, now(), bridge),
         /** The DM's core block. */
         coreBlock: () => coreBlock({ party: createParty(db, now) }),
         /** Logs a turn that went wrong, as the Player sees it in the timeline. */

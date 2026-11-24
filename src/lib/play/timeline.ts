@@ -2,8 +2,11 @@
 export type TimelineEntry =
   /** What a Player said one Character does, once its Floor closed. */
   | { type: 'declaration'; id: string; character: string; player: string; text: string }
-  /** The DM's Narration; `voice` names the NPC speaking, if any. */
-  | { type: 'narration'; id: string; text: string; voice: string | null }
+  /**
+   * The DM's Narration; `voice` names the NPC speaking, if any. `recap` marks the opening recap
+   * of a sitting, shown as "Previously".
+   */
+  | { type: 'narration'; id: string; text: string; voice: string | null; recap?: true }
   /** A muted `⚙ DM …` line: what the DM did with one tool call. */
   | { type: 'activity'; id: string; text: string }
   /** Something went wrong with the turn, such as the DM ending it without a Narration. */

@@ -52,9 +52,12 @@ export function createPlay({ library, channels, publish }: Options) {
       return outcome
     },
 
-    /** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */
-    openSession(campaignId: string): { id: string; number: number } {
-      return library.record(campaignId).openSession()
+    /**
+     * Opens the Campaign's Session as a DM attaches through `bridge`; a reconnecting bridge keeps
+     * its own Session.
+     */
+    openSession(campaignId: string, bridge?: string): { id: string; number: number } {
+      return library.record(campaignId).openSession(bridge)
     },
 
     /**
@@ -91,7 +94,7 @@ export type Play = ReturnType<typeof createPlay>
 
 /** Opens a Campaign's Session whenever a DM attaches to it; returns the unsubscribe. */
 export function openSessionsOnAttach(sessions: Sessions, play: Play): () => void {
-  return sessions.onChange(({ campaign, attached }) => {
-    if (attached) play.openSession(campaign)
+  return sessions.onChange(({ campaign, attached, session }) => {
+    if (attached) play.openSession(campaign, session)
   })
 }
