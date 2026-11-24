@@ -2,15 +2,19 @@
   import { resolve } from '$app/paths'
   import DmBadge from '#lib/campaign/DmBadge.svelte'
   import { createSessionsQuery } from '#lib/live/client.ts'
+  import CallCard from '#lib/play/CallCard.svelte'
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
+  import SceneRail from '#lib/play/SceneRail.svelte'
   import Journal from '#lib/play/Journal.svelte'
   import { knownBy } from '#lib/play/journal.ts'
   import PermissionCard from '#lib/play/PermissionCard.svelte'
   import Timeline from '#lib/play/Timeline.svelte'
   import { createPermissionQuery, permissionActions } from '#lib/play/permission-client.ts'
   import {
+    callActions,
     createFloorQuery,
+    createSceneQuery,
     createJournalQuery,
     createTimelineQuery,
     endSession,
@@ -32,11 +36,24 @@
     () => data.campaign.id,
     () => data.timeline
   )
+  const scene = createSceneQuery(
+    () => data.campaign.id,
+    () => data.scene
+  )
   const journal = createJournalQuery(
     () => data.campaign.id,
     () => data.journal
   )
   const actions = floorActions(() => data.campaign.id)
+  const calls = callActions(() => data.campaign.id)
+  let rolling = $state(false)
+
+  /** Rolls or answers one part of the open Call, one click at a time. */
+  function answerCall(change: () => Promise<unknown>) {
+    rolling = true
+    attempt(change).finally(() => (rolling = false))
+  }
+
   const permission = createPermissionQuery(
     () => data.campaign.id,
     () => data.permission
@@ -51,9 +68,18 @@
     })
   }
 
-  // The selected sheet tab is the acting Character: the first who can act, until the Player picks.
+  // The selected sheet tab is the acting Character: the first in the Scene who can act, until the
+  // Player picks.
   let picked = $state<string | null>(null)
-  const actors = $derived(data.sheets.filter((s) => s.canAct))
+  const inScene = $derived(new Set(scene.data.present.map((c) => c.id)))
+  // A tab for a Character elsewhere shows where they are, by Place name.
+  const sheets = $derived(
+    data.sheets.map((s) => {
+      const away = scene.data.elsewhere.find((c) => c.id === s.id)
+      return { ...s, whereabouts: away ? (away.whereabouts ?? 'elsewhere') : null }
+    })
+  )
+  const actors = $derived(sheets.filter((s) => s.canAct && inScene.has(s.id)))
   const acting = $derived(actors.find((s) => s.id === picked) ?? actors[0] ?? null)
   const archived = $derived(data.campaign.status === 'archived')
   const attached = $derived(sessions.data.includes(data.campaign.id))
@@ -103,14 +129,19 @@
     class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]"
     aria-label="Play console"
   >
-    <CharacterSheet
-      sheets={data.sheets}
-      acting={acting?.id ?? null}
-      onselect={(id) => (picked = id)}
-    />
+    <CharacterSheet {sheets} acting={acting?.id ?? null} onselect={(id) => (picked = id)} />
 
     <section aria-label="Story" class="flex min-h-0 flex-col gap-2">
       <Timeline entries={timeline.data.entries} awaitingSince={timeline.data.awaitingSince} />
+      {#if timeline.data.call && !archived}
+        {@const open = timeline.data.call}
+        <CallCard
+          call={open}
+          disabled={rolling}
+          onroll={(part) => answerCall(() => calls.roll(open.id, part))}
+          onanswer={(part, answer) => answerCall(() => calls.answer(open.id, part, answer))}
+        />
+      {/if}
       {#if problem}<Alert variant="danger">{problem}</Alert>{/if}
       {#if permission.data}
         {@const request = permission.data}
@@ -130,15 +161,16 @@
           ondone={done}
           onedit={(id, text) => attempt(() => actions.edit(id, text))}
           onwithdraw={(id) => attempt(() => actions.withdraw(id))}
+          elsewhere={scene.data.elsewhere}
+          oncut={(id) => attempt(() => actions.cut(id))}
+          returned={floor.data.returned}
+          onreturned={(ids) => attempt(() => actions.clearReturned(ids))}
         />
       {/if}
     </section>
 
     <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm">
-      <section class="rounded-panel border border-border bg-surface p-3">
-        <h2 class="mb-1 text-xs font-semibold text-muted uppercase">Clock and Scene</h2>
-        <p class="text-muted">The Scene is set once play begins.</p>
-      </section>
+      <SceneRail scene={scene.data} />
       <section
         aria-labelledby="knows-heading"
         class="rounded-panel border border-border bg-surface p-3"

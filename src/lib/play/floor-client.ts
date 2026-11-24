@@ -3,11 +3,13 @@ import {
   floorQueryKey,
   journalQueryKey,
   sessionHistoryQueryKey,
+  sceneQueryKey,
   timelineQueryKey
 } from '#lib/live/messages.ts'
 import type { OpenFloor, PendingDeclaration } from './floor'
 import type { Journal } from './journal'
 import type { SessionHistory } from './sessions'
+import type { SceneView } from './scene'
 import type { Timeline } from './timeline'
 
 /** A Floor change the server refused, with its message for the Player. */
@@ -34,6 +36,19 @@ export function createTimelineQuery(campaign: () => string, initial: () => Timel
       const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/timeline`)
       if (!res.ok) throw new FloorChangeError('The timeline could not be loaded')
       return (await res.json()) as Timeline
+    },
+    initialData: initial()
+  }))
+}
+
+/** The Campaign's Scene for the rail, starting from the server-rendered one. */
+export function createSceneQuery(campaign: () => string, initial: () => SceneView) {
+  return createQuery(() => ({
+    queryKey: sceneQueryKey(campaign()),
+    queryFn: async (): Promise<SceneView> => {
+      const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/scene`)
+      if (!res.ok) throw new FloorChangeError('The Scene could not be loaded')
+      return (await res.json()) as SceneView
     },
     initialData: initial()
   }))
@@ -114,11 +129,55 @@ export function floorActions(campaign: () => string) {
     async withdraw(id: string): Promise<void> {
       await call(`${base()}/${encodeURIComponent(id)}`, { method: 'DELETE' })
     },
+    /** The composer loaded drafts a cut sent back; the server stops holding them. */
+    async clearReturned(ids: string[]): Promise<void> {
+      for (const id of ids) {
+        await call(
+          `/api/campaigns/${encodeURIComponent(campaign())}/floor/returned/${encodeURIComponent(id)}`,
+          { method: 'DELETE' }
+        )
+      }
+    },
+    /** "Cut to <Name>": a spotlight request to the DM. Doesn't make the DM answer a turn. */
+    async cut(character: string): Promise<void> {
+      await call(`/api/campaigns/${encodeURIComponent(campaign())}/spotlight`, {
+        method: 'POST',
+        body: JSON.stringify({ character })
+      })
+    },
     /** Done: closes the Floor (once every Player has pressed it) and wakes the DM. */
     async done(): Promise<void> {
       await call(`/api/campaigns/${encodeURIComponent(campaign())}/floor/done`, {
         method: 'POST'
       })
     }
+  }
+}
+
+/** Rolling and answering the open Call; each refreshes the timeline, which holds the Call. */
+export function callActions(campaign: () => string) {
+  const queryClient = useQueryClient()
+
+  async function post(call: string, part: string, body: Record<string, unknown>) {
+    const res = await fetch(
+      `/api/campaigns/${encodeURIComponent(campaign())}/calls/${encodeURIComponent(call)}/parts/${encodeURIComponent(part)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      }
+    )
+    await queryClient.invalidateQueries({ queryKey: timelineQueryKey(campaign()) })
+    if (!res.ok) {
+      const failure = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new FloorChangeError(failure.error ?? 'The Call could not be answered')
+    }
+  }
+
+  return {
+    /** Rolls one Check of the Call; the server rolls the dice. */
+    roll: (call: string, part: string) => post(call, part, { roll: true }),
+    /** Answers a question Call. */
+    answer: (call: string, part: string, answer: string) => post(call, part, { answer })
   }
 }

@@ -1,5 +1,5 @@
 import { t as error } from "../../../../../chunks/exports.js";
-import { P as playSheets, i as sessions, n as library } from "../../../../../chunks/campaign.js";
+import { Y as playSheets, i as sessions, n as library } from "../../../../../chunks/campaign.js";
 import { a as permissions, o as play } from "../../../../../chunks/bridge.js";
 // src/routes/campaigns/[id]/play/+page.server.ts
 /** The play console: the Party's sheets, the open Floor, the timeline, the Journal and any permission prompt, begun or not. */
@@ -17,6 +17,7 @@ var load = ({ params }) => {
 		sheets: playSheets(library.party(entry.id)),
 		floor: library.floor(entry.id).current(),
 		timeline: play.timeline(entry.id),
+		scene: play.scene(entry.id),
 		journal: library.record(entry.id).journal(),
 		permission: permissions.pending(entry.id),
 		attached: sessions.list()

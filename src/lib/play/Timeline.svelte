@@ -4,7 +4,8 @@
 
   /**
    * The console's centre: the Show filters above one timeline, DM on the left and the Player on
-   * the right. Narrations (with the NPC voicing them), Declarations from closed Floors and muted
+   * the right. Narrations (with the NPC voicing them), Declarations from closed Floors, one-line rolls,
+   * question answers and muted
    * `⚙ DM …` activity lines; while the DM works on a turn, a `Ns / ~20s` progress bar.
    */
   let {
@@ -23,7 +24,12 @@
     ['dm', 'DM activity']
   ] as const
 
-  const shown = $derived(entries.filter((e) => (e.type === 'activity' ? show.dm : show.story)))
+  const shown = $derived(
+    entries.filter((e) =>
+      e.type === 'activity' ? show.dm : e.type === 'roll' ? show.rolls : show.story
+    )
+  )
+  const signed = (n: number) => (n < 0 ? `− ${-n}` : `+ ${n}`)
 
   let now = $state(Date.now())
   $effect(() => {
@@ -69,6 +75,28 @@
       </li>
     {:else if entry.type === 'error'}
       <li class="self-stretch"><Alert variant="danger">{entry.text}</Alert></li>
+    {:else if entry.type === 'roll'}
+      <li class="flex flex-wrap items-baseline gap-x-2 self-end text-sm">
+        <span class="font-medium">{entry.character}</span>
+        <span class="text-muted">{entry.what}</span>
+        <span class="font-mono text-xs text-muted"
+          >🎲 {entry.dice.join(' | ')} {signed(entry.modifier)}</span
+        >
+        <span class="font-mono font-semibold">= {entry.total}</span>
+        <span class={entry.outcome === 'success' ? 'text-accent' : 'text-danger'}
+          >{entry.outcome}</span
+        >
+        {#if entry.mode !== 'normal'}
+          <span class="text-xs text-muted italic">({entry.mode}: {entry.reason})</span>
+        {/if}
+      </li>
+    {:else if entry.type === 'answer'}
+      <li
+        class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm"
+      >
+        <span class="block text-xs text-muted">{entry.question}</span>
+        <span class="whitespace-pre-wrap">{entry.text}</span>
+      </li>
     {:else}
       <li class="self-start text-xs text-muted">⚙ {entry.text}</li>
     {/if}

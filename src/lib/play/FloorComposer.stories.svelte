@@ -22,3 +22,7 @@
 <Story name="Empty Floor" args={{ declarations: [] }} />
 <Story name="DM answering" args={{ awaiting: true }} />
 <Story name="No Character can act" args={{ acting: null, declarations: [] }} />
+<Story
+  name="Split Party"
+  args={{ elsewhere: [{ id: 'c-mira', name: 'Mira', whereabouts: 'The Docks' }], oncut: () => {} }}
+/>

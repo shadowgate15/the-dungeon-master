@@ -4851,6 +4851,8 @@ var schema_exports = /* @__PURE__ */ __exportAll({
 	backgroundOptionAlignment: () => backgroundOptionAlignment,
 	backgroundProficiency: () => backgroundProficiency,
 	belief: () => belief,
+	call: () => call,
+	callPart: () => callPart,
 	campaign: () => campaign,
 	character: () => character,
 	characterChoice: () => characterChoice,
@@ -4894,6 +4896,7 @@ var schema_exports = /* @__PURE__ */ __exportAll({
 	raceAbilityBonus: () => raceAbilityBonus,
 	raceLanguage: () => raceLanguage,
 	raceTrait: () => raceTrait,
+	returnedDraft: () => returnedDraft,
 	ruleSection: () => ruleSection,
 	rulesDataset: () => rulesDataset,
 	session: () => session,
@@ -4937,7 +4940,11 @@ var campaign = sqliteTable("campaign", {
 	/** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
 	awaitingNarrationSince: integer("awaiting_narration_since"),
 	/** The last Event the DM has heard about: change notices cover the Player's edits after it. */
-	noticedThrough: integer("noticed_through").notNull().default(0)
+	noticedThrough: integer("noticed_through").notNull().default(0),
+	/** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
+	clockMinute: integer("clock_minute").notNull().default(0),
+	/** The Scene: the handle of the Place the spotlight is on, or null before it is first set. */
+	scene: text("scene")
 }, () => [
 	check("campaign_tone_check", oneOf("tone", TONES)),
 	check("campaign_length_check", oneOf("length", LENGTHS)),
@@ -5164,6 +5171,72 @@ var activityLine = sqliteTable("activity_line", {
 	id: integer("id").primaryKey({ autoIncrement: true }),
 	sessionId: text("session_id"),
 	afterEvent: integer("after_event").notNull(),
+	text: text("text").notNull(),
+	createdAt: integer("created_at").notNull()
+});
+/**
+* A Call: the DM's open request to the Players, a Check to roll or a question to answer. At most
+* one is open per Campaign; it is kept with the Scene until every part is answered or a closed
+* Floor with Declarations withdraws it. `pending` (an action tool's Call not yet attached by
+* `narrate`) and `cancelled` are for the action tools.
+*/
+var call = sqliteTable("call", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	campaignId: campaignOwner(),
+	kind: text("kind", { enum: ["check", "question"] }).notNull(),
+	state: text("state", { enum: [
+		"pending",
+		"open",
+		"answered",
+		"withdrawn",
+		"cancelled"
+	] }).notNull().default("open"),
+	/** A question's text; null for a Check. */
+	text: text("text"),
+	/** A question's choices; empty for free text (and for a Check). */
+	choices: text("choices", { mode: "json" }).$type().notNull().default([]),
+	/** The Event (a Narration) that opened it. */
+	openedBy: integer("opened_by"),
+	createdAt: integer("created_at").notNull(),
+	closedAt: integer("closed_at")
+});
+/**
+* One part of a Call, addressed to one Player: a Check for one Character (its skill or save, the
+* hidden DC from the tier), or a question's answer. It holds the result once answered.
+*/
+var callPart = sqliteTable("call_part", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	callId: text("call_id").notNull().references(() => call.id, { onDelete: "cascade" }),
+	position: integer("position").notNull(),
+	/** The Character rolling; null for a question, which goes to the Player. */
+	characterId: text("character_id").references(() => character.id, { onDelete: "cascade" }),
+	/** The Controlling Player the part is addressed to. */
+	player: text("player").notNull(),
+	/** Skill slug, for a skill Check. */
+	skill: text("skill"),
+	/** Ability key, for a saving throw. */
+	save: text("save", { enum: ABILITY_KEYS }),
+	tier: text("tier"),
+	/** The DM-only DC; never in a Player payload. */
+	dc: integer("dc"),
+	mode: text("mode", { enum: [
+		"normal",
+		"advantage",
+		"disadvantage"
+	] }).notNull().default("normal"),
+	reason: text("reason"),
+	result: text("result", { mode: "json" }).$type(),
+	answer: text("answer"),
+	answeredAt: integer("answered_at")
+}, (t) => [index("call_part_call_idx").on(t.callId)]);
+/**
+* A Declaration sent back to its Player's composer as unsent text: its Character left the Scene
+* when the spotlight cut away before the Floor closed. The console loads it, then clears it.
+*/
+var returnedDraft = sqliteTable("returned_draft", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	characterId: text("character_id").notNull().references(() => character.id, { onDelete: "cascade" }),
+	player: text("player").notNull(),
 	text: text("text").notNull(),
 	createdAt: integer("created_at").notNull()
 });
@@ -6737,6 +6810,6 @@ function seedRulesData(db, dataset = loadRulesDataset(), now = Date.now) {
 		}).run();
 	});
 }
-export { equipmentWeaponProperty as $, ability as A, desc as At, choiceOptionItem as B, Column as Bt, entity as C, weaponProperty as Ct, worldLink as D, CUSTOM_BACKGROUND_SLUG as Dt, pageRevision as E, CUSTOM_BACKGROUND_FEATURE_MAX as Et, backgroundOption as F, isNotNull as Ft, classStartingEquipment as G, DUNGEON_MASTER_PORT as Gt, classLevelFeature as H, DATABASE_URL as Ht, backgroundOptionAlignment as I, isNull as It, damageType as J, classTable as K, DUNGEON_MASTER_VERSION as Kt, backgroundProficiency as L, like as Lt, alignment as M, eq as Mt, background as N, gt as Nt, ENTITY_TYPES as O, SOLO_PLAYER as Ot, backgroundEquipment as P, inArray as Pt, equipmentContent as Q, choiceGroup as R, or as Rt, belief as S, traitProficiency as St, fact as T, BACKSTORY_MAX as Tt, classProficiency as U, DUNGEON_MASTER_CAMPAIGNS as Ut, classLevel as V, is as Vt, classSavingThrow as W, DUNGEON_MASTER_HOME as Wt, equipmentCategory as X, equipment as Y, equipmentCategoryItem as Z, characterSpell as _, subclass as _t, userStateDir as a, monsterConditionImmunity as at, floor as b, subraceTrait as bt, openDatabase as c, race as ct, character as d, raceTrait as dt, feature as et, characterChoice as f, ruleSection as ft, characterSkill as g, spellClass as gt, characterItem as h, spell as ht, defaultCampaignRoot as i, monster as it, abilityScoreMethod as j, and as jt, NPC_STATUSES as k, asc as kt, activityLine as l, raceAbilityBonus as lt, characterEquipment as m, skill as mt, campaignDatabasePath as n, magicItem as nt, loadRulesDataset as o, monsterProficiency as ot, characterDraft as p, rulesDataset as pt, condition as q, canonicalFolder as r, magicSchool as rt, migrateDatabase as s, proficiency as st, seedRulesData as t, language as tt, campaign as u, raceLanguage as ut, declaration as v, subrace as vt, entityAlias as w, ABILITY_METHODS as wt, session as x, trait as xt, event as y, subraceAbilityBonus as yt, choiceOption as z, sql as zt };
+export { damageType as $, fact as A, BACKSTORY_MAX as At, backgroundOption as B, isNotNull as Bt, event as C, subrace as Ct, belief as D, traitProficiency as Dt, session as E, trait as Et, ability as F, desc as Ft, choiceOptionItem as G, Column as Gt, backgroundProficiency as H, like as Ht, abilityScoreMethod as I, and as It, classProficiency as J, DUNGEON_MASTER_CAMPAIGNS as Jt, classLevel as K, is as Kt, alignment as L, eq as Lt, worldLink as M, CUSTOM_BACKGROUND_SLUG as Mt, ENTITY_TYPES as N, SOLO_PLAYER as Nt, entity as O, weaponProperty as Ot, NPC_STATUSES as P, asc as Pt, condition as Q, background as R, gt as Rt, declaration as S, subclass as St, returnedDraft as T, subraceTrait as Tt, choiceGroup as U, or as Ut, backgroundOptionAlignment as V, isNull as Vt, choiceOption as W, sql as Wt, classStartingEquipment as X, DUNGEON_MASTER_PORT as Xt, classSavingThrow as Y, DUNGEON_MASTER_HOME as Yt, classTable as Z, DUNGEON_MASTER_VERSION as Zt, characterDraft as _, ruleSection as _t, userStateDir as a, feature as at, characterSkill as b, spell as bt, abilities_default as c, magicSchool as ct, activityLine as d, monsterProficiency as dt, equipment as et, call as f, proficiency as ft, characterChoice as g, raceTrait as gt, character as h, raceLanguage as ht, defaultCampaignRoot as i, equipmentWeaponProperty as it, pageRevision as j, CUSTOM_BACKGROUND_FEATURE_MAX as jt, entityAlias as k, ABILITY_METHODS as kt, migrateDatabase as l, monster as lt, campaign as m, raceAbilityBonus as mt, campaignDatabasePath as n, equipmentCategoryItem as nt, loadRulesDataset as o, language as ot, callPart as p, race as pt, classLevelFeature as q, DATABASE_URL as qt, canonicalFolder as r, equipmentContent as rt, skills_default as s, magicItem as st, seedRulesData as t, equipmentCategory as tt, openDatabase as u, monsterConditionImmunity as ut, characterEquipment as v, rulesDataset as vt, floor as w, subraceAbilityBonus as wt, characterSpell as x, spellClass as xt, characterItem as y, skill as yt, backgroundEquipment as z, inArray as zt };
 
 //# sourceMappingURL=seed.js.map

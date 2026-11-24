@@ -67,7 +67,11 @@ export const campaign = sqliteTable(
     /** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
     awaitingNarrationSince: integer('awaiting_narration_since'),
     /** The last Event the DM has heard about: change notices cover the Player's edits after it. */
-    noticedThrough: integer('noticed_through').notNull().default(0)
+    noticedThrough: integer('noticed_through').notNull().default(0),
+    /** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
+    clockMinute: integer('clock_minute').notNull().default(0),
+    /** The Scene: the handle of the Place the spotlight is on, or null before it is first set. */
+    scene: text('scene')
   },
   () => [
     check('campaign_tone_check', oneOf('tone', TONES)),
@@ -371,6 +375,92 @@ export const activityLine = sqliteTable('activity_line', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   sessionId: text('session_id'),
   afterEvent: integer('after_event').notNull(),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull()
+})
+
+/**
+ * A Call: the DM's open request to the Players, a Check to roll or a question to answer. At most
+ * one is open per Campaign; it is kept with the Scene until every part is answered or a closed
+ * Floor with Declarations withdraws it. `pending` (an action tool's Call not yet attached by
+ * `narrate`) and `cancelled` are for the action tools.
+ */
+export const call = sqliteTable('call', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  campaignId: campaignOwner(),
+  kind: text('kind', { enum: ['check', 'question'] }).notNull(),
+  state: text('state', { enum: ['pending', 'open', 'answered', 'withdrawn', 'cancelled'] })
+    .notNull()
+    .default('open'),
+  /** A question's text; null for a Check. */
+  text: text('text'),
+  /** A question's choices; empty for free text (and for a Check). */
+  choices: text('choices', { mode: 'json' }).$type<string[]>().notNull().default([]),
+  /** The Event (a Narration) that opened it. */
+  openedBy: integer('opened_by'),
+  createdAt: integer('created_at').notNull(),
+  closedAt: integer('closed_at')
+})
+
+/** One roll of a Check, after the dice: both d20s on advantage, the one kept and the total. */
+export type CheckResult = {
+  dice: number[]
+  kept: number
+  modifier: number
+  total: number
+  success: boolean
+}
+
+/**
+ * One part of a Call, addressed to one Player: a Check for one Character (its skill or save, the
+ * hidden DC from the tier), or a question's answer. It holds the result once answered.
+ */
+export const callPart = sqliteTable(
+  'call_part',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    callId: text('call_id')
+      .notNull()
+      .references(() => call.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    /** The Character rolling; null for a question, which goes to the Player. */
+    characterId: text('character_id').references(() => character.id, { onDelete: 'cascade' }),
+    /** The Controlling Player the part is addressed to. */
+    player: text('player').notNull(),
+    /** Skill slug, for a skill Check. */
+    skill: text('skill'),
+    /** Ability key, for a saving throw. */
+    save: text('save', { enum: ABILITY_KEYS }),
+    tier: text('tier'),
+    /** The DM-only DC; never in a Player payload. */
+    dc: integer('dc'),
+    mode: text('mode', { enum: ['normal', 'advantage', 'disadvantage'] })
+      .notNull()
+      .default('normal'),
+    reason: text('reason'),
+    result: text('result', { mode: 'json' }).$type<CheckResult>(),
+    answer: text('answer'),
+    answeredAt: integer('answered_at')
+  },
+  (t) => [index('call_part_call_idx').on(t.callId)]
+)
+
+/**
+ * A Declaration sent back to its Player's composer as unsent text: its Character left the Scene
+ * when the spotlight cut away before the Floor closed. The console loads it, then clears it.
+ */
+export const returnedDraft = sqliteTable('returned_draft', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id')
+    .notNull()
+    .references(() => character.id, { onDelete: 'cascade' }),
+  player: text('player').notNull(),
   text: text('text').notNull(),
   createdAt: integer('created_at').notNull()
 })

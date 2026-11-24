@@ -2,13 +2,88 @@ import { ft as resolve } from "../../../../../chunks/internal.js";
 import { _ as clsx, c as ensure_array_like, f as stringify, g as attr, l as head, n as attr_style, o as derived, r as attributes, t as attr_class, y as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/paths.js";
 import { n as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
-import { t as Badge } from "../../../../../chunks/Badge.js";
 import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
+import { t as Badge } from "../../../../../chunks/Badge.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
-import { a as createTimelineQuery, c as Journal, n as createFloorQuery, o as endSession, r as createJournalQuery, s as floorActions, t as FloorChangeError } from "../../../../../chunks/floor-client.js";
-import { i as permissionQueryKey, s as createQuery } from "../../../../../chunks/messages.js";
+import { a as createSceneQuery, c as endSession, i as createJournalQuery, l as floorActions, n as callActions, r as createFloorQuery, s as createTimelineQuery, t as FloorChangeError, u as Journal } from "../../../../../chunks/floor-client.js";
+import { c as createQuery, i as permissionQueryKey } from "../../../../../chunks/messages.js";
 import { t as useQueryClient } from "../../../../../chunks/useQueryClient.js";
 import { t as Link } from "../../../../../chunks/Link.js";
+// src/lib/play/CallCard.svelte
+function CallCard($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		/**
+		* The open Call at the foot of the timeline: one button group per Character for a Check (the
+		* skill or save and the reason, never the DC; advantage marked), or a question with its choices
+		* as buttons (free text without). Clicking rolls on the server; nothing is rolled here.
+		*/
+		let { call, onroll, onanswer, disabled = false } = $$props;
+		let drafts = {};
+		$$renderer.push(`<section aria-label="Call" class="flex shrink-0 flex-col gap-2 rounded-panel border-2 border-primary bg-raised p-3 text-sm">`);
+		if (call.kind === "question") $$renderer.push(`<!--[0--><p class="font-medium">${escape_html(call.text)}</p>`);
+		else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]--> <!--[-->`);
+		const each_array = ensure_array_like(call.parts);
+		for (let $$index_1 = 0, $$length = each_array.length; $$index_1 < $$length; $$index_1++) {
+			let part = each_array[$$index_1];
+			$$renderer.push(`<div role="group"${attr("aria-label", part.character ?? part.player)} class="flex flex-wrap items-center gap-2">`);
+			if (call.kind === "check") {
+				$$renderer.push(`<!--[0--><span class="font-medium">${escape_html(part.character)}</span> <span>${escape_html(part.label)}</span> `);
+				if (part.mode !== "normal") $$renderer.push(`<!--[0--><span class="text-xs font-semibold text-accent uppercase">${escape_html(part.mode === "advantage" ? "Advantage" : "Disadvantage")}</span>`);
+				else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--> <span class="text-muted">${escape_html(part.reason)}</span> `);
+				if (part.answered) $$renderer.push(`<!--[0--><span class="ml-auto text-xs text-muted">Rolled</span>`);
+				else {
+					$$renderer.push("<!--[-1-->");
+					Button($$renderer, {
+						size: "sm",
+						class: "ml-auto",
+						"aria-label": `Roll ${stringify(part.label)} for ${stringify(part.character)}`,
+						disabled,
+						onclick: () => onroll(part.id),
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->🎲 Roll`);
+						},
+						$$slots: { default: true }
+					});
+				}
+				$$renderer.push(`<!--]-->`);
+			} else if (part.answered) $$renderer.push(`<!--[1--><span class="text-xs text-muted">Answered</span>`);
+			else if (call.choices.length) {
+				$$renderer.push(`<!--[2--><!--[-->`);
+				const each_array_1 = ensure_array_like(call.choices);
+				for (let $$index = 0, $$length = each_array_1.length; $$index < $$length; $$index++) {
+					let choice = each_array_1[$$index];
+					Button($$renderer, {
+						size: "sm",
+						variant: "secondary",
+						disabled,
+						onclick: () => onanswer(part.id, choice),
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->${escape_html(choice)}`);
+						},
+						$$slots: { default: true }
+					});
+				}
+				$$renderer.push(`<!--]-->`);
+			} else {
+				$$renderer.push(`<!--[-1--><form class="flex flex-1 gap-2"><input aria-label="Your answer" class="flex-1 rounded-control border border-control-border bg-surface px-2 py-1"${attr("value", drafts[part.id])}/> `);
+				Button($$renderer, {
+					size: "sm",
+					type: "submit",
+					disabled,
+					children: ($$renderer) => {
+						$$renderer.push(`<!---->Answer`);
+					},
+					$$slots: { default: true }
+				});
+				$$renderer.push(`<!----></form>`);
+			}
+			$$renderer.push(`<!--]--></div>`);
+		}
+		$$renderer.push(`<!--]--></section>`);
+	});
+}
 // src/lib/ui/Meter.svelte
 function Meter($$renderer, $$props) {
 	/** Accessible name of the meter. */
@@ -153,7 +228,7 @@ function FloorComposer($$renderer, $$props) {
 		* closes the Floor (empty or not); Ctrl+Enter is Send & Done. While the DM is answering, drafting
 		* stays open but Done waits. A pure view; the console wires the callbacks to the server.
 		*/
-		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false } = $$props;
+		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false, elsewhere = [], oncut = () => {}, returned = [], onreturned = () => {} } = $$props;
 		let draft = "";
 		let editing = null;
 		const blocked = derived(() => disabled || acting === null);
@@ -245,7 +320,17 @@ function FloorComposer($$renderer, $$props) {
 					$$settled = false;
 				}
 			});
-			$$renderer.push(`<!----> <div class="flex items-center justify-end gap-2"><span class="mr-auto text-xs text-muted">Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span> `);
+			$$renderer.push(`<!----> `);
+			if (elsewhere.length) {
+				$$renderer.push(`<!--[0--><ul class="flex flex-wrap gap-2 text-xs" aria-label="Elsewhere"><!--[-->`);
+				const each_array_1 = ensure_array_like(elsewhere);
+				for (let $$index_1 = 0, $$length = each_array_1.length; $$index_1 < $$length; $$index_1++) {
+					let c = each_array_1[$$index_1];
+					$$renderer.push(`<li class="flex items-center gap-1 rounded-control bg-surface px-2 py-1 text-muted"><span>${escape_html(c.name)} · elsewhere${escape_html(c.whereabouts ? `: ${c.whereabouts}` : "")}</span> <button class="underline">Cut to ${escape_html(c.name)}</button></li>`);
+				}
+				$$renderer.push(`<!--]--></ul>`);
+			} else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> <div class="flex items-center justify-end gap-2"><span class="mr-auto text-xs text-muted">Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span> `);
 			Button($$renderer, {
 				size: "sm",
 				variant: "secondary",
@@ -274,6 +359,27 @@ function FloorComposer($$renderer, $$props) {
 			$$render_inner($$inner_renderer);
 		} while (!$$settled);
 		$$renderer.subsume($$inner_renderer);
+	});
+}
+// src/lib/play/SceneRail.svelte
+function SceneRail($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		/**
+		* The rail's top panel: the clock (time large, day below), the Scene's Place and the Characters
+		* present. A pure view of the Player-safe `SceneView`.
+		*/
+		let { scene } = $$props;
+		$$renderer.push(`<section aria-label="Clock and Scene" class="rounded-panel border border-border bg-surface p-3"><p class="font-display text-3xl">${escape_html(scene.clock.time)}</p> <p class="text-muted">day ${escape_html(scene.clock.day)}</p> `);
+		if (scene.place) {
+			$$renderer.push(`<!--[0--><p class="mt-2 font-medium">${escape_html(scene.place.name)}</p> <ul aria-label="Present" class="mt-1 flex flex-wrap gap-1 text-xs"><!--[-->`);
+			const each_array = ensure_array_like(scene.present);
+			for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
+				let c = each_array[$$index];
+				$$renderer.push(`<li class="rounded-control bg-raised px-2 py-0.5">${escape_html(c.name)}</li>`);
+			}
+			$$renderer.push(`<!--]--></ul>`);
+		} else $$renderer.push(`<!--[-1--><p class="mt-2 text-muted">The Scene is set once play begins.</p>`);
+		$$renderer.push(`<!--]--></section>`);
 	});
 }
 // src/lib/play/journal.ts
@@ -320,7 +426,8 @@ function Timeline($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/**
 		* The console's centre: the Show filters above one timeline, DM on the left and the Player on
-		* the right. Narrations (with the NPC voicing them), Declarations from closed Floors and muted
+		* the right. Narrations (with the NPC voicing them), Declarations from closed Floors, one-line rolls,
+		* question answers and muted
 		* `⚙ DM …` activity lines; while the DM works on a turn, a `Ns / ~20s` progress bar.
 		*/
 		let { entries, awaitingSince } = $$props;
@@ -334,7 +441,8 @@ function Timeline($$renderer, $$props) {
 			["rolls", "Rolls"],
 			["dm", "DM activity"]
 		];
-		const shown = derived(() => entries.filter((e) => e.type === "activity" ? show.dm : show.story));
+		const shown = derived(() => entries.filter((e) => e.type === "activity" ? show.dm : e.type === "roll" ? show.rolls : show.story));
+		const signed = (n) => n < 0 ? `− ${-n}` : `+ ${n}`;
 		let now = Date.now();
 		const elapsed = derived(() => awaitingSince === null ? 0 : Math.max(0, Math.floor((now - awaitingSince) / 1e3)));
 		$$renderer.push(`<div role="group" aria-label="Show" class="flex items-center gap-3 text-xs"><span class="text-muted">Show</span> <!--[-->`);
@@ -368,7 +476,13 @@ function Timeline($$renderer, $$props) {
 						$$slots: { default: true }
 					});
 					$$renderer.push(`<!----></li>`);
-				} else $$renderer.push(`<!--[-1--><li class="self-start text-xs text-muted">⚙ ${escape_html(entry.text)}</li>`);
+				} else if (entry.type === "roll") {
+					$$renderer.push(`<!--[3--><li class="flex flex-wrap items-baseline gap-x-2 self-end text-sm"><span class="font-medium">${escape_html(entry.character)}</span> <span class="text-muted">${escape_html(entry.what)}</span> <span class="font-mono text-xs text-muted">🎲 ${escape_html(entry.dice.join(" | "))} ${escape_html(signed(entry.modifier))}</span> <span class="font-mono font-semibold">= ${escape_html(entry.total)}</span> <span${attr_class(clsx(entry.outcome === "success" ? "text-accent" : "text-danger"))}>${escape_html(entry.outcome)}</span> `);
+					if (entry.mode !== "normal") $$renderer.push(`<!--[0--><span class="text-xs text-muted italic">(${escape_html(entry.mode)}: ${escape_html(entry.reason)})</span>`);
+					else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--></li>`);
+				} else if (entry.type === "answer") $$renderer.push(`<!--[4--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm"><span class="block text-xs text-muted">${escape_html(entry.question)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
+				else $$renderer.push(`<!--[-1--><li class="self-start text-xs text-muted">⚙ ${escape_html(entry.text)}</li>`);
 				$$renderer.push(`<!--]-->`);
 			}
 		} else {
@@ -422,8 +536,16 @@ function _page($$renderer, $$props) {
 		const sessions = createSessionsQuery(() => data.attached);
 		const floor = createFloorQuery(() => data.campaign.id, () => data.floor);
 		const timeline = createTimelineQuery(() => data.campaign.id, () => data.timeline);
+		const scene = createSceneQuery(() => data.campaign.id, () => data.scene);
 		const journal = createJournalQuery(() => data.campaign.id, () => data.journal);
 		const actions = floorActions(() => data.campaign.id);
+		const calls = callActions(() => data.campaign.id);
+		let rolling = false;
+		/** Rolls or answers one part of the open Call, one click at a time. */
+		function answerCall(change) {
+			rolling = true;
+			attempt(change).finally(() => rolling = false);
+		}
 		const permission = createPermissionQuery(() => data.campaign.id, () => data.permission);
 		const answers = permissionActions(() => data.campaign.id);
 		/** Done, sending the composer's text first for Send & Done. */
@@ -434,7 +556,15 @@ function _page($$renderer, $$props) {
 			});
 		}
 		let picked = null;
-		const actors = derived(() => data.sheets.filter((s) => s.canAct));
+		const inScene = derived(() => new Set(scene.data.present.map((c) => c.id)));
+		const sheets = derived(() => data.sheets.map((s) => {
+			const away = scene.data.elsewhere.find((c) => c.id === s.id);
+			return {
+				...s,
+				whereabouts: away ? away.whereabouts ?? "elsewhere" : null
+			};
+		}));
+		const actors = derived(() => sheets().filter((s) => s.canAct && inScene().has(s.id)));
 		const acting = derived(() => actors().find((s) => s.id === picked) ?? actors()[0] ?? null);
 		const archived = derived(() => data.campaign.status === "archived");
 		const attached = derived(() => sessions.data.includes(data.campaign.id));
@@ -496,7 +626,7 @@ function _page($$renderer, $$props) {
 		});
 		$$renderer.push(`<!----></header> <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]" aria-label="Play console">`);
 		CharacterSheet($$renderer, {
-			sheets: data.sheets,
+			sheets: sheets(),
 			acting: acting()?.id ?? null,
 			onselect: (id) => picked = id
 		});
@@ -506,6 +636,17 @@ function _page($$renderer, $$props) {
 			awaitingSince: timeline.data.awaitingSince
 		});
 		$$renderer.push(`<!----> `);
+		if (timeline.data.call && !archived()) {
+			$$renderer.push("<!--[0-->");
+			const open = timeline.data.call;
+			CallCard($$renderer, {
+				call: open,
+				disabled: rolling,
+				onroll: (part) => answerCall(() => calls.roll(open.id, part)),
+				onanswer: (part, answer) => answerCall(() => calls.answer(open.id, part, answer))
+			});
+		} else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]--> `);
 		if (problem) {
 			$$renderer.push("<!--[0-->");
 			Alert($$renderer, {
@@ -544,10 +685,16 @@ function _page($$renderer, $$props) {
 				onsend: (text) => acting() && attempt(() => actions.send(acting().id, text)),
 				ondone: done,
 				onedit: (id, text) => attempt(() => actions.edit(id, text)),
-				onwithdraw: (id) => attempt(() => actions.withdraw(id))
+				onwithdraw: (id) => attempt(() => actions.withdraw(id)),
+				elsewhere: scene.data.elsewhere,
+				oncut: (id) => attempt(() => actions.cut(id)),
+				returned: floor.data.returned,
+				onreturned: (ids) => attempt(() => actions.clearReturned(ids))
 			});
 		}
-		$$renderer.push(`<!--]--></section> <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm"><section class="rounded-panel border border-border bg-surface p-3"><h2 class="mb-1 text-xs font-semibold text-muted uppercase">Clock and Scene</h2> <p class="text-muted">The Scene is set once play begins.</p></section> <section aria-labelledby="knows-heading" class="rounded-panel border border-border bg-surface p-3"><h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">What ${escape_html(acting()?.name ?? "the Party")} knows</h2> `);
+		$$renderer.push(`<!--]--></section> <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm">`);
+		SceneRail($$renderer, { scene: scene.data });
+		$$renderer.push(`<!----> <section aria-labelledby="knows-heading" class="rounded-panel border border-border bg-surface p-3"><h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">What ${escape_html(acting()?.name ?? "the Party")} knows</h2> `);
 		Journal($$renderer, {
 			entries: acting() ? knownBy(journal.data, acting().id) : journal.data.entries,
 			holders: !acting()

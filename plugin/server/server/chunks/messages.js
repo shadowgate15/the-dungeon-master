@@ -674,12 +674,14 @@ var SESSIONS_QUERY_KEY = ["sessions"];
 var floorQueryKey = (campaign) => ["floor", campaign];
 /** The query holding a Campaign's timeline. */
 var timelineQueryKey = (campaign) => ["timeline", campaign];
+/** The query holding a Campaign's Scene, as the rail shows it. */
+var sceneQueryKey = (campaign) => ["scene", campaign];
 /** The query holding the Player's Journal: what their Characters believe. */
 var journalQueryKey = (campaign) => ["journal", campaign];
 /** The query holding the Player's read-only Session history (`close_session` is a DM write). */
 var sessionHistoryQueryKey = (campaign) => ["session-history", campaign];
 /** The query holding the permission prompt a Campaign's session is waiting on. */
 var permissionQueryKey = (campaign) => ["permission", campaign];
-export { sessionHistoryQueryKey as a, SvelteMap as c, permissionQueryKey as i, floorQueryKey as n, timelineQueryKey as o, journalQueryKey as r, createQuery as s, SESSIONS_QUERY_KEY as t };
+export { sceneQueryKey as a, createQuery as c, permissionQueryKey as i, SvelteMap as l, floorQueryKey as n, sessionHistoryQueryKey as o, journalQueryKey as r, timelineQueryKey as s, SESSIONS_QUERY_KEY as t };
 
 //# sourceMappingURL=messages.js.map

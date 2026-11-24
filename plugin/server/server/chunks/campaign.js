@@ -1,5 +1,6 @@
-import { At as desc, Bt as Column, C as entity, Et as CUSTOM_BACKGROUND_FEATURE_MAX, Ft as isNotNull, It as isNull, K as classTable, M as alignment, Mt as eq, N as background, Nt as gt, Ot as SOLO_PLAYER, Pt as inArray, S as belief, Tt as BACKSTORY_MAX, Ut as DUNGEON_MASTER_CAMPAIGNS, Vt as is, Wt as DUNGEON_MASTER_HOME, Y as equipment, _ as characterSpell, _t as subclass, a as userStateDir, b as floor, c as openDatabase, ct as race, d as character, f as characterChoice, g as characterSkill, h as characterItem, ht as spell, i as defaultCampaignRoot, j as abilityScoreMethod, jt as and, kt as asc, l as activityLine, m as characterEquipment, mt as skill, n as campaignDatabasePath, o as loadRulesDataset, p as characterDraft, r as canonicalFolder, s as migrateDatabase, t as seedRulesData, u as campaign, v as declaration, vt as subrace, wt as ABILITY_METHODS, x as session, y as event, zt as sql } from "./seed.js";
+import { At as BACKSTORY_MAX, Bt as isNotNull, C as event, Ct as subrace, D as belief, E as session, Ft as desc, Gt as Column, I as abilityScoreMethod, It as and, Jt as DUNGEON_MASTER_CAMPAIGNS, Kt as is, L as alignment, Lt as eq, Nt as SOLO_PLAYER, O as entity, Pt as asc, R as background, Rt as gt, S as declaration, St as subclass, T as returnedDraft, Vt as isNull, Wt as sql, Yt as DUNGEON_MASTER_HOME, Z as classTable, _ as characterDraft, a as userStateDir, b as characterSkill, bt as spell, c as abilities_default, d as activityLine, et as equipment, f as call, g as characterChoice, h as character, i as defaultCampaignRoot, jt as CUSTOM_BACKGROUND_FEATURE_MAX, kt as ABILITY_METHODS, l as migrateDatabase, m as campaign, n as campaignDatabasePath, o as loadRulesDataset, p as callPart, pt as race, r as canonicalFolder, s as skills_default, t as seedRulesData, u as openDatabase, v as characterEquipment, w as floor, x as characterSpell, y as characterItem, yt as skill, zt as inArray } from "./seed.js";
 import { A as equipmentGroupKeys, P as resolveFeatures, c as WIZARD_RULES_KEYS, d as resolverDraft, i as tryDraftToCharacterInput, j as equipmentGroups, l as emptyDraft, m as STEPS, n as detailToSummaryData, o as deriveStats, t as buildSummary } from "./summary.js";
+import { c as literal, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { o as parseCampaignSeed, r as campaignSeedCard } from "./seed2.js";
 import fs from "node:fs";
@@ -193,7 +194,7 @@ function detailToDraft(rules, c) {
 /** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
 var plain$1 = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 /** The slug part of a handle: `Mira Voss` → `mira-voss`. */
-function slug(name) {
+function slug$1(name) {
 	return plain$1(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
 }
 /** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
@@ -308,7 +309,7 @@ function playSheets(party) {
 }
 // src/lib/server/play/core-block.ts
 /** A Character's handle, from its name. */
-var characterHandle = (name) => `char:${slug(name)}`;
+var characterHandle = (name) => `char:${slug$1(name)}`;
 /** The Scene: its Place and the in-fiction time. No Scene exists until the clock and Scene do. */
 function scenePart() {
 	return "Scene: none set yet.";
@@ -378,209 +379,6 @@ function createChannels({ annotate } = {}) {
 			for (const listener of verdictListeners.get(key(folder)) ?? []) listener(verdict);
 		}
 	};
-}
-// src/lib/server/play/log.ts
-/**
-* The Campaign's current stamp: the open Session (null offline) and the in-fiction minute (0 until
-* the clock exists).
-*/
-function currentStamp(db) {
-	return {
-		sessionId: currentSession(db)?.id ?? null,
-		minute: 0
-	};
-}
-/**
-* The current Session: the newest one still open, or undefined offline. An older open one is a
-* sitting that stopped without End Session, waiting for its catch-up close.
-*/
-function currentSession(db) {
-	return db.select().from(session).where(isNull(session.closedAt)).orderBy(desc(session.number)).get();
-}
-/** Whether any non-recap Narration was logged in the Session. */
-function hasNarration(db, sessionId) {
-	return db.select({ id: event.id }).from(event).where(and(eq(event.sessionId, sessionId), eq(event.kind, "narration"), sql`coalesce(json_extract(${event.data}, '$.recap'), 0) = 0`)).get() !== void 0;
-}
-/** The id the next Event will get. The log is append-only, so ids are never reused. */
-function nextEventId(db) {
-	return (db.get(sql`SELECT max(${event.id}) AS id FROM ${event}`)?.id ?? 0) + 1;
-}
-/** Appends one Event, stamped with `stamp`; returns its id. */
-function logEvent(db, entry, { stamp = currentStamp(db), at, id = nextEventId(db) }) {
-	db.insert(event).values({
-		id,
-		sessionId: stamp.sessionId,
-		minute: stamp.minute,
-		tool: entry.tool,
-		kind: entry.kind,
-		summary: entry.summary,
-		data: entry.data ?? null,
-		dmOnly: entry.dmOnly ?? false,
-		createdAt: at
-	}).run();
-	return id;
-}
-/** Writes a Player-safe DM activity line after the Event `afterEvent` (the latest one by default). */
-function logActivity(db, text, { at, afterEvent = nextEventId(db) - 1 }) {
-	db.insert(activityLine).values({
-		text,
-		afterEvent,
-		sessionId: currentStamp(db).sessionId,
-		createdAt: at
-	}).run();
-}
-/**
-* The Session for a DM attaching through `bridge` (one per Claude Code session). A reconnect of
-* the same bridge keeps its Session, even one End Session closed. A new bridge opens the next
-* Session; an older open one stays open for its catch-up close, unless it has no Narration, in
-* which case it closes now with no summary. With no bridge, the current Session is reused.
-*/
-function openSession(db, at, bridge) {
-	const pick = {
-		id: session.id,
-		number: session.number
-	};
-	if (bridge !== void 0) {
-		const own = db.select(pick).from(session).where(eq(session.bridge, bridge)).get();
-		if (own) return own;
-	} else {
-		const current = currentSession(db);
-		if (current) return {
-			id: current.id,
-			number: current.number
-		};
-	}
-	for (const stale of db.select().from(session).where(isNull(session.closedAt)).all()) if (!hasNarration(db, stale.id)) db.update(session).set({ closedAt: at }).where(eq(session.id, stale.id)).run();
-	const last = db.select({ number: session.number }).from(session).orderBy(desc(session.number)).get();
-	return db.insert(session).values({
-		number: (last?.number ?? 0) + 1,
-		bridge: bridge ?? null,
-		startedAt: at
-	}).returning(pick).get();
-}
-/** When the open turn started waiting on the DM, or null when nothing awaits Narration. */
-function awaitingNarrationSince(db) {
-	return db.select({ at: campaign.awaitingNarrationSince }).from(campaign).get()?.at ?? null;
-}
-/** Sets (a timestamp) or clears (null) the Campaign's awaiting Narration flag. */
-function setAwaitingNarration(db, since) {
-	db.update(campaign).set({ awaitingNarrationSince: since }).run();
-}
-/** Event kinds the Player's timeline shows. */
-var SHOWN = /* @__PURE__ */ new Set([
-	"declaration",
-	"narration",
-	"turn_error"
-]);
-/** One logged Event as a timeline entry, or null for one the timeline does not show. */
-function entryFor(e) {
-	if (e.dmOnly || !SHOWN.has(e.kind)) return null;
-	const data = e.data ?? {};
-	const id = `e${e.id}`;
-	if (e.kind === "declaration") return {
-		type: "declaration",
-		id,
-		character: String(data.characterName),
-		player: String(data.player),
-		text: String(data.text)
-	};
-	if (e.kind === "turn_error") return {
-		type: "error",
-		id,
-		text: String(data.text)
-	};
-	return {
-		type: "narration",
-		id,
-		text: String(data.text),
-		voice: typeof data.voiceName === "string" ? data.voiceName : null,
-		...data.recap === true ? { recap: true } : {}
-	};
-}
-/**
-* The Player's timeline: Declarations and Narrations from the Event log (never DM-only Events),
-* with each DM activity line after the Event it follows, plus the awaiting Narration flag. Every
-* entry is built here from Player-safe fields; nothing raw passes through.
-*/
-function timeline(db) {
-	const lines = db.select().from(activityLine).orderBy(asc(activityLine.id)).all();
-	const entries = [];
-	let next = 0;
-	const flushUntil = (eventId) => {
-		while (next < lines.length && lines[next].afterEvent < eventId) {
-			const line = lines[next++];
-			entries.push({
-				type: "activity",
-				id: `a${line.id}`,
-				text: line.text
-			});
-		}
-	};
-	for (const e of db.select().from(event).orderBy(asc(event.id)).all()) {
-		flushUntil(e.id);
-		const entry = entryFor(e);
-		if (entry) entries.push(entry);
-	}
-	flushUntil(Infinity);
-	return {
-		entries,
-		awaitingSince: awaitingNarrationSince(db)
-	};
-}
-// src/lib/server/play/notices.ts
-var TOOL = "player";
-var KIND = "change";
-/** Logs a change the Player made outside the DM (a UI edit), so the DM hears of it next. */
-function logChange(db, change, { at }) {
-	logEvent(db, {
-		tool: TOOL,
-		kind: KIND,
-		summary: change.summary,
-		data: {
-			handle: change.handle,
-			version: change.version
-		}
-	}, { at });
-}
-/**
-* The changes the DM has not heard about yet, marking them heard: each Player edit logged in the
-* open Session since the last channel event. Offline edits belong to no Session; they reach the DM
-* at the next sitting's opening instead.
-*/
-function takeChanges(db) {
-	const through = db.select({ at: campaign.noticedThrough }).from(campaign).get()?.at ?? 0;
-	const { sessionId } = currentStamp(db);
-	if (!sessionId) return [];
-	const rows = db.select().from(event).where(and(gt(event.id, through), eq(event.sessionId, sessionId), eq(event.tool, TOOL), eq(event.kind, KIND))).orderBy(event.id).all();
-	const last = db.select({ id: max(event.id) }).from(event).get()?.id ?? through;
-	db.update(campaign).set({ noticedThrough: last }).run();
-	return rows.map((e) => ({
-		handle: String(e.data?.handle),
-		version: Number(e.data?.version),
-		summary: e.summary
-	}));
-}
-/**
-* The DM's channel: every channel event carries the changes made outside the DM since the last
-* one, as `handle vN: summary` lines; a changed core-block part is re-sent whole. Notices are
-* never an event of their own.
-*/
-function createDmChannels(library) {
-	return createChannels({ annotate(folder, sent) {
-		const entry = library.entryAt(folder);
-		const db = library.databaseFor(folder);
-		if (!entry || !db) return sent;
-		const changes = db.transaction((tx) => takeChanges(tx));
-		if (changes.length === 0) return sent;
-		const latest = new Map(changes.map((c) => [c.handle, c]));
-		const parts = ["Changed outside the DM:", ...[...latest.values()].map((c) => `- ${c.handle} v${c.version}: ${c.summary}`)];
-		if ([...latest.keys()].some((h) => h.startsWith("char:"))) parts.push("", partyPart({ party: library.party(entry.id) }));
-		const notice = parts.join("\n");
-		return {
-			...sent,
-			content: sent.content ? `${sent.content}\n\n${notice}` : notice
-		};
-	} });
 }
 // src/lib/server/character/service.ts
 /** The input breaks a Character rule (required or conditional field, bad score, unknown key or slug). */
@@ -1017,6 +815,721 @@ function createCharacterService(db, now = Date.now, rules = loadRulesDataset()) 
 		}
 	};
 }
+// src/lib/server/tools/contract.ts
+/**
+* The shared contract every game tool follows: short snake_case names, per-Entity versions on
+* every read and write, one transaction and one Event per mutating call, and errors shaped
+* `{code, message, next}`.
+*/
+/** The plugin's name, which namespaces the skills a tool points to. */
+var PLUGIN_NAME = "the-dungeon-master";
+/**
+* A refusal the DM can act on: what went wrong and the call to make next. `details` adds
+* structured data to the payload (such as the matches a near-duplicate refusal found).
+*/
+var ToolError = class ToolError extends Error {
+	code;
+	next;
+	details;
+	constructor(code, message, next, details) {
+		super(message);
+		this.code = code;
+		this.next = next;
+		this.details = details;
+	}
+	/** The handle names no Entity. */
+	static unknownHandle(handle) {
+		return new ToolError("unknown_handle", `No Entity has the handle ${handle}`, "Check the handle against a recent read and call again");
+	}
+	/** The write passed an old version: someone changed the Entity since the DM read it. */
+	static staleVersion(handle, given, current, read) {
+		return new ToolError("stale_version", `${handle} is at version ${current}, not ${given}: it changed since you read it`, read);
+	}
+	/** The input breaks a rule the forms enforce too. */
+	static invalidInput(tool, message) {
+		return new ToolError("invalid_input", message, `Fix the arguments and call ${tool} again`);
+	}
+};
+/** Refuses a write whose version is not the Entity's current one. */
+function expectVersion(entity, given) {
+	if (entity.version !== given) throw ToolError.staleVersion(entity.handle, given, entity.version, entity.read);
+}
+/** A tool that only reads. It logs nothing. */
+function readTool(tool) {
+	return {
+		...tool,
+		activity: tool.activity,
+		mutates: false,
+		run: tool.run
+	};
+}
+/** A tool that changes state: one transaction, exactly one Event. */
+function writeTool(tool) {
+	return {
+		...tool,
+		activity: tool.activity,
+		mutates: true,
+		run: tool.run
+	};
+}
+// src/lib/server/play/calls.ts
+/**
+* The DC for each difficulty tier, from the SRD's "Typical Difficulty Classes" table
+* (`rule:ability-checks` in the Rules Data). Server-only: no DC ever reaches a Player payload.
+*/
+var DC_BY_TIER = {
+	easy: 10,
+	medium: 15,
+	hard: 20,
+	"very hard": 25
+};
+var TIERS = Object.keys(DC_BY_TIER);
+var SKILL_NAMES = new Map(skills_default.map((s) => [s.slug, s.name]));
+var ABILITY_NAMES = new Map(abilities_default.map((a) => [a.slug, a.fullName]));
+var skillSlug = string().transform((s) => s.trim().toLowerCase().replace(/\s+/g, "-")).refine((s) => SKILL_NAMES.has(s), { message: `Expected a skill: ${[...SKILL_NAMES.keys()]}` });
+var saveKey = string().transform((s) => {
+	const key = s.trim().toLowerCase();
+	return ABILITY_KEYS.find((k) => k === key || ABILITY_NAMES.get(k)?.toLowerCase() === key) ?? key;
+}).refine((s) => ABILITY_KEYS.includes(s), { message: `Expected an ability: ${ABILITY_KEYS}` });
+/** One Check: one Character or several (each with its own roll), a skill or a save, a tier. */
+var checkSpec = object({
+	kind: literal("check"),
+	character: union([string().min(1), array(string().min(1)).min(1)]).describe("Character name or char: handle, or several, each rolling"),
+	skill: skillSlug.optional().describe("Skill slug, such as sleight-of-hand"),
+	save: saveKey.optional().describe("Ability for a saving throw, such as dex"),
+	tier: _enum(TIERS).describe("Difficulty; code turns it into the DC"),
+	adv: _enum(["advantage", "disadvantage"]).optional(),
+	reason: string().trim().min(1).describe("Why the roll, shown to the Player")
+}).refine((c) => c.skill === void 0 !== (c.save === void 0), { message: "Name exactly one of skill or save" });
+var questionSpec = object({
+	kind: literal("question"),
+	text: string().trim().min(1),
+	choices: array(string().trim().min(1)).optional().describe("Buttons; free text without")
+});
+/**
+* `narrate`'s `call`: a pending Call id from an action tool, an inline question, or inline Checks
+* (one, or a list for different rolls from several Characters).
+*/
+var callInput = union([
+	string().min(1).describe("Pending Call id from an action tool"),
+	questionSpec,
+	checkSpec,
+	array(checkSpec).min(1)
+]);
+var slug = (name) => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+/** The Character a Call names: by id, by name, or by `char:<name>` handle. */
+function findCharacter(db, ref) {
+	const key = slug(ref.replace(/^char:/, ""));
+	const found = db.select().from(character).all().find((c) => c.id === ref || slug(c.name) === key);
+	if (!found) throw new ToolError("unknown_character", `No Character is called ${ref}`, "Name a Character in the Party and call narrate again");
+	if (!canAct(found)) throw new ToolError("character_cannot_act", `${found.name} can't act`, "Call on a Character who can act");
+	return found;
+}
+function openCallRow(db) {
+	return db.select().from(call).where(eq(call.state, "open")).get();
+}
+/** What a Check part rolls, as the Player reads it. */
+function labelOf(part) {
+	if (part.skill) return `${SKILL_NAMES.get(part.skill) ?? part.skill} check`;
+	if (part.save) return `${ABILITY_NAMES.get(part.save) ?? part.save} save`;
+	return null;
+}
+/**
+* Opens a Call in the Narration's transaction. A Call ends the turn; only one is open at a time.
+* Returns its id.
+*/
+function openCall(db, input, { at, openedBy }) {
+	if (typeof input === "string") throw new ToolError("unknown_call", `No pending Call has the id ${input}`, "Attach a pending Call id an action tool returned, or pass the Call inline");
+	if (openCallRow(db)) throw new ToolError("call_open", "A Call is already open, waiting on the Players", "Wait for its call_result, or narrate without a call");
+	const id = db.insert(call).values({
+		campaignId: db.select({ id: campaign.id }).from(campaign).get().id,
+		kind: Array.isArray(input) ? "check" : input.kind,
+		text: !Array.isArray(input) && input.kind === "question" ? input.text : null,
+		choices: !Array.isArray(input) && input.kind === "question" ? input.choices ?? [] : [],
+		openedBy,
+		createdAt: at
+	}).returning({ id: call.id }).get().id;
+	(!Array.isArray(input) && input.kind === "question" ? playersAtTable(db).map((player) => ({ player })) : (Array.isArray(input) ? input : [input]).flatMap((check) => [check.character].flat().map((ref) => {
+		const who = findCharacter(db, ref);
+		return {
+			characterId: who.id,
+			player: who.controllingPlayer,
+			skill: check.skill ?? null,
+			save: check.save ?? null,
+			tier: check.tier,
+			dc: DC_BY_TIER[check.tier],
+			mode: check.adv ?? "normal",
+			reason: check.reason
+		};
+	}))).forEach((part, i) => {
+		db.insert(callPart).values({
+			...part,
+			callId: id,
+			position: i + 1
+		}).run();
+	});
+	return id;
+}
+/** The Players at the table: everyone with a Character who can act (solo play: one). */
+function playersAtTable(db) {
+	const players = new Set(db.select().from(character).all().filter(canAct).map((c) => c.controllingPlayer));
+	return players.size ? [...players] : [SOLO_PLAYER];
+}
+/** The open Call, Player-safe (no DC, no tier), or null when none is open. */
+function openCallView(db) {
+	const open = openCallRow(db);
+	if (!open) return null;
+	const parts = db.select({
+		part: callPart,
+		characterName: character.name
+	}).from(callPart).leftJoin(character, eq(character.id, callPart.characterId)).where(eq(callPart.callId, open.id)).orderBy(asc(callPart.position)).all();
+	return {
+		id: open.id,
+		kind: open.kind,
+		text: open.text,
+		choices: open.choices,
+		parts: parts.map(({ part, characterName }) => ({
+			id: part.id,
+			character: characterName,
+			player: part.player,
+			label: labelOf(part),
+			reason: part.reason,
+			mode: part.mode,
+			answered: part.answeredAt !== null
+		}))
+	};
+}
+/** A closed Floor with Declarations on it withdraws the open Call; returns its id, if any. */
+function withdrawOpenCall(db, at) {
+	return db.update(call).set({
+		state: "withdrawn",
+		closedAt: at
+	}).where(eq(call.state, "open")).returning({ id: call.id }).get()?.id ?? null;
+}
+/** The Call or part isn't open (answered, withdrawn or unknown). */
+var CallClosedError = class extends Error {};
+/** The part is addressed to another Player, or the answer doesn't fit it. */
+var CallRefusedError = class extends Error {};
+/** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
+function resultLine(p) {
+	if (p.result === null) return `[${p.player}] ${p.answer}`;
+	const r = p.result;
+	const dice = r.dice.length > 1 ? `${r.dice.join("/")} (${p.mode}) kept ${r.kept}` : `${r.kept}`;
+	const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`;
+	return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? "success" : "failure"}`;
+}
+/** The `call_result` channel event: one body line per part, in order. */
+function callResultEvent(result) {
+	return {
+		content: result.parts.map(resultLine).join("\n"),
+		meta: {
+			kind: "call_result",
+			call_id: result.call,
+			players: result.players.join(",")
+		}
+	};
+}
+/**
+* A Campaign's Calls as the Players answer them: each click rolls (or answers) one part in code
+* and logs it; the part that completes the Call sets awaiting Narration and returns the result.
+*/
+function createCalls(db, now = Date.now) {
+	function modifierFor(characterId, part) {
+		const detail = createCharacterService(db, now).get(characterId);
+		if (!detail) return 0;
+		const { stats } = buildSummary(loadWizardRules(), {
+			...detailToSummaryData(detail),
+			equipment: detail.inventory
+		});
+		const stat = part.skill ? stats.skills[part.skill] : stats.savingThrows[part.save];
+		return stat?.status === "ok" ? stat.value.modifier : 0;
+	}
+	function answer(callId, partId, player, resolve) {
+		return db.transaction(() => {
+			const at = now();
+			const part = db.select().from(call).where(and(eq(call.id, callId), eq(call.state, "open"))).get() && db.select().from(callPart).where(and(eq(callPart.id, partId), eq(callPart.callId, callId), isNull(callPart.answeredAt))).get();
+			if (!part) throw new CallClosedError("That Call is no longer open");
+			if (part.player !== player) throw new CallRefusedError("That roll is not yours");
+			const { values, event } = resolve(part);
+			db.update(callPart).set({
+				...values,
+				answeredAt: at
+			}).where(eq(callPart.id, partId)).run();
+			logEvent(db, {
+				tool: "call",
+				...event,
+				data: {
+					call: callId,
+					...event.data
+				}
+			}, { at });
+			const parts = db.select({
+				part: callPart,
+				characterName: character.name
+			}).from(callPart).leftJoin(character, eq(character.id, callPart.characterId)).where(eq(callPart.callId, callId)).orderBy(asc(callPart.position)).all().map(({ part, characterName }) => ({
+				...part,
+				characterName
+			}));
+			if (parts.some((p) => p.answeredAt === null)) return null;
+			db.update(call).set({
+				state: "answered",
+				closedAt: at
+			}).where(eq(call.id, callId)).run();
+			const result = {
+				call: callId,
+				players: [...new Set(parts.map((p) => p.player))],
+				parts
+			};
+			logEvent(db, {
+				tool: "call",
+				kind: "call_result",
+				summary: callResultEvent(result).content,
+				data: { call: callId },
+				dmOnly: true
+			}, { at });
+			setAwaitingNarration(db, at);
+			return result;
+		});
+	}
+	return {
+		/** The open Call, Player-safe. */
+		open: () => openCallView(db),
+		/**
+		* Rolls one Check part in code for its Controlling Player; returns the Call's result when this
+		* roll completes it, null otherwise.
+		*/
+		roll(callId, partId, dice, player = SOLO_PLAYER) {
+			return answer(callId, partId, player, (part) => {
+				if (!part.characterId) throw new CallRefusedError("That part is a question: answer it");
+				const modifier = modifierFor(part.characterId, part);
+				const d20 = part.mode === "normal" ? dice.rollD20() : dice.rollD20({
+					mode: part.mode,
+					reason: part.reason ?? ""
+				});
+				const total = d20.kept + modifier;
+				const result = {
+					dice: d20.dice,
+					kept: d20.kept,
+					modifier,
+					total,
+					success: total >= (part.dc ?? 0)
+				};
+				const name = db.select({ name: character.name }).from(character).where(eq(character.id, part.characterId)).get()?.name ?? "";
+				const what = labelOf(part) ?? "";
+				return {
+					values: { result },
+					event: {
+						kind: "roll",
+						summary: `${name} ${what}: ${total} (${result.success ? "success" : "failure"})`,
+						data: {
+							part: partId,
+							characterName: name,
+							player,
+							what,
+							mode: part.mode,
+							reason: part.reason,
+							...result
+						}
+					}
+				};
+			});
+		},
+		/** Answers a question part; with choices, the answer must be one of them. */
+		answer(callId, partId, text, player = SOLO_PLAYER) {
+			const clean = text.trim();
+			return answer(callId, partId, player, (part) => {
+				if (part.characterId) throw new CallRefusedError("That part is a Check: roll it");
+				const { choices, text: question } = db.select().from(call).where(eq(call.id, callId)).get();
+				if (!clean) throw new CallRefusedError("Give an answer");
+				if (choices.length && !choices.includes(clean)) throw new CallRefusedError(`Answer with one of: ${choices.join(", ")}`);
+				return {
+					values: { answer: clean },
+					event: {
+						kind: "answer",
+						summary: `${player}: ${clean}`,
+						data: {
+							part: partId,
+							player,
+							question,
+							text: clean
+						}
+					}
+				};
+			});
+		}
+	};
+}
+// src/lib/play/clock.ts
+/**
+* The Campaign clock counts in-fiction minutes from the Campaign's start, which is day 1 at 08:00.
+* Shown as "day 3, 14:20". Named calendars wait until the World needs them.
+*/
+var DAY = 1440;
+/** The time of day the Campaign starts, in minutes after midnight. */
+var START = 480;
+var pad = (n) => String(n).padStart(2, "0");
+/** The clock as day and time of day, e.g. `{ day: 3, time: '14:20' }`. */
+function clockParts(minute) {
+	const since = START + minute;
+	const ofDay = since % DAY;
+	return {
+		day: Math.floor(since / DAY) + 1,
+		time: `${pad(Math.floor(ofDay / 60))}:${pad(ofDay % 60)}`
+	};
+}
+/** The clock as the Players read it: "day 3, 14:20". */
+function formatClock(minute) {
+	const { day, time } = clockParts(minute);
+	return `day ${day}, ${time}`;
+}
+/** The minute a "day 3, 14:20" reading names, or null when it isn't one (or is before the start). */
+function parseClock(text) {
+	const match = /^\s*day\s+(\d+),?\s+(\d{1,2}):(\d{2})\s*$/i.exec(text);
+	if (!match) return null;
+	const [day, hours, minutes] = match.slice(1).map(Number);
+	if (day < 1 || hours > 23 || minutes > 59) return null;
+	const minute = (day - 1) * DAY + hours * 60 + minutes - START;
+	return minute < 0 ? null : minute;
+}
+// src/lib/server/play/scene.ts
+/** A move of the clock that would take it backwards. */
+var ClockBackwardsError = class extends Error {};
+/** The Campaign clock: in-fiction minutes since the Campaign started. */
+function currentMinute(db) {
+	return db.select({ minute: campaign.clockMinute }).from(campaign).get()?.minute ?? 0;
+}
+/**
+* Moves the Campaign clock to `to`, inside the caller's transaction. The one way the clock moves:
+* `advance_time`, rests and the end of a Combat all go through here. Refuses to go backwards.
+*/
+function advanceClock(db, to) {
+	const from = currentMinute(db);
+	if (!Number.isInteger(to) || to < from) throw new ClockBackwardsError(`The clock is at ${formatClock(from)}; it cannot go back to ${formatClock(Math.max(0, Math.floor(to)))}`);
+	db.update(campaign).set({ clockMinute: to }).run();
+	return {
+		from,
+		to
+	};
+}
+/**
+* Every Character with its handle, in the order they joined the Party. A handle is `char:` and the
+* name's slug, numbered (`char:wren-2`) when two Characters share a name. Characters are not
+* Entities, but Facts, Beliefs and tools link to them by handle.
+*/
+function characterRefs(db) {
+	const rows = db.select().from(character).orderBy(sql`rowid`).all();
+	const taken = /* @__PURE__ */ new Set();
+	return rows.map((row) => {
+		const base = `char:${slug$1(row.name)}`;
+		let handle = base;
+		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
+		taken.add(handle);
+		return {
+			handle,
+			row
+		};
+	});
+}
+/** The Place the spotlight is on, or null before the DM first sets the Scene. */
+function scenePlace(db) {
+	const handle = db.select({ scene: campaign.scene }).from(campaign).get()?.scene ?? null;
+	if (handle === null) return null;
+	return db.select().from(entity).where(eq(entity.handle, handle)).get() ?? null;
+}
+/** Whether a Character is in the Scene. Before the Scene is first set, the whole Party is. */
+function inScene(place, row) {
+	return place === null || row.whereabouts === place.handle;
+}
+/** Live NPCs whose whereabouts is `place`. */
+function npcsAt(db, place) {
+	return db.select().from(entity).where(and(eq(entity.type, "npc"), isNull(entity.retiredAt))).orderBy(entity.name).all().filter((e) => e.fields.whereabouts === place && e.fields.status !== "dead");
+}
+/**
+* Who is in the Scene, worked out from whereabouts (never stored): the Characters there who are
+* still in play and the live NPCs at the Place. The rest of the Party is elsewhere.
+*/
+function present(db) {
+	const place = scenePlace(db);
+	const party = characterRefs(db).filter((c) => c.row.status === "alive");
+	return {
+		place,
+		characters: party.filter((c) => inScene(place, c.row)),
+		elsewhere: party.filter((c) => !inScene(place, c.row)),
+		npcs: place ? npcsAt(db, place.handle) : []
+	};
+}
+/** A spotlight request the server won't send: unknown Character, or one already in the Scene. */
+var SpotlightRefusedError = class extends Error {};
+/** The Scene as the Player's rail shows it, built from Player-safe fields only. */
+function playerScene(db) {
+	const { place, characters, elsewhere } = present(db);
+	const minute = currentMinute(db);
+	const placeName = (handle) => handle === null ? null : db.select({ name: entity.name }).from(entity).where(eq(entity.handle, handle)).get()?.name ?? null;
+	return {
+		clock: {
+			minute,
+			...clockParts(minute)
+		},
+		place: place && { name: place.name },
+		present: characters.map((c) => ({
+			id: c.row.id,
+			name: c.row.name
+		})),
+		elsewhere: elsewhere.map((c) => ({
+			id: c.row.id,
+			name: c.row.name,
+			whereabouts: placeName(c.row.whereabouts)
+		}))
+	};
+}
+/**
+* A Player's "Cut to <Name>" for a Character elsewhere, as the DM hears it: one `spotlight`
+* channel event carrying the Character and the Player. It doesn't await Narration; the DM cuts
+* with `set_scene` at a natural break.
+*/
+function spotlightRequest(db, characterId, player) {
+	const { elsewhere, characters } = present(db);
+	const target = elsewhere.find((c) => c.row.id === characterId);
+	if (!target) {
+		const here = characters.find((c) => c.row.id === characterId);
+		throw new SpotlightRefusedError(here ? `${here.row.name} is already in the Scene` : "Character not found");
+	}
+	return {
+		content: `Cut to ${target.row.name} (${target.handle}), at ${target.row.whereabouts ?? "no known Place"}`,
+		meta: {
+			kind: "spotlight",
+			character: target.handle,
+			player
+		}
+	};
+}
+// src/lib/server/play/log.ts
+/**
+* The Campaign's current stamp: the open Session (null offline) and the Campaign clock's minute.
+*/
+function currentStamp(db) {
+	return {
+		sessionId: currentSession(db)?.id ?? null,
+		minute: currentMinute(db)
+	};
+}
+/**
+* The current Session: the newest one still open, or undefined offline. An older open one is a
+* sitting that stopped without End Session, waiting for its catch-up close.
+*/
+function currentSession(db) {
+	return db.select().from(session).where(isNull(session.closedAt)).orderBy(desc(session.number)).get();
+}
+/** Whether any non-recap Narration was logged in the Session. */
+function hasNarration(db, sessionId) {
+	return db.select({ id: event.id }).from(event).where(and(eq(event.sessionId, sessionId), eq(event.kind, "narration"), sql`coalesce(json_extract(${event.data}, '$.recap'), 0) = 0`)).get() !== void 0;
+}
+/** The id the next Event will get. The log is append-only, so ids are never reused. */
+function nextEventId(db) {
+	return (db.get(sql`SELECT max(${event.id}) AS id FROM ${event}`)?.id ?? 0) + 1;
+}
+/** Appends one Event, stamped with `stamp`; returns its id. */
+function logEvent(db, entry, { stamp = currentStamp(db), at, id = nextEventId(db) }) {
+	db.insert(event).values({
+		id,
+		sessionId: stamp.sessionId,
+		minute: stamp.minute,
+		tool: entry.tool,
+		kind: entry.kind,
+		summary: entry.summary,
+		data: entry.data ?? null,
+		dmOnly: entry.dmOnly ?? false,
+		createdAt: at
+	}).run();
+	return id;
+}
+/** Writes a Player-safe DM activity line after the Event `afterEvent` (the latest one by default). */
+function logActivity(db, text, { at, afterEvent = nextEventId(db) - 1 }) {
+	db.insert(activityLine).values({
+		text,
+		afterEvent,
+		sessionId: currentStamp(db).sessionId,
+		createdAt: at
+	}).run();
+}
+/**
+* The Session for a DM attaching through `bridge` (one per Claude Code session). A reconnect of
+* the same bridge keeps its Session, even one End Session closed. A new bridge opens the next
+* Session; an older open one stays open for its catch-up close, unless it has no Narration, in
+* which case it closes now with no summary. With no bridge, the current Session is reused.
+*/
+function openSession(db, at, bridge) {
+	const pick = {
+		id: session.id,
+		number: session.number
+	};
+	if (bridge !== void 0) {
+		const own = db.select(pick).from(session).where(eq(session.bridge, bridge)).get();
+		if (own) return own;
+	} else {
+		const current = currentSession(db);
+		if (current) return {
+			id: current.id,
+			number: current.number
+		};
+	}
+	for (const stale of db.select().from(session).where(isNull(session.closedAt)).all()) if (!hasNarration(db, stale.id)) db.update(session).set({ closedAt: at }).where(eq(session.id, stale.id)).run();
+	const last = db.select({ number: session.number }).from(session).orderBy(desc(session.number)).get();
+	return db.insert(session).values({
+		number: (last?.number ?? 0) + 1,
+		bridge: bridge ?? null,
+		startedAt: at
+	}).returning(pick).get();
+}
+/** When the open turn started waiting on the DM, or null when nothing awaits Narration. */
+function awaitingNarrationSince(db) {
+	return db.select({ at: campaign.awaitingNarrationSince }).from(campaign).get()?.at ?? null;
+}
+/** Sets (a timestamp) or clears (null) the Campaign's awaiting Narration flag. */
+function setAwaitingNarration(db, since) {
+	db.update(campaign).set({ awaitingNarrationSince: since }).run();
+}
+/** Event kinds the Player's timeline shows. */
+var SHOWN = /* @__PURE__ */ new Set([
+	"declaration",
+	"narration",
+	"turn_error",
+	"roll",
+	"answer"
+]);
+/** One logged Event as a timeline entry, or null for one the timeline does not show. */
+function entryFor(e) {
+	if (e.dmOnly || !SHOWN.has(e.kind)) return null;
+	const data = e.data ?? {};
+	const id = `e${e.id}`;
+	if (e.kind === "declaration") return {
+		type: "declaration",
+		id,
+		character: String(data.characterName),
+		player: String(data.player),
+		text: String(data.text)
+	};
+	if (e.kind === "turn_error") return {
+		type: "error",
+		id,
+		text: String(data.text)
+	};
+	if (e.kind === "roll") {
+		const mode = data.mode === "advantage" || data.mode === "disadvantage" ? data.mode : "normal";
+		return {
+			type: "roll",
+			id,
+			character: String(data.characterName),
+			what: String(data.what),
+			dice: data.dice.map(Number),
+			modifier: Number(data.modifier),
+			total: Number(data.total),
+			outcome: data.success ? "success" : "failure",
+			mode,
+			reason: mode === "normal" ? null : String(data.reason ?? "")
+		};
+	}
+	if (e.kind === "answer") return {
+		type: "answer",
+		id,
+		player: String(data.player),
+		question: String(data.question ?? ""),
+		text: String(data.text)
+	};
+	return {
+		type: "narration",
+		id,
+		text: String(data.text),
+		voice: typeof data.voiceName === "string" ? data.voiceName : null,
+		...data.recap === true ? { recap: true } : {}
+	};
+}
+/**
+* The Player's timeline: Declarations and Narrations from the Event log (never DM-only Events),
+* with each DM activity line after the Event it follows, plus the awaiting Narration flag. Every
+* entry is built here from Player-safe fields; nothing raw passes through.
+*/
+function timeline(db) {
+	const lines = db.select().from(activityLine).orderBy(asc(activityLine.id)).all();
+	const entries = [];
+	let next = 0;
+	const flushUntil = (eventId) => {
+		while (next < lines.length && lines[next].afterEvent < eventId) {
+			const line = lines[next++];
+			entries.push({
+				type: "activity",
+				id: `a${line.id}`,
+				text: line.text
+			});
+		}
+	};
+	for (const e of db.select().from(event).orderBy(asc(event.id)).all()) {
+		flushUntil(e.id);
+		const entry = entryFor(e);
+		if (entry) entries.push(entry);
+	}
+	flushUntil(Infinity);
+	return {
+		entries,
+		awaitingSince: awaitingNarrationSince(db),
+		call: openCallView(db)
+	};
+}
+// src/lib/server/play/notices.ts
+var TOOL = "player";
+var KIND = "change";
+/** Logs a change the Player made outside the DM (a UI edit), so the DM hears of it next. */
+function logChange(db, change, { at }) {
+	logEvent(db, {
+		tool: TOOL,
+		kind: KIND,
+		summary: change.summary,
+		data: {
+			handle: change.handle,
+			version: change.version
+		}
+	}, { at });
+}
+/**
+* The changes the DM has not heard about yet, marking them heard: each Player edit logged in the
+* open Session since the last channel event. Offline edits belong to no Session; they reach the DM
+* at the next sitting's opening instead.
+*/
+function takeChanges(db) {
+	const through = db.select({ at: campaign.noticedThrough }).from(campaign).get()?.at ?? 0;
+	const { sessionId } = currentStamp(db);
+	if (!sessionId) return [];
+	const rows = db.select().from(event).where(and(gt(event.id, through), eq(event.sessionId, sessionId), eq(event.tool, TOOL), eq(event.kind, KIND))).orderBy(event.id).all();
+	const last = db.select({ id: max(event.id) }).from(event).get()?.id ?? through;
+	db.update(campaign).set({ noticedThrough: last }).run();
+	return rows.map((e) => ({
+		handle: String(e.data?.handle),
+		version: Number(e.data?.version),
+		summary: e.summary
+	}));
+}
+/**
+* The DM's channel: every channel event carries the changes made outside the DM since the last
+* one, as `handle vN: summary` lines; a changed core-block part is re-sent whole. Notices are
+* never an event of their own.
+*/
+function createDmChannels(library) {
+	return createChannels({ annotate(folder, sent) {
+		const entry = library.entryAt(folder);
+		const db = library.databaseFor(folder);
+		if (!entry || !db) return sent;
+		const changes = db.transaction((tx) => takeChanges(tx));
+		if (changes.length === 0) return sent;
+		const latest = new Map(changes.map((c) => [c.handle, c]));
+		const parts = ["Changed outside the DM:", ...[...latest.values()].map((c) => `- ${c.handle} v${c.version}: ${c.summary}`)];
+		if ([...latest.keys()].some((h) => h.startsWith("char:"))) parts.push("", partyPart({ party: library.party(entry.id) }));
+		const notice = parts.join("\n");
+		return {
+			...sent,
+			content: sent.content ? `${sent.content}\n\n${notice}` : notice
+		};
+	} });
+}
 // src/lib/server/character/party.ts
 /** The Campaign has no draft with this id. */
 var DraftNotFoundError = class extends Error {};
@@ -1151,6 +1664,33 @@ var DeclarationRefusedError = class extends Error {};
 var DeclarationNotFoundError = class extends Error {};
 /** Done while the DM is still answering the last closed Floor. */
 var DmBusyError = class extends Error {};
+/**
+* The spotlight cut to `place`: every Declaration on the open Floor for a Character no longer in
+* the Scene goes back to its Player's composer as unsent text, and the Floor reopens (nobody has
+* pressed Done on the new Scene). Runs inside the cut's transaction; returns how many went back.
+*/
+function returnStrandedDrafts(db, place, at) {
+	const open = db.select().from(floor).where(eq(floor.state, "open")).get();
+	if (!open) return 0;
+	const stranded = db.select({
+		id: declaration.id,
+		characterId: declaration.characterId,
+		player: declaration.player,
+		text: declaration.text,
+		whereabouts: character.whereabouts
+	}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, open.id)).orderBy(asc(declaration.position)).all().filter((d) => d.whereabouts !== place);
+	for (const d of stranded) {
+		db.insert(returnedDraft).values({
+			characterId: d.characterId,
+			player: d.player,
+			text: d.text,
+			createdAt: at
+		}).run();
+		db.delete(declaration).where(eq(declaration.id, d.id)).run();
+	}
+	db.update(floor).set({ done: [] }).where(eq(floor.id, open.id)).run();
+	return stranded.length;
+}
 /** Declarations are a sentence or a short paragraph, not an essay. */
 var DECLARATION_MAX = 2e3;
 /**
@@ -1167,9 +1707,10 @@ function createFloor(db, now = Date.now) {
 			createdAt: at
 		}).returning({ id: floor.id }).get().id;
 	}
-	/** The Players at the table: everyone with a Character who can act. */
+	/** The Players at the table: everyone with a Character in the Scene who can act. */
 	function playersAtTable() {
-		const actors = db.select().from(character).all().filter(canAct);
+		const place = scenePlace(db);
+		const actors = db.select().from(character).all().filter((c) => canAct(c) && inScene(place, c));
 		return [...new Set(actors.map((c) => c.controllingPlayer))];
 	}
 	function cleanText(text) {
@@ -1182,21 +1723,40 @@ function createFloor(db, now = Date.now) {
 		const floorId = openFloorId();
 		if (!(floorId && db.select({ id: declaration.id }).from(declaration).where(and(eq(declaration.id, id), eq(declaration.floorId, floorId))).get())) throw new DeclarationNotFoundError("Declaration not found on the open Floor");
 	}
-	/** The open Floor (empty until something is sent). */
-	function current() {
-		const floorId = openFloorId();
-		if (!floorId) return { declarations: [] };
-		return { declarations: db.select({
-			id: declaration.id,
-			character: declaration.characterId,
+	/** `player`'s drafts a cut sent back to the composer, oldest first. */
+	function returned(player) {
+		return db.select({
+			id: returnedDraft.id,
+			character: returnedDraft.characterId,
 			characterName: character.name,
-			player: declaration.player,
-			text: declaration.text
-		}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all() };
+			text: returnedDraft.text
+		}).from(returnedDraft).innerJoin(character, eq(character.id, returnedDraft.characterId)).where(eq(returnedDraft.player, player)).orderBy(asc(returnedDraft.createdAt), asc(sql`${returnedDraft}.rowid`)).all();
+	}
+	/** The open Floor (empty until something is sent), with `player`'s returned drafts. */
+	function current(player = SOLO_PLAYER) {
+		const floorId = openFloorId();
+		if (!floorId) return {
+			declarations: [],
+			returned: returned(player)
+		};
+		return {
+			declarations: db.select({
+				id: declaration.id,
+				character: declaration.characterId,
+				characterName: character.name,
+				player: declaration.player,
+				text: declaration.text
+			}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all(),
+			returned: returned(player)
+		};
 	}
 	return {
-		/** The open Floor (empty until something is sent). */
+		/** The open Floor (empty until something is sent), with `player`'s returned drafts. */
 		current,
+		/** The composer has loaded a returned draft: it is no longer held for the Player. */
+		clearReturned(id) {
+			db.delete(returnedDraft).where(eq(returnedDraft.id, id)).run();
+		},
 		/**
 		* Puts a Declaration for one Character on the open Floor, opening it if none is. Refused for a
 		* Character who can't act or whom `player` doesn't control.
@@ -1207,6 +1767,7 @@ function createFloor(db, now = Date.now) {
 				const actor = db.select().from(character).where(eq(character.id, characterId)).get();
 				if (!actor) throw new DeclarationRefusedError("Character not found");
 				if (!canAct(actor)) throw new DeclarationRefusedError(`${actor.name} can't act`);
+				if (!inScene(scenePlace(db), actor)) throw new DeclarationRefusedError(`${actor.name} is not in the Scene`);
 				if (actor.controllingPlayer !== player) throw new DeclarationRefusedError(`${actor.name} is not your Character`);
 				const at = now();
 				const floorId = openFloor(at);
@@ -1230,8 +1791,8 @@ function createFloor(db, now = Date.now) {
 		},
 		/**
 		* The Player presses Done. Once every Player at the table has, the Floor closes in one
-		* transaction: its Declarations are logged (stamped with the Session) in send order and the
-		* Campaign awaits Narration. An empty Floor closes too, handing the DM the initiative. Refused
+		* transaction: its Declarations are logged (stamped with the Session) in send order, they
+		* withdraw any open Call, and the Campaign awaits Narration. An empty Floor closes too, handing the DM the initiative. Refused
 		* while the DM is still answering the last Floor.
 		*/
 		done(player = SOLO_PLAYER) {
@@ -1264,12 +1825,14 @@ function createFloor(db, now = Date.now) {
 						text: d.text
 					}
 				}, { at });
+				const withdrawnCall = declarations.length > 0 ? withdrawOpenCall(db, at) : null;
 				setAwaitingNarration(db, at);
 				return {
 					closed: true,
 					floor: floorId,
 					players: done,
-					declarations
+					declarations,
+					withdrawnCall
 				};
 			});
 		},
@@ -1301,7 +1864,7 @@ function characterHolders(db) {
 		name: character.name,
 		player: character.controllingPlayer
 	}).from(character).orderBy(asc(character.createdAt), asc(character.id)).all().map((c) => {
-		const base = `char:${slug(c.name) || "character"}`;
+		const base = `char:${slug$1(c.name) || "character"}`;
 		let handle = base;
 		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
 		taken.add(handle);
@@ -1363,63 +1926,6 @@ function journal(db, player) {
 		entries.set(key, entry);
 	}
 	return { entries: [...entries.values()] };
-}
-// src/lib/server/tools/contract.ts
-/**
-* The shared contract every game tool follows: short snake_case names, per-Entity versions on
-* every read and write, one transaction and one Event per mutating call, and errors shaped
-* `{code, message, next}`.
-*/
-/** The plugin's name, which namespaces the skills a tool points to. */
-var PLUGIN_NAME = "the-dungeon-master";
-/**
-* A refusal the DM can act on: what went wrong and the call to make next. `details` adds
-* structured data to the payload (such as the matches a near-duplicate refusal found).
-*/
-var ToolError = class ToolError extends Error {
-	code;
-	next;
-	details;
-	constructor(code, message, next, details) {
-		super(message);
-		this.code = code;
-		this.next = next;
-		this.details = details;
-	}
-	/** The handle names no Entity. */
-	static unknownHandle(handle) {
-		return new ToolError("unknown_handle", `No Entity has the handle ${handle}`, "Check the handle against a recent read and call again");
-	}
-	/** The write passed an old version: someone changed the Entity since the DM read it. */
-	static staleVersion(handle, given, current, read) {
-		return new ToolError("stale_version", `${handle} is at version ${current}, not ${given}: it changed since you read it`, read);
-	}
-	/** The input breaks a rule the forms enforce too. */
-	static invalidInput(tool, message) {
-		return new ToolError("invalid_input", message, `Fix the arguments and call ${tool} again`);
-	}
-};
-/** Refuses a write whose version is not the Entity's current one. */
-function expectVersion(entity, given) {
-	if (entity.version !== given) throw ToolError.staleVersion(entity.handle, given, entity.version, entity.read);
-}
-/** A tool that only reads. It logs nothing. */
-function readTool(tool) {
-	return {
-		...tool,
-		activity: tool.activity,
-		mutates: false,
-		run: tool.run
-	};
-}
-/** A tool that changes state: one transaction, exactly one Event. */
-function writeTool(tool) {
-	return {
-		...tool,
-		activity: tool.activity,
-		mutates: true,
-		run: tool.run
-	};
 }
 // src/lib/server/play/sessions.ts
 /** The in-fiction span of a Session: the clock minutes of its first and last Events. */
@@ -1714,6 +2220,10 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		floor(id) {
 			return createFloor(database(find(id).folder), now);
 		},
+		/** The Campaign's Calls, as the Players roll and answer them. */
+		calls(id) {
+			return createCalls(database(find(id).folder), now);
+		},
 		/** The Campaign's record of play: the Player's timeline and Journal, and its Sessions. */
 		record(id) {
 			const db = database(find(id).folder);
@@ -1731,7 +2241,9 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 					kind: "turn_error",
 					summary: text,
 					data: { text }
-				}, { at: now() })
+				}, { at: now() }),
+				scene: () => playerScene(db),
+				spotlight: (character, player) => spotlightRequest(db, character, player)
 			};
 		},
 		/**
@@ -1807,6 +2319,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { logActivity as A, DeclarationRefusedError as C, CharacterValidationError as D, CharacterNotFoundError as E, loadWizardRules as F, isNearName as I, normalizeName as L, nextEventId as M, setAwaitingNarration as N, createDmChannels as O, playSheets as P, slug as R, DeclarationNotFoundError as S, DraftNotFoundError as T, expectVersion as _, CampaignArchivedError as a, characterHolders as b, CampaignNotFoundError as c, closeSession as d, history as f, ToolError as g, PLUGIN_NAME as h, sessions as i, logEvent as j, currentStamp as k, NotACampaignFolderError as l, sessionsView as m, library as n, CampaignExistsError as o, indexNarration as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, readTool as v, DmBusyError as w, charactersInScene as x, writeTool as y, SESSION_LIVE_MESSAGE as z };
+export { slug$1 as $, advanceClock as A, callResultEvent as B, currentStamp as C, setAwaitingNarration as D, nextEventId as E, formatClock as F, readTool as G, PLUGIN_NAME as H, parseClock as I, CharacterValidationError as J, writeTool as K, CallClosedError as L, currentMinute as M, present as N, ClockBackwardsError as O, scenePlace as P, normalizeName as Q, CallRefusedError as R, createDmChannels as S, logEvent as T, ToolError as U, openCall as V, expectVersion as W, loadWizardRules as X, playSheets as Y, isNearName as Z, DeclarationNotFoundError as _, CampaignArchivedError as a, returnStrandedDrafts as b, CampaignNotFoundError as c, closeSession as d, SESSION_LIVE_MESSAGE as et, history as f, charactersInScene as g, characterHolders as h, sessions as i, characterRefs as j, SpotlightRefusedError as k, NotACampaignFolderError as l, sessionsView as m, library as n, CampaignExistsError as o, indexNarration as p, CharacterNotFoundError as q, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, DeclarationRefusedError as v, logActivity as w, DraftNotFoundError as x, DmBusyError as y, callInput as z };
 
 //# sourceMappingURL=campaign.js.map
