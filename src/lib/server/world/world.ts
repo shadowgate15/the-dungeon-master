@@ -11,7 +11,7 @@ import { isNearName, normalizeName, slug } from './names'
  * Whether a Fact's claim restates a field's value: it mentions the value's words, or links to the
  * Entity a handle value names.
  */
-function restates(rendered: string, stored: string, value: unknown, all: Known[]): boolean {
+export function restates(rendered: string, stored: string, value: unknown, all: Known[]): boolean {
   const mentions = (v: unknown): boolean => {
     if (typeof v === 'string') {
       const linked = all.find((k) => k.handle === v)

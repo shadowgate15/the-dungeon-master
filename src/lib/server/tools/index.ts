@@ -1,6 +1,7 @@
 import type { GameTool } from './contract'
 import { creationTools } from './creation-tools'
 import { knowledgeTools } from './knowledge-tools'
+import { lintTools } from './lint-tools'
 import { narrationTools } from './narration-tools'
 import { sceneTools } from './scene-tools'
 import { seedTools } from './seed-tools'
@@ -15,5 +16,6 @@ export const gameTools: GameTool[] = [
   ...knowledgeTools,
   ...narrationTools,
   ...sceneTools,
-  ...sessionTools
+  ...sessionTools,
+  ...lintTools
 ]
