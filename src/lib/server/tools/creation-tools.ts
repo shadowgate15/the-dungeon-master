@@ -4,7 +4,6 @@ import {
   CAMPAIGN_SEED_FIELDS,
   CampaignSeedError,
   campaignSeedCard,
-  missingSeedFields,
   parseCampaignSeed,
   type CampaignSeed,
   type CampaignSeedField
@@ -20,18 +19,15 @@ import {
 import { lengthIssue } from '#lib/character/steps.ts'
 import { ABILITY_KEYS } from '#lib/rules/registry.ts'
 import { loadWizardRules } from '../character/wizard-rules'
+import { SeedLockedError, creationStage, refuseLockedSeed } from '../creation/begin'
 import { addConversationLine } from '../creation/conversation'
-import { campaign, character, characterDraft } from '../db/schema'
+import { background, campaign, character, characterDraft, classTable, race } from '../db/schema'
+import { characterHolders } from '../knowledge/holders'
 import { ToolError, creationTool, expectVersion, readTool, type ToolContext } from './contract'
 import { SEED_HANDLE, currentSeed, seedView } from './seed-tools'
 
-/** Where creation stands, which the `session-opening` skill branches on. */
-export type CreationState = 'seed_incomplete' | 'party_empty' | 'ready' | 'begun'
-
 /** A Character draft's handle: drafts are Entities the DM writes into while the Player creates. */
 export const draftHandle = (id: string) => `draft:${id}`
-
-const campaignRow = currentSeed
 
 /** How the conversation's muted lines name the Seed fields. */
 const SEED_FIELD_NAMES: Record<CampaignSeedField, string> = {
@@ -187,13 +183,7 @@ export const creationTools = [
     input: z.object({}),
     activity: null,
     run: (ctx) => {
-      const found = campaignRow(ctx)
-      const missing = missingSeedFields(campaignSeedCard(found))
-      const characters = ctx.db
-        .select({ id: character.id })
-        .from(character)
-        .where(ne(character.status, 'departed'))
-        .all().length
+      const { state, missing, characters } = creationStage(ctx.db)
       const drafts = ctx.db
         .select()
         .from(characterDraft)
@@ -205,15 +195,49 @@ export const creationTools = [
           step: d.step,
           version: d.version
         }))
-      const state: CreationState =
-        found.begunAt !== null
-          ? 'begun'
-          : missing.length > 0
-            ? 'seed_incomplete'
-            : characters === 0
-              ? 'party_empty'
-              : 'ready'
       return { state, missing, characters, drafts }
+    }
+  }),
+
+  readTool({
+    name: 'party',
+    description:
+      'The Party as builder needs it: each Character’s handle (char:…), name, level, race, class, background, alignment, appearance, personality, ideal, bond, flaw and backstory. Build the World and the Arc from these.',
+    input: z.object({}),
+    activity: 'DM reads the Party',
+    run: (ctx) => {
+      const handles = new Map(characterHolders(ctx.db).map((c) => [c.id, c.handle]))
+      const rows = ctx.db
+        .select({
+          id: character.id,
+          name: character.name,
+          level: character.level,
+          race: race.name,
+          class: classTable.name,
+          background: background.name,
+          customBackground: character.customBackgroundName,
+          alignment: character.alignment,
+          appearance: character.appearance,
+          personality: character.personality,
+          ideal: character.ideal,
+          bond: character.bond,
+          flaw: character.flaw,
+          backstory: character.backstory
+        })
+        .from(character)
+        .innerJoin(race, eq(race.id, character.raceId))
+        .innerJoin(classTable, eq(classTable.id, character.classId))
+        .innerJoin(background, eq(background.id, character.backgroundId))
+        .where(ne(character.status, 'departed'))
+        .orderBy(asc(character.createdAt))
+        .all()
+      return {
+        characters: rows.map(({ id, customBackground, ...c }) => ({
+          handle: handles.get(id),
+          ...c,
+          background: customBackground ?? c.background
+        }))
+      }
     }
   }),
 
@@ -227,6 +251,16 @@ export const creationTools = [
       expectVersion({ handle: SEED_HANDLE, version: found.version, read: 'seed' }, version)
       if (found.archivedAt !== null) {
         throw new ToolError('archived', 'An archived Campaign cannot be changed', 'Stop here')
+      }
+      try {
+        refuseLockedSeed(found)
+      } catch (e) {
+        if (!(e instanceof SeedLockedError)) throw e
+        throw new ToolError(
+          'seed_locked',
+          e.message,
+          'Leave the Seed as it is; only the Player can Start over'
+        )
       }
       let seed: CampaignSeed
       try {

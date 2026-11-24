@@ -559,3 +559,4 @@ export const returnedDraft = sqliteTable('returned_draft', {
 export * from './rules-schema'
 export * from './world-schema'
 export * from './knowledge-schema'
+export * from './arc-schema'

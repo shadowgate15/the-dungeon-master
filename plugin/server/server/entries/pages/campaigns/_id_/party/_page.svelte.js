@@ -2,7 +2,7 @@ import { ft as resolve } from "../../../../../chunks/internal.js";
 import { _ as attr, a as bind_props, c as ensure_array_like, l as head, o as derived, r as attributes, t as attr_class, u as props_id, v as clsx, x as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/forms.js";
 import "../../../../../chunks/paths.js";
-import { a as CreationStepper, i as Panel, n as createDraftQuery, o as Select, t as CreationPage } from "../../../../../chunks/CreationPage.js";
+import { a as CreationStepper, i as Panel, n as createDraftQuery, t as CreationPage } from "../../../../../chunks/CreationPage.js";
 import { n as Badge, r as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
 import { t as Link } from "../../../../../chunks/Link.js";
 import "../../../../../chunks/index-server.js";
@@ -12,6 +12,7 @@ import { t as Dialog } from "../../../../../chunks/Dialog.js";
 import { s as ABILITY_KEYS } from "../../../../../chunks/schema.js";
 import { A as rollTotal, C as STANDARD_ARRAY, D as pointCost, E as methodPatch, F as fixedEquipment, I as ownedEquipment, L as resolveFeatures, M as categoryItems, O as pointsSpent, P as equipmentGroups, S as POINT_BUY, T as availableValues, _ as groupIssues, a as cappedScore, b as skillsStepGroups, d as reconcile, f as resolverDraft, g as computeSteps, h as STEPS, i as tryDraftToCharacterInput, j as rollTotals, k as rollAbilityScores, m as spellsView, o as deriveStats, p as spellPickFlags, r as draftToSummaryData, s as LIMITS, t as buildSummary, u as emptyDraft, v as groupLabel, x as ABILITY_LABELS } from "../../../../../chunks/summary.js";
 import { t as Field } from "../../../../../chunks/Field.js";
+import { t as Select } from "../../../../../chunks/Select.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
 import { t as TextInput } from "../../../../../chunks/TextInput.js";
 // src/lib/campaign/PartyList.svelte
@@ -1830,9 +1831,9 @@ function _page($$renderer, $$props) {
 						current: "Party",
 						hrefs: {
 							Seed: seedHref(),
-							Party: partyHref()
-						},
-						unavailable: ["Begin"]
+							Party: partyHref(),
+							Begin: resolve("/campaigns/[id]/begin", { id: data.campaign.id })
+						}
 					});
 					$$renderer.push(`<!----> `);
 					if (archived()) {

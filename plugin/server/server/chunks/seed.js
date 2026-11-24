@@ -1862,6 +1862,9 @@ var Index = class {
 function index(name) {
 	return new IndexBuilderOn(name, false);
 }
+function uniqueIndex(name) {
+	return new IndexBuilderOn(name, true);
+}
 // node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/primary-keys.js
 function primaryKey(...config) {
 	if (config[0].columns) return new PrimaryKeyBuilder(config[0].columns, config[0].name);
@@ -4838,18 +4841,72 @@ var belief = sqliteTable("belief", {
 	check("belief_one_holder_check", sql`(${t.holderCharacter} IS NULL) <> (${t.holderNpc} IS NULL)`),
 	check("belief_kind_check", sql.raw(`kind IN (${BELIEF_KINDS.map((k) => `'${k}'`).join(", ")})`))
 ]);
+// src/lib/server/db/arc-schema.ts
+var ARC_STATES = [
+	"current",
+	"concluded",
+	"retired"
+];
+var BEAT_STATES = [
+	"pending",
+	"reached",
+	"abandoned"
+];
+/**
+* The Arc: the DM's hidden plan for the story. At most one is current; it leaves current once
+* (concluded or retired) and stays on record. The whole Arc carries one `version`. Nothing here
+* ever reaches the Player.
+*/
+var arc = sqliteTable("arc", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	title: text("title").notNull(),
+	premise: text("premise").notNull(),
+	stakes: text("stakes").notNull(),
+	resolution: text("resolution").notNull(),
+	state: text("state", { enum: ARC_STATES }).notNull().default("current"),
+	version: integer("version").notNull().default(1),
+	createdAt: integer("created_at").notNull(),
+	/** When it left current (concluded or retired). */
+	endedAt: integer("ended_at"),
+	endReason: text("end_reason")
+}, (t) => [check("arc_state", sql`${t.state} IN ('current', 'concluded', 'retired')`), uniqueIndex("arc_one_current").on(t.state).where(sql`${t.state} = 'current'`)]);
+/** One Act of an Arc, in order: a name and what it is for. */
+var act = sqliteTable("act", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	arcId: text("arc_id").notNull().references(() => arc.id, { onDelete: "cascade" }),
+	position: integer("position").notNull(),
+	name: text("name").notNull(),
+	purpose: text("purpose").notNull()
+});
+/** One Beat of an Act, in order, with a readable handle (`beat:the-vizier-is-the-patron`). */
+var beat = sqliteTable("beat", {
+	handle: text("handle").primaryKey(),
+	actId: integer("act_id").notNull().references(() => act.id, { onDelete: "cascade" }),
+	position: integer("position").notNull(),
+	title: text("title").notNull(),
+	description: text("description").notNull(),
+	state: text("state", { enum: BEAT_STATES }).notNull().default("pending"),
+	/** Why it was reached or abandoned. */
+	reason: text("reason"),
+	resolvedAt: integer("resolved_at")
+}, (t) => [check("beat_state", sql`${t.state} IN ('pending', 'reached', 'abandoned')`)]);
 // src/lib/server/db/schema.ts
 var schema_exports = /* @__PURE__ */ __exportAll({
+	ARC_STATES: () => ARC_STATES,
+	BEAT_STATES: () => BEAT_STATES,
 	BELIEF_KINDS: () => BELIEF_KINDS,
 	ability: () => ability,
 	abilityScoreMethod: () => abilityScoreMethod,
+	act: () => act,
 	activityLine: () => activityLine,
 	alignment: () => alignment,
+	arc: () => arc,
 	background: () => background,
 	backgroundEquipment: () => backgroundEquipment,
 	backgroundOption: () => backgroundOption,
 	backgroundOptionAlignment: () => backgroundOptionAlignment,
 	backgroundProficiency: () => backgroundProficiency,
+	beat: () => beat,
 	belief: () => belief,
 	call: () => call,
 	callPart: () => callPart,
@@ -7204,6 +7261,6 @@ function seedRulesData(db, dataset = loadRulesDataset(), now = Date.now) {
 		}).run();
 	});
 }
-export { asc as $, belief as A, background as B, conversationMessage as C, npcCombat as D, floor as E, worldLink as F, spell as G, equipment as H, ENTITY_TYPES as I, ABILITY_METHODS as J, subclass as K, NPC_STATUSES as L, entityAlias as M, fact as N, returnedDraft as O, pageRevision as P, SOLO_PLAYER as Q, abilityScoreMethod as R, characterSpell as S, event as T, race as U, classTable as V, skill as W, CUSTOM_BACKGROUND_FEATURE_MAX as X, BACKSTORY_MAX as Y, CUSTOM_BACKGROUND_SLUG as Z, characterChoice as _, DUNGEON_MASTER_VERSION as _t, defaultCampaignRoot as a, isNotNull as at, characterItem as b, skills_default as c, ne as ct, openDatabase as d, Column as dt, desc as et, activityLine as f, is as ft, character as g, DUNGEON_MASTER_PORT as gt, campaign as h, DUNGEON_MASTER_HOME as ht, canonicalFolder as i, inArray as it, entity as j, session as k, abilities_default as l, or as lt, callPart as m, DUNGEON_MASTER_CAMPAIGNS as mt, createRulesRepository as n, eq as nt, userStateDir as o, isNull as ot, call as p, DATABASE_URL as pt, subrace as q, campaignDatabasePath as r, gt as rt, loadRulesDataset as s, like as st, seedRulesData as t, and as tt, migrateDatabase as u, sql as ut, characterDraft as v, declaration as w, characterSkill as x, characterEquipment as y, alignment as z };
+export { CUSTOM_BACKGROUND_FEATURE_MAX as $, act as A, NPC_STATUSES as B, conversationMessage as C, npcCombat as D, floor as E, entityAlias as F, equipment as G, alignment as H, fact as I, spell as J, race as K, pageRevision as L, beat as M, belief as N, returnedDraft as O, entity as P, BACKSTORY_MAX as Q, worldLink as R, characterSpell as S, event as T, background as U, abilityScoreMethod as V, classTable as W, subrace as X, subclass as Y, ABILITY_METHODS as Z, characterChoice as _, DATABASE_URL as _t, defaultCampaignRoot as a, eq as at, characterItem as b, DUNGEON_MASTER_PORT as bt, skills_default as c, inArray as ct, openDatabase as d, like as dt, CUSTOM_BACKGROUND_SLUG as et, activityLine as f, ne as ft, character as g, is as gt, campaign as h, Column as ht, canonicalFolder as i, and as it, arc as j, session as k, abilities_default as l, isNotNull as lt, callPart as m, sql as mt, createRulesRepository as n, asc as nt, userStateDir as o, gt as ot, call as p, or as pt, skill as q, campaignDatabasePath as r, desc as rt, loadRulesDataset as s, gte as st, seedRulesData as t, SOLO_PLAYER as tt, migrateDatabase as u, isNull as ut, characterDraft as v, DUNGEON_MASTER_CAMPAIGNS as vt, declaration as w, characterSkill as x, DUNGEON_MASTER_VERSION as xt, characterEquipment as y, DUNGEON_MASTER_HOME as yt, ENTITY_TYPES as z };
 
 //# sourceMappingURL=seed.js.map

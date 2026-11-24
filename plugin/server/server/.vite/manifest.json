@@ -58,6 +58,13 @@
       "_server2.js"
     ]
   },
+  "_Select.js": {
+    "file": "chunks/Select.js",
+    "name": "Select",
+    "imports": [
+      "_server2.js"
+    ]
+  },
   "_TextInput.js": {
     "file": "chunks/TextInput.js",
     "name": "TextInput",
@@ -823,14 +830,43 @@
       "_enums.js",
       "_Button.js",
       "_Field.js",
-      "_CreationPage.js",
+      "_Select.js",
       "_Textarea.js",
       "_TextInput.js",
       "_seed2.js",
+      "_CreationPage.js",
       "_Link.js",
       "_DmBadge.js",
       "_useQueryClient.js",
       "_index-server.js"
+    ]
+  },
+  "src/routes/campaigns/[id]/begin/+page.server.ts": {
+    "file": "entries/pages/campaigns/_id_/begin/_page.server.ts.js",
+    "name": "entries/pages/campaigns/_id_/begin/_page.server.ts",
+    "src": "src/routes/campaigns/[id]/begin/+page.server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_bridge.js",
+      "_campaign.js"
+    ]
+  },
+  "src/routes/campaigns/[id]/begin/+page.svelte": {
+    "file": "entries/pages/campaigns/_id_/begin/_page.svelte.js",
+    "name": "entries/pages/campaigns/_id_/begin/_page.svelte",
+    "src": "src/routes/campaigns/[id]/begin/+page.svelte",
+    "isEntry": true,
+    "imports": [
+      "_internal.js",
+      "_server2.js",
+      "_forms.js",
+      "_paths.js",
+      "_CreationPage.js",
+      "_DmBadge.js",
+      "_floor-client.js",
+      "_Button.js",
+      "_Link.js"
     ]
   },
   "src/routes/campaigns/[id]/journal/+page.server.ts": {
@@ -888,6 +924,7 @@
       "_schema.js",
       "_summary.js",
       "_Field.js",
+      "_Select.js",
       "_Textarea.js",
       "_TextInput.js"
     ]

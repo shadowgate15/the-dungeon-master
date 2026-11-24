@@ -21,6 +21,7 @@ import {
 } from '#lib/campaign/seed.ts'
 import type { ConversationMessage } from '#lib/creation/conversation.ts'
 import { addConversationLine, conversationLines } from '../creation/conversation'
+import { begin, creationStage, refuseLockedSeed, startOver } from '../creation/begin'
 import { campaignDatabasePath, canonicalFolder } from './paths'
 import { createRegistry } from './registry'
 
@@ -188,6 +189,7 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
       if (found.archivedAt !== null) {
         throw new CampaignArchivedError('An archived Campaign cannot be changed')
       }
+      refuseLockedSeed(found)
       const seed = parseCampaignSeed(card)
       const edited = new Set(CAMPAIGN_SEED_FIELDS.filter((f) => seed[f] !== found[f]))
       const saved = database(folder).transaction((tx) => {
@@ -206,6 +208,33 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
       })
       registry.put({ id, path: folder, name: saved.name })
       return saved
+    },
+
+    /** Where creation stands: the Begin step reads it. */
+    creation(id: string) {
+      return creationStage(database(find(id).folder))
+    },
+
+    /** The Player pressed Begin: locks the Seed. Refused (`BeginRefusedError`) unless creation is ready. */
+    begin(id: string): void {
+      const { folder, found } = find(id)
+      if (found.archivedAt !== null) {
+        throw new CampaignArchivedError('An archived Campaign cannot be changed')
+      }
+      begin(database(folder), now())
+    },
+
+    /**
+     * Start over: discards the World and the Arc and unlocks the Seed. Refused
+     * (`StartOverRefusedError`) before Begin and after the first Narration; it needs no DM.
+     */
+    startOver(id: string): void {
+      const { folder, found } = find(id)
+      if (found.archivedAt !== null) {
+        throw new CampaignArchivedError('An archived Campaign cannot be changed')
+      }
+      const db = database(folder)
+      db.transaction((tx) => startOver(tx, now()))
     },
 
     /** The creation conversation in the DM pane. It is out of fiction and never logged. */
