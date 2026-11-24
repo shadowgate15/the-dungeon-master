@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, inArray, lt, ne } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, lt, ne, type SQL } from 'drizzle-orm'
 import type { Queryable } from '../db/connect'
 import { act, arc, beat, event } from '../db/schema'
 import { expectVersion, ToolError, type ToolContext } from '../tools/contract'
@@ -58,7 +58,8 @@ function arcView(db: Queryable, found: typeof arc.$inferSelect) {
     state: found.state,
     version: found.version,
     ...(found.state === 'current' ? {} : { endReason: found.endReason }),
-    acts: acts.map((a) => ({
+    acts: acts.map((a, i) => ({
+      number: i + 1,
       name: a.name,
       purpose: a.purpose,
       beats: beats
@@ -321,4 +322,124 @@ export function retireArc(ctx: ToolContext, input: { version: number; reason: st
     abandoned: abandoned.map(beatSummary),
     arc: { state: after.state, version: after.version }
   }
+}
+
+/** One `revise_arc` op. Acts are numbered from 1 in order; positions within an Act from 1. */
+export type ArcOp =
+  | { op: 'edit_arc'; title?: string; premise?: string; stakes?: string; resolution?: string }
+  | { op: 'edit_act'; act: number; name?: string; purpose?: string }
+  | { op: 'add_act'; before: number; name: string; purpose: string }
+  | { op: 'edit_beat'; beat: string; title?: string; description?: string }
+  | { op: 'add_beat'; act: number; position?: number; title: string; description: string }
+  | { op: 'move_beat'; beat: string; act: number; position?: number }
+
+/**
+ * Applies every op in order, or none (the caller's transaction rolls back on a refusal). Only
+ * pending Beats change, nothing is deleted, and nothing is added after the final Act.
+ */
+export function reviseArc(ctx: ToolContext, input: { version: number; ops: ArcOp[] }) {
+  const { db } = ctx
+  const found = writableArc(db, input.version)
+  const acts = () =>
+    db.select().from(act).where(eq(act.arcId, found.id)).orderBy(asc(act.position)).all()
+  const actAt = (n: number) => {
+    const all = acts()
+    if (n > all.length) {
+      throw new ToolError(
+        'after_final_act',
+        `The Arc has ${all.length} Acts; nothing can be added after the final Act`,
+        'Revise the final Act, or have builder draft the next Arc once this one ends'
+      )
+    }
+    return all[n - 1]
+  }
+  /** Puts a Beat at a 1-based position of an Act (the end by default), renumbering the Act. */
+  const place = (handle: string, actId: number, position?: number) => {
+    const others = db
+      .select({ handle: beat.handle })
+      .from(beat)
+      .where(and(eq(beat.actId, actId), ne(beat.handle, handle)))
+      .orderBy(asc(beat.position))
+      .all()
+      .map((b) => b.handle)
+    const at = Math.min(Math.max((position ?? others.length + 1) - 1, 0), others.length)
+    others.splice(at, 0, handle)
+    others.forEach((h, i) =>
+      db.update(beat).set({ actId, position: i }).where(eq(beat.handle, h)).run()
+    )
+  }
+  const pendingBeat = (handle: string) => {
+    const target = beatOf(db, found.id, handle).beat
+    expectPending(target)
+    return target
+  }
+
+  /** The fields an edit op sets, so an edit that names none changes nothing. */
+  const fieldsOf = (op: Record<string, unknown>, ...keys: string[]) =>
+    Object.fromEntries(Object.entries(op).filter(([k, v]) => keys.includes(k) && v !== undefined))
+  const edit = (table: typeof arc | typeof act | typeof beat, where: SQL, fields: object) => {
+    if (Object.keys(fields).length) db.update(table).set(fields).where(where).run()
+  }
+
+  const added: string[] = []
+  for (const op of input.ops) {
+    switch (op.op) {
+      case 'edit_arc': {
+        edit(arc, eq(arc.id, found.id), fieldsOf(op, 'title', 'premise', 'stakes', 'resolution'))
+        break
+      }
+      case 'edit_act': {
+        edit(act, eq(act.id, actAt(op.act).id), fieldsOf(op, 'name', 'purpose'))
+        break
+      }
+      case 'add_act': {
+        const all = acts()
+        if (op.before > all.length) actAt(op.before)
+        const at = Math.max(op.before, 1) - 1
+        all.slice(at).forEach((a) => {
+          db.update(act)
+            .set({ position: a.position + 1 })
+            .where(eq(act.id, a.id))
+            .run()
+        })
+        db.insert(act)
+          .values({
+            arcId: found.id,
+            position: all[at].position,
+            name: op.name,
+            purpose: op.purpose
+          })
+          .run()
+        break
+      }
+      case 'edit_beat': {
+        pendingBeat(op.beat)
+        edit(beat, eq(beat.handle, op.beat), fieldsOf(op, 'title', 'description'))
+        break
+      }
+      case 'add_beat': {
+        const target = actAt(op.act)
+        const handle = beatHandle(db, op.title, new Set())
+        db.insert(beat)
+          .values({
+            handle,
+            actId: target.id,
+            position: Number.MAX_SAFE_INTEGER,
+            title: op.title,
+            description: op.description
+          })
+          .run()
+        place(handle, target.id, op.position)
+        added.push(handle)
+        break
+      }
+      case 'move_beat': {
+        pendingBeat(op.beat)
+        place(op.beat, actAt(op.act).id, op.position)
+        break
+      }
+    }
+  }
+  bump(db, found)
+  return { ...arcView(db, currentRow(db)!), added }
 }

@@ -211,3 +211,84 @@ describe('retire_arc', () => {
     expect(host.events(folder).at(-1)).toMatchObject({ kind: 'arc_retired', dmOnly: true })
   })
 })
+
+describe('revise_arc', () => {
+  beforeEach(() => call('create_arc', relicArc))
+
+  const revise = (ops: unknown[]) => call('revise_arc', { version: version(), ops })
+  const titles = () =>
+    call('arc').payload.current.acts.map((a: { name: string; beats: { title: string }[] }) => [
+      a.name,
+      a.beats.map((b) => b.title)
+    ])
+
+  it('applies every op at once as one DM-only Event and one new version', () => {
+    const { isError, payload } = revise([
+      { op: 'edit_arc', stakes: 'If the cult wins, Ashford burns first.' },
+      { op: 'edit_beat', beat: 'beat:ambush-at-the-ford', title: 'Ambush at the Mill' },
+      { op: 'add_act', before: 2, name: 'The Long Night', purpose: 'Survive the siege.' },
+      { op: 'add_beat', act: 2, title: 'The Siege Breaks', description: 'Dawn comes, or not.' },
+      { op: 'move_beat', beat: 'beat:the-vizier-is-the-patron', act: 3, position: 1 },
+      { op: 'edit_act', act: 3, purpose: 'Reach the shrine with the vizier unmasked.' }
+    ])
+
+    expect(isError).toBe(false)
+    expect(payload).toMatchObject({
+      version: 2,
+      stakes: 'If the cult wins, Ashford burns first.',
+      added: ['beat:the-siege-breaks']
+    })
+    expect(titles()).toEqual([
+      ['The Road Out', ['Ambush at the Mill']],
+      ['The Long Night', ['The Siege Breaks']],
+      ['The Burning Hills', ['The Vizier Is the Patron', 'The Shrine Falls']]
+    ])
+    expect(call('arc').payload.current.acts[2].purpose).toBe(
+      'Reach the shrine with the vizier unmasked.'
+    )
+    expect(host.events(folder).at(-1)).toMatchObject({ kind: 'arc_revised', dmOnly: true })
+  })
+
+  it('refuses to edit or move a reached or abandoned Beat, and applies none of the ops', () => {
+    call('resolve_beat', {
+      beat: 'beat:ambush-at-the-ford',
+      version: version(),
+      to: 'abandoned',
+      reason: 'The ford flooded.'
+    })
+    const before = titles()
+
+    for (const op of [
+      { op: 'edit_beat', beat: 'beat:ambush-at-the-ford', description: 'Changed.' },
+      { op: 'move_beat', beat: 'beat:ambush-at-the-ford', act: 2 }
+    ]) {
+      const refused = revise([{ op: 'edit_arc', title: 'Renamed' }, op])
+      expect(refused.payload.code).toBe('beat_not_pending')
+    }
+    expect(titles()).toEqual(before)
+    expect(call('arc').payload.current).toMatchObject({ title: 'The Ember Relic', version: 2 })
+  })
+
+  it('refuses anything after the final Act', () => {
+    for (const op of [
+      { op: 'add_act', before: 3, name: 'Epilogue', purpose: 'Aftermath.' },
+      { op: 'add_beat', act: 3, title: 'Later', description: 'After the end.' },
+      { op: 'move_beat', beat: 'beat:the-shrine-falls', act: 3 },
+      { op: 'edit_act', act: 3, name: 'Epilogue' }
+    ]) {
+      expect(revise([op]).payload.code).toBe('after_final_act')
+    }
+  })
+
+  it('has no delete op: a dropped Beat is abandoned instead', () => {
+    expect(revise([{ op: 'delete_beat', beat: 'beat:the-shrine-falls' }]).payload.code).toBe(
+      'invalid_input'
+    )
+  })
+
+  it('refuses a stale version', () => {
+    call('revise_arc', { version: 1, ops: [{ op: 'edit_arc', title: 'Once' }] })
+    const stale = call('revise_arc', { version: 1, ops: [{ op: 'edit_arc', title: 'Twice' }] })
+    expect(stale.payload.code).toBe('stale_version')
+  })
+})

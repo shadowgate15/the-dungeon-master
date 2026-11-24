@@ -5,12 +5,14 @@ import {
   currentArc,
   pastArcs,
   resolveBeat,
-  retireArc
+  retireArc,
+  reviseArc
 } from '../story/arc'
 import { readTool, ToolError, writeTool } from './contract'
 
 const words = z.string().trim().min(1)
 const version = z.number().int().positive()
+const position = z.number().int().positive()
 
 /** Arc changes point the DM at the replanning procedure. */
 const ARC_REVIEW = 'arc-review'
@@ -54,6 +56,66 @@ export const arcTools = [
             abandoned: result.abandoned.map((b) => b.handle),
             concluded
           },
+          dmOnly: true
+        }
+      }
+    }
+  }),
+  writeTool({
+    name: 'revise_arc',
+    description:
+      'Revise the current Arc in one atomic call: edit its title, premise, stakes or resolution; edit an Act (numbered from 1) or add one before an existing Act; edit, add or move pending Beats (positions within an Act from 1, the end by default). Reached and abandoned Beats stay as history, nothing goes after the final Act, and there is no delete: abandon a dropped Beat with resolve_beat. An unplanned turning point is a new Beat you then resolve as reached. Never reaches the Player.',
+    input: z.object({
+      version,
+      ops: z
+        .array(
+          z.discriminatedUnion('op', [
+            z.object({
+              op: z.literal('edit_arc'),
+              title: words.optional(),
+              premise: words.optional(),
+              stakes: words.optional(),
+              resolution: words.optional()
+            }),
+            z.object({
+              op: z.literal('edit_act'),
+              act: position,
+              name: words.optional(),
+              purpose: words.optional()
+            }),
+            z.object({ op: z.literal('add_act'), before: position, name: words, purpose: words }),
+            z.object({
+              op: z.literal('edit_beat'),
+              beat: words,
+              title: words.optional(),
+              description: words.optional()
+            }),
+            z.object({
+              op: z.literal('add_beat'),
+              act: position,
+              position: position.optional(),
+              title: words,
+              description: words
+            }),
+            z.object({
+              op: z.literal('move_beat'),
+              beat: words,
+              act: position,
+              position: position.optional()
+            })
+          ])
+        )
+        .min(1)
+    }),
+    activity: null,
+    run: (ctx, input) => {
+      const result = reviseArc(ctx, input)
+      return {
+        result,
+        event: {
+          kind: 'arc_revised',
+          summary: `Arc revised: ${input.ops.map((o) => o.op).join(', ')}`,
+          data: { ops: input.ops, added: result.added },
           dmOnly: true
         }
       }
