@@ -4,7 +4,12 @@ import { render } from 'vitest-browser-svelte'
 import { declarations } from './play-fixtures'
 import FloorComposer from './FloorComposer.svelte'
 
-const handlers = () => ({ onsend: vi.fn(), onedit: vi.fn(), onwithdraw: vi.fn() })
+const handlers = () => ({
+  onsend: vi.fn(),
+  ondone: vi.fn(),
+  onedit: vi.fn(),
+  onwithdraw: vi.fn()
+})
 
 describe('FloorComposer', () => {
   it('lists the pending Declarations with the Character each names', async () => {
@@ -74,5 +79,46 @@ describe('FloorComposer', () => {
     render(FloorComposer, { acting: null, declarations: [], ...handlers() })
 
     await expect.element(page.getByRole('textbox')).toBeDisabled()
+  })
+
+  it('closes the Floor with Done', async () => {
+    const h = handlers()
+    render(FloorComposer, { acting: 'Wren', declarations, ...h })
+
+    await page.getByRole('button', { name: 'Done' }).click()
+
+    expect(h.ondone).toHaveBeenCalledWith(null)
+  })
+
+  it('offers Done on an empty Floor, to hand the DM the initiative', async () => {
+    const h = handlers()
+    render(FloorComposer, { acting: 'Wren', declarations: [], ...h })
+
+    await page.getByRole('button', { name: 'Done' }).click()
+
+    expect(h.ondone).toHaveBeenCalledWith(null)
+  })
+
+  it('sends and closes the Floor on Ctrl+Enter', async () => {
+    const h = handlers()
+    render(FloorComposer, { acting: 'Wren', declarations: [], ...h })
+
+    await page.getByRole('textbox', { name: 'What does Wren do?' }).click()
+    await userEvent.keyboard('I pick the lock.{Control>}{Enter}{/Control}')
+
+    expect(h.ondone).toHaveBeenCalledWith('I pick the lock.')
+    expect(h.onsend).not.toHaveBeenCalled()
+    await expect.element(page.getByRole('textbox', { name: 'What does Wren do?' })).toHaveValue('')
+  })
+
+  it('keeps drafting open but holds Done while the DM is answering', async () => {
+    const h = handlers()
+    render(FloorComposer, { acting: 'Wren', declarations: [], awaiting: true, ...h })
+
+    await expect.element(page.getByRole('button', { name: 'Done' })).toBeDisabled()
+    const box = page.getByRole('textbox', { name: 'What does Wren do?' })
+    await box.fill('I wait.')
+    await page.getByRole('button', { name: 'Send' }).click()
+    expect(h.onsend).toHaveBeenCalledWith('I wait.')
   })
 })

@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto'
 import { DUNGEON_MASTER_HOME, DUNGEON_MASTER_PORT, DUNGEON_MASTER_VERSION } from '$app/env/private'
-import { library, sessions } from '../campaign'
+import { library, live, sessions } from '../campaign'
 import { userStateDir } from '../campaign/paths'
 import { writeRuntimeFile } from '../runtime'
 import { gameTools } from '../tools'
 import { createToolHost } from '../tools/host'
+import { createPlay, openSessionsOnAttach } from '../play/play'
 import { createBridgeApi } from './api'
 import { createChannels } from './channels'
 
@@ -12,10 +13,14 @@ import { createChannels } from './channels'
 const token = randomBytes(24).toString('hex')
 
 /** The game's tools, over the server's Campaign library. */
-export const host = createToolHost({ library, tools: gameTools })
+export const host = createToolHost({ library, tools: gameTools, publish: live.publish })
 
 /** Channel events for the DM, per Campaign folder. */
 export const channels = createChannels()
+
+/** The play turn: Done wakes the DM, and a DM attaching opens a Session. */
+export const play = createPlay({ library, channels, publish: live.publish })
+openSessionsOnAttach(sessions, play)
 
 export const bridgeApi = createBridgeApi({ library, host, channels, sessions, token })
 

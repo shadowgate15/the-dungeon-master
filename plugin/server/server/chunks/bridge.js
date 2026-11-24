@@ -1,5 +1,5 @@
-import { Bt as DUNGEON_MASTER_HOME, C as pageRevision, Dt as desc, E as NPC_STATUSES, Et as asc, Ft as sql, Ht as DUNGEON_MASTER_VERSION, Mt as isNull, Nt as like, Ot as and, Pt as or, S as fact, T as ENTITY_TYPES, Vt as DUNGEON_MASTER_PORT, b as entity, i as userStateDir, jt as isNotNull, kt as eq, l as campaign, n as canonicalFolder, v as event, w as worldLink, x as entityAlias } from "./paths.js";
-import { i as sessions, l as NotACampaignFolderError, n as library, v as SESSION_LIVE_MESSAGE } from "./campaign.js";
+import { At as and, C as entityAlias, D as ENTITY_TYPES, Dt as SOLO_PLAYER, E as worldLink, Ft as like, Ht as DUNGEON_MASTER_HOME, It as or, Lt as sql, Nt as isNotNull, O as NPC_STATUSES, Ot as asc, Pt as isNull, S as entity, T as pageRevision, Ut as DUNGEON_MASTER_PORT, Wt as DUNGEON_MASTER_VERSION, i as userStateDir, jt as eq, kt as desc, n as canonicalFolder, u as campaign, w as fact, y as event } from "./paths.js";
+import { _ as nextEventId, c as CampaignNotFoundError, g as logEvent, h as logActivity, i as sessions, l as NotACampaignFolderError, m as currentStamp, n as library, r as live, v as setAwaitingNarration, w as SESSION_LIVE_MESSAGE } from "./campaign.js";
 import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -59,6 +59,7 @@ function expectVersion(entity, given) {
 function readTool(tool) {
 	return {
 		...tool,
+		activity: tool.activity,
 		mutates: false,
 		run: tool.run
 	};
@@ -67,10 +68,44 @@ function readTool(tool) {
 function writeTool(tool) {
 	return {
 		...tool,
+		activity: tool.activity,
 		mutates: true,
 		run: tool.run
 	};
 }
+// src/lib/server/tools/narration-tools.ts
+/** The NPC a Narration is voiced by; refused unless the handle names a live NPC. */
+function speaker({ db }, handle) {
+	const found = db.select().from(entity).where(eq(entity.handle, handle)).get();
+	if (!found || found.type !== "npc" || found.retiredAt !== null) throw ToolError.unknownHandle(handle);
+	return found;
+}
+/** Telling the Players what happens. */
+var narrationTools = [writeTool({
+	name: "narrate",
+	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine.",
+	input: object({
+		text: string().trim().min(1),
+		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks")
+	}),
+	activity: null,
+	run: (ctx, { text, voice }) => {
+		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
+		setAwaitingNarration(ctx.db, null);
+		return {
+			result: { narrated: true },
+			event: {
+				kind: "narration",
+				summary: npc ? `${npc.name}: ${text}` : text,
+				data: {
+					text,
+					voice: npc?.handle ?? null,
+					voiceName: npc?.name ?? null
+				}
+			}
+		};
+	}
+})];
 // src/lib/server/tools/seed-tools.ts
 /** The Seed is one Entity per Campaign, so its handle is fixed. */
 var HANDLE$1 = "campaign";
@@ -93,6 +128,7 @@ var seedTools = [readTool({
 	name: "seed",
 	description: "Read the Campaign Seed (name, premise, tone, length and optional World details) and its version.",
 	input: object({}),
+	activity: "DM checks the Campaign Seed",
 	run: (ctx) => view(current(ctx))
 }), writeTool({
 	name: "set_seed",
@@ -101,6 +137,7 @@ var seedTools = [readTool({
 		version: int(),
 		...fields
 	}),
+	activity: "DM updates the Campaign Seed",
 	run: (ctx, { version, ...changes }) => {
 		const found = current(ctx);
 		expectVersion({
@@ -943,7 +980,103 @@ var worldTools = [
 ];
 // src/lib/server/tools/index.ts
 /** Every game tool the server exposes to the DM. */
-var gameTools = [...seedTools, ...worldTools];
+var gameTools = [
+	...seedTools,
+	...worldTools,
+	...narrationTools
+];
+// src/lib/server/dice.ts
+var MAX_COUNT = 100;
+var MAX_SIDES = 1e3;
+var EXPRESSION = /^(\d*)d(\d+)(?:([+-])(\d+))?$/;
+/** Parses `NdM+K` (count optional, modifier optional); throws on an invalid expression. */
+function parseDiceExpression(expression) {
+	const match = EXPRESSION.exec(expression.replace(/\s+/g, "").toLowerCase());
+	const count = match ? match[1] === "" ? 1 : Number(match[1]) : 0;
+	const sides = match ? Number(match[2]) : 0;
+	if (!match || count < 1 || count > MAX_COUNT || sides < 1 || sides > MAX_SIDES) throw new Error(`Invalid dice expression: ${JSON.stringify(expression)}`);
+	return {
+		count,
+		sides,
+		modifier: match[4] === void 0 ? 0 : Number(match[4]) * (match[3] === "-" ? -1 : 1)
+	};
+}
+/** mulberry32: a small, fast, seedable generator; plenty for dice. */
+function mulberry32(seed) {
+	let a = seed >>> 0;
+	return () => {
+		a = a + 1831565813 >>> 0;
+		let t = a;
+		t = Math.imul(t ^ t >>> 15, t | 1);
+		t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+		return ((t ^ t >>> 14) >>> 0) / 4294967296;
+	};
+}
+function createDice(source) {
+	const random = source === void 0 ? Math.random : typeof source === "number" ? mulberry32(source) : source.random;
+	const roll = (sides) => 1 + Math.floor(random() * sides);
+	const rollExpression = (expression, { crit = false } = {}) => {
+		const parsed = parseDiceExpression(expression);
+		const count = crit ? parsed.count * 2 : parsed.count;
+		const dice = Array.from({ length: count }, () => roll(parsed.sides));
+		const total = dice.reduce((sum, die) => sum + die, parsed.modifier);
+		return {
+			expression,
+			...parsed,
+			dice,
+			total,
+			crit
+		};
+	};
+	const rollD20 = (options) => {
+		if (!options) {
+			const die = roll(20);
+			return {
+				mode: "normal",
+				dice: [die],
+				kept: die
+			};
+		}
+		const dice = [roll(20), roll(20)];
+		const kept = options.mode === "advantage" ? Math.max(...dice) : Math.min(...dice);
+		return {
+			mode: options.mode,
+			reason: options.reason,
+			dice,
+			kept
+		};
+	};
+	return {
+		random,
+		roll,
+		d20: () => roll(20),
+		rollExpression,
+		rollD20
+	};
+}
+/** FNV-1a over the Campaign id, mixed with the base seed: one independent seed per Campaign. */
+function campaignSeed(seed, campaignId) {
+	let hash = (2166136261 ^ seed) >>> 0;
+	for (let i = 0; i < campaignId.length; i++) hash = Math.imul(hash ^ campaignId.charCodeAt(i), 16777619) >>> 0;
+	return hash;
+}
+/** With a seed, each Campaign's roller is seeded from it and the Campaign id; random otherwise. */
+function createCampaignDice(seed) {
+	const rollers = /* @__PURE__ */ new Map();
+	return { for(campaignId) {
+		let roller = rollers.get(campaignId);
+		if (!roller) {
+			roller = createDice(seed === void 0 ? void 0 : campaignSeed(seed, campaignId));
+			rollers.set(campaignId, roller);
+		}
+		return roller;
+	} };
+}
+var envSeed = process.env.DICE_SEED;
+var seed = envSeed !== void 0 && envSeed !== "" && Number.isFinite(Number(envSeed)) ? Number(envSeed) : void 0;
+createDice(seed);
+/** The process-wide per-Campaign rollers; seeded by `DICE_SEED` when it is a number. */
+var campaignDice = createCampaignDice(seed);
 // src/lib/server/tools/host.ts
 var json$1 = (value) => ({ content: [{
 	type: "text",
@@ -958,10 +1091,6 @@ var failure = (e) => ({
 	}),
 	isError: true
 });
-/** The id the next Event will get. The log is append-only, so ids are never reused. */
-function nextEventId(db) {
-	return (db.get(sql`SELECT max(${event.id}) AS id FROM ${event}`)?.id ?? 0) + 1;
-}
 /** The output of a tool that enters a situation, pointing at the skill to load. */
 function withSkill(result, skill) {
 	if (!skill) return result;
@@ -972,54 +1101,89 @@ function withSkill(result, skill) {
 		next: `Load skill ${name} before continuing.`
 	};
 }
+/** The Player-safe activity line for a successful call, or null for none. */
+function activityLine(tool, input, result, dmOnly) {
+	const { activity } = tool;
+	if (activity === void 0) {
+		if (!tool.mutates) return "DM checks their notes";
+		return dmOnly ? null : "DM updates the game";
+	}
+	return typeof activity === "function" ? activity(input, result) : activity;
+}
 /**
 * The game's tools, called by name against a Campaign folder. Every call follows the contract in
 * `./contract`: validated input, `{code, message, next}` refusals, and for mutating tools one
 * transaction that logs exactly one Event.
 */
-function createToolHost({ library, tools, stamp = () => ({
-	sessionId: null,
-	minute: 0
-}), now = Date.now }) {
+function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, dice = (id) => campaignDice.for(id), publish = () => {} }) {
 	const byName = new Map(tools.map((t) => [t.name, t]));
 	function campaignDb(folder) {
 		const db = library.databaseFor(folder);
-		if (!db) throw new ToolError("not_a_campaign", `${folder} is not a registered Campaign folder`, "Ask the Player to open or create the Campaign in the web UI, then run dm in its folder");
-		return db;
+		const entry = library.entryAt(folder);
+		if (!db || !entry) throw new ToolError("not_a_campaign", `${folder} is not a registered Campaign folder`, "Ask the Player to open or create the Campaign in the web UI, then run dm in its folder");
+		return {
+			db,
+			campaignId: entry.id
+		};
 	}
-	function run(tool, db, args) {
+	/** Runs one call; returns its result and whether the Player's timeline changed. */
+	function run(tool, folder, args) {
+		const { db, campaignId } = campaignDb(folder);
 		const parsed = tool.input.safeParse(args ?? {});
 		if (!parsed.success) throw ToolError.invalidInput(tool.name, prettifyError(parsed.error));
-		if (!tool.mutates) return tool.run({
-			db,
-			stamp: {
-				...stamp(db),
-				eventId: null
-			}
-		}, parsed.data);
+		const at = now();
+		const context = {
+			folder,
+			campaignId,
+			dice: dice(campaignId),
+			now: at
+		};
+		if (!tool.mutates) {
+			const result = tool.run({
+				...context,
+				db,
+				stamp: {
+					...stamp(db),
+					eventId: null
+				}
+			}, parsed.data);
+			const line = activityLine(tool, parsed.data, result, false);
+			if (line) logActivity(db, line, { at });
+			return {
+				result,
+				campaignId,
+				changed: line !== null
+			};
+		}
 		return db.transaction((tx) => {
-			const { sessionId, minute } = stamp(tx);
+			const current = stamp(tx);
 			const eventId = nextEventId(tx);
 			const { result, skill, event: logged } = tool.run({
+				...context,
 				db: tx,
 				stamp: {
-					sessionId,
-					minute,
+					...current,
 					eventId
 				}
 			}, parsed.data);
-			tx.insert(event).values({
-				id: eventId,
-				sessionId,
-				minute,
+			logEvent(tx, {
 				tool: tool.name,
-				kind: logged.kind,
-				summary: logged.summary,
-				data: logged.data ?? null,
-				dmOnly: logged.dmOnly ?? false,
-				createdAt: now()
-			}).run();
-			return withSkill(result, skill);
+				...logged
+			}, {
+				stamp: current,
+				at,
+				id: eventId
+			});
+			const line = activityLine(tool, parsed.data, result, logged.dmOnly ?? false);
+			if (line) logActivity(tx, line, {
+				at,
+				afterEvent: eventId
+			});
+			return {
+				result: withSkill(result, skill),
+				campaignId,
+				changed: true
+			};
 		});
 	}
 	return {
@@ -1036,7 +1200,12 @@ function createToolHost({ library, tools, stamp = () => ({
 			try {
 				const tool = byName.get(name);
 				if (!tool) throw new ToolError("unknown_tool", `There is no tool named ${name}`, "Use a listed tool");
-				return json$1(run(tool, campaignDb(folder), args));
+				const { result, campaignId, changed } = run(tool, folder, args);
+				if (changed) publish({
+					type: "timeline",
+					campaign: campaignId
+				});
+				return json$1(result);
 			} catch (e) {
 				if (e instanceof ToolError) return failure(e);
 				throw e;
@@ -1044,7 +1213,7 @@ function createToolHost({ library, tools, stamp = () => ({
 		},
 		/** The Campaign's Event log, oldest first. */
 		events(folder) {
-			return campaignDb(folder).select().from(event).orderBy(asc(event.id)).all().map((e) => ({
+			return campaignDb(folder).db.select().from(event).orderBy(asc(event.id)).all().map((e) => ({
 				id: e.id,
 				session: e.sessionId,
 				minute: e.minute,
@@ -1056,6 +1225,65 @@ function createToolHost({ library, tools, stamp = () => ({
 			}));
 		}
 	};
+}
+// src/lib/server/play/play.ts
+/**
+* A closed Floor as the DM hears it: one `floor` channel event, one body line per Declaration in
+* send order (`[d1 Wren · player] picks the lock`). An empty body hands the DM the initiative.
+*/
+function floorEvent(closed) {
+	return {
+		content: closed.declarations.map((d, i) => `[d${i + 1} ${d.characterName} · ${d.player}] ${d.text}`).join("\n"),
+		meta: {
+			kind: "floor",
+			floor_id: closed.floor,
+			players: closed.players.join(",")
+		}
+	};
+}
+/**
+* The play turn across the server: the Players' Done wakes the DM over its channel, Sessions open
+* as the DM attaches, and the Player's timeline is read from the Event log.
+*/
+function createPlay({ library, channels, publish }) {
+	function folderOf(campaignId) {
+		const entry = library.get(campaignId);
+		if (!entry) throw new CampaignNotFoundError("Campaign not found");
+		return entry.path;
+	}
+	return {
+		/**
+		* The Player presses Done. When it closes the Floor, the DM gets exactly one floor event and
+		* the Campaign awaits Narration.
+		*/
+		done(campaignId, player = SOLO_PLAYER) {
+			const outcome = library.floor(campaignId).done(player);
+			if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome));
+			publish({
+				type: "floor",
+				campaign: campaignId
+			});
+			if (outcome.closed) publish({
+				type: "timeline",
+				campaign: campaignId
+			});
+			return outcome;
+		},
+		/** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */
+		openSession(campaignId) {
+			return library.record(campaignId).openSession();
+		},
+		/** The Player's timeline and whether the DM is working on a turn. */
+		timeline(campaignId) {
+			return library.record(campaignId).timeline();
+		}
+	};
+}
+/** Opens a Campaign's Session whenever a DM attaches to it; returns the unsubscribe. */
+function openSessionsOnAttach(sessions, play) {
+	return sessions.onChange(({ campaign, attached }) => {
+		if (attached) play.openSession(campaign);
+	});
 }
 var json = (body, status = 200) => new Response(JSON.stringify(body), {
 	status,
@@ -1182,10 +1410,18 @@ var token = randomBytes(24).toString("hex");
 /** The game's tools, over the server's Campaign library. */
 var host = createToolHost({
 	library,
-	tools: gameTools
+	tools: gameTools,
+	publish: live.publish
 });
 /** Channel events for the DM, per Campaign folder. */
 var channels = createChannels();
+/** The play turn: Done wakes the DM, and a DM attaching opens a Session. */
+var play = createPlay({
+	library,
+	channels,
+	publish: live.publish
+});
+openSessionsOnAttach(sessions, play);
 var bridgeApi = createBridgeApi({
 	library,
 	host,
@@ -1204,6 +1440,6 @@ function announceServer() {
 		version: DUNGEON_MASTER_VERSION || void 0
 	});
 }
-export { port as a, host as i, bridgeApi as n, channels as r, announceServer as t };
+export { play as a, host as i, bridgeApi as n, port as o, channels as r, announceServer as t };
 
 //# sourceMappingURL=bridge.js.map

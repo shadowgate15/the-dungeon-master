@@ -1,7 +1,7 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
 import { _ as clsx, c as ensure_array_like, f as stringify, g as attr, l as head, n as attr_style, o as derived, r as attributes, t as attr_class, y as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/paths2.js";
-import { i as createQuery, n as createSessionsQuery, r as floorQueryKey, t as DmBadge } from "../../../../../chunks/DmBadge.js";
+import { a as createQuery, i as timelineQueryKey, n as createSessionsQuery, r as floorQueryKey, t as DmBadge } from "../../../../../chunks/DmBadge.js";
 import { t as Badge } from "../../../../../chunks/Badge.js";
 import { n as Alert, r as Link, t as Button } from "../../../../../chunks/Button.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
@@ -146,10 +146,11 @@ function FloorComposer($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/**
 		* The pinned composer: the open Floor's pending tray above a box that adds a Declaration for the
-		* acting Character. Every tray entry can be edited or withdrawn until the Floor closes. A pure
-		* view; the console wires the callbacks to the server.
+		* acting Character. Every tray entry can be edited or withdrawn until the Floor closes. Done
+		* closes the Floor (empty or not); Ctrl+Enter is Send & Done. While the DM is answering, drafting
+		* stays open but Done waits. A pure view; the console wires the callbacks to the server.
 		*/
-		let { acting, declarations, onsend, onedit, onwithdraw, disabled = false } = $$props;
+		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false } = $$props;
 		let draft = "";
 		let editing = null;
 		const blocked = derived(() => disabled || acting === null);
@@ -160,8 +161,17 @@ function FloorComposer($$renderer, $$props) {
 			onsend(text);
 			draft = "";
 		}
+		function done() {
+			if (disabled || awaiting) return;
+			const text = draft.trim();
+			ondone(text && !blocked() ? text : null);
+			if (text && !blocked()) draft = "";
+		}
 		function onkeydown(e) {
-			if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+			if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) {
+				e.preventDefault();
+				done();
+			} else if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
 				e.preventDefault();
 				send();
 			}
@@ -232,7 +242,7 @@ function FloorComposer($$renderer, $$props) {
 					$$settled = false;
 				}
 			});
-			$$renderer.push(`<!----> <div class="flex items-center justify-end gap-2"><span class="mr-auto text-xs text-muted">Enter adds to the tray · Shift+Enter for a new line</span> `);
+			$$renderer.push(`<!----> <div class="flex items-center justify-end gap-2"><span class="mr-auto text-xs text-muted">Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span> `);
 			Button($$renderer, {
 				size: "sm",
 				variant: "secondary",
@@ -240,6 +250,16 @@ function FloorComposer($$renderer, $$props) {
 				disabled: blocked() || !draft.trim(),
 				children: ($$renderer) => {
 					$$renderer.push(`<!---->Send`);
+				},
+				$$slots: { default: true }
+			});
+			$$renderer.push(`<!----> `);
+			Button($$renderer, {
+				size: "sm",
+				onclick: done,
+				disabled: disabled || awaiting,
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->Done`);
 				},
 				$$slots: { default: true }
 			});
@@ -255,35 +275,58 @@ function FloorComposer($$renderer, $$props) {
 }
 // src/lib/play/Timeline.svelte
 function Timeline($$renderer, $$props) {
-	/**
-	* The console's centre: the Show filters above one timeline, DM on the left and the Player on
-	* the right. Narration, rolls and DM activity join it in later slices; until then it says the
-	* story has not started.
-	*/
-	let { children } = $$props;
-	let show = {
-		story: true,
-		rolls: true,
-		dm: true
-	};
-	const filters = [
-		["story", "Story"],
-		["rolls", "Rolls"],
-		["dm", "DM activity"]
-	];
-	$$renderer.push(`<div role="group" aria-label="Show" class="flex items-center gap-3 text-xs"><span class="text-muted">Show</span> <!--[-->`);
-	const each_array = ensure_array_like(filters);
-	for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
-		let [key, label] = each_array[$$index];
-		$$renderer.push(`<label class="flex items-center gap-1"><input type="checkbox"${attr("checked", show[key], true)} class="rounded"/> ${escape_html(label)}</label>`);
-	}
-	$$renderer.push(`<!--]--></div> <ol aria-label="Timeline" class="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto rounded-panel border border-border bg-surface p-3">`);
-	if (children) {
-		$$renderer.push("<!--[0-->");
-		children($$renderer);
-		$$renderer.push(`<!---->`);
-	} else $$renderer.push(`<!--[-1--><li class="m-auto text-sm text-muted">Nothing has happened yet.</li>`);
-	$$renderer.push(`<!--]--></ol>`);
+	$$renderer.component(($$renderer) => {
+		/**
+		* The console's centre: the Show filters above one timeline, DM on the left and the Player on
+		* the right. Narrations (with the NPC voicing them), Declarations from closed Floors and muted
+		* `⚙ DM …` activity lines; while the DM works on a turn, a `Ns / ~20s` progress bar.
+		*/
+		let { entries, awaitingSince } = $$props;
+		let show = {
+			story: true,
+			rolls: true,
+			dm: true
+		};
+		const filters = [
+			["story", "Story"],
+			["rolls", "Rolls"],
+			["dm", "DM activity"]
+		];
+		const shown = derived(() => entries.filter((e) => e.type === "activity" ? show.dm : show.story));
+		let now = Date.now();
+		const elapsed = derived(() => awaitingSince === null ? 0 : Math.max(0, Math.floor((now - awaitingSince) / 1e3)));
+		$$renderer.push(`<div role="group" aria-label="Show" class="flex items-center gap-3 text-xs"><span class="text-muted">Show</span> <!--[-->`);
+		const each_array = ensure_array_like(filters);
+		for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
+			let [key, label] = each_array[$$index];
+			$$renderer.push(`<label class="flex items-center gap-1"><input type="checkbox"${attr("checked", show[key], true)} class="rounded"/> ${escape_html(label)}</label>`);
+		}
+		$$renderer.push(`<!--]--></div> <ol aria-label="Timeline" class="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto rounded-panel border border-border bg-surface p-3">`);
+		const each_array_1 = ensure_array_like(shown());
+		if (each_array_1.length !== 0) {
+			$$renderer.push("<!--[-->");
+			for (let $$index_1 = 0, $$length = each_array_1.length; $$index_1 < $$length; $$index_1++) {
+				let entry = each_array_1[$$index_1];
+				if (entry.type === "narration") {
+					$$renderer.push(`<!--[0--><li class="max-w-[85%] self-start rounded-panel bg-raised px-3 py-2 text-sm">`);
+					if (entry.voice) $$renderer.push(`<!--[0--><span class="block text-xs font-semibold text-primary">${escape_html(entry.voice)}</span>`);
+					else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
+				} else if (entry.type === "declaration") $$renderer.push(`<!--[1--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm"><span class="block text-xs font-semibold text-muted">${escape_html(entry.character)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
+				else $$renderer.push(`<!--[-1--><li class="self-start text-xs text-muted">⚙ ${escape_html(entry.text)}</li>`);
+				$$renderer.push(`<!--]-->`);
+			}
+		} else {
+			$$renderer.push("<!--[!-->");
+			if (entries.length === 0) $$renderer.push(`<!--[0--><li class="m-auto text-sm text-muted">Nothing has happened yet.</li>`);
+			else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]-->`);
+		}
+		$$renderer.push(`<!--]--></ol> `);
+		if (awaitingSince !== null) $$renderer.push(`<!--[0--><div class="flex items-center gap-2 text-xs text-muted"><div role="progressbar" aria-label="The DM is working" aria-valuemin="0"${attr("aria-valuemax", 20)}${attr("aria-valuenow", Math.min(elapsed(), 20))} class="h-1.5 flex-1 overflow-hidden rounded-full bg-border"><div class="h-full bg-primary transition-[width]"${attr_style("", { width: `${stringify(Math.min(100, elapsed() / 20 * 100))}%` })}></div></div> <span>${escape_html(elapsed())}s / ~${escape_html(20)}s</span></div>`);
+		else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]-->`);
+	});
 }
 // src/lib/play/floor-client.ts
 /** A Floor change the server refused, with its message for the Player. */
@@ -300,7 +343,19 @@ function createFloorQuery(campaign, initial) {
 		initialData: initial()
 	}));
 }
-/** Send, edit and withdraw on the Campaign's open Floor; each refreshes the Floor query. */
+/** The Campaign's timeline and awaiting Narration, starting from the server-rendered one. */
+function createTimelineQuery(campaign, initial) {
+	return createQuery(() => ({
+		queryKey: timelineQueryKey(campaign()),
+		queryFn: async () => {
+			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/timeline`);
+			if (!res.ok) throw new FloorChangeError("The timeline could not be loaded");
+			return await res.json();
+		},
+		initialData: initial()
+	}));
+}
+/** Send, edit, withdraw and Done on the Campaign's open Floor; each refreshes the Floor and timeline. */
 function floorActions(campaign) {
 	const queryClient = useQueryClient();
 	const base = () => `/api/campaigns/${encodeURIComponent(campaign())}/floor/declarations`;
@@ -309,7 +364,7 @@ function floorActions(campaign) {
 			...init,
 			headers: init.body ? { "content-type": "application/json" } : void 0
 		});
-		await queryClient.invalidateQueries({ queryKey: floorQueryKey(campaign()) });
+		await Promise.all([queryClient.invalidateQueries({ queryKey: floorQueryKey(campaign()) }), queryClient.invalidateQueries({ queryKey: timelineQueryKey(campaign()) })]);
 		if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The Floor could not be changed");
 		return res;
 	}
@@ -331,6 +386,10 @@ function floorActions(campaign) {
 		},
 		async withdraw(id) {
 			await call(`${base()}/${encodeURIComponent(id)}`, { method: "DELETE" });
+		},
+		/** Done: closes the Floor (once every Player has pressed it) and wakes the DM. */
+		async done() {
+			await call(`/api/campaigns/${encodeURIComponent(campaign())}/floor/done`, { method: "POST" });
 		}
 	};
 }
@@ -340,7 +399,15 @@ function _page($$renderer, $$props) {
 		let { data } = $$props;
 		const sessions = createSessionsQuery(() => data.attached);
 		const floor = createFloorQuery(() => data.campaign.id, () => data.floor);
+		const timeline = createTimelineQuery(() => data.campaign.id, () => data.timeline);
 		const actions = floorActions(() => data.campaign.id);
+		/** Done, sending the composer's text first for Send & Done. */
+		function done(text) {
+			attempt(async () => {
+				if (text && acting()) await actions.send(acting().id, text);
+				await actions.done();
+			});
+		}
 		let picked = null;
 		const actors = derived(() => data.sheets.filter((s) => s.canAct));
 		const acting = derived(() => actors().find((s) => s.id === picked) ?? actors()[0] ?? null);
@@ -381,7 +448,10 @@ function _page($$renderer, $$props) {
 			onselect: (id) => picked = id
 		});
 		$$renderer.push(`<!----> <section aria-label="Story" class="flex min-h-0 flex-col gap-2">`);
-		Timeline($$renderer, {});
+		Timeline($$renderer, {
+			entries: timeline.data.entries,
+			awaitingSince: timeline.data.awaitingSince
+		});
 		$$renderer.push(`<!----> `);
 		if (problem) {
 			$$renderer.push("<!--[0-->");
@@ -408,7 +478,9 @@ function _page($$renderer, $$props) {
 			FloorComposer($$renderer, {
 				acting: acting()?.name ?? null,
 				declarations: floor.data.declarations,
+				awaiting: timeline.data.awaitingSince !== null,
 				onsend: (text) => acting() && attempt(() => actions.send(acting().id, text)),
+				ondone: done,
 				onedit: (id, text) => attempt(() => actions.edit(id, text)),
 				onwithdraw: (id) => attempt(() => actions.withdraw(id))
 			});

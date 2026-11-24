@@ -4,12 +4,21 @@ import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import type { OpenFloor, PendingDeclaration } from '#lib/play/floor.ts'
 import type { Database } from '../db/connect'
 import { campaign, character, declaration, floor } from '../db/schema'
+import { awaitingNarrationSince, logEvent, setAwaitingNarration } from '../play/log'
 
 /** The Character can't put a Declaration on the Floor (unknown, dead or departed, not theirs). */
 export class DeclarationRefusedError extends Error {}
 
 /** The open Floor holds no Declaration with this id. */
 export class DeclarationNotFoundError extends Error {}
+
+/** Done while the DM is still answering the last closed Floor. */
+export class DmBusyError extends Error {}
+
+/** What Done did: closed the Floor (with what was on it), or recorded the Player as waiting. */
+export type DoneOutcome =
+  | { closed: false }
+  | { closed: true; floor: string; players: string[]; declarations: PendingDeclaration[] }
 
 /** Declarations are a sentence or a short paragraph, not an essay. */
 export const DECLARATION_MAX = 2000
@@ -21,6 +30,26 @@ export const DECLARATION_MAX = 2000
 export function createFloor(db: Database, now: () => number = Date.now) {
   function openFloorId(): string | undefined {
     return db.select({ id: floor.id }).from(floor).where(eq(floor.state, 'open')).get()?.id
+  }
+
+  function openFloor(at: number): string {
+    return (
+      openFloorId() ??
+      db
+        .insert(floor)
+        .values({
+          campaignId: db.select({ id: campaign.id }).from(campaign).get()!.id,
+          createdAt: at
+        })
+        .returning({ id: floor.id })
+        .get().id
+    )
+  }
+
+  /** The Players at the table: everyone with a Character who can act. */
+  function playersAtTable(): string[] {
+    const actors = db.select().from(character).all().filter(canAct)
+    return [...new Set(actors.map((c) => c.controllingPlayer))]
   }
 
   function cleanText(text: unknown): string {
@@ -44,26 +73,29 @@ export function createFloor(db: Database, now: () => number = Date.now) {
     if (!found) throw new DeclarationNotFoundError('Declaration not found on the open Floor')
   }
 
+  /** The open Floor (empty until something is sent). */
+  function current(): OpenFloor {
+    const floorId = openFloorId()
+    if (!floorId) return { declarations: [] }
+    const declarations = db
+      .select({
+        id: declaration.id,
+        character: declaration.characterId,
+        characterName: character.name,
+        player: declaration.player,
+        text: declaration.text
+      })
+      .from(declaration)
+      .innerJoin(character, eq(character.id, declaration.characterId))
+      .where(eq(declaration.floorId, floorId))
+      .orderBy(asc(declaration.position))
+      .all()
+    return { declarations }
+  }
+
   return {
     /** The open Floor (empty until something is sent). */
-    current(): OpenFloor {
-      const floorId = openFloorId()
-      if (!floorId) return { declarations: [] }
-      const declarations = db
-        .select({
-          id: declaration.id,
-          character: declaration.characterId,
-          characterName: character.name,
-          player: declaration.player,
-          text: declaration.text
-        })
-        .from(declaration)
-        .innerJoin(character, eq(character.id, declaration.characterId))
-        .where(eq(declaration.floorId, floorId))
-        .orderBy(asc(declaration.position))
-        .all()
-      return { declarations }
-    },
+    current,
 
     /**
      * Puts a Declaration for one Character on the open Floor, opening it if none is. Refused for a
@@ -87,16 +119,7 @@ export function createFloor(db: Database, now: () => number = Date.now) {
           throw new DeclarationRefusedError(`${actor.name} is not your Character`)
         }
         const at = now()
-        const floorId =
-          openFloorId() ??
-          db
-            .insert(floor)
-            .values({
-              campaignId: db.select({ id: campaign.id }).from(campaign).get()!.id,
-              createdAt: at
-            })
-            .returning({ id: floor.id })
-            .get().id
+        const floorId = openFloor(at)
         const last = db
           .select({ n: max(declaration.position) })
           .from(declaration)
@@ -122,6 +145,54 @@ export function createFloor(db: Database, now: () => number = Date.now) {
           player,
           text: clean
         }
+      })
+    },
+
+    /**
+     * The Player presses Done. Once every Player at the table has, the Floor closes in one
+     * transaction: its Declarations are logged (stamped with the Session) in send order and the
+     * Campaign awaits Narration. An empty Floor closes too, handing the DM the initiative. Refused
+     * while the DM is still answering the last Floor.
+     */
+    done(player: string = SOLO_PLAYER): DoneOutcome {
+      return db.transaction((): DoneOutcome => {
+        if (awaitingNarrationSince(db) !== null) {
+          throw new DmBusyError('The DM is still answering the last turn')
+        }
+        const at = now()
+        const floorId = openFloor(at)
+        const row = db.select().from(floor).where(eq(floor.id, floorId)).get()!
+        const done = row.done.includes(player) ? row.done : [...row.done, player]
+        if (!playersAtTable().every((p) => done.includes(p))) {
+          db.update(floor).set({ done }).where(eq(floor.id, floorId)).run()
+          return { closed: false }
+        }
+        const declarations = current().declarations
+        db.update(floor)
+          .set({ done, state: 'closed', closedAt: at })
+          .where(eq(floor.id, floorId))
+          .run()
+        for (const d of declarations) {
+          logEvent(
+            db,
+            {
+              tool: 'done',
+              kind: 'declaration',
+              summary: `${d.characterName}: ${d.text}`,
+              data: {
+                floor: floorId,
+                declaration: d.id,
+                character: d.character,
+                characterName: d.characterName,
+                player: d.player,
+                text: d.text
+              }
+            },
+            { at }
+          )
+        }
+        setAwaitingNarration(db, at)
+        return { closed: true, floor: floorId, players: done, declarations }
       })
     },
 

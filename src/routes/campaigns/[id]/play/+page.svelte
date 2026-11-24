@@ -5,7 +5,12 @@
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
   import Timeline from '#lib/play/Timeline.svelte'
-  import { createFloorQuery, floorActions, FloorChangeError } from '#lib/play/floor-client.ts'
+  import {
+    createFloorQuery,
+    createTimelineQuery,
+    floorActions,
+    FloorChangeError
+  } from '#lib/play/floor-client.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Link from '#lib/ui/Link.svelte'
 
@@ -16,7 +21,19 @@
     () => data.campaign.id,
     () => data.floor
   )
+  const timeline = createTimelineQuery(
+    () => data.campaign.id,
+    () => data.timeline
+  )
   const actions = floorActions(() => data.campaign.id)
+
+  /** Done, sending the composer's text first for Send & Done. */
+  function done(text: string | null) {
+    attempt(async () => {
+      if (text && acting) await actions.send(acting.id, text)
+      await actions.done()
+    })
+  }
 
   // The selected sheet tab is the acting Character: the first who can act, until the Player picks.
   let picked = $state<string | null>(null)
@@ -57,7 +74,7 @@
     />
 
     <section aria-label="Story" class="flex min-h-0 flex-col gap-2">
-      <Timeline />
+      <Timeline entries={timeline.data.entries} awaitingSince={timeline.data.awaitingSince} />
       {#if problem}<Alert variant="danger">{problem}</Alert>{/if}
       {#if archived}
         <Alert variant="warning">This Campaign is archived. Restore it to play.</Alert>
@@ -65,7 +82,9 @@
         <FloorComposer
           acting={acting?.name ?? null}
           declarations={floor.data.declarations}
+          awaiting={timeline.data.awaitingSince !== null}
           onsend={(text) => acting && attempt(() => actions.send(acting.id, text))}
+          ondone={done}
           onedit={(id, text) => attempt(() => actions.edit(id, text))}
           onwithdraw={(id) => attempt(() => actions.withdraw(id))}
         />

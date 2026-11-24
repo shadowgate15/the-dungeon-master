@@ -4797,6 +4797,7 @@ var worldLink = sqliteTable("world_link", {
 var schema_exports = /* @__PURE__ */ __exportAll({
 	ability: () => ability,
 	abilityScoreMethod: () => abilityScoreMethod,
+	activityLine: () => activityLine,
 	alignment: () => alignment,
 	background: () => background,
 	backgroundEquipment: () => backgroundEquipment,
@@ -4848,6 +4849,7 @@ var schema_exports = /* @__PURE__ */ __exportAll({
 	raceTrait: () => raceTrait,
 	ruleSection: () => ruleSection,
 	rulesDataset: () => rulesDataset,
+	session: () => session,
 	skill: () => skill,
 	spell: () => spell,
 	spellClass: () => spellClass,
@@ -4884,7 +4886,9 @@ var campaign = sqliteTable("campaign", {
 	version: integer("version").notNull().default(1),
 	createdAt: integer("created_at").notNull(),
 	updatedAt: integer("updated_at").notNull(),
-	archivedAt: integer("archived_at")
+	archivedAt: integer("archived_at"),
+	/** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
+	awaitingNarrationSince: integer("awaiting_narration_since")
 }, () => [
 	check("campaign_tone_check", oneOf("tone", TONES)),
 	check("campaign_length_check", oneOf("length", LENGTHS)),
@@ -5067,6 +5071,8 @@ var floor = sqliteTable("floor", {
 	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
 	campaignId: campaignOwner(),
 	state: text("state", { enum: ["open", "closed"] }).notNull().default("open"),
+	/** The Players who have pressed Done on it; it closes once every Player at the table has. */
+	done: text("done", { mode: "json" }).$type().notNull().default([]),
 	createdAt: integer("created_at").notNull(),
 	closedAt: integer("closed_at")
 });
@@ -5085,6 +5091,29 @@ var declaration = sqliteTable("declaration", {
 	createdAt: integer("created_at").notNull(),
 	updatedAt: integer("updated_at").notNull()
 }, (t) => [index("declaration_floor_idx").on(t.floorId)]);
+/**
+* A Session: one sitting, begun when a DM attaches. At most one is open. Summary and threads are
+* written when it closes.
+*/
+var session = sqliteTable("session", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	number: integer("number").notNull().unique(),
+	startedAt: integer("started_at").notNull(),
+	closedAt: integer("closed_at"),
+	summary: text("summary"),
+	threads: text("threads", { mode: "json" }).$type()
+});
+/**
+* A Player-safe `⚙ DM …` line in the timeline: what the DM did with one tool call, written by the
+* server from the call (never the raw result). It sits after the Event `afterEvent` in the timeline.
+*/
+var activityLine = sqliteTable("activity_line", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	sessionId: text("session_id"),
+	afterEvent: integer("after_event").notNull(),
+	text: text("text").notNull(),
+	createdAt: integer("created_at").notNull()
+});
 // src/lib/server/db/connect.ts
 /** The only place connections are opened, so foreign keys are always enforced. */
 function openDatabase(url) {
@@ -6655,6 +6684,6 @@ function canonicalFolder(folder) {
 		return resolved;
 	}
 }
-export { magicItem as $, background as A, inArray as At, classProficiency as B, DUNGEON_MASTER_HOME as Bt, pageRevision as C, CUSTOM_BACKGROUND_FEATURE_MAX as Ct, ability as D, desc as Dt, NPC_STATUSES as E, asc as Et, choiceGroup as F, sql as Ft, damageType as G, classStartingEquipment as H, DUNGEON_MASTER_VERSION as Ht, choiceOption as I, Column as It, equipmentCategoryItem as J, equipment as K, choiceOptionItem as L, is as Lt, backgroundOption as M, isNull as Mt, backgroundOptionAlignment as N, like as Nt, abilityScoreMethod as O, and as Ot, backgroundProficiency as P, or as Pt, language as Q, classLevel as R, DATABASE_URL as Rt, fact as S, BACKSTORY_MAX as St, ENTITY_TYPES as T, SOLO_PLAYER as Tt, classTable as U, classSavingThrow as V, DUNGEON_MASTER_PORT as Vt, condition as W, equipmentWeaponProperty as X, equipmentContent as Y, feature as Z, declaration as _, subraceTrait as _t, seedRulesData as a, race as at, entity as b, weaponProperty as bt, openDatabase as c, raceTrait as ct, characterChoice as d, skill as dt, magicSchool as et, characterDraft as f, spell as ft, characterSpell as g, subraceAbilityBonus as gt, characterSkill as h, subrace as ht, userStateDir as i, proficiency as it, backgroundEquipment as j, isNotNull as jt, alignment as k, eq as kt, campaign as l, ruleSection as lt, characterItem as m, subclass as mt, canonicalFolder as n, monsterConditionImmunity as nt, loadRulesDataset as o, raceAbilityBonus as ot, characterEquipment as p, spellClass as pt, equipmentCategory as q, defaultCampaignRoot as r, monsterProficiency as rt, migrateDatabase as s, raceLanguage as st, campaignDatabasePath as t, monster as tt, character as u, rulesDataset as ut, event as v, trait as vt, worldLink as w, CUSTOM_BACKGROUND_SLUG as wt, entityAlias as x, ABILITY_METHODS as xt, floor as y, traitProficiency as yt, classLevelFeature as z, DUNGEON_MASTER_CAMPAIGNS as zt };
+export { feature as $, abilityScoreMethod as A, and as At, classLevel as B, DATABASE_URL as Bt, entityAlias as C, ABILITY_METHODS as Ct, ENTITY_TYPES as D, SOLO_PLAYER as Dt, worldLink as E, CUSTOM_BACKGROUND_SLUG as Et, backgroundOptionAlignment as F, like as Ft, classTable as G, classProficiency as H, DUNGEON_MASTER_HOME as Ht, backgroundProficiency as I, or as It, equipment as J, condition as K, choiceGroup as L, sql as Lt, background as M, inArray as Mt, backgroundEquipment as N, isNotNull as Nt, NPC_STATUSES as O, asc as Ot, backgroundOption as P, isNull as Pt, equipmentWeaponProperty as Q, choiceOption as R, Column as Rt, entity as S, weaponProperty as St, pageRevision as T, CUSTOM_BACKGROUND_FEATURE_MAX as Tt, classSavingThrow as U, DUNGEON_MASTER_PORT as Ut, classLevelFeature as V, DUNGEON_MASTER_CAMPAIGNS as Vt, classStartingEquipment as W, DUNGEON_MASTER_VERSION as Wt, equipmentCategoryItem as X, equipmentCategory as Y, equipmentContent as Z, characterSpell as _, subrace as _t, seedRulesData as a, monsterProficiency as at, floor as b, trait as bt, openDatabase as c, raceAbilityBonus as ct, character as d, ruleSection as dt, language as et, characterChoice as f, rulesDataset as ft, characterSkill as g, subclass as gt, characterItem as h, spellClass as ht, userStateDir as i, monsterConditionImmunity as it, alignment as j, eq as jt, ability as k, desc as kt, activityLine as l, raceLanguage as lt, characterEquipment as m, spell as mt, canonicalFolder as n, magicSchool as nt, loadRulesDataset as o, proficiency as ot, characterDraft as p, skill as pt, damageType as q, defaultCampaignRoot as r, monster as rt, migrateDatabase as s, race as st, campaignDatabasePath as t, magicItem as tt, campaign as u, raceTrait as ut, declaration as v, subraceAbilityBonus as vt, fact as w, BACKSTORY_MAX as wt, session as x, traitProficiency as xt, event as y, subraceTrait as yt, choiceOptionItem as z, is as zt };
 
 //# sourceMappingURL=paths.js.map

@@ -63,7 +63,9 @@ export const campaign = sqliteTable(
     version: integer('version').notNull().default(1),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
-    archivedAt: integer('archived_at')
+    archivedAt: integer('archived_at'),
+    /** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
+    awaitingNarrationSince: integer('awaiting_narration_since')
   },
   () => [
     check('campaign_tone_check', oneOf('tone', TONES)),
@@ -308,6 +310,8 @@ export const floor = sqliteTable('floor', {
   state: text('state', { enum: ['open', 'closed'] })
     .notNull()
     .default('open'),
+  /** The Players who have pressed Done on it; it closes once every Player at the table has. */
+  done: text('done', { mode: 'json' }).$type<string[]>().notNull().default([]),
   createdAt: integer('created_at').notNull(),
   closedAt: integer('closed_at')
 })
@@ -337,6 +341,33 @@ export const declaration = sqliteTable(
   },
   (t) => [index('declaration_floor_idx').on(t.floorId)]
 )
+
+/**
+ * A Session: one sitting, begun when a DM attaches. At most one is open. Summary and threads are
+ * written when it closes.
+ */
+export const session = sqliteTable('session', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  number: integer('number').notNull().unique(),
+  startedAt: integer('started_at').notNull(),
+  closedAt: integer('closed_at'),
+  summary: text('summary'),
+  threads: text('threads', { mode: 'json' }).$type<string[]>()
+})
+
+/**
+ * A Player-safe `⚙ DM …` line in the timeline: what the DM did with one tool call, written by the
+ * server from the call (never the raw result). It sits after the Event `afterEvent` in the timeline.
+ */
+export const activityLine = sqliteTable('activity_line', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionId: text('session_id'),
+  afterEvent: integer('after_event').notNull(),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull()
+})
 
 export * from './rules-schema'
 export * from './world-schema'

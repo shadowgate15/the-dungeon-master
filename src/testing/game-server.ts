@@ -9,6 +9,7 @@ import { createLiveUpdates, LIVE_STREAM } from '../lib/server/live'
 import { writeRuntimeFile } from '../lib/server/runtime'
 import { gameTools } from '../lib/server/tools'
 import { createToolHost } from '../lib/server/tools/host'
+import { createPlay, openSessionsOnAttach } from '../lib/server/play/play'
 
 /**
  * A game server for Vitest: the real Campaign library, tool host, bridge API and the browser's
@@ -18,10 +19,12 @@ export async function startTestGameServer({ home }: { home: string }) {
   const sessions = createSessions()
   const library = createCampaignLibrary({ home, live: (id) => sessions.attached(id) })
   const channels = createChannels()
-  const host = createToolHost({ library, tools: gameTools })
+  const live = createLiveUpdates({ sessions })
+  const host = createToolHost({ library, tools: gameTools, publish: live.publish })
+  const play = createPlay({ library, channels, publish: live.publish })
+  openSessionsOnAttach(sessions, play)
   const token = 'test-token'
   const api = createBridgeApi({ library, host, channels, sessions, token })
-  const live = createLiveUpdates({ sessions })
   const seen: string[] = []
 
   const server = http.createServer(async (req, res) => {
@@ -57,6 +60,7 @@ export async function startTestGameServer({ home }: { home: string }) {
     channels,
     sessions,
     host,
+    play,
 
     /** Requests the server has received, as `METHOD /path`. */
     requests: () => [...seen],
