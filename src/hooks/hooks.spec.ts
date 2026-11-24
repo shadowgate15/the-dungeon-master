@@ -115,6 +115,22 @@ describe('SessionStart', () => {
     expect(context).toContain('the-dungeon-master:session-opening')
   })
 
+  it('tells the DM what changed since the last sitting, once', async () => {
+    const wren = addCharacter(server.library, campaignId, fighterDraft('Wren'))
+    server.library.party(campaignId).updateDetails(wren, { appearance: 'A scar across one brow.' })
+    const start = async () =>
+      (
+        (await hook('session-start', { hook_event_name: 'SessionStart', source: 'startup' })) as {
+          hookSpecificOutput: { additionalContext: string }
+        }
+      ).hookSpecificOutput.additionalContext
+
+    const context = await start()
+    expect(context).toContain('# Core block')
+    expect(context).toMatch(/^- char:wren v2: the Player edited Wren’s appearance$/m)
+    expect(await start()).not.toContain('Changed since last sitting')
+  })
+
   it('re-injects the core block after compaction, without reopening the session', async () => {
     const out = (await hook('session-start', {
       hook_event_name: 'SessionStart',
