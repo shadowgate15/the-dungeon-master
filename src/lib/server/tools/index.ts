@@ -1,3 +1,4 @@
+import { arcTools } from './arc-tools'
 import type { GameTool } from './contract'
 import { creationTools } from './creation-tools'
 import { knowledgeTools } from './knowledge-tools'
@@ -13,5 +14,6 @@ export const gameTools: GameTool[] = [
   ...worldTools,
   ...knowledgeTools,
   ...narrationTools,
-  ...sceneTools
+  ...sceneTools,
+  ...arcTools
 ]
