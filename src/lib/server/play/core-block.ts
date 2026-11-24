@@ -1,6 +1,7 @@
 import { formatClock } from '#lib/play/clock.ts'
 import type { Party } from '../character/party'
 import type { Queryable } from '../db/connect'
+import { currentArc, driftCount } from '../story/arc'
 import { slug } from '../world/names'
 import { characterRefs, currentMinute, present } from './scene'
 import { playSheets } from './sheets'
@@ -8,7 +9,7 @@ import { playSheets } from './sheets'
 /**
  * The core block: the ~300 tokens the DM needs to be oriented, injected whole at SessionStart and
  * after compaction. No Page text and no Facts. One function per part, so each part can be re-sent
- * whole when it changes; later tickets add the clock and open Call, the Arc line and Combat.
+ * whole when it changes; later tickets add the clock and open Call and Combat.
  */
 export type CoreBlockSource = { party: Party; db: Queryable }
 
@@ -51,6 +52,28 @@ export function npcsPart({ db }: CoreBlockSource): string {
   return ['NPCs present:', ...lines].join('\n')
 }
 
+/**
+ * The Arc line: the current Act (the Act of the first pending Beat) with its purpose, that Act's
+ * pending Beats by handle and title, the next Act's name, and the drift count. No descriptions.
+ */
+export function arcPart({ db }: CoreBlockSource): string {
+  const drift = `Declarations since the last Beat change: ${driftCount(db)}.`
+  const found = currentArc(db)
+  const at = found?.acts.findIndex((a) => a.beats.some((b) => b.state === 'pending')) ?? -1
+  if (!found || at === -1) return `Arc: No current Arc. ${drift}`
+  const current = found.acts[at]
+  const pending = current.beats
+    .filter((b) => b.state === 'pending')
+    .map((b) => `${b.handle} (${b.title})`)
+  const next = found.acts[at + 1]
+  return [
+    `Arc: Act ${current.number}, ${current.name}: ${current.purpose}`,
+    `- Pending: ${pending.join('; ')}`,
+    `- Next Act: ${next ? next.name : 'none, this is the final Act'}`,
+    `- ${drift}`
+  ].join('\n')
+}
+
 /** When lint last ran. */
 export function lintPart(): string {
   return 'Lint last ran: never.'
@@ -58,7 +81,12 @@ export function lintPart(): string {
 
 /** The whole core block. */
 export function coreBlock(source: CoreBlockSource): string {
-  return ['# Core block', scenePart(source), partyPart(source), npcsPart(source), lintPart()].join(
-    '\n'
-  )
+  return [
+    '# Core block',
+    scenePart(source),
+    partyPart(source),
+    npcsPart(source),
+    arcPart(source),
+    lintPart()
+  ].join('\n')
 }
