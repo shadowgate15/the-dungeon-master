@@ -115,3 +115,99 @@ describe('arc', () => {
     expect(call('arc').payload).not.toHaveProperty('history')
   })
 })
+
+describe('resolve_beat', () => {
+  beforeEach(() => call('create_arc', relicArc))
+
+  const resolve = (beat: string, to: 'reached' | 'abandoned', reason = 'Play settled it.') =>
+    call('resolve_beat', { beat, version: version(), to, reason })
+
+  it('stamps a pending Beat with its reason, the Event and the Session', () => {
+    const { isError, payload } = resolve('beat:the-vizier-is-the-patron', 'reached')
+
+    expect(isError).toBe(false)
+    expect(payload).toMatchObject({
+      resolved: { handle: 'beat:the-vizier-is-the-patron', state: 'reached' },
+      abandoned: [],
+      arc: { state: 'current', version: 2 }
+    })
+    const [, logged] = host.events(folder)
+    expect(logged).toMatchObject({ kind: 'beat_resolved', dmOnly: true })
+    const read = call('arc').payload.current.acts[0].beats[0]
+    expect(read).toMatchObject({
+      state: 'reached',
+      reason: 'Play settled it.',
+      event: logged.id
+    })
+  })
+
+  it('reaching a later-Act Beat abandons the earlier Acts’ pending Beats', () => {
+    resolve('beat:the-vizier-is-the-patron', 'reached')
+
+    const { payload } = resolve('beat:the-shrine-falls', 'reached')
+
+    expect(payload.abandoned).toEqual([
+      { handle: 'beat:ambush-at-the-ford', title: 'Ambush at the Ford', state: 'abandoned' }
+    ])
+  })
+
+  it('abandoning a later-Act Beat cascades nothing', () => {
+    const { payload } = resolve('beat:the-shrine-falls', 'abandoned')
+    expect(payload.abandoned).toEqual([])
+    expect(payload.arc.state).toBe('current')
+  })
+
+  it('concludes the Arc when no Beat is left pending and points at arc-review', () => {
+    resolve('beat:the-vizier-is-the-patron', 'reached')
+    resolve('beat:ambush-at-the-ford', 'abandoned')
+
+    const { payload } = resolve('beat:the-shrine-falls', 'reached')
+
+    expect(payload).toMatchObject({
+      arc: { state: 'concluded' },
+      skill: 'the-dungeon-master:arc-review'
+    })
+    expect(call('arc').payload.current).toBeNull()
+  })
+
+  it('refuses a Beat that is no longer pending, an unknown Beat and a stale version', () => {
+    resolve('beat:ambush-at-the-ford', 'abandoned')
+
+    expect(resolve('beat:ambush-at-the-ford', 'reached').payload.code).toBe('beat_not_pending')
+    expect(resolve('beat:nope', 'reached').payload.code).toBe('unknown_beat')
+    const stale = call('resolve_beat', {
+      beat: 'beat:the-shrine-falls',
+      version: 1,
+      to: 'reached',
+      reason: 'Too late.'
+    })
+    expect(stale.payload.code).toBe('stale_version')
+  })
+
+  it('is refused in a gap between Arcs', () => {
+    call('retire_arc', { version: version(), reason: 'Gone.' })
+    const gap = call('resolve_beat', { beat: 'beat:x', version: 2, to: 'reached', reason: 'r' })
+    expect(gap.payload.code).toBe('no_current_arc')
+  })
+})
+
+describe('retire_arc', () => {
+  it('abandons every pending Beat, returns them and points at arc-review', () => {
+    call('create_arc', relicArc)
+    call('resolve_beat', {
+      beat: 'beat:the-vizier-is-the-patron',
+      version: 1,
+      to: 'reached',
+      reason: 'Learned.'
+    })
+
+    const { payload } = call('retire_arc', { version: 2, reason: 'The relic was destroyed.' })
+
+    expect(payload).toMatchObject({
+      abandoned: [{ handle: 'beat:ambush-at-the-ford' }, { handle: 'beat:the-shrine-falls' }],
+      arc: { state: 'retired' },
+      skill: 'the-dungeon-master:arc-review'
+    })
+    expect(host.events(folder).at(-1)).toMatchObject({ kind: 'arc_retired', dmOnly: true })
+  })
+})

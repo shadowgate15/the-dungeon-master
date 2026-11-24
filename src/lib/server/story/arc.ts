@@ -68,7 +68,8 @@ function arcView(db: Queryable, found: typeof arc.$inferSelect) {
           title: b.title,
           description: b.description,
           state: b.state,
-          reason: b.reason
+          reason: b.reason,
+          ...(b.state === 'pending' ? {} : { event: b.resolvedEvent, minute: b.resolvedMinute })
         }))
     }))
   }
