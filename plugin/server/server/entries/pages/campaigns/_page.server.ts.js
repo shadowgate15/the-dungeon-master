@@ -1,7 +1,7 @@
 import { a as redirect, n as fail } from "../../../chunks/exports.js";
 import { ft as resolve } from "../../../chunks/internal.js";
-import "../../../chunks/paths2.js";
-import { n as CampaignSeedError } from "../../../chunks/seed.js";
+import "../../../chunks/paths.js";
+import { n as CampaignSeedError } from "../../../chunks/seed2.js";
 import { c as CampaignNotFoundError, i as sessions, l as NotACampaignFolderError, n as library, o as CampaignExistsError, s as CampaignMissingError, t as campaignRoot, u as SessionLiveError } from "../../../chunks/campaign.js";
 // src/routes/campaigns/+page.server.ts
 var item = (e) => ({

@@ -5,7 +5,9 @@ import { SOLO_PLAYER, type CharacterStatus } from '#lib/character/enums.ts'
 import { tryDraftToCharacterInput } from '#lib/character/save.ts'
 import { STEPS, type StepId } from '#lib/character/steps.ts'
 import type { Database } from '../db/connect'
-import { campaign, characterDraft } from '../db/schema'
+import { campaign, character, characterDraft } from '../db/schema'
+import { characterHandle } from '../play/core-block'
+import { logChange } from '../play/notices'
 import {
   CharacterNotFoundError,
   CharacterValidationError,
@@ -64,6 +66,13 @@ export function createParty(db: Database, now: () => number = Date.now) {
       .set({ data: draft, step, updatedAt: now() })
       .where(eq(characterDraft.id, id))
       .run()
+  }
+
+  /** Logs a Player edit to a Character, so the DM hears of it on the next channel event. */
+  function noteChange(id: string, summary: string) {
+    const row = db.select().from(character).where(eq(character.id, id)).get()!
+    const handle = characterHandle(row.name)
+    logChange(db, { handle, version: row.version, summary }, { at: now() })
   }
 
   /** The draft as the service's input; refused while any step is not valid. */
@@ -149,6 +158,7 @@ export function createParty(db: Database, now: () => number = Date.now) {
         const { controllingPlayer } = row(id)
         const created = characters.create(input(value.draft), { player: controllingPlayer })
         db.delete(characterDraft).where(eq(characterDraft.id, id)).run()
+        noteChange(created.id, `the Player added ${created.name}`)
         return created
       })
     },
@@ -162,7 +172,15 @@ export function createParty(db: Database, now: () => number = Date.now) {
 
     /** Replaces a saved Character's choices from the edit wizard's draft. */
     updateCharacter(id: string, draft: CharacterDraft): Character {
-      return characters.update(id, input(draft))
+      return db.transaction(() => {
+        const updated = characters.update(id, input(draft))
+        db.update(character)
+          .set({ version: sql`${character.version} + 1` })
+          .where(eq(character.id, id))
+          .run()
+        noteChange(id, `the Player edited ${updated.name}`)
+        return updated
+      })
     }
   }
 }

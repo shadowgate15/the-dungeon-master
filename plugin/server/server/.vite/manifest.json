@@ -93,20 +93,20 @@
     "file": "chunks/bridge.js",
     "name": "bridge",
     "imports": [
-      "_paths.js",
+      "_seed.js",
       "_campaign.js",
       "_schemas.js",
-      "_seed.js"
+      "_seed2.js"
     ]
   },
   "_campaign.js": {
     "file": "chunks/campaign.js",
     "name": "campaign",
     "imports": [
-      "_paths.js",
-      "_save.js",
+      "_seed.js",
+      "_summary.js",
       "_schema.js",
-      "_seed.js"
+      "_seed2.js"
     ]
   },
   "_config.js": {
@@ -202,15 +202,6 @@
     "file": "chunks/paths.js",
     "name": "paths",
     "imports": [
-      "_config.js",
-      "_enums.js",
-      "_schema.js"
-    ]
-  },
-  "_paths2.js": {
-    "file": "chunks/paths2.js",
-    "name": "paths",
-    "imports": [
       "_internal.js"
     ]
   },
@@ -237,14 +228,6 @@
       "_campaign.js"
     ]
   },
-  "_save.js": {
-    "file": "chunks/save.js",
-    "name": "save",
-    "imports": [
-      "_schema.js",
-      "_schemas.js"
-    ]
-  },
   "_schema.js": {
     "file": "chunks/schema.js",
     "name": "schema",
@@ -258,6 +241,15 @@
   },
   "_seed.js": {
     "file": "chunks/seed.js",
+    "name": "seed",
+    "imports": [
+      "_config.js",
+      "_enums.js",
+      "_schema.js"
+    ]
+  },
+  "_seed2.js": {
+    "file": "chunks/seed2.js",
     "name": "seed",
     "imports": [
       "_enums.js"
@@ -295,7 +287,8 @@
     "file": "chunks/summary.js",
     "name": "summary",
     "imports": [
-      "_save.js"
+      "_schema.js",
+      "_schemas.js"
     ]
   },
   "_theme.js": {
@@ -510,14 +503,14 @@
       "_forms.js",
       "_theme.js",
       "_state.js",
-      "_paths2.js"
+      "_paths.js"
     ],
     "dynamicImports": [
       "src/lib/dev/ReportIssue.svelte",
       "node_modules/.pnpm/@tanstack+svelte-query-devtools@6.3.7_@tanstack+svelte-query@6.3.7_svelte@5.57.3_@types_8ea849ea8105e537a5386474a23c1746/node_modules/@tanstack/svelte-query-devtools/dist/index.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.D79KjKt9.css"
+      "_app/immutable/assets/_layout.D3rppbzF.css"
     ],
     "assets": [
       "_app/immutable/assets/metamorphous-latin-ext-400-normal.D08n4oeX.woff2",
@@ -541,7 +534,7 @@
     "imports": [
       "_exports.js",
       "_internal.js",
-      "_paths2.js"
+      "_paths.js"
     ]
   },
   "src/routes/api/bridge/[...path]/+server.ts": {
@@ -693,8 +686,8 @@
     "imports": [
       "_exports.js",
       "_internal.js",
-      "_paths2.js",
-      "_seed.js",
+      "_paths.js",
+      "_seed2.js",
       "_campaign.js"
     ]
   },
@@ -708,7 +701,7 @@
       "_server2.js",
       "_state.js",
       "_navigation.js",
-      "_paths2.js",
+      "_paths.js",
       "_Badge.js",
       "_DmBadge.js",
       "_Link.js",
@@ -726,7 +719,7 @@
     "isEntry": true,
     "imports": [
       "_exports.js",
-      "_seed.js",
+      "_seed2.js",
       "_campaign.js"
     ]
   },
@@ -739,14 +732,14 @@
       "_internal.js",
       "_server2.js",
       "_forms.js",
-      "_paths2.js",
+      "_paths.js",
       "_enums.js",
       "_Button.js",
       "_Field.js",
       "_Panel.js",
       "_Textarea.js",
       "_TextInput.js",
-      "_seed.js",
+      "_seed2.js",
       "_Link.js",
       "_DmBadge.js"
     ]
@@ -769,7 +762,7 @@
     "imports": [
       "_internal.js",
       "_server2.js",
-      "_paths2.js",
+      "_paths.js",
       "_floor-client.js",
       "_Link.js"
     ]
@@ -782,7 +775,7 @@
     "imports": [
       "_exports.js",
       "_internal.js",
-      "_paths2.js",
+      "_paths.js",
       "_campaign.js"
     ]
   },
@@ -795,7 +788,7 @@
       "_internal.js",
       "_server2.js",
       "_forms.js",
-      "_paths2.js",
+      "_paths.js",
       "_Panel.js",
       "_Badge.js",
       "_Link.js",
@@ -803,11 +796,10 @@
       "_Button.js",
       "_Dialog.js",
       "_schema.js",
-      "_save.js",
+      "_summary.js",
       "_Field.js",
       "_Textarea.js",
-      "_TextInput.js",
-      "_summary.js"
+      "_TextInput.js"
     ]
   },
   "src/routes/campaigns/[id]/play/+page.server.ts": {
@@ -818,9 +810,7 @@
     "imports": [
       "_exports.js",
       "_campaign.js",
-      "_bridge.js",
-      "_summary.js",
-      "_schema.js"
+      "_bridge.js"
     ]
   },
   "src/routes/campaigns/[id]/play/+page.svelte": {
@@ -831,7 +821,7 @@
     "imports": [
       "_internal.js",
       "_server2.js",
-      "_paths2.js",
+      "_paths.js",
       "_DmBadge.js",
       "_Badge.js",
       "_Button.js",
@@ -848,7 +838,7 @@
     "src": "src/routes/credits/+page.server.ts",
     "isEntry": true,
     "imports": [
-      "_paths.js"
+      "_seed.js"
     ]
   },
   "src/routes/credits/+page.svelte": {

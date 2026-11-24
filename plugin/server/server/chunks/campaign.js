@@ -1,7 +1,7 @@
-import { At as desc, Bt as is, C as entity, Et as CUSTOM_BACKGROUND_FEATURE_MAX, Ft as isNull, Ht as DUNGEON_MASTER_CAMPAIGNS, K as classTable, M as alignment, Mt as eq, N as background, Nt as inArray, Ot as SOLO_PLAYER, Pt as isNotNull, Rt as sql, S as belief, Tt as BACKSTORY_MAX, Ut as DUNGEON_MASTER_HOME, Y as equipment, _ as characterSpell, _t as subclass, a as seedRulesData, b as floor, c as openDatabase, ct as race, d as character, f as characterChoice, g as characterSkill, h as characterItem, ht as spell, i as userStateDir, j as abilityScoreMethod, jt as and, kt as asc, l as activityLine, m as characterEquipment, mt as skill, n as canonicalFolder, o as loadRulesDataset, p as characterDraft, r as defaultCampaignRoot, s as migrateDatabase, t as campaignDatabasePath, u as campaign, v as declaration, vt as subrace, wt as ABILITY_METHODS, x as session, y as event, zt as Column } from "./paths.js";
-import { D as equipmentGroupKeys, M as resolveFeatures, O as equipmentGroups, a as WIZARD_RULES_KEYS, c as resolverDraft, d as STEPS, o as emptyDraft, r as deriveStats, t as tryDraftToCharacterInput } from "./save.js";
+import { At as desc, Bt as Column, C as entity, Et as CUSTOM_BACKGROUND_FEATURE_MAX, Ft as isNotNull, It as isNull, K as classTable, M as alignment, Mt as eq, N as background, Nt as gt, Ot as SOLO_PLAYER, Pt as inArray, S as belief, Tt as BACKSTORY_MAX, Ut as DUNGEON_MASTER_CAMPAIGNS, Vt as is, Wt as DUNGEON_MASTER_HOME, Y as equipment, _ as characterSpell, _t as subclass, a as userStateDir, b as floor, c as openDatabase, ct as race, d as character, f as characterChoice, g as characterSkill, h as characterItem, ht as spell, i as defaultCampaignRoot, j as abilityScoreMethod, jt as and, kt as asc, l as activityLine, m as characterEquipment, mt as skill, n as campaignDatabasePath, o as loadRulesDataset, p as characterDraft, r as canonicalFolder, s as migrateDatabase, t as seedRulesData, u as campaign, v as declaration, vt as subrace, wt as ABILITY_METHODS, x as session, y as event, zt as sql } from "./seed.js";
+import { A as equipmentGroupKeys, P as resolveFeatures, c as WIZARD_RULES_KEYS, d as resolverDraft, i as tryDraftToCharacterInput, j as equipmentGroups, l as emptyDraft, m as STEPS, n as detailToSummaryData, o as deriveStats, t as buildSummary } from "./summary.js";
 import { s as ABILITY_KEYS } from "./schema.js";
-import { o as parseCampaignSeed, r as campaignSeedCard } from "./seed.js";
+import { o as parseCampaignSeed, r as campaignSeedCard } from "./seed2.js";
 import fs from "node:fs";
 import path from "node:path";
 // src/lib/server/bridge/sessions.ts
@@ -186,6 +186,374 @@ function detailToDraft(rules, c) {
 		if (pick) draft.equipment[group.key] = pick;
 	}
 	return draft;
+}
+// src/lib/server/world/names.ts
+/** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
+var plain$1 = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/** The slug part of a handle: `Mira Voss` → `mira-voss`. */
+function slug(name) {
+	return plain$1(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
+}
+/** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
+function normalizeName(name) {
+	return plain$1(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+}
+function distance(a, b) {
+	let row = Array.from({ length: b.length + 1 }, (_, i) => i);
+	for (let i = 1; i <= a.length; i++) {
+		const next = [i];
+		for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+		row = next;
+	}
+	return row[b.length];
+}
+/**
+* Whether two names are close enough to be the same thing: equal once normalized, a typo apart,
+* or one's words all in the other ("Mira" and "Mira Voss").
+*/
+function isNearName(a, b) {
+	const x = normalizeName(a);
+	const y = normalizeName(b);
+	if (!x || !y) return false;
+	if (x === y) return true;
+	if (distance(x, y) <= Math.max(1, Math.floor(Math.max(x.length, y.length) / 6))) return true;
+	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+	const words = new Set(long.split(" "));
+	return short.split(" ").every((w) => words.has(w));
+}
+// src/lib/character/acting.ts
+/**
+* Whether a Character can act: put a Declaration on the Floor or be picked as the acting
+* Character. Dead and departed Characters can't. The one rule the sheet tabs, the composer and the
+* server all use; presence in the Scene (#328) and Unconscious (#332) join it later.
+*/
+function canAct(character) {
+	return character.status === "alive";
+}
+// src/lib/server/character/wizard-rules.ts
+var cached;
+/**
+* The Rules Data collections the resolver and `deriveStats` read, in the plain dataset shape (the
+* committed JSON the database is seeded from). Loaded once per process.
+*/
+function loadWizardRules() {
+	if (!cached) {
+		const dataset = loadRulesDataset();
+		cached = Object.fromEntries(WIZARD_RULES_KEYS.map((k) => [k, dataset[k]]));
+	}
+	return cached;
+}
+// src/lib/server/play/sheets.ts
+var signed = (n) => n >= 0 ? `+${n}` : `${n}`;
+function toPlaySheet(c) {
+	const rules = loadWizardRules();
+	const { stats, names, resolved } = buildSummary(rules, {
+		...detailToSummaryData(c),
+		equipment: c.inventory
+	});
+	const itemName = new Map(rules.equipment.map((e) => [e.slug, e.name]));
+	const ok = (s) => s.status === "ok" ? s.value : null;
+	const slots = ok(stats.spellSlots) ?? [];
+	return {
+		id: c.id,
+		name: c.name,
+		headline: `${[names.subrace ?? names.race, names.class].filter(Boolean).join(" ")} ${c.level}`,
+		canAct: canAct(c),
+		whereabouts: c.whereabouts,
+		hp: {
+			current: c.currentHp,
+			max: ok(stats.hitPoints),
+			temp: c.tempHp
+		},
+		ac: stats.unarmoredAc.status === "ok" ? {
+			value: stats.unarmoredAc.value.value,
+			note: "unarmored"
+		} : null,
+		conditions: c.conditions,
+		concentration: c.concentration,
+		abilities: ABILITY_KEYS.flatMap((key) => {
+			const a = ok(stats.abilities[key]);
+			return a ? [{
+				key,
+				score: a.score,
+				modifier: a.modifier
+			}] : [];
+		}),
+		attacks: (ok(stats.attacks) ?? []).map((a) => ({
+			name: a.name,
+			attackBonus: a.attackBonus,
+			damage: a.damage && `${a.damage.dice}${a.damage.modifier ? signed(a.damage.modifier) : ""} ${a.damage.type}`
+		})),
+		spellSlots: slots.flatMap((max, i) => max > 0 ? [{
+			level: i + 1,
+			max,
+			spent: c.spentSlots[i] ?? 0
+		}] : []),
+		features: resolved.features.map((f) => ({
+			slug: f.slug,
+			name: f.name,
+			spent: c.featureUses[f.slug] ?? 0
+		})),
+		inventory: c.inventory.map((i) => ({
+			name: itemName.get(i.item) ?? i.item,
+			quantity: i.quantity
+		}))
+	};
+}
+/** The play sheet of every saved Character in the Party, oldest first. */
+function playSheets(party) {
+	return party.list().flatMap((m) => m.kind === "character" ? [toPlaySheet(party.character(m.id).character)] : []);
+}
+// src/lib/server/play/core-block.ts
+/** A Character's handle, from its name. */
+var characterHandle = (name) => `char:${slug(name)}`;
+/** The Scene: its Place and the in-fiction time. No Scene exists until the clock and Scene do. */
+function scenePart() {
+	return "Scene: none set yet.";
+}
+/** The Party: name, handle, HP/max, conditions, status and whereabouts per Character. */
+function partyPart({ party }) {
+	const status = new Map(party.list().flatMap((m) => m.kind === "character" ? [[m.id, m.status]] : []));
+	const sheets = playSheets(party);
+	if (sheets.length === 0) return "Party: no Characters yet.";
+	return ["Party:", ...sheets.map((c) => {
+		const hp = `HP ${c.hp.current}/${c.hp.max ?? "?"}${c.hp.temp ? ` (+${c.hp.temp} temp)` : ""}`;
+		const conditions = c.conditions.length ? c.conditions.join(", ") : "none";
+		return `- ${c.name} (${characterHandle(c.name)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? "unknown"}`;
+	})].join("\n");
+}
+/** The NPCs at the Scene's Place. Presence needs a Scene, so none are present yet. */
+function npcsPart() {
+	return "NPCs present: none.";
+}
+/** When lint last ran. */
+function lintPart() {
+	return "Lint last ran: never.";
+}
+/** The whole core block. */
+function coreBlock(source) {
+	return [
+		"# Core block",
+		scenePart(),
+		partyPart(source),
+		npcsPart(),
+		lintPart()
+	].join("\n");
+}
+// src/lib/server/bridge/channels.ts
+/** Channel events per Campaign folder, delivered to the bridges listening for it. */
+function createChannels({ annotate } = {}) {
+	const listeners = /* @__PURE__ */ new Map();
+	const verdictListeners = /* @__PURE__ */ new Map();
+	const key = canonicalFolder;
+	return {
+		/** Starts listening for a Campaign's events; returns the unsubscribe. */
+		listen(folder, listener) {
+			const set = listeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
+			listeners.set(key(folder), set);
+			set.add(listener);
+			return () => set.delete(listener);
+		},
+		/** Whether any bridge is listening for the Campaign. */
+		listening(folder) {
+			return (listeners.get(key(folder))?.size ?? 0) > 0;
+		},
+		send(folder, event) {
+			const set = listeners.get(key(folder));
+			if (!set?.size) return;
+			const delivered = annotate ? annotate(folder, event) : event;
+			for (const listener of set) listener(delivered);
+		},
+		/** Starts listening for the verdicts the Player gives the Campaign's session; returns the unsubscribe. */
+		listenVerdicts(folder, listener) {
+			const set = verdictListeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
+			verdictListeners.set(key(folder), set);
+			set.add(listener);
+			return () => set.delete(listener);
+		},
+		/** Relays a permission verdict to the Campaign's session. */
+		sendVerdict(folder, verdict) {
+			for (const listener of verdictListeners.get(key(folder)) ?? []) listener(verdict);
+		}
+	};
+}
+// src/lib/server/play/log.ts
+/**
+* The Campaign's current stamp: the open Session (null offline) and the in-fiction minute (0 until
+* the clock exists).
+*/
+function currentStamp(db) {
+	return {
+		sessionId: db.select({ id: session.id }).from(session).where(isNull(session.closedAt)).get()?.id ?? null,
+		minute: 0
+	};
+}
+/** The id the next Event will get. The log is append-only, so ids are never reused. */
+function nextEventId(db) {
+	return (db.get(sql`SELECT max(${event.id}) AS id FROM ${event}`)?.id ?? 0) + 1;
+}
+/** Appends one Event, stamped with `stamp`; returns its id. */
+function logEvent(db, entry, { stamp = currentStamp(db), at, id = nextEventId(db) }) {
+	db.insert(event).values({
+		id,
+		sessionId: stamp.sessionId,
+		minute: stamp.minute,
+		tool: entry.tool,
+		kind: entry.kind,
+		summary: entry.summary,
+		data: entry.data ?? null,
+		dmOnly: entry.dmOnly ?? false,
+		createdAt: at
+	}).run();
+	return id;
+}
+/** Writes a Player-safe DM activity line after the Event `afterEvent` (the latest one by default). */
+function logActivity(db, text, { at, afterEvent = nextEventId(db) - 1 }) {
+	db.insert(activityLine).values({
+		text,
+		afterEvent,
+		sessionId: currentStamp(db).sessionId,
+		createdAt: at
+	}).run();
+}
+/** The open Session, opened now (numbered after the last) if none is. */
+function openSession(db, at) {
+	const open = db.select({
+		id: session.id,
+		number: session.number
+	}).from(session).where(isNull(session.closedAt)).get();
+	if (open) return open;
+	const last = db.select({ number: session.number }).from(session).orderBy(desc(session.number)).get();
+	return db.insert(session).values({
+		number: (last?.number ?? 0) + 1,
+		startedAt: at
+	}).returning({
+		id: session.id,
+		number: session.number
+	}).get();
+}
+/** When the open turn started waiting on the DM, or null when nothing awaits Narration. */
+function awaitingNarrationSince(db) {
+	return db.select({ at: campaign.awaitingNarrationSince }).from(campaign).get()?.at ?? null;
+}
+/** Sets (a timestamp) or clears (null) the Campaign's awaiting Narration flag. */
+function setAwaitingNarration(db, since) {
+	db.update(campaign).set({ awaitingNarrationSince: since }).run();
+}
+/** Event kinds the Player's timeline shows. */
+var SHOWN = /* @__PURE__ */ new Set([
+	"declaration",
+	"narration",
+	"turn_error"
+]);
+/** One logged Event as a timeline entry, or null for one the timeline does not show. */
+function entryFor(e) {
+	if (e.dmOnly || !SHOWN.has(e.kind)) return null;
+	const data = e.data ?? {};
+	const id = `e${e.id}`;
+	if (e.kind === "declaration") return {
+		type: "declaration",
+		id,
+		character: String(data.characterName),
+		player: String(data.player),
+		text: String(data.text)
+	};
+	if (e.kind === "turn_error") return {
+		type: "error",
+		id,
+		text: String(data.text)
+	};
+	return {
+		type: "narration",
+		id,
+		text: String(data.text),
+		voice: typeof data.voiceName === "string" ? data.voiceName : null
+	};
+}
+/**
+* The Player's timeline: Declarations and Narrations from the Event log (never DM-only Events),
+* with each DM activity line after the Event it follows, plus the awaiting Narration flag. Every
+* entry is built here from Player-safe fields; nothing raw passes through.
+*/
+function timeline(db) {
+	const lines = db.select().from(activityLine).orderBy(asc(activityLine.id)).all();
+	const entries = [];
+	let next = 0;
+	const flushUntil = (eventId) => {
+		while (next < lines.length && lines[next].afterEvent < eventId) {
+			const line = lines[next++];
+			entries.push({
+				type: "activity",
+				id: `a${line.id}`,
+				text: line.text
+			});
+		}
+	};
+	for (const e of db.select().from(event).orderBy(asc(event.id)).all()) {
+		flushUntil(e.id);
+		const entry = entryFor(e);
+		if (entry) entries.push(entry);
+	}
+	flushUntil(Infinity);
+	return {
+		entries,
+		awaitingSince: awaitingNarrationSince(db)
+	};
+}
+// src/lib/server/play/notices.ts
+var TOOL = "player";
+var KIND = "change";
+/** Logs a change the Player made outside the DM (a UI edit), so the DM hears of it next. */
+function logChange(db, change, { at }) {
+	logEvent(db, {
+		tool: TOOL,
+		kind: KIND,
+		summary: change.summary,
+		data: {
+			handle: change.handle,
+			version: change.version
+		}
+	}, { at });
+}
+/**
+* The changes the DM has not heard about yet, marking them heard: each Player edit logged in the
+* open Session since the last channel event. Offline edits belong to no Session; they reach the DM
+* at the next sitting's opening instead.
+*/
+function takeChanges(db) {
+	const through = db.select({ at: campaign.noticedThrough }).from(campaign).get()?.at ?? 0;
+	const { sessionId } = currentStamp(db);
+	if (!sessionId) return [];
+	const rows = db.select().from(event).where(and(gt(event.id, through), eq(event.sessionId, sessionId), eq(event.tool, TOOL), eq(event.kind, KIND))).orderBy(event.id).all();
+	const last = db.select({ id: max(event.id) }).from(event).get()?.id ?? through;
+	db.update(campaign).set({ noticedThrough: last }).run();
+	return rows.map((e) => ({
+		handle: String(e.data?.handle),
+		version: Number(e.data?.version),
+		summary: e.summary
+	}));
+}
+/**
+* The DM's channel: every channel event carries the changes made outside the DM since the last
+* one, as `handle vN: summary` lines; a changed core-block part is re-sent whole. Notices are
+* never an event of their own.
+*/
+function createDmChannels(library) {
+	return createChannels({ annotate(folder, sent) {
+		const entry = library.entryAt(folder);
+		const db = library.databaseFor(folder);
+		if (!entry || !db) return sent;
+		const changes = db.transaction((tx) => takeChanges(tx));
+		if (changes.length === 0) return sent;
+		const latest = new Map(changes.map((c) => [c.handle, c]));
+		const parts = ["Changed outside the DM:", ...[...latest.values()].map((c) => `- ${c.handle} v${c.version}: ${c.summary}`)];
+		if ([...latest.keys()].some((h) => h.startsWith("char:"))) parts.push("", partyPart({ party: library.party(entry.id) }));
+		const notice = parts.join("\n");
+		return {
+			...sent,
+			content: sent.content ? `${sent.content}\n\n${notice}` : notice
+		};
+	} });
 }
 // src/lib/server/character/service.ts
 /** The input breaks a Character rule (required or conditional field, bad score, unknown key or slug). */
@@ -622,19 +990,6 @@ function createCharacterService(db, now = Date.now, rules = loadRulesDataset()) 
 		}
 	};
 }
-// src/lib/server/character/wizard-rules.ts
-var cached;
-/**
-* The Rules Data collections the resolver and `deriveStats` read, in the plain dataset shape (the
-* committed JSON the database is seeded from). Loaded once per process.
-*/
-function loadWizardRules() {
-	if (!cached) {
-		const dataset = loadRulesDataset();
-		cached = Object.fromEntries(WIZARD_RULES_KEYS.map((k) => [k, dataset[k]]));
-	}
-	return cached;
-}
 // src/lib/server/character/party.ts
 /** The Campaign has no draft with this id. */
 var DraftNotFoundError = class extends Error {};
@@ -659,6 +1014,15 @@ function createParty(db, now = Date.now) {
 			step,
 			updatedAt: now()
 		}).where(eq(characterDraft.id, id)).run();
+	}
+	/** Logs a Player edit to a Character, so the DM hears of it on the next channel event. */
+	function noteChange(id, summary) {
+		const row = db.select().from(character).where(eq(character.id, id)).get();
+		logChange(db, {
+			handle: characterHandle(row.name),
+			version: row.version,
+			summary
+		}, { at: now() });
 	}
 	/** The draft as the service's input; refused while any step is not valid. */
 	function input(draft) {
@@ -729,6 +1093,7 @@ function createParty(db, now = Date.now) {
 				const { controllingPlayer } = row(id);
 				const created = characters.create(input(value.draft), { player: controllingPlayer });
 				db.delete(characterDraft).where(eq(characterDraft.id, id)).run();
+				noteChange(created.id, `the Player added ${created.name}`);
 				return created;
 			});
 		},
@@ -743,131 +1108,13 @@ function createParty(db, now = Date.now) {
 		},
 		/** Replaces a saved Character's choices from the edit wizard's draft. */
 		updateCharacter(id, draft) {
-			return characters.update(id, input(draft));
-		}
-	};
-}
-// src/lib/character/acting.ts
-/**
-* Whether a Character can act: put a Declaration on the Floor or be picked as the acting
-* Character. Dead and departed Characters can't. The one rule the sheet tabs, the composer and the
-* server all use; presence in the Scene (#328) and Unconscious (#332) join it later.
-*/
-function canAct(character) {
-	return character.status === "alive";
-}
-// src/lib/server/play/log.ts
-/**
-* The Campaign's current stamp: the open Session (null offline) and the in-fiction minute (0 until
-* the clock exists).
-*/
-function currentStamp(db) {
-	return {
-		sessionId: db.select({ id: session.id }).from(session).where(isNull(session.closedAt)).get()?.id ?? null,
-		minute: 0
-	};
-}
-/** The id the next Event will get. The log is append-only, so ids are never reused. */
-function nextEventId(db) {
-	return (db.get(sql`SELECT max(${event.id}) AS id FROM ${event}`)?.id ?? 0) + 1;
-}
-/** Appends one Event, stamped with `stamp`; returns its id. */
-function logEvent(db, entry, { stamp = currentStamp(db), at, id = nextEventId(db) }) {
-	db.insert(event).values({
-		id,
-		sessionId: stamp.sessionId,
-		minute: stamp.minute,
-		tool: entry.tool,
-		kind: entry.kind,
-		summary: entry.summary,
-		data: entry.data ?? null,
-		dmOnly: entry.dmOnly ?? false,
-		createdAt: at
-	}).run();
-	return id;
-}
-/** Writes a Player-safe DM activity line after the Event `afterEvent` (the latest one by default). */
-function logActivity(db, text, { at, afterEvent = nextEventId(db) - 1 }) {
-	db.insert(activityLine).values({
-		text,
-		afterEvent,
-		sessionId: currentStamp(db).sessionId,
-		createdAt: at
-	}).run();
-}
-/** The open Session, opened now (numbered after the last) if none is. */
-function openSession(db, at) {
-	const open = db.select({
-		id: session.id,
-		number: session.number
-	}).from(session).where(isNull(session.closedAt)).get();
-	if (open) return open;
-	const last = db.select({ number: session.number }).from(session).orderBy(desc(session.number)).get();
-	return db.insert(session).values({
-		number: (last?.number ?? 0) + 1,
-		startedAt: at
-	}).returning({
-		id: session.id,
-		number: session.number
-	}).get();
-}
-/** When the open turn started waiting on the DM, or null when nothing awaits Narration. */
-function awaitingNarrationSince(db) {
-	return db.select({ at: campaign.awaitingNarrationSince }).from(campaign).get()?.at ?? null;
-}
-/** Sets (a timestamp) or clears (null) the Campaign's awaiting Narration flag. */
-function setAwaitingNarration(db, since) {
-	db.update(campaign).set({ awaitingNarrationSince: since }).run();
-}
-/** Event kinds the Player's timeline shows. */
-var SHOWN = /* @__PURE__ */ new Set(["declaration", "narration"]);
-/** One logged Event as a timeline entry, or null for one the timeline does not show. */
-function entryFor(e) {
-	if (e.dmOnly || !SHOWN.has(e.kind)) return null;
-	const data = e.data ?? {};
-	const id = `e${e.id}`;
-	if (e.kind === "declaration") return {
-		type: "declaration",
-		id,
-		character: String(data.characterName),
-		player: String(data.player),
-		text: String(data.text)
-	};
-	return {
-		type: "narration",
-		id,
-		text: String(data.text),
-		voice: typeof data.voiceName === "string" ? data.voiceName : null
-	};
-}
-/**
-* The Player's timeline: Declarations and Narrations from the Event log (never DM-only Events),
-* with each DM activity line after the Event it follows, plus the awaiting Narration flag. Every
-* entry is built here from Player-safe fields; nothing raw passes through.
-*/
-function timeline(db) {
-	const lines = db.select().from(activityLine).orderBy(asc(activityLine.id)).all();
-	const entries = [];
-	let next = 0;
-	const flushUntil = (eventId) => {
-		while (next < lines.length && lines[next].afterEvent < eventId) {
-			const line = lines[next++];
-			entries.push({
-				type: "activity",
-				id: `a${line.id}`,
-				text: line.text
+			return db.transaction(() => {
+				const updated = characters.update(id, input(draft));
+				db.update(character).set({ version: sql`${character.version} + 1` }).where(eq(character.id, id)).run();
+				noteChange(id, `the Player edited ${updated.name}`);
+				return updated;
 			});
 		}
-	};
-	for (const e of db.select().from(event).orderBy(asc(event.id)).all()) {
-		flushUntil(e.id);
-		const entry = entryFor(e);
-		if (entry) entries.push(entry);
-	}
-	flushUntil(Infinity);
-	return {
-		entries,
-		awaitingSince: awaitingNarrationSince(db)
 	};
 }
 // src/lib/server/floor/floor.ts
@@ -1014,40 +1261,6 @@ function createFloor(db, now = Date.now) {
 			db.delete(declaration).where(eq(declaration.id, id)).run();
 		}
 	};
-}
-// src/lib/server/world/names.ts
-/** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
-var plain$1 = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-/** The slug part of a handle: `Mira Voss` → `mira-voss`. */
-function slug(name) {
-	return plain$1(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
-}
-/** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
-function normalizeName(name) {
-	return plain$1(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
-}
-function distance(a, b) {
-	let row = Array.from({ length: b.length + 1 }, (_, i) => i);
-	for (let i = 1; i <= a.length; i++) {
-		const next = [i];
-		for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-		row = next;
-	}
-	return row[b.length];
-}
-/**
-* Whether two names are close enough to be the same thing: equal once normalized, a typo apart,
-* or one's words all in the other ("Mira" and "Mira Voss").
-*/
-function isNearName(a, b) {
-	const x = normalizeName(a);
-	const y = normalizeName(b);
-	if (!x || !y) return false;
-	if (x === y) return true;
-	if (distance(x, y) <= Math.max(1, Math.floor(Math.max(x.length, y.length) / 6))) return true;
-	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
-	const words = new Set(long.split(" "));
-	return short.split(" ").every((w) => words.has(w));
 }
 // src/lib/server/knowledge/holders.ts
 /**
@@ -1282,9 +1495,17 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		saveSeed(id, card) {
 			const { folder, found } = find(id);
 			if (found.archivedAt !== null) throw new CampaignArchivedError("An archived Campaign cannot be changed");
-			const saved = update(id, {
-				...parseCampaignSeed(card),
-				version: found.version + 1
+			const saved = database(folder).transaction((tx) => {
+				const row = update(id, {
+					...parseCampaignSeed(card),
+					version: found.version + 1
+				});
+				logChange(tx, {
+					handle: "campaign",
+					version: row.version,
+					summary: "the Player edited the Campaign Seed"
+				}, { at: now() });
+				return row;
 			});
 			registry.put({
 				id,
@@ -1307,7 +1528,16 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 			return {
 				timeline: () => timeline(db),
 				journal: () => journal(db),
-				openSession: () => openSession(db, now())
+				openSession: () => openSession(db, now()),
+				/** The DM's core block. */
+				coreBlock: () => coreBlock({ party: createParty(db, now) }),
+				/** Logs a turn that went wrong, as the Player sees it in the timeline. */
+				turnError: (text) => logEvent(db, {
+					tool: "stop",
+					kind: "turn_error",
+					summary: text,
+					data: { text }
+				}, { at: now() })
 			};
 		},
 		/**
@@ -1383,6 +1613,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { setAwaitingNarration as C, CharacterNotFoundError as D, loadWizardRules as E, CharacterValidationError as O, nextEventId as S, DraftNotFoundError as T, DeclarationRefusedError as _, CampaignArchivedError as a, logActivity as b, CampaignNotFoundError as c, characterHolders as d, charactersInScene as f, DeclarationNotFoundError as g, slug as h, sessions as i, SESSION_LIVE_MESSAGE as k, NotACampaignFolderError as l, normalizeName as m, library as n, CampaignExistsError as o, isNearName as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, DmBusyError as v, canAct as w, logEvent as x, currentStamp as y };
+export { SESSION_LIVE_MESSAGE as A, nextEventId as C, isNearName as D, loadWizardRules as E, normalizeName as O, logEvent as S, playSheets as T, CharacterNotFoundError as _, CampaignArchivedError as a, currentStamp as b, CampaignNotFoundError as c, characterHolders as d, charactersInScene as f, DraftNotFoundError as g, DmBusyError as h, sessions as i, slug as k, NotACampaignFolderError as l, DeclarationRefusedError as m, library as n, CampaignExistsError as o, DeclarationNotFoundError as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, CharacterValidationError as v, setAwaitingNarration as w, logActivity as x, createDmChannels as y };
 
 //# sourceMappingURL=campaign.js.map

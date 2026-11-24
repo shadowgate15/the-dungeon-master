@@ -1,5 +1,5 @@
 import { n as fail, t as error } from "../../../../chunks/exports.js";
-import { n as CampaignSeedError, t as CAMPAIGN_SEED_FIELDS } from "../../../../chunks/seed.js";
+import { n as CampaignSeedError, t as CAMPAIGN_SEED_FIELDS } from "../../../../chunks/seed2.js";
 import { a as CampaignArchivedError, i as sessions, n as library, s as CampaignMissingError } from "../../../../chunks/campaign.js";
 // src/routes/campaigns/[id]/+page.server.ts
 var load = ({ params }) => {

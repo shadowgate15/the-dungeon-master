@@ -50,6 +50,13 @@
       "when": 1795478939471,
       "tag": "0006_beliefs",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795497350882,
+      "tag": "0007_change_notices",
+      "breakpoints": true
     }
   ]
 }
