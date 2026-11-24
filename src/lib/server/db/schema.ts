@@ -65,7 +65,9 @@ export const campaign = sqliteTable(
     updatedAt: integer('updated_at').notNull(),
     archivedAt: integer('archived_at'),
     /** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
-    awaitingNarrationSince: integer('awaiting_narration_since')
+    awaitingNarrationSince: integer('awaiting_narration_since'),
+    /** The last Event the DM has heard about: change notices cover the Player's edits after it. */
+    noticedThrough: integer('noticed_through').notNull().default(0)
   },
   () => [
     check('campaign_tone_check', oneOf('tone', TONES)),
@@ -129,6 +131,8 @@ export const character = sqliteTable(
     /** The Player who controls this Character; exactly one, transferable. */
     controllingPlayer: text('controlling_player').notNull(),
     status: text('status', { enum: CHARACTER_STATUSES }).notNull().default('alive'),
+    /** The Character's Entity version: bumped by every edit, named in change notices. */
+    version: integer('version').notNull().default(1),
     name: text('name').notNull(),
     alignment: text('alignment', { enum: ALIGNMENTS }),
     appearance: text('appearance'),

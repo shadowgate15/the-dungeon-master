@@ -5,6 +5,8 @@ import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import { campaign } from '../db/schema'
 import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
+import { coreBlock } from '../play/core-block'
+import { logChange } from '../play/notices'
 import { openSession, timeline } from '../play/log'
 import { seedRulesData } from '../rules/seed'
 import { campaignSeedCard, parseCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
@@ -167,7 +169,12 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
       if (found.archivedAt !== null) {
         throw new CampaignArchivedError('An archived Campaign cannot be changed')
       }
-      const saved = update(id, { ...parseCampaignSeed(card), version: found.version + 1 })
+      const saved = database(folder).transaction((tx) => {
+        const row = update(id, { ...parseCampaignSeed(card), version: found.version + 1 })
+        const summary = 'the Player edited the Campaign Seed'
+        logChange(tx, { handle: 'campaign', version: row.version, summary }, { at: now() })
+        return row
+      })
       registry.put({ id, path: folder, name: saved.name })
       return saved
     },
@@ -185,7 +192,12 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
     /** The Campaign's record of play: the Player's timeline and its Sessions. */
     record(id: string) {
       const db = database(find(id).folder)
-      return { timeline: () => timeline(db), openSession: () => openSession(db, now()) }
+      return {
+        timeline: () => timeline(db),
+        openSession: () => openSession(db, now()),
+        /** The DM's core block. */
+        coreBlock: () => coreBlock({ party: createParty(db, now) })
+      }
     },
 
     /**

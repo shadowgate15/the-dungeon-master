@@ -5,9 +5,9 @@ import { userStateDir } from '../campaign/paths'
 import { writeRuntimeFile } from '../runtime'
 import { gameTools } from '../tools'
 import { createToolHost } from '../tools/host'
+import { createDmChannels } from '../play/notices'
 import { createPlay, openSessionsOnAttach } from '../play/play'
 import { createBridgeApi } from './api'
-import { createChannels } from './channels'
 
 /** A fresh token each server start; only processes that can read the runtime file know it. */
 const token = randomBytes(24).toString('hex')
@@ -16,7 +16,7 @@ const token = randomBytes(24).toString('hex')
 export const host = createToolHost({ library, tools: gameTools, publish: live.publish })
 
 /** Channel events for the DM, per Campaign folder. */
-export const channels = createChannels()
+export const channels = createDmChannels(library)
 
 /** The play turn: Done wakes the DM, and a DM attaching opens a Session. */
 export const play = createPlay({ library, channels, publish: live.publish })

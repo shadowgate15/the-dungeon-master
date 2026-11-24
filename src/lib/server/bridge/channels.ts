@@ -8,8 +8,13 @@ export type ChannelEvent = { content: string; meta: Record<string, string> }
 
 type Listener = (event: ChannelEvent) => void
 
+type Options = {
+  /** Rewrites each event just before it is delivered (the DM's change notices ride on it). */
+  annotate?: (folder: string, event: ChannelEvent) => ChannelEvent
+}
+
 /** Channel events per Campaign folder, delivered to the bridges listening for it. */
-export function createChannels() {
+export function createChannels({ annotate }: Options = {}) {
   const listeners = new Map<string, Set<Listener>>()
   const key = canonicalFolder
 
@@ -28,7 +33,10 @@ export function createChannels() {
     },
 
     send(folder: string, event: ChannelEvent) {
-      for (const listener of listeners.get(key(folder)) ?? []) listener(event)
+      const set = listeners.get(key(folder))
+      if (!set?.size) return
+      const delivered = annotate ? annotate(folder, event) : event
+      for (const listener of set) listener(delivered)
     }
   }
 }

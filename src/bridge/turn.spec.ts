@@ -44,7 +44,9 @@ it('a DM attaching opens a Session, and one play turn runs Floor to Narration wi
   server.play.done(campaignId)
   await dm.settled()
 
-  const logged = server.host.events(folder)
+  // The offline Character save is logged with no Session; the turn is in the Session.
+  const [added, ...logged] = server.host.events(folder)
+  expect(added).toMatchObject({ kind: 'change', session: null })
   expect(logged.map((e) => e.kind)).toEqual(['declaration', 'narration'])
   expect(logged.every((e) => e.session !== null && e.session === logged[0].session)).toBe(true)
   expect(server.play.timeline(campaignId).awaitingSince).toBeNull()
