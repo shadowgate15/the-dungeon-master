@@ -15,15 +15,20 @@ export type CallPart = {
   reason: string | null
   mode: RollMode
   answered: boolean
+  /**
+   * A roll sequence's next roll (`to hit`, then `damage`; or `save`), null once it is done and for
+   * a Check or question. The AC or DC it is rolled against is never here.
+   */
+  next: 'to hit' | 'damage' | 'save' | null
 }
 
 /**
- * The open Call, Player-safe: a Check (one part per Character) or a question (its text and
- * choices, free text when there are none).
+ * The open Call, Player-safe: a Check (one part per Character), a question (its text and
+ * choices, free text when there are none), or an action's roll sequences (one per Character).
  */
 export type OpenCall = {
   id: string
-  kind: 'check' | 'question'
+  kind: 'check' | 'question' | 'roll_sequence'
   text: string | null
   choices: string[]
   parts: CallPart[]

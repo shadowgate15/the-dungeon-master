@@ -1,5 +1,5 @@
-import { $t as DUNGEON_MASTER_VERSION, A as entityAlias, Bt as inArray, F as NPC_STATUSES, Ft as asc, Gt as or, Ht as isNull, It as desc, Kt as sql, Lt as and, M as pageRevision, N as worldLink, O as belief, P as ENTITY_TYPES, Pt as SOLO_PLAYER, Qt as DUNGEON_MASTER_PORT, Rt as eq, Ut as like, Vt as isNotNull, Wt as ne, Zt as DUNGEON_MASTER_HOME, _ as characterDraft, a as userStateDir, h as character, j as fact, k as entity, m as campaign, w as event } from "./seed.js";
-import { $ as slug$1, C as createDmChannels, D as nextEventId, E as logEvent, F as ToolError, I as creationTool, J as currentMinute, K as advanceClock, L as expectVersion, M as callResultEvent, N as openCall, O as setAwaitingNarration, P as PLUGIN_NAME, Q as normalizeName, R as readTool, T as logActivity, U as loadWizardRules, W as ClockBackwardsError, X as scenePlace, Y as present, Z as isNearName, _ as charactersInScene, c as CampaignNotFoundError, d as addConversationLine, et as formatClock, f as closeSession, g as characterHolders, h as sessionsView, i as sessions, j as callInput, l as NotACampaignFolderError, m as indexNarration, n as library, nt as SESSION_LIVE_MESSAGE, p as history, q as characterRefs, r as live, tt as parseClock, w as currentStamp, x as returnStrandedDrafts, z as writeTool } from "./campaign.js";
+import { $ as asc, A as belief, F as worldLink, I as ENTITY_TYPES, L as NPC_STATUSES, M as entityAlias, N as fact, P as pageRevision, Q as SOLO_PLAYER, T as event, _t as DUNGEON_MASTER_VERSION, at as isNotNull, ct as ne, et as desc, g as character, gt as DUNGEON_MASTER_PORT, h as campaign, ht as DUNGEON_MASTER_HOME, it as inArray, j as entity, lt as or, n as createRulesRepository, nt as eq, o as userStateDir, ot as isNull, st as like, tt as and, ut as sql, v as characterDraft } from "./seed.js";
+import { $ as ToolError, A as DC_BY_TIER, B as rollAll, C as logActivity, D as ABILITY_NAMES, E as setAwaitingNarration, F as createPendingCall, G as combatant, H as sequenceText, I as openCall, J as setConditions, K as mustAct, L as saveKey, M as callInput, N as callResultEvent, P as cancelPendingCall, Q as PLUGIN_NAME, R as attackSequence, S as currentStamp, T as nextEventId, U as applyDamage, V as saveSequence, W as applyHealing, X as charactersInScene, Y as characterHolders, Z as hpState, _t as slug$1, bt as SESSION_LIVE_MESSAGE, c as CampaignNotFoundError, ct as ClockBackwardsError, d as addConversationLine, dt as characterRefs, et as creationTool, f as closeSession, ft as currentMinute, gt as normalizeName, h as sessionsView, ht as isNearName, i as sessions, j as TIERS, l as NotACampaignFolderError, m as indexNarration, mt as scenePlace, n as library, nt as readTool, p as history, pt as present, q as saveBonus, r as live, rt as writeTool, st as loadWizardRules, tt as expectVersion, ut as advanceClock, vt as formatClock, w as logEvent, x as createDmChannels, y as returnStrandedDrafts, yt as parseClock, z as damageSequence } from "./campaign.js";
 import { a as missingSeedFields, n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { d as reconcile, j as rollTotals, l as changedDraftFields, u as emptyDraft, w as arrangementProblem, y as lengthIssue } from "./summary.js";
@@ -19,6 +19,604 @@ function writeRuntimeFile(home, runtime) {
 	fs.writeFileSync(tmp, JSON.stringify(runtime) + "\n", { mode: 384 });
 	fs.renameSync(tmp, file);
 }
+// src/lib/server/tools/action-tools.ts
+var adv = {
+	adv: _enum(["advantage", "disadvantage"]).optional(),
+	reason: string().trim().min(1).optional().describe("Why advantage or disadvantage, shown to the Player")
+};
+var modeOf = (input) => ({
+	mode: input.adv ?? "normal",
+	reason: input.adv ? input.reason ?? "" : null
+});
+var pendingNext = (id) => `Attach it with your closing narrate(text, call: "${id}"), or drop it with cancel_call`;
+var withModifier = (dice, modifier) => modifier === 0 ? dice : `${dice}${modifier > 0 ? "+" : "-"}${Math.abs(modifier)}`;
+/** The attacks a combatant has: a Character's weapons, an NPC's stat block actions. */
+function attacksOf(who) {
+	if (who.kind === "character") return (who.stats.attacks.status === "ok" ? who.stats.attacks.value : []).map((a) => ({
+		name: a.name,
+		bonus: a.attackBonus,
+		damage: a.damage && {
+			dice: withModifier(a.damage.dice, a.damage.modifier),
+			damageType: a.damage.type
+		}
+	}));
+	return who.monster.actions.flatMap((a) => {
+		if (a.attack_bonus === void 0) return [];
+		const first = a.damage?.find((d) => d.damage_dice && d.damage_type);
+		return [{
+			name: a.name,
+			bonus: a.attack_bonus,
+			damage: first ? {
+				dice: first.damage_dice,
+				damageType: first.damage_type.toLowerCase()
+			} : null
+		}];
+	});
+}
+/** The attack `with` names: exactly by name, or the one whose name contains it. */
+function findAttack(who, name) {
+	const attacks = attacksOf(who);
+	const key = name.trim().toLowerCase();
+	const found = attacks.find((a) => a.name.toLowerCase() === key) ?? attacks.find((a) => a.name.toLowerCase().includes(key));
+	if (!found) throw new ToolError("unknown_attack", `${who.name} has no attack called ${name}`, attacks.length ? `Use one of ${who.name}'s attacks: ${attacks.map((a) => a.name).join(", ")}` : `${who.name} has no attacks; use roll and damage for an improvised one`);
+	return found;
+}
+function diceLogRoll(roller, rolled, mode) {
+	const d20 = rolled.roll.kept !== null;
+	return {
+		characterName: roller,
+		what: rolled.what,
+		dice: rolled.roll.dice,
+		modifier: rolled.roll.modifier,
+		total: rolled.roll.total,
+		outcome: rolled.roll.outcome,
+		mode: d20 ? mode.mode : "normal",
+		reason: d20 ? mode.reason : null,
+		target: rolled.targetState
+	};
+}
+/**
+* Resolves rolls by who makes them. A Character's rolls go into one pending Call for the closing
+* narrate to attach; an NPC's roll now. Returns the DM's result and the one Event: the dice log
+* when anything rolled, else a DM-only note of the pending Call.
+*/
+function resolve(db, dice, now, rolls, { summary, pre = [], result = {} }) {
+	const parts = rolls.flatMap(({ roller, sequence, mode }) => roller.kind === "character" ? [{
+		characterId: roller.id,
+		player: roller.player,
+		sequence,
+		...mode
+	}] : []);
+	const id = parts.length ? createPendingCall(db, parts, now) : null;
+	const outcomes = rolls.filter((r) => r.roller.kind !== "character").map((r) => ({
+		...r,
+		...rollAll(db, r.sequence, dice, r.mode)
+	}));
+	const log = [...pre.map((p) => p.log), ...outcomes.flatMap((o) => o.steps.map((s) => diceLogRoll(o.roller.name, s, o.mode)))];
+	const text = [...pre.map((p) => p.text), ...outcomes.map((o) => sequenceText(o.sequence, o.mode.mode))];
+	const full = {
+		...result,
+		...text.length && {
+			rolled: text.join("\n"),
+			targets: outcomes.map((o) => {
+				const last = o.sequence.rolls.findLast((r) => r.after);
+				return {
+					handle: o.sequence.target.handle,
+					hp: last?.after?.hp ?? null
+				};
+			})
+		},
+		...id && {
+			pending_call: id,
+			next: pendingNext(id)
+		}
+	};
+	if (!log.length) return {
+		result: full,
+		event: {
+			kind: id ? "call_pending" : "action",
+			summary,
+			data: { call: id },
+			dmOnly: true
+		}
+	};
+	return {
+		result: full,
+		event: {
+			kind: "rolls",
+			summary: log.map((r) => `${r.characterName} ${r.what}: ${r.total}${r.outcome ? ` (${r.outcome})` : ""}`).join("; "),
+			data: {
+				rolls: log,
+				call: id
+			}
+		}
+	};
+}
+var abilityName = (ability) => ABILITY_NAMES.get(ability) ?? ability;
+/** Rolls an effect's damage once, for every target's save. */
+function preRollDamage(dice, by, what, expression, damageType) {
+	const rolled = dice.rollExpression(expression);
+	const total = Math.max(0, rolled.total);
+	const modifier = rolled.modifier ? ` ${rolled.modifier > 0 ? "+" : "-"} ${Math.abs(rolled.modifier)}` : "";
+	return {
+		total,
+		pre: {
+			text: `${what}: ${rolled.dice.join(" + ")}${modifier} = ${total}${damageType ? ` ${damageType}` : ""}`,
+			log: {
+				characterName: by,
+				what,
+				dice: rolled.dice,
+				modifier: rolled.modifier,
+				total,
+				outcome: null,
+				mode: "normal",
+				reason: null,
+				target: null
+			}
+		}
+	};
+}
+var slugOf = (s) => s.trim().toLowerCase().replace(/^(spell|condition):/, "").replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-");
+/** What a caster casts with: spell attack bonus, save DC, caster level, and the spells it has. */
+function casting(who) {
+	if (who.kind === "character") {
+		const stat = who.stats.spellcasting;
+		const value = stat.status === "ok" ? stat.value : null;
+		if (!value) return null;
+		return {
+			attackBonus: value.attackBonus,
+			saveDc: value.saveDc,
+			level: who.detail.level,
+			spells: who.detail.spells.map((s) => s.spell)
+		};
+	}
+	const block = who.monster.specialAbilities?.find((a) => a.spellcasting)?.spellcasting;
+	if (!block) return null;
+	return {
+		attackBonus: block.modifier ?? 0,
+		saveDc: block.dc ?? 10,
+		level: block.level ?? 1,
+		spells: (block.spells ?? []).map((s) => s.url.split("/").at(-1))
+	};
+}
+/** The spell's damage at this slot level, or at the caster's level for a cantrip. */
+function spellDamage(spell, level, casterLevel) {
+	const first = spell.damage?.find((d) => d.damage_type);
+	if (!first) return null;
+	const bySlot = first.damage_at_slot_level?.[String(level)];
+	const byCaster = Object.entries(first.damage_at_character_level ?? {}).filter(([at]) => Number(at) <= casterLevel).sort(([a], [b]) => Number(b) - Number(a))[0]?.[1];
+	const dice = bySlot ?? byCaster;
+	return dice ? {
+		dice: dice.replace(/\s+/g, ""),
+		damageType: first.damage_type.toLowerCase()
+	} : null;
+}
+/** Spends a Character's slot of this level, or refuses when none is free. */
+function spendSlot(db, who, level) {
+	const slots = who.stats.spellSlots.status === "ok" ? who.stats.spellSlots.value : [];
+	const max = slots[level - 1] ?? 0;
+	const spent = who.detail.spentSlots[level - 1] ?? 0;
+	if (spent >= max) {
+		const free = slots.flatMap((m, i) => i + 1 > level && (who.detail.spentSlots[i] ?? 0) < m ? [i + 1] : []);
+		throw new ToolError("no_slot", `${who.name} has no level ${level} spell slot free (${spent} of ${max} spent)`, free.length ? `Cast it at a higher level with a free slot (${free.join(", ")}), or choose another action` : `${who.name} needs a rest to regain slots; choose another action`);
+	}
+	const spentSlots = [...who.detail.spentSlots];
+	spentSlots[level - 1] = spent + 1;
+	db.update(character).set({ spentSlots }).where(eq(character.id, who.id)).run();
+	return {
+		level,
+		spent: spent + 1,
+		max
+	};
+}
+/** Rolls a dice expression, or refuses one that isn't. */
+function rollExpressionOrRefuse(dice, expr) {
+	try {
+		return dice.rollExpression(expr);
+	} catch {
+		throw new ToolError("bad_dice", `${expr} is not a dice expression`, "Write it as NdS+M, such as 2d6+1");
+	}
+}
+/** An SRD condition's slug, or a refusal naming them. */
+function srdCondition(db, name) {
+	const rules = createRulesRepository(db);
+	const slug = slugOf(name);
+	if (!rules.entry(`condition:${slug}`)) {
+		const all = rules.conditions().map((c) => c.slug);
+		throw new ToolError("unknown_condition", `${name} is not an SRD condition`, `Use one of: ${all.join(", ")}`);
+	}
+	return slug;
+}
+var actionTools = [
+	writeTool({
+		name: "attack",
+		description: "Make a weapon or natural attack. A Character attacker returns a pending Call: attach it with your closing narrate(text, call: id) and the Player rolls to hit, then damage (you hear one call_result). An NPC attacker rolls and applies at once, in the dice log. The target's AC stays hidden from the Player.",
+		input: object({
+			actor: string().min(1).describe("Who attacks: char:… or npc:…"),
+			target: string().min(1).describe("Who is attacked: char:… or npc:…"),
+			with: string().trim().min(1).describe("The weapon or stat block action, such as longsword"),
+			...adv
+		}),
+		activity: "DM resolves an attack",
+		run: ({ db, dice, now }, input) => {
+			const actor = combatant(db, input.actor);
+			mustAct(actor);
+			const target = combatant(db, input.target);
+			const attack = findAttack(actor, input.with);
+			const sequence = attackSequence(attack.name, target, attack.bonus, attack.damage);
+			return resolve(db, dice, now, [{
+				roller: actor,
+				sequence,
+				mode: modeOf(input)
+			}], { summary: `${actor.name}'s ${sequence.label} on ${target.name}` });
+		}
+	}),
+	writeTool({
+		name: "cast",
+		description: "Cast a spell: checks the caster has it and a free slot of the level, and spends the slot (cantrips are level 0). A spell attack from a Character returns a pending Call (to hit, then damage) to attach with narrate; an NPC's rolls at once. A save spell rolls its damage once; NPC targets save at once against the caster's DC, Character targets get a pending Call. Healing and other effects: apply them with heal, add_condition and the like.",
+		input: object({
+			caster: string().min(1).describe("Who casts: char:… or npc:…"),
+			spell: string().min(1).describe("The spell: spell:fire-bolt, fire-bolt or Fire Bolt"),
+			level: number().int().min(0).max(9).describe("The slot level; 0 for a cantrip"),
+			targets: array(string().min(1)).default([]).describe("Who the spell affects: char:… or npc:…"),
+			...adv
+		}),
+		activity: "DM resolves a spell",
+		run: ({ db, dice, now }, input) => {
+			const caster = combatant(db, input.caster);
+			mustAct(caster);
+			const found = createRulesRepository(db).entry(`spell:${slugOf(input.spell)}`);
+			if (!found || found.kind !== "spell") throw new ToolError("unknown_spell", `No SRD spell is called ${input.spell}`, "Find the spell with lookup({query}) and call again");
+			const spell = found.entry;
+			const powers = casting(caster);
+			if (!powers || !powers.spells.includes(spell.slug)) throw new ToolError("spell_not_known", `${caster.name} doesn't have ${spell.name}`, powers?.spells.length ? `Cast one of ${caster.name}'s spells: ${powers.spells.join(", ")}` : `${caster.name} casts no spells; choose another action`);
+			if (spell.level === 0 ? input.level !== 0 : input.level < spell.level) throw new ToolError("bad_spell_level", `${spell.name} can't be cast at level ${input.level}`, spell.level === 0 ? "Cast a cantrip at level 0" : `Cast it at level ${spell.level} or higher`);
+			const targets = input.targets.map((t) => combatant(db, t));
+			if ((spell.attackType || spell.dcAbility) && !targets.length) throw new ToolError("no_targets", `${spell.name} needs a target`, "Name its targets and call again");
+			const slot = caster.kind === "character" && input.level > 0 ? spendSlot(db, caster, input.level) : null;
+			const damage = spellDamage(spell, input.level, powers.level);
+			const result = {
+				cast: spell.name,
+				level: input.level,
+				slot
+			};
+			const summary = `${caster.name} casts ${spell.name}${targets.length ? ` on ${targets.map((t) => t.name).join(", ")}` : ""}`;
+			if (spell.attackType) {
+				const label = `${spell.name}`;
+				return resolve(db, dice, now, targets.map((t) => ({
+					roller: caster,
+					sequence: attackSequence(label, t, powers.attackBonus, damage),
+					mode: modeOf(input)
+				})), {
+					summary,
+					result
+				});
+			}
+			if (spell.dcAbility) {
+				const ability = spell.dcAbility;
+				const rolled = damage && preRollDamage(dice, caster.name, `${spell.name} damage`, damage.dice, damage.damageType);
+				return resolve(db, dice, now, targets.map((t) => ({
+					roller: t,
+					sequence: saveSequence(abilityName(ability), t, {
+						ability,
+						bonus: saveBonus(t, ability),
+						dc: powers.saveDc,
+						damage: rolled?.total ?? null,
+						damageType: damage?.damageType ?? null,
+						condition: null,
+						onSuccess: spell.dcSuccess === "half" ? "half" : "none"
+					}),
+					mode: {
+						mode: "normal",
+						reason: null
+					}
+				})), {
+					summary,
+					result,
+					pre: rolled ? [rolled.pre] : []
+				});
+			}
+			if (damage && targets.length) return resolve(db, dice, now, targets.map((t) => ({
+				roller: caster,
+				sequence: damageSequence(spell.name, t, damage),
+				mode: {
+					mode: "normal",
+					reason: null
+				}
+			})), {
+				summary,
+				result
+			});
+			return resolve(db, dice, now, [], {
+				summary,
+				result
+			});
+		}
+	}),
+	writeTool({
+		name: "force_save",
+		description: "Force a saving throw: a trap, a breath, an NPC's spell. Code rolls the damage once; Character targets get a pending Call to attach with narrate (each Player rolls their save), NPC targets save at once. A failure takes the damage and the condition; a success takes half or none. The DC stays hidden from the Player.",
+		input: object({
+			targets: array(string().min(1)).min(1).describe("Who saves: char:… or npc:…"),
+			ability: saveKey.describe("The save: dex or Dexterity"),
+			dc_tier: _enum(TIERS).optional().describe("Difficulty; code turns it into the DC"),
+			dc: number().int().min(1).max(30).optional().describe("An exact DC, such as a stat block's"),
+			on_fail: object({
+				damage: string().min(1).optional().describe("Dice for the damage, such as 2d6"),
+				type: string().min(1).optional().describe("The damage type, such as fire"),
+				condition: string().min(1).optional().describe("A condition a failure lands, such as prone")
+			}),
+			on_success: _enum(["half", "none"]).default("none"),
+			source: string().trim().min(1).optional().describe("What forces it, shown in the dice log")
+		}).refine((i) => i.dc === void 0 !== (i.dc_tier === void 0), { message: "Give exactly one of dc_tier and dc" }),
+		activity: "DM calls for a saving throw",
+		run: ({ db, dice, now }, input) => {
+			const targets = input.targets.map((t) => combatant(db, t));
+			const ability = input.ability;
+			const dc = input.dc ?? DC_BY_TIER[input.dc_tier];
+			const source = input.source ?? "Effect";
+			const damageType = input.on_fail.type?.toLowerCase() ?? null;
+			const rolled = input.on_fail.damage ? preRollDamage(dice, source, `${source} damage`, input.on_fail.damage, damageType) : null;
+			return resolve(db, dice, now, targets.map((t) => ({
+				roller: t,
+				sequence: saveSequence(abilityName(ability), t, {
+					ability,
+					bonus: saveBonus(t, ability),
+					dc,
+					damage: rolled?.total ?? null,
+					damageType,
+					condition: input.on_fail.condition?.toLowerCase() ?? null,
+					onSuccess: input.on_success
+				}),
+				mode: {
+					mode: "normal",
+					reason: null
+				}
+			})), {
+				summary: `${abilityName(ability)} save for ${targets.map((t) => t.name).join(", ")}`,
+				pre: rolled ? [rolled.pre] : []
+			});
+		}
+	}),
+	writeTool({
+		name: "cancel_call",
+		description: "Drop a pending Call an action tool returned that you won't attach.",
+		input: object({ id: string().min(1) }),
+		activity: null,
+		run: ({ db, now }, { id }) => {
+			cancelPendingCall(db, id, now);
+			return {
+				result: { cancelled: id },
+				event: {
+					kind: "call_cancelled",
+					summary: `Pending Call ${id} cancelled`,
+					data: { call: id },
+					dmOnly: true
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "roll",
+		description: "Roll dice for yourself alone: a hidden check, a random table, an improvised effect. Nothing is applied and the Player doesn't see it; use damage, heal and the like to apply a result.",
+		input: object({
+			expr: string().min(1).describe("Dice such as 2d6+1 or d20+3"),
+			...adv
+		}),
+		activity: null,
+		run: ({ dice }, input) => {
+			const d20 = /^\s*1?d20\s*([+-]\s*\d+)?\s*$/i.exec(input.expr);
+			if (input.adv && !d20) throw new ToolError("adv_needs_d20", "Advantage and disadvantage apply to a single d20", "Roll d20+N with adv, or drop adv");
+			let result;
+			if (input.adv && d20) {
+				const modifier = d20[1] ? Number(d20[1].replace(/\s+/g, "")) : 0;
+				const rolled = dice.rollD20({
+					mode: input.adv,
+					reason: input.reason ?? ""
+				});
+				result = {
+					dice: rolled.dice,
+					kept: rolled.kept,
+					modifier,
+					total: rolled.kept + modifier
+				};
+			} else {
+				const rolled = rollExpressionOrRefuse(dice, input.expr);
+				result = {
+					dice: rolled.dice,
+					kept: null,
+					modifier: rolled.modifier,
+					total: rolled.total
+				};
+			}
+			return {
+				result,
+				event: {
+					kind: "dm_roll",
+					summary: `${input.expr}: ${result.total}`,
+					data: {
+						...result,
+						expr: input.expr
+					},
+					dmOnly: true
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "damage",
+		description: "Deal damage outside an attack or save, such as a fall. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply.",
+		input: object({
+			target: string().min(1).describe("char:… or npc:…"),
+			amount: number().int().min(0),
+			type: string().min(1).describe("The damage type, such as bludgeoning")
+		}),
+		activity: "DM applies damage",
+		run: ({ db }, input) => {
+			const who = combatant(db, input.target);
+			const type = input.type.toLowerCase();
+			const change = applyDamage(db, who, input.amount, type);
+			return {
+				result: {
+					...change,
+					state: hpState(change.hp, change.max)
+				},
+				event: {
+					kind: "damage",
+					summary: `${who.name} takes ${change.dealt} ${type}`,
+					data: {
+						target: who.handle,
+						dealt: change.dealt,
+						type,
+						state: hpState(change.hp, change.max)
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "heal",
+		description: "Restore HP, never above the maximum. Roll a healing spell or potion with roll first.",
+		input: object({
+			target: string().min(1).describe("char:… or npc:…"),
+			amount: number().int().min(0)
+		}),
+		activity: "DM applies healing",
+		run: ({ db }, input) => {
+			const who = combatant(db, input.target);
+			const change = applyHealing(db, who, input.amount);
+			return {
+				result: {
+					healed: change.dealt,
+					hp: change.hp,
+					max: change.max,
+					state: hpState(change.hp, change.max)
+				},
+				event: {
+					kind: "heal",
+					summary: `${who.name} regains ${change.dealt} HP`,
+					data: {
+						target: who.handle,
+						healed: change.dealt,
+						state: hpState(change.hp, change.max)
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "add_condition",
+		description: "Give a Character or NPC an SRD condition, such as prone or frightened.",
+		input: object({
+			target: string().min(1),
+			condition: string().min(1)
+		}),
+		activity: "DM applies a condition",
+		run: ({ db }, input) => {
+			const who = combatant(db, input.target);
+			const condition = srdCondition(db, input.condition);
+			if (!who.conditions.includes(condition)) setConditions(db, who, [...who.conditions, condition]);
+			return {
+				result: {
+					target: who.handle,
+					conditions: [.../* @__PURE__ */ new Set([...who.conditions, condition])]
+				},
+				event: {
+					kind: "condition_added",
+					summary: `${who.name} is ${condition}`,
+					data: {
+						target: who.handle,
+						condition
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "remove_condition",
+		description: "End a condition a Character or NPC has.",
+		input: object({
+			target: string().min(1),
+			condition: string().min(1)
+		}),
+		activity: "DM ends a condition",
+		run: ({ db }, input) => {
+			const who = combatant(db, input.target);
+			const condition = slugOf(input.condition);
+			if (!who.conditions.includes(condition)) throw new ToolError("condition_absent", `${who.name} isn't ${condition}`, who.conditions.length ? `${who.name} has: ${who.conditions.join(", ")}` : `${who.name} has no conditions`);
+			const conditions = who.conditions.filter((c) => c !== condition);
+			setConditions(db, who, conditions);
+			return {
+				result: {
+					target: who.handle,
+					conditions
+				},
+				event: {
+					kind: "condition_removed",
+					summary: `${who.name} is no longer ${condition}`,
+					data: {
+						target: who.handle,
+						condition
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "spend",
+		description: "Spend a Character's resource outside cast: a spell slot (slot:1 to slot:9) or one use of a feature by its slug, such as second-wind.",
+		input: object({
+			character: string().min(1).describe("char:…"),
+			resource: string().min(1).describe("slot:N or a feature slug")
+		}),
+		activity: null,
+		run: ({ db }, input) => {
+			const who = combatant(db, input.character);
+			if (who.kind !== "character") throw new ToolError("not_a_character", `${who.name} is not a Character`, "NPC resources are yours to pace; no tool call needed");
+			const slot = /^slot:([1-9])$/.exec(input.resource.trim());
+			if (slot) {
+				const spent = spendSlot(db, who, Number(slot[1]));
+				return {
+					result: {
+						character: who.handle,
+						slot: spent
+					},
+					event: {
+						kind: "spend",
+						summary: `${who.name} spends a level ${spent.level} slot`,
+						data: {
+							character: who.handle,
+							resource: input.resource
+						}
+					}
+				};
+			}
+			const key = slugOf(input.resource);
+			const feature = who.features.find((f) => f.slug === key || slugOf(f.name) === key);
+			if (!feature) throw new ToolError("unknown_resource", `${who.name} has no resource called ${input.resource}`, `Spend slot:N or one of ${who.name}'s features: ${who.features.map((f) => f.slug).join(", ")}`);
+			const featureUses = {
+				...who.detail.featureUses,
+				[feature.slug]: (who.detail.featureUses[feature.slug] ?? 0) + 1
+			};
+			db.update(character).set({ featureUses }).where(eq(character.id, who.id)).run();
+			return {
+				result: {
+					character: who.handle,
+					feature: feature.slug,
+					spent: featureUses[feature.slug]
+				},
+				event: {
+					kind: "spend",
+					summary: `${who.name} uses ${feature.name}`,
+					data: {
+						character: who.handle,
+						resource: feature.slug
+					}
+				}
+			};
+		}
+	})
+];
 // src/lib/server/tools/seed-tools.ts
 /** The Seed is one Entity per Campaign, so its handle is fixed. */
 var SEED_HANDLE = "campaign";
@@ -1279,6 +1877,25 @@ var narrationTools = [writeTool({
 		};
 	}
 })];
+// src/lib/server/tools/rules-tools.ts
+/** SRD rules content: never secret, never World content, so kept apart from `search`. */
+var rulesTools = [readTool({
+	name: "lookup",
+	description: "Read SRD rules data (spells, monsters, conditions, magic items, rules sections): by handle (spell:fireball, monster:goblin, condition:prone, magic-item:…, rule:…) or by a free-text query. Separate from the World search.",
+	input: object({
+		handle: string().trim().min(1).optional().describe("A rules handle, such as spell:fireball"),
+		query: string().trim().min(1).optional().describe("Words to search the rules for"),
+		limit: number().int().min(1).max(25).optional()
+	}).refine((i) => i.handle === void 0 !== (i.query === void 0), { message: "Pass exactly one of handle or query" }),
+	activity: "DM checks the rules",
+	run: ({ db }, { handle, query, limit }) => {
+		const rules = createRulesRepository(db);
+		if (query !== void 0) return { results: rules.search(query, { limit }) };
+		const found = rules.entry(handle);
+		if (!found) throw new ToolError("unknown_rules_entry", `No rules entry has the handle ${handle}`, "Find the handle with lookup({query}) and call again");
+		return found;
+	}
+})];
 // src/lib/server/tools/scene-tools.ts
 /** A live Place, or `unknown_handle`. */
 function placeAt(db, handle) {
@@ -1813,7 +2430,9 @@ var gameTools = [
 	...knowledgeTools,
 	...narrationTools,
 	...sceneTools,
-	...sessionTools
+	...sessionTools,
+	...rulesTools,
+	...actionTools
 ];
 // src/lib/server/dice.ts
 var MAX_COUNT = 100;
@@ -2201,16 +2820,20 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		},
 		/**
 		* The Stop hook asks whether the DM may end its turn. It may not while a closed Floor awaits
-		* Narration; on the second attempt (`again`) it may, and the Player's timeline shows an error.
+		* Narration, or while an action tool's pending Call is unattached. On the second attempt
+		* (`again`) it may, and the Player's timeline shows an error.
 		*/
 		stopCheck(campaignId, again) {
 			const record = library.record(campaignId);
-			if (record.timeline().awaitingSince === null) return { block: false };
+			const pending = record.pendingCalls();
+			const awaiting = record.timeline().awaitingSince !== null;
+			if (!pending.length && !awaiting) return { block: false };
 			if (!again) return {
 				block: true,
-				reason: "A closed Floor awaits Narration. Answer it with narrate before ending your turn."
+				reason: [awaiting && "A closed Floor awaits Narration. Answer it with narrate before ending your turn.", pending.length && `A pending Call is unattached (${pending.join(", ")}). Attach it with narrate(text, call: id), or drop it with cancel_call.`].filter(Boolean).join(" ")
 			};
-			record.turnError("The DM ended its turn without a Narration.");
+			record.dropPendingCalls();
+			record.turnError(awaiting ? "The DM ended its turn without a Narration." : "The DM ended its turn before asking for a roll.");
 			publish({
 				type: "timeline",
 				campaign: campaignId

@@ -1,7 +1,7 @@
 import { page } from 'vitest/browser'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-svelte'
-import { checkCall, questionCall } from './play-fixtures'
+import { attackCall, checkCall, questionCall } from './play-fixtures'
 import CallCard from './CallCard.svelte'
 
 describe('CallCard', () => {
@@ -63,5 +63,15 @@ describe('CallCard', () => {
     await expect
       .element(page.getByRole('button', { name: 'Roll Sleight of Hand check for Wren' }))
       .toBeDisabled()
+  })
+
+  it("offers an attack's next roll, damage after the to-hit", async () => {
+    const onroll = vi.fn()
+    render(CallCard, { call: attackCall, onroll, onanswer: () => {} })
+
+    await expect.element(page.getByText('Crossbow, light attack')).toBeVisible()
+    await page.getByRole('button', { name: 'Roll damage for Wren' }).click()
+
+    expect(onroll).toHaveBeenCalledWith('p4')
   })
 })

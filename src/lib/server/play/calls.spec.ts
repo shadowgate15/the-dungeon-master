@@ -78,7 +78,8 @@ describe('a Check Call', () => {
           label: 'Sleight of Hand check',
           reason: 'The lock is old and stiff',
           mode: 'normal',
-          answered: false
+          answered: false,
+          next: null
         }
       ]
     })
@@ -137,7 +138,8 @@ describe('rolling a Call', () => {
       total: expect.any(Number),
       outcome: expect.stringMatching(/^(success|failure)$/),
       mode: 'normal',
-      reason: null
+      reason: null,
+      target: null
     })
     expect(JSON.stringify(play.timeline(campaignId))).not.toMatch(/\bdc\b|tier|hard/i)
   })

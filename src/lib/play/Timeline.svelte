@@ -83,9 +83,16 @@
           >🎲 {entry.dice.join(' | ')} {signed(entry.modifier)}</span
         >
         <span class="font-mono font-semibold">= {entry.total}</span>
-        <span class={entry.outcome === 'success' ? 'text-accent' : 'text-danger'}
-          >{entry.outcome}</span
-        >
+        {#if entry.outcome}
+          <span
+            class={['success', 'hit', 'critical hit'].includes(entry.outcome)
+              ? 'text-accent'
+              : 'text-danger'}>{entry.outcome}</span
+          >
+        {/if}
+        {#if entry.target}
+          <span class="text-muted">{entry.target.name} is {entry.target.state}</span>
+        {/if}
         {#if entry.mode !== 'normal'}
           <span class="text-xs text-muted italic">({entry.mode}: {entry.reason})</span>
         {/if}

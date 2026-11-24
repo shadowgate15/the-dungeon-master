@@ -1,6 +1,6 @@
 import { i as json } from "../../../../../../chunks/exports.js";
 import { o as play } from "../../../../../../chunks/bridge.js";
-import { G as SpotlightRefusedError, c as CampaignNotFoundError, s as CampaignMissingError } from "../../../../../../chunks/campaign.js";
+import { c as CampaignNotFoundError, lt as SpotlightRefusedError, s as CampaignMissingError } from "../../../../../../chunks/campaign.js";
 import { n as readJson } from "../../../../../../chunks/respond.js";
 // src/routes/api/campaigns/[id]/spotlight/+server.ts
 /**
