@@ -2,7 +2,9 @@ import { clockParts, formatClock } from '#lib/play/clock.ts'
 import type { SceneView } from '#lib/play/scene.ts'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { Queryable } from '../db/connect'
-import { campaign, character, entity } from '../db/schema'
+import { hpState } from '#lib/play/hp-state.ts'
+import { campaign, character, entity, npcCombat } from '../db/schema'
+import { playerCombat } from './combat'
 import { slug } from '../world/names'
 
 /** A move of the clock that would take it backwards. */
@@ -113,7 +115,15 @@ export function playerScene(db: Queryable): SceneView {
       id: c.row.id,
       name: c.row.name,
       whereabouts: placeName(c.row.whereabouts)
-    }))
+    })),
+    combat: playerCombat(
+      db,
+      new Map(characterRefs(db).map((c) => [c.handle, c.row.id])),
+      (handle) => {
+        const npc = db.select().from(npcCombat).where(eq(npcCombat.handle, handle)).get()
+        return npc ? hpState(npc.hp, npc.maxHp) : 'unhurt'
+      }
+    )
   }
 }
 

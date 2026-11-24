@@ -6,7 +6,8 @@ import type { Database, Queryable } from '../db/connect'
 import { campaign, character, declaration, floor, returnedDraft } from '../db/schema'
 import { withdrawOpenCall } from '../play/calls'
 import { awaitingNarrationSince, logEvent, setAwaitingNarration } from '../play/log'
-import { inScene, scenePlace } from '../play/scene'
+import { currentTurn } from '../play/combat'
+import { characterRefs, inScene, scenePlace } from '../play/scene'
 
 /** The Character can't put a Declaration on the Floor (unknown, dead or departed, not theirs). */
 export class DeclarationRefusedError extends Error {}
@@ -187,6 +188,12 @@ export function createFloor(db: Database, now: () => number = Date.now) {
         }
         if (actor.controllingPlayer !== player) {
           throw new DeclarationRefusedError(`${actor.name} is not your Character`)
+        }
+        // In Combat, the Floor is locked to whoever's turn it is.
+        const turn = currentTurn(db)
+        const handle = characterRefs(db).find((c) => c.row.id === actor.id)?.handle
+        if (turn && turn.handle !== handle) {
+          throw new DeclarationRefusedError(`It is ${turn.name}'s turn`)
         }
         const at = now()
         const floorId = openFloor(at)

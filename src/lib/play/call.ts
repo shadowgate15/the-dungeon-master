@@ -24,11 +24,12 @@ export type CallPart = {
 
 /**
  * The open Call, Player-safe: a Check (one part per Character), a question (its text and
- * choices, free text when there are none), or an action's roll sequences (one per Character).
+ * choices, free text when there are none), an action's roll sequences (one per Character), or
+ * Combat initiative (one roll per Character).
  */
 export type OpenCall = {
   id: string
-  kind: 'check' | 'question' | 'roll_sequence'
+  kind: 'check' | 'question' | 'roll_sequence' | 'initiative'
   text: string | null
   choices: string[]
   parts: CallPart[]

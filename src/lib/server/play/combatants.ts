@@ -5,10 +5,11 @@ import type { AbilityKey, DerivedStats } from '#lib/rules/derive-stats.ts'
 import { createCharacterService, type CharacterDetail } from '../character/service'
 import { loadWizardRules } from '../character/wizard-rules'
 import type { Database, Queryable } from '../db/connect'
-import { character, entity, npcCombat } from '../db/schema'
+import { character, combatant as combatantTable, entity, npcCombat } from '../db/schema'
 import { characterHolders } from '../knowledge/holders'
 import { createRulesRepository } from '../rules/repository'
 import { ToolError } from '../tools/contract'
+import { liveCreature } from './combat'
 
 /** A monster stat block, as the rules repository returns it. */
 export type Monster = NonNullable<
@@ -18,7 +19,8 @@ export type Monster = NonNullable<
 /**
  * Someone who can attack, be attacked, save or take damage. Characters keep their numbers in the
  * Character row and derive them; NPCs carry a `stat_block` and keep their own HP and conditions.
- * Creatures (#331) join this union.
+ * Creatures are faceless foes in the live Combat, keeping their HP and conditions on their
+ * combatant row until it ends.
  */
 export type Combatant =
   | {
@@ -37,7 +39,7 @@ export type Combatant =
       conditions: string[]
     }
   | {
-      kind: 'npc'
+      kind: 'npc' | 'creature'
       handle: string
       name: string
       monster: Monster
@@ -123,12 +125,36 @@ function npcCombatant(db: Queryable, handle: string): Combatant | null {
   }
 }
 
+/** A Creature in the live Combat; gone once the Combat ends. */
+function creatureCombatant(db: Queryable, handle: string): Combatant | null {
+  const row = liveCreature(db, handle)
+  if (!row) return null
+  const found = createRulesRepository(db).entry(row.statBlock!)
+  if (!found || found.kind !== 'monster') return null
+  const monster = found.entry as Monster
+  return {
+    kind: 'creature',
+    handle,
+    name: row.name,
+    monster,
+    ac: monsterAc(monster),
+    hp: row.hp!,
+    maxHp: row.maxHp!,
+    conditions: row.conditions
+  }
+}
+
 /**
- * The combatant a tool names: a Character by handle (`char:wren`) or name, or an NPC by handle.
- * The one lookup every action tool and primitive goes through.
+ * The combatant a tool names: a Character by handle (`char:wren`) or name, an NPC by handle, or a
+ * Creature in the live Combat (`creature:goblin-2`). The one lookup every action tool and primitive
+ * goes through.
  */
 export function combatant(db: Queryable, ref: string): Combatant {
-  const found = ref.startsWith('npc:') ? npcCombatant(db, ref) : characterCombatant(db, ref)
+  const found = ref.startsWith('npc:')
+    ? npcCombatant(db, ref)
+    : ref.startsWith('creature:')
+      ? creatureCombatant(db, ref)
+      : characterCombatant(db, ref)
   if (!found) throw ToolError.unknownHandle(ref)
   return found
 }
@@ -157,7 +183,7 @@ export function mustAct(who: Combatant) {
 
 /** How a monster's resistances, immunities and vulnerabilities scale damage of one type. */
 function damageFactor(who: Combatant, damageType: string | null): number {
-  if (who.kind !== 'npc' || !damageType) return 1
+  if (who.kind === 'character' || !damageType) return 1
   const has = (list: unknown) =>
     (list as string[]).some((entry) =>
       entry
@@ -195,7 +221,7 @@ export function applyDamage(
     return { dealt, hp, max: who.maxHp }
   }
   const hp = Math.max(0, who.hp - dealt)
-  db.update(npcCombat).set({ hp }).where(eq(npcCombat.handle, who.handle)).run()
+  writeFoe(db, who, { hp })
   return { dealt, hp, max: who.maxHp }
 }
 
@@ -205,7 +231,7 @@ export function applyHealing(db: Queryable, who: Combatant, amount: number): HpC
   if (who.kind === 'character') {
     db.update(character).set({ currentHp: hp }).where(eq(character.id, who.id)).run()
   } else {
-    db.update(npcCombat).set({ hp }).where(eq(npcCombat.handle, who.handle)).run()
+    writeFoe(db, who, { hp })
   }
   return { dealt: hp - who.hp, hp, max: who.maxHp }
 }
@@ -215,6 +241,16 @@ export function setConditions(db: Queryable, who: Combatant, conditions: string[
   if (who.kind === 'character') {
     db.update(character).set({ conditions }).where(eq(character.id, who.id)).run()
   } else {
-    db.update(npcCombat).set({ conditions }).where(eq(npcCombat.handle, who.handle)).run()
+    writeFoe(db, who, { conditions })
+  }
+}
+
+/** Writes an NPC's or Creature's own HP or conditions. */
+function writeFoe(db: Queryable, who: Combatant, set: { hp?: number; conditions?: string[] }) {
+  if (who.kind === 'creature') {
+    const row = liveCreature(db, who.handle)!
+    db.update(combatantTable).set(set).where(eq(combatantTable.id, row.id)).run()
+  } else {
+    db.update(npcCombat).set(set).where(eq(npcCombat.handle, who.handle)).run()
   }
 }

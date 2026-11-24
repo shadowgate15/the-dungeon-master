@@ -74,4 +74,18 @@ describe('CallCard', () => {
 
     expect(onroll).toHaveBeenCalledWith('p4')
   })
+
+  it("rolls each Character's initiative from the batched initiative Call", async () => {
+    const onroll = vi.fn()
+    const call = {
+      ...checkCall,
+      kind: 'initiative' as const,
+      parts: checkCall.parts.map((p) => ({ ...p, label: 'Initiative', reason: null }))
+    }
+    render(CallCard, { call, onroll, onanswer: () => {} })
+
+    await page.getByRole('button', { name: 'Roll Initiative for Bram' }).click()
+
+    expect(onroll).toHaveBeenCalledWith('p2')
+  })
 })

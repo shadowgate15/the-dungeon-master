@@ -11,10 +11,20 @@ import type { ChannelEvent } from '../bridge/channels'
 import { createCharacterService } from '../character/service'
 import { loadWizardRules } from '../character/wizard-rules'
 import type { Database, Queryable } from '../db/connect'
-import { call, callPart, campaign, character, type CheckResult, type Sequence } from '../db/schema'
+import {
+  call,
+  CALL_KINDS,
+  callPart,
+  campaign,
+  character,
+  type CheckResult,
+  type Sequence
+} from '../db/schema'
 import type { Dice } from '../dice'
 import { ToolError } from '../tools/contract'
+import { orderText, recordInitiative } from './combat'
 import { logEvent, setAwaitingNarration } from './log'
+import { characterRefs } from './scene'
 import { nextStep, rollStep, sequenceText } from './sequences'
 
 /**
@@ -80,6 +90,7 @@ export const callInput = z.union([
 export type CallInput = z.infer<typeof callInput>
 
 type CharacterRow = typeof character.$inferSelect
+type CallKind = (typeof CALL_KINDS)[number]
 
 const slug = (name: string) =>
   name
@@ -118,11 +129,15 @@ function openCallRow(db: Queryable) {
 }
 
 /** What a part rolls, as the Player reads it. */
-function labelOf(part: {
-  skill: string | null
-  save: string | null
-  sequence?: Sequence | null
-}): string | null {
+function labelOf(
+  part: {
+    skill: string | null
+    save: string | null
+    sequence?: Sequence | null
+  },
+  kind?: CallKind
+): string | null {
+  if (kind === 'initiative') return 'Initiative'
   if (part.sequence) return part.sequence.label
   if (part.skill) return `${SKILL_NAMES.get(part.skill) ?? part.skill} check`
   if (part.save) return `${ABILITY_NAMES.get(part.save) ?? part.save} save`
@@ -203,11 +218,14 @@ function attachPending(db: Queryable, id: string, openedBy: number | null): stri
   return attached.id
 }
 
-/** One roll sequence for one Character, addressed to its Controlling Player. */
+/**
+ * One part of a pending Call for one Character, addressed to its Controlling Player: a roll
+ * sequence, or (for an initiative Call) none.
+ */
 export type PendingPart = {
   characterId: string
   player: string
-  sequence: Sequence
+  sequence: Sequence | null
   mode?: RollMode
   reason?: string | null
 }
@@ -216,12 +234,17 @@ export type PendingPart = {
  * Stores an action tool's roll sequences as a pending Call, hidden from the Players until the
  * closing `narrate(..., call: id)` attaches it. Returns its id.
  */
-export function createPendingCall(db: Queryable, parts: PendingPart[], at: number): string {
+export function createPendingCall(
+  db: Queryable,
+  parts: PendingPart[],
+  at: number,
+  kind: 'roll_sequence' | 'initiative' = 'roll_sequence'
+): string {
   const id = db
     .insert(call)
     .values({
       campaignId: db.select({ id: campaign.id }).from(campaign).get()!.id,
-      kind: 'roll_sequence',
+      kind,
       state: 'pending',
       createdAt: at
     })
@@ -303,7 +326,7 @@ export function openCallView(db: Queryable): OpenCall | null {
       id: part.id,
       character: characterName,
       player: part.player,
-      label: labelOf(part),
+      label: labelOf(part, open.kind),
       reason: part.reason,
       mode: part.mode,
       answered: part.answeredAt !== null,
@@ -330,10 +353,10 @@ export class CallClosedError extends Error {}
 export class CallRefusedError extends Error {}
 
 /** One answered part, as the DM hears it in the call result. */
-type Answered = typeof callPart.$inferSelect & { characterName: string | null }
+type Answered = typeof callPart.$inferSelect & { characterName: string | null; kind: CallKind }
 
-/** A completed Call: every part answered. */
-export type CallResult = { call: string; players: string[]; parts: Answered[] }
+/** A completed Call: every part answered. `after` adds lines, such as the Combat's order. */
+export type CallResult = { call: string; players: string[]; parts: Answered[]; after?: string[] }
 
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
 function resultLine(p: Answered): string {
@@ -342,13 +365,16 @@ function resultLine(p: Answered): string {
   const r = p.result
   const dice = r.dice.length > 1 ? `${r.dice.join('/')} (${p.mode}) kept ${r.kept}` : `${r.kept}`
   const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`
+  if (p.kind === 'initiative') {
+    return `[${p.characterName} · ${p.player}] Initiative: d20 ${dice} ${modifier} = ${r.total}`
+  }
   return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? 'success' : 'failure'}`
 }
 
 /** The `call_result` channel event: one body line per part, in order. */
 export function callResultEvent(result: CallResult): ChannelEvent {
   return {
-    content: result.parts.map(resultLine).join('\n'),
+    content: [...result.parts.map(resultLine), ...(result.after ?? [])].join('\n'),
     meta: { kind: 'call_result', call_id: result.call, players: result.players.join(',') }
   }
 }
@@ -358,13 +384,20 @@ export function callResultEvent(result: CallResult): ChannelEvent {
  * and logs it; the part that completes the Call sets awaiting Narration and returns the result.
  */
 export function createCalls(db: Database, now: () => number = Date.now) {
-  function modifierFor(characterId: string, part: { skill: string | null; save: string | null }) {
+  function modifierFor(
+    characterId: string,
+    part: { skill: string | null; save: string | null },
+    kind: CallKind
+  ) {
     const detail = createCharacterService(db, now).get(characterId)
     if (!detail) return 0
     const { stats } = buildSummary(loadWizardRules(), {
       ...detailToSummaryData(detail),
       equipment: detail.inventory
     })
+    if (kind === 'initiative') {
+      return stats.initiative.status === 'ok' ? stats.initiative.value : 0
+    }
     const stat = part.skill ? stats.skills[part.skill] : stats.savingThrows[part.save as AbilityKey]
     return stat?.status === 'ok' ? stat.value.modifier : 0
   }
@@ -373,7 +406,10 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     callId: string,
     partId: string,
     player: string,
-    resolve: (part: typeof callPart.$inferSelect) => {
+    resolve: (
+      part: typeof callPart.$inferSelect,
+      kind: CallKind
+    ) => {
       values: Partial<typeof callPart.$inferInsert>
       event: { kind: string; summary: string; data: Record<string, unknown> }
       /** Whether the part is finished; a roll sequence takes several clicks. */
@@ -398,7 +434,7 @@ export function createCalls(db: Database, now: () => number = Date.now) {
           .get()
       if (!part) throw new CallClosedError('That Call is no longer open')
       if (part.player !== player) throw new CallRefusedError('That roll is not yours')
-      const { values, event, finished = true } = resolve(part)
+      const { values, event, finished = true } = resolve(part, open.kind)
       db.update(callPart)
         .set({ ...values, answeredAt: finished ? at : null })
         .where(eq(callPart.id, partId))
@@ -412,13 +448,14 @@ export function createCalls(db: Database, now: () => number = Date.now) {
         .where(eq(callPart.callId, callId))
         .orderBy(asc(callPart.position))
         .all()
-        .map(({ part, characterName }) => ({ ...part, characterName }))
+        .map(({ part, characterName }) => ({ ...part, characterName, kind: open.kind }))
       if (parts.some((p) => p.answeredAt === null)) return null
       db.update(call).set({ state: 'answered', closedAt: at }).where(eq(call.id, callId)).run()
       const result: CallResult = {
         call: callId,
         players: [...new Set(parts.map((p) => p.player))],
-        parts
+        parts,
+        after: open.kind === 'initiative' ? [orderText(db)] : []
       }
       logEvent(
         db,
@@ -478,10 +515,10 @@ export function createCalls(db: Database, now: () => number = Date.now) {
      * roll completes it, null otherwise.
      */
     roll(callId: string, partId: string, dice: Dice, player: string = SOLO_PLAYER) {
-      return answer(callId, partId, player, (part) => {
+      return answer(callId, partId, player, (part, kind) => {
         if (!part.characterId) throw new CallRefusedError('That part is a question: answer it')
         if (part.sequence) return rollSequenceStep(part, dice, player)
-        const modifier = modifierFor(part.characterId, part)
+        const modifier = modifierFor(part.characterId, part, kind)
         const d20 =
           part.mode === 'normal'
             ? dice.rollD20()
@@ -500,7 +537,28 @@ export function createCalls(db: Database, now: () => number = Date.now) {
             .from(character)
             .where(eq(character.id, part.characterId))
             .get()?.name ?? ''
-        const what = labelOf(part) ?? ''
+        const what = labelOf(part, kind) ?? ''
+        if (kind === 'initiative') {
+          const handle = characterRefs(db).find((c) => c.row.id === part.characterId)?.handle
+          if (handle) recordInitiative(db, handle, total)
+          return {
+            values: { result },
+            event: {
+              kind: 'roll',
+              summary: `${name} ${what}: ${total}`,
+              data: {
+                part: partId,
+                characterName: name,
+                player,
+                what,
+                mode: part.mode,
+                reason: part.reason,
+                ...result,
+                outcome: null
+              }
+            }
+          }
+        }
         return {
           values: { result },
           event: {

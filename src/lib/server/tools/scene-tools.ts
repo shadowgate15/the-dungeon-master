@@ -12,6 +12,7 @@ import {
   present,
   scenePlace
 } from '../play/scene'
+import { refuseDuringCombat } from '../play/combat'
 import { readTool, ToolError, writeTool, type ToolContext } from './contract'
 
 type Exit = { name: string; to?: string }
@@ -191,10 +192,11 @@ export const sceneTools = [
   writeTool({
     name: 'set_scene',
     description:
-      'Move the spotlight to a Place. Refused unless a Character is there (move them first). Who is present follows from whereabouts. On a cut, Declarations for Characters no longer in the Scene go back to their Player as unsent text and the Floor reopens. Honour a spotlight request within a Floor or two, at a natural break.',
+      'Move the spotlight to a Place. Refused unless a Character is there (move them first), and while a Combat is live. Who is present follows from whereabouts. On a cut, Declarations for Characters no longer in the Scene go back to their Player as unsent text and the Floor reopens. Honour a spotlight request within a Floor or two, at a natural break.',
     input: z.strictObject({ place: z.string().min(1).describe('Place handle') }),
     activity: (_, result) => `DM sets the Scene: ${(result.scene as { name: string }).name}`,
     run: ({ db, now }, { place: handle }) => {
+      refuseDuringCombat(db, 'moving the spotlight')
       const place = placeAt(db, handle)
       const party = characterRefs(db).filter((c) => c.row.status === 'alive')
       if (!party.some((c) => c.row.whereabouts === place.handle)) {

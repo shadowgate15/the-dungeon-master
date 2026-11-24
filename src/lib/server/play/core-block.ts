@@ -6,6 +6,8 @@ import { session } from '../db/schema'
 import { currentArc, driftCount } from '../story/arc'
 import { lastLint } from '../world/lint'
 import { slug } from '../world/names'
+import { hpState } from '#lib/play/hp-state.ts'
+import { initiativeOrder, liveCombat, waitingOnInitiative } from './combat'
 import { characterRefs, currentMinute, present } from './scene'
 import { playSheets } from './sheets'
 
@@ -56,6 +58,35 @@ export function npcsPart({ db }: CoreBlockSource): string {
 }
 
 /**
+ * The live Combat, or null outside one: the round and whose turn, then the order (initiative,
+ * name, handle), with each Creature's stat block, HP state and conditions. This lifts the block
+ * from ~300 to ~500 tokens while it lasts.
+ */
+export function combatPart({ db }: CoreBlockSource): string | null {
+  const live = liveCombat(db)
+  if (!live) return null
+  const order = initiativeOrder(db, live.id)
+  const current = order.find((c) => c.id === live.current)
+  const head = current
+    ? `Combat: round ${live.round}, turn: ${current.name} (${current.handle}).`
+    : 'Combat: waiting on initiative.'
+  const lines = order.map((c) => {
+    const creature =
+      c.kind === 'creature'
+        ? `: ${c.statBlock}, ${hpState(c.hp!, c.maxHp!)}, conditions ${c.conditions.join(', ') || 'none'}`
+        : ''
+    return `- ${c.initiative} ${c.name} (${c.handle})${creature}${c.id === live.current ? ' ← turn' : ''}`
+  })
+  const waiting = waitingOnInitiative(db, live.id)
+  if (waiting.length) {
+    lines.push(
+      `- waiting on initiative: ${waiting.map((c) => `${c.name} (${c.handle})`).join(', ')}`
+    )
+  }
+  return [head, ...lines].join('\n')
+}
+
+/**
  * The Arc line: the current Act (the Act of the first pending Beat) with its purpose, that Act's
  * pending Beats by handle and title, the next Act's name, and the drift count. No descriptions.
  */
@@ -98,7 +129,10 @@ export function coreBlock(source: CoreBlockSource): string {
     scenePart(source),
     partyPart(source),
     npcsPart(source),
+    combatPart(source),
     arcPart(source),
     lintPart(source)
-  ].join('\n')
+  ]
+    .filter((part) => part !== null)
+    .join('\n')
 }

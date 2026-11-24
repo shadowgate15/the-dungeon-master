@@ -405,6 +405,12 @@ export const activityLine = sqliteTable('activity_line', {
 })
 
 /**
+ * What a Call asks for: a Check, a question, an action's roll sequences, or Combat initiative
+ * (one roll per Character, recorded in the Combat's order).
+ */
+export const CALL_KINDS = ['check', 'question', 'roll_sequence', 'initiative'] as const
+
+/**
  * A Call: the DM's open request to the Players, a Check to roll or a question to answer. At most
  * one is open per Campaign; it is kept with the Scene until every part is answered or a closed
  * Floor with Declarations withdraws it. `pending` (an action tool's Call not yet attached by
@@ -416,7 +422,7 @@ export const call = sqliteTable('call', {
     .$defaultFn(() => crypto.randomUUID()),
   campaignId: campaignOwner(),
   /** `roll_sequence`: an action tool's Call, each part a chain of rolls code resolves click by click. */
-  kind: text('kind', { enum: ['check', 'question', 'roll_sequence'] }).notNull(),
+  kind: text('kind', { enum: CALL_KINDS }).notNull(),
   state: text('state', { enum: ['pending', 'open', 'answered', 'withdrawn', 'cancelled'] })
     .notNull()
     .default('open'),
@@ -539,6 +545,66 @@ export const npcCombat = sqliteTable('npc_combat', {
     .notNull()
     .$defaultFn(() => [])
 })
+
+/**
+ * A fight in the Scene, run in initiative order. At most one is live (`endedAt` null). `round` is 0
+ * until every combatant has initiative, then counts from 1; `current` is the combatant whose turn
+ * it is (null until the order is known).
+ */
+export const combat = sqliteTable('combat', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  round: integer('round').notNull().default(0),
+  current: text('current'),
+  startedAt: integer('started_at').notNull(),
+  endedAt: integer('ended_at')
+})
+
+/** The per-turn resources a combatant spends: a reminder for the DM, never a refusal. */
+export type TurnResources = { action: boolean; bonusAction: boolean; reaction: boolean }
+
+/**
+ * One combatant in a Combat: a Character, an NPC (both by handle), or a Creature — a faceless foe
+ * spawned for this Combat from a stat block (`creature:goblin-2`), which keeps its HP and
+ * conditions here and vanishes with the Combat. `initiative` is null until rolled.
+ */
+export const combatant = sqliteTable(
+  'combatant',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    combatId: text('combat_id')
+      .notNull()
+      .references(() => combat.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['character', 'npc', 'creature'] }).notNull(),
+    handle: text('handle').notNull(),
+    name: text('name').notNull(),
+    /** The order combatants joined in, the last tie-break. */
+    joined: integer('joined').notNull(),
+    initiative: integer('initiative'),
+    /** The Dexterity score, the first tie-break. */
+    dex: integer('dex').notNull(),
+    /** Surprised: loses its first turn. */
+    surprised: integer('surprised', { mode: 'boolean' }).notNull().default(false),
+    /** What it has spent this turn. */
+    used: text('used', { mode: 'json' })
+      .$type<TurnResources>()
+      .notNull()
+      .$defaultFn(() => ({ action: false, bonusAction: false, reaction: false })),
+    /** A Creature's stat block (`monster:goblin`); null for a Character or NPC. */
+    statBlock: text('stat_block'),
+    /** A Creature's HP (starting at the stat block's average), max and conditions. */
+    hp: integer('hp'),
+    maxHp: integer('max_hp'),
+    conditions: text('conditions', { mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .$defaultFn(() => [])
+  },
+  (t) => [index('combatant_combat_idx').on(t.combatId)]
+)
 
 /**
  * A Declaration sent back to its Player's composer as unsent text: its Character left the Scene

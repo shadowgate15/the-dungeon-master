@@ -198,4 +198,19 @@ describe('FloorComposer for a split Party', () => {
     expect(writeText).toHaveBeenCalledWith('cd /home/me/ember-road && dm')
     vi.unstubAllGlobals()
   })
+
+  it('says the composer is locked to the Character whose turn it is', async () => {
+    render(FloorComposer, { acting: 'Wren', turn: 'Wren', declarations: [], ...handlers() })
+
+    await expect.element(page.getByText("Wren's turn")).toBeVisible()
+    await expect.element(page.getByRole('textbox', { name: 'What does Wren do?' })).toBeEnabled()
+  })
+
+  it("blocks the box on a foe's turn", async () => {
+    render(FloorComposer, { acting: null, turn: 'Goblin 1', declarations: [], ...handlers() })
+
+    const box = page.getByRole('textbox', { name: "It is Goblin 1's turn" })
+    await expect.element(box).toBeDisabled()
+    await expect.element(page.getByRole('button', { name: 'Send' })).toBeDisabled()
+  })
 })
