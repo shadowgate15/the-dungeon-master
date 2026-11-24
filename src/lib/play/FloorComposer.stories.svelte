@@ -26,3 +26,5 @@
   name="Split Party"
   args={{ elsewhere: [{ id: 'c-mira', name: 'Mira', whereabouts: 'The Docks' }], oncut: () => {} }}
 />
+<Story name="Locked to a Combat turn" args={{ declarations: [], turn: 'Wren' }} />
+<Story name="A foe's Combat turn" args={{ acting: null, declarations: [], turn: 'Goblin 1' }} />

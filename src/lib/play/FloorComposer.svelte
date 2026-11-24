@@ -22,7 +22,8 @@
     elsewhere = [],
     oncut = () => {},
     returned = [],
-    onreturned = () => {}
+    onreturned = () => {},
+    turn = null
   }: {
     /** The acting Character's name, or null when no Character can act. */
     acting: string | null
@@ -43,6 +44,8 @@
     returned?: ReturnedDraft[]
     /** The box has loaded these returned drafts. */
     onreturned?: (ids: string[]) => void
+    /** In a Combat, whose turn it is: the box is locked to that Character, or blocked for a foe. */
+    turn?: string | null
   } = $props()
 
   let draft = $state('')
@@ -59,6 +62,9 @@
   })
 
   const blocked = $derived(disabled || acting === null)
+  const prompt = $derived(
+    acting ? `What does ${acting} do?` : turn ? `It is ${turn}'s turn` : 'No Character can act'
+  )
   const label = (d: PendingDeclaration) => `${d.characterName}: ${d.text}`
 
   function send() {
@@ -140,14 +146,17 @@
       {/each}
     </ul>
   {/if}
+  {#if turn}
+    <p class="text-xs font-medium">{turn}'s turn</p>
+  {/if}
   <Textarea
     size="sm"
     rows={2}
     bind:value={draft}
     {onkeydown}
     disabled={blocked}
-    aria-label={acting ? `What does ${acting} do?` : 'No Character can act'}
-    placeholder={acting ? `What does ${acting} do?` : 'No Character can act'}
+    aria-label={prompt}
+    placeholder={prompt}
   />
   {#if elsewhere.length}
     <ul class="flex flex-wrap gap-2 text-xs" aria-label="Elsewhere">

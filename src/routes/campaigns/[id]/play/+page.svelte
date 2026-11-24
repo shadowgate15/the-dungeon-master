@@ -6,6 +6,7 @@
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
   import SceneRail from '#lib/play/SceneRail.svelte'
+  import { actingCharacter, turnOf } from '#lib/play/combat.ts'
   import Journal from '#lib/play/Journal.svelte'
   import { knownBy } from '#lib/play/journal.ts'
   import PermissionCard from '#lib/play/PermissionCard.svelte'
@@ -69,7 +70,7 @@
   }
 
   // The selected sheet tab is the acting Character: the first in the Scene who can act, until the
-  // Player picks.
+  // Player picks (or a Combat turn locks it).
   let picked = $state<string | null>(null)
   const inScene = $derived(new Set(scene.data.present.map((c) => c.id)))
   // A tab for a Character elsewhere shows where they are, by Place name.
@@ -80,7 +81,9 @@
     })
   )
   const actors = $derived(sheets.filter((s) => s.canAct && inScene.has(s.id)))
-  const acting = $derived(actors.find((s) => s.id === picked) ?? actors[0] ?? null)
+  // In a Combat the composer is locked to whoever's turn it is, so picks wait.
+  const acting = $derived(actingCharacter(actors, picked, scene.data.combat))
+  const turn = $derived(turnOf(scene.data.combat))
   const archived = $derived(data.campaign.status === 'archived')
   const attached = $derived(sessions.data.includes(data.campaign.id))
 
@@ -155,6 +158,7 @@
       {:else}
         <FloorComposer
           acting={acting?.name ?? null}
+          turn={turn?.name ?? null}
           declarations={floor.data.declarations}
           awaiting={timeline.data.awaitingSince !== null}
           onsend={(text) => acting && attempt(() => actions.send(acting.id, text))}
