@@ -14,6 +14,6 @@ The Player pressed End Session. Close the sitting cleanly, in this order.
    - **Threads:** a short list of open, unresolved hooks the Characters know about, one line each.
    - Leave out recaps: they retell, they are not what happened.
 3. **The Arc.** Load `the-dungeon-master:arc-review` and review the Arc's pending Beats against what happened.
-4. **The World.** When the `lint` tool exists, run it and fix the findings with the ordinary tools.
+4. **The World.** Call `lint`, then load `the-dungeon-master:lint-review` and work through its findings and changed Pages with the ordinary tools.
 
 Then say goodbye to the table in one short line out of character and end your turn. The next sitting opens on a recap written from this summary.

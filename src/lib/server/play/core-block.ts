@@ -1,7 +1,10 @@
 import { formatClock } from '#lib/play/clock.ts'
 import type { Party } from '../character/party'
 import type { Queryable } from '../db/connect'
+import { eq } from 'drizzle-orm'
+import { session } from '../db/schema'
 import { currentArc, driftCount } from '../story/arc'
+import { lastLint } from '../world/lint'
 import { slug } from '../world/names'
 import { characterRefs, currentMinute, present } from './scene'
 import { playSheets } from './sheets'
@@ -74,9 +77,18 @@ export function arcPart({ db }: CoreBlockSource): string {
   ].join('\n')
 }
 
-/** When lint last ran. */
-export function lintPart(): string {
-  return 'Lint last ran: never.'
+/** When lint last ran: the Session (if any) and in-fiction time of its last `lint_ran` Event. */
+export function lintPart({ db }: CoreBlockSource): string {
+  const last = lastLint(db)
+  if (!last) return 'Lint last ran: never.'
+  const number = last.sessionId
+    ? db
+        .select({ number: session.number })
+        .from(session)
+        .where(eq(session.id, last.sessionId))
+        .get()?.number
+    : undefined
+  return `Lint last ran: ${number ? `Session ${number}, ` : ''}${formatClock(last.minute)}.`
 }
 
 /** The whole core block. */
@@ -87,6 +99,6 @@ export function coreBlock(source: CoreBlockSource): string {
     partyPart(source),
     npcsPart(source),
     arcPart(source),
-    lintPart()
+    lintPart(source)
   ].join('\n')
 }

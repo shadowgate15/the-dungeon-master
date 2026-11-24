@@ -6,15 +6,19 @@
    * The console's centre: the Show filters above one timeline, DM on the left and the Player on
    * the right. Narrations (with the NPC voicing them), Declarations from closed Floors, one-line rolls,
    * question answers and muted
-   * `⚙ DM …` activity lines; while the DM works on a turn, a `Ns / ~20s` progress bar.
+   * `⚙ DM …` activity lines; while the DM works on a turn, a `Ns / ~20s` progress bar. A turn
+   * still awaiting Narration with the DM away ends the bar with "The DM left mid-turn".
    */
   let {
     entries,
-    awaitingSince
+    awaitingSince,
+    away = false
   }: {
     entries: TimelineEntry[]
     /** When the DM started on the turn awaiting Narration; null when nothing awaits. */
     awaitingSince: number | null
+    /** No DM is at the table. */
+    away?: boolean
   } = $props()
 
   let show = $state({ story: true, rolls: true, dm: true })
@@ -33,7 +37,7 @@
 
   let now = $state(Date.now())
   $effect(() => {
-    if (awaitingSince === null) return
+    if (awaitingSince === null || away) return
     now = Date.now()
     const tick = setInterval(() => (now = Date.now()), 1000)
     return () => clearInterval(tick)
@@ -113,7 +117,12 @@
     {/if}
   {/each}
 </ol>
-{#if awaitingSince !== null}
+{#if awaitingSince !== null && away}
+  <Alert variant="warning"
+    >The DM left mid-turn. What was done stays done; the next sitting answers this turn after the
+    recap.</Alert
+  >
+{:else if awaitingSince !== null}
   <div class="flex items-center gap-2 text-xs text-muted">
     <div
       role="progressbar"

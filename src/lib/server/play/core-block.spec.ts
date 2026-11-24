@@ -66,6 +66,15 @@ describe('the core block', () => {
     expect(block).toContain('whereabouts place:drowned-lantern')
   })
 
+  it('says when lint last ran', () => {
+    const host = createToolHost({ library, tools: gameTools })
+    host.call(folder, 'advance_time', { hours: 2 })
+    expect(host.call(folder, 'lint', {}).isError ?? false).toBe(false)
+    host.call(folder, 'advance_time', { hours: 1 })
+
+    expect(library.record(campaignId).coreBlock()).toMatch(/^Lint last ran: day 1, 10:00\.$/m)
+  })
+
   it('stays within about 300 tokens for a typical four-Character Party', () => {
     for (const name of ['Wren', 'Brannoch Ironfist', 'Seraphine of the Vale', 'Tobias Quill']) {
       addCharacter(library, campaignId, fighterDraft(name))

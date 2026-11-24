@@ -229,21 +229,32 @@ function FloorComposer($$renderer, $$props) {
 		* The pinned composer: the open Floor's pending tray above a box that adds a Declaration for the
 		* acting Character. Every tray entry can be edited or withdrawn until the Floor closes. Done
 		* closes the Floor (empty or not); Ctrl+Enter is Send & Done. While the DM is answering, drafting
-		* stays open but Done waits. A pure view; the console wires the callbacks to the server.
+		* stays open but Done waits. While the DM is away, a "DM away" bar with the command that brings
+		* the DM back replaces the send controls; drafting stays open. A pure view; the console wires the
+		* callbacks to the server.
 		*/
-		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false, elsewhere = [], oncut = () => {}, returned = [], onreturned = () => {} } = $$props;
+		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false, elsewhere = [], oncut = () => {}, returned = [], onreturned = () => {}, away = null } = $$props;
+		/** The folder, quoted for a POSIX shell when it needs it. */
+		const quoted = (folder) => /^[\w@%+=:,./-]+$/.test(folder) ? folder : `'${folder.replaceAll("'", `'\\''`)}'`;
+		const relaunch = derived(() => away ? `cd ${quoted(away.folder)} && dm` : "");
+		let copied = false;
+		async function copy() {
+			await navigator.clipboard.writeText(relaunch());
+			copied = true;
+			setTimeout(() => copied = false, 2e3);
+		}
 		let draft = "";
 		let editing = null;
 		const blocked = derived(() => disabled || acting === null);
 		const label = (d) => `${d.characterName}: ${d.text}`;
 		function send() {
 			const text = draft.trim();
-			if (!text || blocked()) return;
+			if (!text || blocked() || away) return;
 			onsend(text);
 			draft = "";
 		}
 		function done() {
-			if (disabled || awaiting) return;
+			if (disabled || awaiting || away) return;
 			const text = draft.trim();
 			ondone(text && !blocked() ? text : null);
 			if (text && !blocked()) draft = "";
@@ -302,7 +313,8 @@ function FloorComposer($$renderer, $$props) {
 							$$slots: { default: true }
 						});
 						$$renderer.push(`<!----></div></form>`);
-					} else $$renderer.push(`<!--[-1--><span class="flex-1 whitespace-pre-wrap">${escape_html(d.text)}</span> <button class="text-xs text-muted underline"${attr("aria-label", `Edit ${stringify(label(d))}`)}>edit</button> <button class="text-xs text-muted underline"${attr("aria-label", `Withdraw ${stringify(label(d))}`)}>withdraw</button>`);
+					} else if (away) $$renderer.push(`<!--[1--><span class="flex-1 whitespace-pre-wrap">${escape_html(d.text)}</span>`);
+					else $$renderer.push(`<!--[-1--><span class="flex-1 whitespace-pre-wrap">${escape_html(d.text)}</span> <button class="text-xs text-muted underline"${attr("aria-label", `Edit ${stringify(label(d))}`)}>edit</button> <button class="text-xs text-muted underline"${attr("aria-label", `Withdraw ${stringify(label(d))}`)}>withdraw</button>`);
 					$$renderer.push(`<!--]--></li>`);
 				}
 				$$renderer.push(`<!--]--></ul>`);
@@ -329,32 +341,51 @@ function FloorComposer($$renderer, $$props) {
 				const each_array_1 = ensure_array_like(elsewhere);
 				for (let $$index_1 = 0, $$length = each_array_1.length; $$index_1 < $$length; $$index_1++) {
 					let c = each_array_1[$$index_1];
-					$$renderer.push(`<li class="flex items-center gap-1 rounded-control bg-surface px-2 py-1 text-muted"><span>${escape_html(c.name)} · elsewhere${escape_html(c.whereabouts ? `: ${c.whereabouts}` : "")}</span> <button class="underline">Cut to ${escape_html(c.name)}</button></li>`);
+					$$renderer.push(`<li class="flex items-center gap-1 rounded-control bg-surface px-2 py-1 text-muted"><span>${escape_html(c.name)} · elsewhere${escape_html(c.whereabouts ? `: ${c.whereabouts}` : "")}</span> `);
+					if (!away) $$renderer.push(`<!--[0--><button class="underline">Cut to ${escape_html(c.name)}</button>`);
+					else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--></li>`);
 				}
 				$$renderer.push(`<!--]--></ul>`);
 			} else $$renderer.push("<!--[-1-->");
-			$$renderer.push(`<!--]--> <div class="flex items-center justify-end gap-2"><span class="mr-auto text-xs text-muted">Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span> `);
-			Button($$renderer, {
-				size: "sm",
-				variant: "secondary",
-				onclick: send,
-				disabled: blocked() || !draft.trim(),
-				children: ($$renderer) => {
-					$$renderer.push(`<!---->Send`);
-				},
-				$$slots: { default: true }
-			});
-			$$renderer.push(`<!----> `);
-			Button($$renderer, {
-				size: "sm",
-				onclick: done,
-				disabled: disabled || awaiting,
-				children: ($$renderer) => {
-					$$renderer.push(`<!---->Done`);
-				},
-				$$slots: { default: true }
-			});
-			$$renderer.push(`<!----></div></div>`);
+			$$renderer.push(`<!--]--> `);
+			if (away) {
+				$$renderer.push(`<!--[0--><div role="status" aria-label="DM away" class="flex flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1 text-sm"><span class="font-medium">The DM is away.</span> <span class="text-muted">Start a sitting to play on; your drafts wait here.</span> <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs">${escape_html(relaunch())}</code> `);
+				Button($$renderer, {
+					size: "sm",
+					variant: "secondary",
+					onclick: copy,
+					children: ($$renderer) => {
+						$$renderer.push(`<!---->${escape_html(copied ? "Copied" : "Copy")}`);
+					},
+					$$slots: { default: true }
+				});
+				$$renderer.push(`<!----></div>`);
+			} else {
+				$$renderer.push(`<!--[-1--><div class="flex items-center justify-end gap-2"><span class="mr-auto text-xs text-muted">Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span> `);
+				Button($$renderer, {
+					size: "sm",
+					variant: "secondary",
+					onclick: send,
+					disabled: blocked() || !draft.trim(),
+					children: ($$renderer) => {
+						$$renderer.push(`<!---->Send`);
+					},
+					$$slots: { default: true }
+				});
+				$$renderer.push(`<!----> `);
+				Button($$renderer, {
+					size: "sm",
+					onclick: done,
+					disabled: disabled || awaiting,
+					children: ($$renderer) => {
+						$$renderer.push(`<!---->Done`);
+					},
+					$$slots: { default: true }
+				});
+				$$renderer.push(`<!----></div>`);
+			}
+			$$renderer.push(`<!--]--></div>`);
 		}
 		do {
 			$$settled = true;
@@ -431,9 +462,10 @@ function Timeline($$renderer, $$props) {
 		* The console's centre: the Show filters above one timeline, DM on the left and the Player on
 		* the right. Narrations (with the NPC voicing them), Declarations from closed Floors, one-line rolls,
 		* question answers and muted
-		* `⚙ DM …` activity lines; while the DM works on a turn, a `Ns / ~20s` progress bar.
+		* `⚙ DM …` activity lines; while the DM works on a turn, a `Ns / ~20s` progress bar. A turn
+		* still awaiting Narration with the DM away ends the bar with "The DM left mid-turn".
 		*/
-		let { entries, awaitingSince } = $$props;
+		let { entries, awaitingSince, away = false } = $$props;
 		let show = {
 			story: true,
 			rolls: true,
@@ -505,7 +537,17 @@ function Timeline($$renderer, $$props) {
 			$$renderer.push(`<!--]-->`);
 		}
 		$$renderer.push(`<!--]--></ol> `);
-		if (awaitingSince !== null) $$renderer.push(`<!--[0--><div class="flex items-center gap-2 text-xs text-muted"><div role="progressbar" aria-label="The DM is working" aria-valuemin="0"${attr("aria-valuemax", 20)}${attr("aria-valuenow", Math.min(elapsed(), 20))} class="h-1.5 flex-1 overflow-hidden rounded-full bg-border"><div class="h-full bg-primary transition-[width]"${attr_style("", { width: `${stringify(Math.min(100, elapsed() / 20 * 100))}%` })}></div></div> <span>${escape_html(elapsed())}s / ~${escape_html(20)}s</span></div>`);
+		if (awaitingSince !== null && away) {
+			$$renderer.push("<!--[0-->");
+			Alert($$renderer, {
+				variant: "warning",
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->The DM left mid-turn. What was done stays done; the next sitting answers this turn after the
+    recap.`);
+				},
+				$$slots: { default: true }
+			});
+		} else if (awaitingSince !== null) $$renderer.push(`<!--[1--><div class="flex items-center gap-2 text-xs text-muted"><div role="progressbar" aria-label="The DM is working" aria-valuemin="0"${attr("aria-valuemax", 20)}${attr("aria-valuenow", Math.min(elapsed(), 20))} class="h-1.5 flex-1 overflow-hidden rounded-full bg-border"><div class="h-full bg-primary transition-[width]"${attr_style("", { width: `${stringify(Math.min(100, elapsed() / 20 * 100))}%` })}></div></div> <span>${escape_html(elapsed())}s / ~${escape_html(20)}s</span></div>`);
 		else $$renderer.push("<!--[-1-->");
 		$$renderer.push(`<!--]-->`);
 	});
@@ -646,7 +688,8 @@ function _page($$renderer, $$props) {
 		$$renderer.push(`<!----> <section aria-label="Story" class="flex min-h-0 flex-col gap-2">`);
 		Timeline($$renderer, {
 			entries: timeline.data.entries,
-			awaitingSince: timeline.data.awaitingSince
+			awaitingSince: timeline.data.awaitingSince,
+			away: !attached()
 		});
 		$$renderer.push(`<!----> `);
 		if (timeline.data.call && !archived()) {
@@ -654,7 +697,7 @@ function _page($$renderer, $$props) {
 			const open = timeline.data.call;
 			CallCard($$renderer, {
 				call: open,
-				disabled: rolling,
+				disabled: rolling || !attached(),
 				onroll: (part) => answerCall(() => calls.roll(open.id, part)),
 				onanswer: (part, answer) => answerCall(() => calls.answer(open.id, part, answer))
 			});
@@ -702,7 +745,8 @@ function _page($$renderer, $$props) {
 				elsewhere: scene.data.elsewhere,
 				oncut: (id) => attempt(() => actions.cut(id)),
 				returned: floor.data.returned,
-				onreturned: (ids) => attempt(() => actions.clearReturned(ids))
+				onreturned: (ids) => attempt(() => actions.clearReturned(ids)),
+				away: attached() ? null : { folder: data.campaign.path }
 			});
 		}
 		$$renderer.push(`<!--]--></section> <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm">`);

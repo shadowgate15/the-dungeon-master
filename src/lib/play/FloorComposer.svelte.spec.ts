@@ -157,4 +157,45 @@ describe('FloorComposer for a split Party', () => {
       .toHaveValue('I check the cellar door.')
     expect(onreturned).toHaveBeenCalledWith(['r1'])
   })
+
+  it('replaces the send controls with the DM away bar, and drafting stays open', async () => {
+    const h = handlers()
+    render(FloorComposer, {
+      acting: 'Wren',
+      declarations,
+      away: { folder: '/home/me/Ember Road' },
+      ...h
+    })
+
+    const bar = page.getByRole('status', { name: 'DM away' })
+    await expect.element(bar).toHaveTextContent("cd '/home/me/Ember Road' && dm")
+    await expect.element(page.getByRole('button', { name: 'Send' })).not.toBeInTheDocument()
+    await expect.element(page.getByRole('button', { name: 'Done' })).not.toBeInTheDocument()
+    await expect
+      .element(page.getByRole('button', { name: /^Withdraw/ }).first())
+      .not.toBeInTheDocument()
+
+    const box = page.getByRole('textbox', { name: 'What does Wren do?' })
+    await box.fill('I pick the lock.')
+    await box.click()
+    await userEvent.keyboard('{Enter}{Control>}{Enter}{/Control}')
+    expect(h.onsend).not.toHaveBeenCalled()
+    expect(h.ondone).not.toHaveBeenCalled()
+  })
+
+  it('copies the command that brings the DM back', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
+    render(FloorComposer, {
+      acting: 'Wren',
+      declarations: [],
+      away: { folder: '/home/me/ember-road' },
+      ...handlers()
+    })
+
+    await page.getByRole('button', { name: 'Copy' }).click()
+
+    expect(writeText).toHaveBeenCalledWith('cd /home/me/ember-road && dm')
+    vi.unstubAllGlobals()
+  })
 })

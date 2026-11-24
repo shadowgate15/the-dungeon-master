@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9ca68223-fff9-4c24-a48a-be44bb3a26f7",
+  "id": "aec7bdd1-688c-4dfe-b5f0-a161a92b8f06",
   "prevId": "820edc4f-9c5d-4693-8583-c756ebcc68a0",
   "tables": {
     "activity_line": {
@@ -421,6 +421,14 @@
           "autoincrement": false,
           "default": 0
         },
+        "offline_noticed_through": {
+          "name": "offline_noticed_through",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "clock_minute": {
           "name": "clock_minute",
           "type": "integer",
@@ -559,6 +567,13 @@
         },
         "backstory": {
           "name": "backstory",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -6621,27 +6636,6 @@
         },
         "resolved_at": {
           "name": "resolved_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "resolved_event": {
-          "name": "resolved_event",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "resolved_session": {
-          "name": "resolved_session",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "resolved_minute": {
-          "name": "resolved_minute",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,

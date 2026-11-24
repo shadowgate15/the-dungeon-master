@@ -1,10 +1,10 @@
 import { i as json } from "../../../../../../chunks/exports.js";
 import { c as CampaignNotFoundError, n as library, s as CampaignMissingError } from "../../../../../../chunks/campaign.js";
-import { o as play } from "../../../../../../chunks/bridge.js";
+import { c as DmAwayError, o as play } from "../../../../../../chunks/bridge.js";
 // src/routes/api/campaigns/[id]/end-session/+server.ts
 /**
 * The Player presses End Session: the DM gets an `end_session` event and closes the sitting.
-* 404 `{ error }` for an unknown Campaign; 400 when archived.
+* 404 `{ error }` for an unknown Campaign; 400 when archived; 409 while the DM is away.
 */
 var POST = ({ params }) => {
 	try {
@@ -12,6 +12,7 @@ var POST = ({ params }) => {
 		play.endSession(params.id);
 		return json({ ok: true });
 	} catch (e) {
+		if (e instanceof DmAwayError) return json({ error: e.message }, { status: 409 });
 		if (e instanceof CampaignNotFoundError || e instanceof CampaignMissingError) return json({ error: e.message }, { status: 404 });
 		throw e;
 	}
