@@ -1,10 +1,11 @@
-import { At as and, C as entityAlias, D as ENTITY_TYPES, Dt as SOLO_PLAYER, E as worldLink, Ft as like, Ht as DUNGEON_MASTER_HOME, It as or, Lt as sql, Nt as isNotNull, O as NPC_STATUSES, Ot as asc, Pt as isNull, S as entity, T as pageRevision, Ut as DUNGEON_MASTER_PORT, Wt as DUNGEON_MASTER_VERSION, i as userStateDir, jt as eq, kt as desc, n as canonicalFolder, u as campaign, w as fact, y as event } from "./paths.js";
-import { _ as nextEventId, c as CampaignNotFoundError, g as logEvent, h as logActivity, i as sessions, l as NotACampaignFolderError, m as currentStamp, n as library, r as live, v as setAwaitingNarration, w as SESSION_LIVE_MESSAGE } from "./campaign.js";
-import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
+import { At as desc, C as entity, D as worldLink, E as pageRevision, Ft as isNull, Gt as DUNGEON_MASTER_VERSION, It as like, Lt as or, Mt as eq, Nt as inArray, O as ENTITY_TYPES, Ot as SOLO_PLAYER, Pt as isNotNull, Rt as sql, S as belief, T as fact, Ut as DUNGEON_MASTER_HOME, Wt as DUNGEON_MASTER_PORT, i as userStateDir, jt as and, k as NPC_STATUSES, kt as asc, n as canonicalFolder, u as campaign, w as entityAlias, y as event } from "./paths.js";
+import { C as setAwaitingNarration, S as nextEventId, b as logActivity, c as CampaignNotFoundError, d as characterHolders, f as charactersInScene, h as slug, i as sessions, k as SESSION_LIVE_MESSAGE, l as NotACampaignFolderError, m as normalizeName, n as library, p as isNearName, r as live, x as logEvent, y as currentStamp } from "./campaign.js";
+import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 // src/lib/server/runtime.ts
 function runtimeFilePath(home) {
 	return path.join(home, "runtime.json");
@@ -73,103 +74,6 @@ function writeTool(tool) {
 		run: tool.run
 	};
 }
-// src/lib/server/tools/narration-tools.ts
-/** The NPC a Narration is voiced by; refused unless the handle names a live NPC. */
-function speaker({ db }, handle) {
-	const found = db.select().from(entity).where(eq(entity.handle, handle)).get();
-	if (!found || found.type !== "npc" || found.retiredAt !== null) throw ToolError.unknownHandle(handle);
-	return found;
-}
-/** Telling the Players what happens. */
-var narrationTools = [writeTool({
-	name: "narrate",
-	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine.",
-	input: object({
-		text: string().trim().min(1),
-		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks")
-	}),
-	activity: null,
-	run: (ctx, { text, voice }) => {
-		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
-		setAwaitingNarration(ctx.db, null);
-		return {
-			result: { narrated: true },
-			event: {
-				kind: "narration",
-				summary: npc ? `${npc.name}: ${text}` : text,
-				data: {
-					text,
-					voice: npc?.handle ?? null,
-					voiceName: npc?.name ?? null
-				}
-			}
-		};
-	}
-})];
-// src/lib/server/tools/seed-tools.ts
-/** The Seed is one Entity per Campaign, so its handle is fixed. */
-var HANDLE$1 = "campaign";
-function current({ db }) {
-	const found = db.select().from(campaign).get();
-	if (!found) throw ToolError.unknownHandle(HANDLE$1);
-	return found;
-}
-function view(found) {
-	const seed = Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, found[f]]));
-	return {
-		handle: HANDLE$1,
-		version: found.version,
-		...seed
-	};
-}
-var fields = Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, string().optional()]));
-/** Reading and writing the Campaign Seed: the first versioned Entity the DM can touch. */
-var seedTools = [readTool({
-	name: "seed",
-	description: "Read the Campaign Seed (name, premise, tone, length and optional World details) and its version.",
-	input: object({}),
-	activity: "DM checks the Campaign Seed",
-	run: (ctx) => view(current(ctx))
-}), writeTool({
-	name: "set_seed",
-	description: "Set Campaign Seed fields. Pass the version from your last `seed` read; an empty string clears an optional field.",
-	input: object({
-		version: int(),
-		...fields
-	}),
-	activity: "DM updates the Campaign Seed",
-	run: (ctx, { version, ...changes }) => {
-		const found = current(ctx);
-		expectVersion({
-			handle: HANDLE$1,
-			version: found.version,
-			read: "seed"
-		}, version);
-		if (found.archivedAt !== null) throw new ToolError("archived", "An archived Campaign cannot be changed", "Stop here");
-		let seed;
-		try {
-			seed = parseCampaignSeed({
-				...campaignSeedCard(found),
-				...changes
-			});
-		} catch (e) {
-			if (e instanceof CampaignSeedError) throw ToolError.invalidInput("set_seed", e.message);
-			throw e;
-		}
-		return {
-			result: view(ctx.db.update(campaign).set({
-				...seed,
-				version: found.version + 1,
-				updatedAt: Date.now()
-			}).returning().get()),
-			event: {
-				kind: "seed_changed",
-				summary: `Seed changed: ${Object.keys(changes).join(", ")}`,
-				data: changes
-			}
-		};
-	}
-})];
 // src/lib/server/world/fields.ts
 /** A Place's handle, as a field value that must name an existing Place. */
 var placeHandle = string().regex(/^place:[a-z0-9-]+$/, "Expected a place handle (place:…)");
@@ -221,44 +125,10 @@ function parseFields(type, fields) {
 function fieldNames(type) {
 	return Object.keys(FIELD_SCHEMAS[type].shape);
 }
-// src/lib/server/world/names.ts
-/** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
-var plain = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-/** The slug part of a handle: `Mira Voss` → `mira-voss`. */
-function slug(name) {
-	return plain(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
-}
-/** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
-function normalizeName(name) {
-	return plain(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
-}
-function distance(a, b) {
-	let row = Array.from({ length: b.length + 1 }, (_, i) => i);
-	for (let i = 1; i <= a.length; i++) {
-		const next = [i];
-		for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-		row = next;
-	}
-	return row[b.length];
-}
-/**
-* Whether two names are close enough to be the same thing: equal once normalized, a typo apart,
-* or one's words all in the other ("Mira" and "Mira Voss").
-*/
-function isNearName(a, b) {
-	const x = normalizeName(a);
-	const y = normalizeName(b);
-	if (!x || !y) return false;
-	if (x === y) return true;
-	if (distance(x, y) <= Math.max(1, Math.floor(Math.max(x.length, y.length) / 6))) return true;
-	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
-	const words = new Set(long.split(" "));
-	return short.split(" ").every((w) => words.has(w));
-}
 // src/lib/server/world/links.ts
 /** `[[Name]]`, `[[alias]]` or `[[npc:handle]]`; text after a `|` is a label and ignored. */
 var LINK = /\[\[([^[\]]+?)\]\]/g;
-var HANDLE = new RegExp(`^(${ENTITY_TYPES.join("|")}):[a-z0-9-]+$`);
+var HANDLE$1 = new RegExp(`^(${ENTITY_TYPES.join("|")}):[a-z0-9-]+$`);
 var target = (inner) => inner.split("|")[0].trim();
 /** The Entity a merged handle now lives in. */
 function follow(handle, known) {
@@ -281,7 +151,7 @@ function resolveLinks(text, all) {
 	return {
 		text: text.replace(LINK, (whole, inner) => {
 			const name = target(inner);
-			if (HANDLE.test(name) && known.has(name)) {
+			if (HANDLE$1.test(name) && known.has(name)) {
 				links.add(follow(name, known)?.handle ?? name);
 				return `[[${name}]]`;
 			}
@@ -312,7 +182,7 @@ function renderLinks(text, all) {
 	const known = new Map(all.map((k) => [k.handle, k]));
 	return text.replace(LINK, (whole, inner) => {
 		const handle = target(inner);
-		if (!HANDLE.test(handle)) return whole;
+		if (!HANDLE$1.test(handle)) return whole;
 		const found = follow(handle, known);
 		if (!found) return whole;
 		const named = byName(found.name, all);
@@ -499,6 +369,8 @@ function createWorld({ db, stamp }) {
 		for (const [source, text] of rows) if (text.trim()) db.run(sql`INSERT INTO world_search (handle, source, text) VALUES (${handle}, ${source}, ${text})`);
 	}
 	return {
+		/** Every Entity as link resolution sees it, retired and merged ones included. */
+		known,
 		/** Entities whose name or aliases are close to any of `names`, retired ones aside. */
 		nearMatches(names) {
 			return known().filter((k) => !k.retired).filter((k) => [k.name, ...k.aliases].some((n) => names.some((m) => isNearName(n, m)))).map((k) => ({
@@ -576,7 +448,6 @@ function createWorld({ db, stamp }) {
 				facts: facts.map((f) => factView(f, all)),
 				links,
 				backlinks,
-				beliefs: 0,
 				...revisions && { revisions }
 			};
 		},
@@ -765,6 +636,459 @@ function createWorld({ db, stamp }) {
 		}
 	};
 }
+// src/lib/server/knowledge/knowledge.ts
+var isCurrentBelief = (b) => b.replacedBy === null && b.retiredAt === null;
+var isCurrentFact = (f) => f.supersededBy === null && f.retiredAt === null;
+/** A field value in words: handles shown by name, lists joined, objects by their name. */
+function formatValue(value, all) {
+	if (value === null || value === void 0) return "none";
+	if (typeof value === "string") return all.find((k) => k.handle === value)?.name ?? value;
+	if (Array.isArray(value)) return value.map((v) => formatValue(v, all)).join(", ") || "none";
+	if (typeof value === "object") {
+		const named = value;
+		return typeof named.name === "string" ? named.name : JSON.stringify(value);
+	}
+	return String(value);
+}
+/** The Knowledge layer over one Campaign database: who believes what (ADR 0007). */
+function createKnowledge(ctx) {
+	const { db, stamp } = ctx;
+	const world = createWorld(ctx);
+	function findEntity(handle) {
+		const found = db.select().from(entity).where(eq(entity.handle, handle)).get();
+		if (!found) throw ToolError.unknownHandle(handle);
+		return found;
+	}
+	function liveEntity(handle, tool) {
+		const found = findEntity(handle);
+		if (found.retiredAt !== null) {
+			const instead = found.mergedInto ? `; use ${found.mergedInto}` : "";
+			throw ToolError.invalidInput(tool, `${handle} is retired${instead}`);
+		}
+		return found;
+	}
+	function findFact(id) {
+		const found = db.select().from(fact).where(eq(fact.id, id)).get();
+		if (!found) throw new ToolError("unknown_fact", `No Fact has the id ${id}`, "Check the id against open");
+		return found;
+	}
+	/** Every Fact connected to `id` through supersession, both ways. */
+	function chainOf(id) {
+		const all = db.select().from(fact).all();
+		const seen = /* @__PURE__ */ new Set([id]);
+		for (let grew = true; grew;) {
+			grew = false;
+			for (const f of all) {
+				if (!(seen.has(f.id) || f.supersededBy !== null && seen.has(f.supersededBy))) continue;
+				for (const n of [f.id, f.supersededBy]) if (n !== null && !seen.has(n)) {
+					seen.add(n);
+					grew = true;
+				}
+			}
+		}
+		return [...seen];
+	}
+	/** The Facts that now stand where `id` stood: the current ends of its supersession chain. */
+	function currentSuccessors(id) {
+		const chain = new Set(chainOf(id));
+		return db.select().from(fact).all().filter((f) => chain.has(f.id) && isCurrentFact(f) && f.id !== id);
+	}
+	function fieldValue(row, field) {
+		return field === "name" ? row.name : row.fields[field] ?? null;
+	}
+	function target(input, tool) {
+		const all = world.known();
+		if ("claim" in input) {
+			const about = liveEntity(input.about, tool);
+			const resolved = resolveLinks(input.claim, all);
+			return {
+				kind: "claim",
+				factId: null,
+				about: about.handle,
+				aboutName: about.name,
+				field: null,
+				value: null,
+				claim: resolved.text,
+				text: renderLinks(resolved.text, all),
+				chain: []
+			};
+		}
+		const { of } = input;
+		if (typeof of === "number") {
+			const found = findFact(of);
+			if (found.retiredAt !== null) throw ToolError.invalidInput(tool, `Fact ${of} is retired (${found.retiredReason})`);
+			const subject = findEntity(found.subject);
+			return {
+				kind: "fact",
+				factId: found.id,
+				about: subject.handle,
+				aboutName: subject.name,
+				field: null,
+				value: null,
+				claim: null,
+				text: renderLinks(found.claim, all),
+				chain: chainOf(found.id)
+			};
+		}
+		const dot = of.lastIndexOf(".");
+		const found = liveEntity(dot === -1 ? of : of.slice(0, dot), tool);
+		if (dot === -1) return {
+			kind: "entity",
+			factId: null,
+			about: found.handle,
+			aboutName: found.name,
+			field: null,
+			value: null,
+			claim: null,
+			text: found.name,
+			chain: []
+		};
+		const field = of.slice(dot + 1);
+		if (field !== "name" && !fieldNames(found.type).includes(field)) throw ToolError.invalidInput(tool, `A ${found.type} has no field ${field}; its fields are name, ${fieldNames(found.type).join(", ")}`);
+		const value = fieldValue(found, field);
+		return {
+			kind: "field",
+			factId: null,
+			about: found.handle,
+			aboutName: found.name,
+			field,
+			value,
+			claim: null,
+			text: `${found.name}'s ${field.replaceAll("_", " ")}: ${formatValue(value, all)}`,
+			chain: []
+		};
+	}
+	function holderFor(handle, characters, tool) {
+		if (handle.startsWith("char:")) {
+			const found = characters.find((c) => c.handle === handle);
+			if (!found) throw ToolError.unknownHandle(handle);
+			return {
+				handle,
+				character: found.id,
+				npc: null
+			};
+		}
+		const found = findEntity(handle);
+		if (found.type !== "npc") throw ToolError.invalidInput(tool, `${handle} is a ${found.type}; only Characters and NPCs hold Beliefs`);
+		return {
+			handle,
+			character: null,
+			npc: found.handle
+		};
+	}
+	const heldBy = (h) => h.character !== null ? eq(belief.holderCharacter, h.character) : eq(belief.holderNpc, h.npc);
+	function currentBeliefsOf(h) {
+		return db.select().from(belief).where(and(heldBy(h), isNull(belief.replacedBy), isNull(belief.retiredAt))).orderBy(asc(belief.id)).all();
+	}
+	/** Whether a held Belief already says what `t` says. */
+	function matches(b, t) {
+		if (b.kind !== t.kind || b.about !== t.about) return false;
+		switch (t.kind) {
+			case "fact": return b.factId === t.factId;
+			case "entity": return true;
+			case "field": return b.field === t.field && isDeepStrictEqual(b.value ?? null, t.value ?? null);
+			case "claim": return b.claim === t.claim;
+		}
+	}
+	/** Whether a held Belief is about the same thing as `t`, so a new one replaces it. */
+	function sameTarget(b, t) {
+		if (t.kind === "fact") return b.kind === "fact" && t.chain.includes(b.factId ?? -1);
+		if (t.kind === "field") return b.kind === "field" && b.about === t.about && b.field === t.field;
+		return false;
+	}
+	function holderHandleOf(b, characters) {
+		if (b.holderNpc !== null) return b.holderNpc;
+		return characters.find((c) => c.id === b.holderCharacter)?.handle ?? "char:unknown";
+	}
+	function view(b, characters, all) {
+		const truth = truthOf(b, all);
+		return {
+			id: b.id,
+			holder: holderHandleOf(b, characters),
+			kind: b.kind,
+			about: b.about,
+			...b.field !== null && { field: b.field },
+			claim: b.text,
+			source: b.source,
+			learned: {
+				session: b.sessionId,
+				minute: b.learnedMinute
+			},
+			outdated: truth !== null,
+			...truth !== null && { truth },
+			...b.replacedBy !== null && { replaced_by: b.replacedBy },
+			...b.retiredAt !== null && { retired_reason: b.retiredReason }
+		};
+	}
+	/** The current truth beside an outdated Belief, or null when the Belief still matches the World. */
+	function truthOf(b, all) {
+		if (b.kind === "fact" && b.factId !== null) {
+			const found = db.select().from(fact).where(eq(fact.id, b.factId)).get();
+			if (!found || isCurrentFact(found)) return null;
+			if (found.retiredAt !== null) return `Fact ${found.id} was retired: ${found.retiredReason}`;
+			const now = currentSuccessors(found.id);
+			return now.length ? now.map((f) => renderLinks(f.claim, all)).join("; ") : `Fact ${found.id} no longer holds`;
+		}
+		if (b.kind === "field" && b.about !== null && b.field !== null) {
+			const found = db.select().from(entity).where(eq(entity.handle, b.about)).get();
+			if (!found) return null;
+			const current = fieldValue(found, b.field);
+			if (isDeepStrictEqual(current ?? null, b.value ?? null)) return null;
+			return `${found.name}'s ${b.field.replaceAll("_", " ")}: ${formatValue(current, all)}`;
+		}
+		return null;
+	}
+	return {
+		/**
+		* Makes Holders learn something. Holders default to the Characters in the Scene. A Holder who
+		* already believes it is skipped; a new Belief replaces the Holder's older one on the same
+		* Fact chain or field, and any named in `replaces`.
+		*/
+		reveal(input, tool = "reveal") {
+			const t = target(input, tool);
+			const characters = characterHolders(db);
+			const handles = input.holders?.length ? [...new Set(input.holders)] : charactersInScene(db).map((c) => c.handle);
+			if (!handles.length) throw new ToolError("no_holders", "No Characters are in the Scene to learn this", "Name the holders explicitly");
+			const holders = handles.map((h) => holderFor(h, characters, tool));
+			const named = [...new Set(input.replaces ?? [])].map((id) => {
+				const found = db.select().from(belief).where(eq(belief.id, id)).get();
+				if (!found) throw new ToolError("unknown_belief", `No Belief has the id ${id}`, "Check the id against beliefs_of");
+				if (!isCurrentBelief(found)) throw ToolError.invalidInput(tool, `Belief ${id} is already replaced or retired`);
+				const owner = holderHandleOf(found, characters);
+				if (!handles.includes(owner)) throw ToolError.invalidInput(tool, `Belief ${id} is held by ${owner}, who is not among the holders`);
+				return {
+					...found,
+					owner
+				};
+			});
+			const beliefs = [];
+			const skipped = [];
+			for (const h of holders) {
+				const held = currentBeliefsOf(h);
+				const already = held.find((b) => matches(b, t));
+				if (already) {
+					skipped.push({
+						holder: h.handle,
+						belief: already.id
+					});
+					continue;
+				}
+				const row = db.insert(belief).values({
+					holderCharacter: h.character,
+					holderNpc: h.npc,
+					kind: t.kind,
+					factId: t.factId,
+					about: t.about,
+					field: t.field,
+					value: t.kind === "field" ? t.value ?? null : null,
+					claim: t.claim,
+					text: t.text,
+					aboutName: t.aboutName,
+					source: input.source ?? null,
+					sessionId: stamp.sessionId,
+					eventId: stamp.eventId,
+					learnedMinute: stamp.minute
+				}).returning().get();
+				const replaced = [...held.filter((b) => sameTarget(b, t)).map((b) => b.id), ...named.filter((b) => b.owner === h.handle).map((b) => b.id)];
+				const unique = [...new Set(replaced)];
+				if (unique.length) db.update(belief).set({ replacedBy: row.id }).where(inArray(belief.id, unique)).run();
+				beliefs.push({
+					id: row.id,
+					holder: h.handle,
+					claim: t.text,
+					replaced: unique
+				});
+			}
+			return {
+				beliefs,
+				skipped
+			};
+		},
+		/** A Holder's current Beliefs (every one with `history`), with outdatedness and the truth. */
+		beliefsOf(holder, about, history = false) {
+			const characters = characterHolders(db);
+			const h = holderFor(holder, characters, "beliefs_of");
+			if (about !== void 0) findEntity(about);
+			const all = world.known();
+			return {
+				holder,
+				beliefs: db.select().from(belief).where(heldBy(h)).orderBy(asc(belief.id)).all().filter((b) => history || isCurrentBelief(b)).filter((b) => about === void 0 || b.about === about).map((b) => view(b, characters, all))
+			};
+		},
+		/** How many current Beliefs are about an Entity. */
+		countAbout(handle) {
+			return db.select().from(belief).where(eq(belief.about, handle)).all().filter(isCurrentBelief).length;
+		},
+		/** Retires every current Belief about an Entity (or held by it), returning their ids. */
+		retireAbout(handle, reason) {
+			const rows = db.select().from(belief).where(or(eq(belief.about, handle), eq(belief.holderNpc, handle))).all().filter(isCurrentBelief);
+			if (rows.length) db.update(belief).set({
+				retiredAt: stamp.minute,
+				retiredReason: reason
+			}).where(inArray(belief.id, rows.map((b) => b.id))).run();
+			return rows.map((b) => b.id);
+		},
+		/** Moves Beliefs about, and held by, `from` onto `into`; returns how many moved. */
+		move(from, into) {
+			const about = db.update(belief).set({ about: into }).where(eq(belief.about, from)).returning({ id: belief.id }).all();
+			const held = db.update(belief).set({ holderNpc: into }).where(eq(belief.holderNpc, from)).returning({ id: belief.id }).all();
+			return new Set([...about, ...held].map((b) => b.id)).size;
+		}
+	};
+}
+// src/lib/server/tools/knowledge-tools.ts
+var handle$1 = string().min(1);
+/** What a Reveal teaches: `of` a Fact, Entity or field, or a lie or rumour's own claim. */
+var revealTargetFields = {
+	of: union([int(), handle$1]).optional().describe("A Fact id, an Entity handle (its existence), or handle.field (its value now)"),
+	claim: string().trim().min(1).optional().describe("A lie or rumour, never a Fact"),
+	about: handle$1.optional().describe("The Entity the claim is about")
+};
+var oneTarget = (i) => i.of !== void 0 ? i.claim === void 0 : i.claim !== void 0 && i.about !== void 0;
+/** The refinement a Reveal target needs: exactly one of `of`, or `claim` with `about`. */
+var revealTargetRule = [oneTarget, { message: "Pass either of, or claim with about" }];
+/** The parsed target as the Knowledge layer takes it. */
+var revealTarget = (i) => i.of !== void 0 ? { of: i.of } : {
+	claim: i.claim,
+	about: i.about
+};
+/** The Knowledge layer: who believes what (ADR 0007). */
+var knowledgeTools = [writeTool({
+	name: "reveal",
+	description: "Make Holders learn something: pass `of` (a Fact id, an Entity handle, or handle.field) or a lie or rumour as `claim` + `about`. Holders default to the Characters in the Scene; name Characters (char:…) or NPCs to narrow or widen. A new Belief on the same Fact chain or field replaces the Holder's older one; name `replaces` for lies (or to re-point a rumour made true at its Fact). No version: it writes Beliefs, not the Entity. Returns the Beliefs created and the Holders skipped because they already believed it.",
+	input: object({
+		...revealTargetFields,
+		holders: array(handle$1).optional(),
+		source: string().trim().min(1).optional().describe("Who or what they learned it from"),
+		replaces: array(int()).default([])
+	}).refine(...revealTargetRule),
+	run: (ctx, { holders, source, replaces, ...rest }) => {
+		const result = createKnowledge(ctx).reveal({
+			...revealTarget(rest),
+			holders,
+			source,
+			replaces
+		});
+		return {
+			result,
+			event: {
+				kind: "beliefs_revealed",
+				summary: `Revealed to ${result.beliefs.map((b) => b.holder).join(", ") || "nobody new"}`,
+				data: {
+					beliefs: result.beliefs.map((b) => b.id),
+					skipped: result.skipped
+				},
+				dmOnly: true
+			}
+		};
+	}
+}), readTool({
+	name: "beliefs_of",
+	description: "A Holder's Beliefs (a Character char:… or an NPC), optionally only those about one Entity: each claim, source and when it was learned, and `outdated` with the current truth beside it, so you voice a mistake on purpose. `history` adds replaced and retired Beliefs.",
+	input: object({
+		holder: handle$1,
+		about: handle$1.optional(),
+		history: boolean().default(false)
+	}),
+	run: (ctx, { holder, about, history }) => createKnowledge(ctx).beliefsOf(holder, about, history)
+})];
+// src/lib/server/tools/narration-tools.ts
+/** The NPC a Narration is voiced by; refused unless the handle names a live NPC. */
+function speaker({ db }, handle) {
+	const found = db.select().from(entity).where(eq(entity.handle, handle)).get();
+	if (!found || found.type !== "npc" || found.retiredAt !== null) throw ToolError.unknownHandle(handle);
+	return found;
+}
+/** Telling the Players what happens. */
+var narrationTools = [writeTool({
+	name: "narrate",
+	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine.",
+	input: object({
+		text: string().trim().min(1),
+		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks")
+	}),
+	activity: null,
+	run: (ctx, { text, voice }) => {
+		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
+		setAwaitingNarration(ctx.db, null);
+		return {
+			result: { narrated: true },
+			event: {
+				kind: "narration",
+				summary: npc ? `${npc.name}: ${text}` : text,
+				data: {
+					text,
+					voice: npc?.handle ?? null,
+					voiceName: npc?.name ?? null
+				}
+			}
+		};
+	}
+})];
+// src/lib/server/tools/seed-tools.ts
+/** The Seed is one Entity per Campaign, so its handle is fixed. */
+var HANDLE = "campaign";
+function current({ db }) {
+	const found = db.select().from(campaign).get();
+	if (!found) throw ToolError.unknownHandle(HANDLE);
+	return found;
+}
+function view(found) {
+	const seed = Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, found[f]]));
+	return {
+		handle: HANDLE,
+		version: found.version,
+		...seed
+	};
+}
+var fields = Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, string().optional()]));
+/** Reading and writing the Campaign Seed: the first versioned Entity the DM can touch. */
+var seedTools = [readTool({
+	name: "seed",
+	description: "Read the Campaign Seed (name, premise, tone, length and optional World details) and its version.",
+	input: object({}),
+	activity: "DM checks the Campaign Seed",
+	run: (ctx) => view(current(ctx))
+}), writeTool({
+	name: "set_seed",
+	description: "Set Campaign Seed fields. Pass the version from your last `seed` read; an empty string clears an optional field.",
+	input: object({
+		version: int(),
+		...fields
+	}),
+	activity: "DM updates the Campaign Seed",
+	run: (ctx, { version, ...changes }) => {
+		const found = current(ctx);
+		expectVersion({
+			handle: HANDLE,
+			version: found.version,
+			read: "seed"
+		}, version);
+		if (found.archivedAt !== null) throw new ToolError("archived", "An archived Campaign cannot be changed", "Stop here");
+		let seed;
+		try {
+			seed = parseCampaignSeed({
+				...campaignSeedCard(found),
+				...changes
+			});
+		} catch (e) {
+			if (e instanceof CampaignSeedError) throw ToolError.invalidInput("set_seed", e.message);
+			throw e;
+		}
+		return {
+			result: view(ctx.db.update(campaign).set({
+				...seed,
+				version: found.version + 1,
+				updatedAt: Date.now()
+			}).returning().get()),
+			event: {
+				kind: "seed_changed",
+				summary: `Seed changed: ${Object.keys(changes).join(", ")}`,
+				data: changes
+			}
+		};
+	}
+})];
 // src/lib/server/tools/world-tools.ts
 /** Every World-layer event is DM-only: the World layer never reaches the Player. */
 var dmOnly = true;
@@ -792,11 +1116,14 @@ var worldTools = [
 			handle,
 			history: boolean().default(false)
 		}),
-		run: (ctx, { handle, history }) => createWorld(ctx).open(handle, history)
+		run: (ctx, { handle, history }) => ({
+			...createWorld(ctx).open(handle, history),
+			beliefs: createKnowledge(ctx).countAbout(handle)
+		})
 	}),
 	writeTool({
 		name: "establish",
-		description: "Establish a new NPC, Place, Faction or Topic. Refuses a name close to an existing Entity (returning the matches) unless you list them in distinct_from. [[Name]] links in the Page and Facts resolve to handles; unresolved ones come back with near-matches.",
+		description: "Establish a new NPC, Place, Faction or Topic. Refuses a name close to an existing Entity (returning the matches) unless you list them in distinct_from. [[Name]] links in the Page and Facts resolve to handles; unresolved ones come back with near-matches. An NPC's knows seeds its Beliefs, secrets included: each item is `of` (a Fact id, handle or handle.field) or a `claim` + `about`, as in reveal.",
 		input: object({
 			type: _enum(ENTITY_TYPES),
 			name: string().trim().min(1),
@@ -804,10 +1131,25 @@ var worldTools = [
 			fields: record(string(), unknown()).default({}),
 			page: string().optional(),
 			facts: array(newFact).default([]),
-			distinct_from: array(handle).default([])
+			distinct_from: array(handle).default([]),
+			knows: array(object({
+				...revealTargetFields,
+				source: string().trim().min(1).optional()
+			}).refine(...revealTargetRule)).default([])
 		}),
-		run: (ctx, input) => {
-			const result = createWorld(ctx).establish(input);
+		run: (ctx, { knows, ...input }) => {
+			if (knows.length && input.type !== "npc") throw ToolError.invalidInput("establish", `Only an NPC knows things; a ${input.type} holds no Beliefs`);
+			const established = createWorld(ctx).establish(input);
+			const knowledge = createKnowledge(ctx);
+			const beliefs = knows.flatMap(({ source, ...item }) => knowledge.reveal({
+				...revealTarget(item),
+				source,
+				holders: [established.handle]
+			}, "establish").beliefs.map((b) => b.id));
+			const result = {
+				...established,
+				beliefs
+			};
 			return {
 				result,
 				event: {
@@ -925,7 +1267,7 @@ var worldTools = [
 	}),
 	writeTool({
 		name: "retire",
-		description: "Retire a Fact (pass its subject's version) or a whole Entity (its version), with a reason. Retiring an Entity retires its current Facts and returns them. Retired records stay on file but are no longer used.",
+		description: "Retire a Fact (pass its subject's version) or a whole Entity (its version), with a reason. Retiring an Entity retires its current Facts and every Belief pointing at it, and returns them. Retired records stay on file but are no longer used.",
 		input: object({
 			fact: int().optional(),
 			handle: handle.optional(),
@@ -935,16 +1277,22 @@ var worldTools = [
 		run: (ctx, { fact, handle, version, reason }) => {
 			const world = createWorld(ctx);
 			const result = fact !== void 0 ? world.retireFact(fact, version, reason) : world.retireEntity(handle, version, reason);
+			const retired_beliefs = fact !== void 0 ? [] : createKnowledge(ctx).retireAbout(handle, reason);
+			const what = fact !== void 0 ? `Fact ${fact}` : handle;
 			return {
-				result,
+				result: {
+					...result,
+					retired_beliefs
+				},
 				event: {
 					kind: "retired",
-					summary: `Retired ${fact !== void 0 ? `Fact ${fact}` : handle}: ${reason}`,
+					summary: `Retired ${what}: ${reason}`,
 					data: {
 						fact,
 						handle: result.handle,
 						reason,
-						facts: result.retired_facts.map((f) => f.id)
+						facts: result.retired_facts.map((f) => f.id),
+						beliefs: retired_beliefs
 					},
 					dmOnly
 				}
@@ -953,7 +1301,7 @@ var worldTools = [
 	}),
 	writeTool({
 		name: "merge",
-		description: "Merge a duplicate Entity into another: moves its Facts, aliases (and its name, as an alias) and incoming links, appends its Page to the survivor as a new revision, and retires it. Pass both versions.",
+		description: "Merge a duplicate Entity into another: moves its Facts, Beliefs, aliases (and its name, as an alias) and incoming links, appends its Page to the survivor as a new revision, and retires it. Pass both versions.",
 		input: object({
 			from: handle,
 			into: handle,
@@ -963,8 +1311,16 @@ var worldTools = [
 			})
 		}),
 		run: (ctx, { from, into, versions }) => {
+			const merged = createWorld(ctx).merge(from, into, versions);
+			const beliefs = createKnowledge(ctx).move(from, into);
 			return {
-				result: createWorld(ctx).merge(from, into, versions),
+				result: {
+					...merged,
+					moved: {
+						...merged.moved,
+						beliefs
+					}
+				},
 				event: {
 					kind: "entities_merged",
 					summary: `Merged ${from} into ${into}`,
@@ -983,6 +1339,7 @@ var worldTools = [
 var gameTools = [
 	...seedTools,
 	...worldTools,
+	...knowledgeTools,
 	...narrationTools
 ];
 // src/lib/server/dice.ts

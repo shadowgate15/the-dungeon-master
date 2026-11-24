@@ -1,5 +1,5 @@
 import { _ as clsx, r as attributes } from "./server2.js";
-import { i as NEUTRAL_CLASSES, o as STATUS_CLASSES_BORDERLESS } from "./Button.js";
+import { a as STATUS_CLASSES_BORDERLESS, r as NEUTRAL_CLASSES } from "./Button.js";
 // src/lib/ui/Badge.svelte
 function Badge($$renderer, $$props) {
 	let { variant = "neutral", size = "md", class: className, children, $$slots, $$events, ...rest } = $$props;

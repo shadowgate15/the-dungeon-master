@@ -1,11 +1,14 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
 import { _ as clsx, c as ensure_array_like, f as stringify, g as attr, l as head, n as attr_style, o as derived, r as attributes, t as attr_class, y as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/paths2.js";
-import { a as timelineQueryKey, i as permissionQueryKey, n as createSessionsQuery, o as createQuery, r as floorQueryKey, t as DmBadge } from "../../../../../chunks/DmBadge.js";
+import { n as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
 import { t as Badge } from "../../../../../chunks/Badge.js";
-import { n as Alert, r as Link, t as Button } from "../../../../../chunks/Button.js";
+import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
+import { a as floorActions, i as createTimelineQuery, n as createFloorQuery, o as Journal, r as createJournalQuery, t as FloorChangeError } from "../../../../../chunks/floor-client.js";
+import { i as permissionQueryKey, o as createQuery } from "../../../../../chunks/messages.js";
 import { t as useQueryClient } from "../../../../../chunks/useQueryClient.js";
+import { t as Link } from "../../../../../chunks/Link.js";
 // src/lib/ui/Meter.svelte
 function Meter($$renderer, $$props) {
 	/** Accessible name of the meter. */
@@ -273,6 +276,9 @@ function FloorComposer($$renderer, $$props) {
 		$$renderer.subsume($$inner_renderer);
 	});
 }
+// src/lib/play/journal.ts
+/** The entries a Character holds: "What <Character> knows". */
+var knownBy = (journal, character) => journal.entries.filter((e) => e.holders.some((h) => h.id === character));
 // src/lib/play/PermissionCard.svelte
 function PermissionCard($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -396,71 +402,6 @@ function permissionActions(campaign) {
 		await queryClient.invalidateQueries({ queryKey: permissionQueryKey(campaign()) });
 	} };
 }
-// src/lib/play/floor-client.ts
-/** A Floor change the server refused, with its message for the Player. */
-var FloorChangeError = class extends Error {};
-/** The Campaign's open Floor, starting from the server-rendered one; live updates keep it fresh. */
-function createFloorQuery(campaign, initial) {
-	return createQuery(() => ({
-		queryKey: floorQueryKey(campaign()),
-		queryFn: async () => {
-			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/floor`);
-			if (!res.ok) throw new FloorChangeError("The Floor could not be loaded");
-			return await res.json();
-		},
-		initialData: initial()
-	}));
-}
-/** The Campaign's timeline and awaiting Narration, starting from the server-rendered one. */
-function createTimelineQuery(campaign, initial) {
-	return createQuery(() => ({
-		queryKey: timelineQueryKey(campaign()),
-		queryFn: async () => {
-			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/timeline`);
-			if (!res.ok) throw new FloorChangeError("The timeline could not be loaded");
-			return await res.json();
-		},
-		initialData: initial()
-	}));
-}
-/** Send, edit, withdraw and Done on the Campaign's open Floor; each refreshes the Floor and timeline. */
-function floorActions(campaign) {
-	const queryClient = useQueryClient();
-	const base = () => `/api/campaigns/${encodeURIComponent(campaign())}/floor/declarations`;
-	async function call(url, init) {
-		const res = await fetch(url, {
-			...init,
-			headers: init.body ? { "content-type": "application/json" } : void 0
-		});
-		await Promise.all([queryClient.invalidateQueries({ queryKey: floorQueryKey(campaign()) }), queryClient.invalidateQueries({ queryKey: timelineQueryKey(campaign()) })]);
-		if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The Floor could not be changed");
-		return res;
-	}
-	return {
-		async send(character, text) {
-			return await (await call(base(), {
-				method: "POST",
-				body: JSON.stringify({
-					character,
-					text
-				})
-			})).json();
-		},
-		async edit(id, text) {
-			await call(`${base()}/${encodeURIComponent(id)}`, {
-				method: "PATCH",
-				body: JSON.stringify({ text })
-			});
-		},
-		async withdraw(id) {
-			await call(`${base()}/${encodeURIComponent(id)}`, { method: "DELETE" });
-		},
-		/** Done: closes the Floor (once every Player has pressed it) and wakes the DM. */
-		async done() {
-			await call(`/api/campaigns/${encodeURIComponent(campaign())}/floor/done`, { method: "POST" });
-		}
-	};
-}
 // src/routes/campaigns/[id]/play/+page.svelte
 function _page($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -468,6 +409,7 @@ function _page($$renderer, $$props) {
 		const sessions = createSessionsQuery(() => data.attached);
 		const floor = createFloorQuery(() => data.campaign.id, () => data.floor);
 		const timeline = createTimelineQuery(() => data.campaign.id, () => data.timeline);
+		const journal = createJournalQuery(() => data.campaign.id, () => data.journal);
 		const actions = floorActions(() => data.campaign.id);
 		const permission = createPermissionQuery(() => data.campaign.id, () => data.permission);
 		const answers = permissionActions(() => data.campaign.id);
@@ -510,6 +452,15 @@ function _page($$renderer, $$props) {
 		DmBadge($$renderer, {
 			size: "sm",
 			attached: sessions.data.includes(data.campaign.id)
+		});
+		$$renderer.push(`<!----> `);
+		Link($$renderer, {
+			href: resolve("/campaigns/[id]/journal", { id: data.campaign.id }),
+			class: "ml-auto text-sm",
+			children: ($$renderer) => {
+				$$renderer.push(`<!---->Journal`);
+			},
+			$$slots: { default: true }
 		});
 		$$renderer.push(`<!----></header> <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]" aria-label="Play console">`);
 		CharacterSheet($$renderer, {
@@ -564,7 +515,12 @@ function _page($$renderer, $$props) {
 				onwithdraw: (id) => attempt(() => actions.withdraw(id))
 			});
 		}
-		$$renderer.push(`<!--]--></section> <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm"><section class="rounded-panel border border-border bg-surface p-3"><h2 class="mb-1 text-xs font-semibold text-muted uppercase">Clock and Scene</h2> <p class="text-muted">The Scene is set once play begins.</p></section> <section class="rounded-panel border border-border bg-surface p-3"><h2 class="mb-1 text-xs font-semibold text-muted uppercase">What ${escape_html(acting()?.name ?? "the Party")} knows</h2> <p class="text-muted">Nothing yet.</p></section></aside></main></div>`);
+		$$renderer.push(`<!--]--></section> <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm"><section class="rounded-panel border border-border bg-surface p-3"><h2 class="mb-1 text-xs font-semibold text-muted uppercase">Clock and Scene</h2> <p class="text-muted">The Scene is set once play begins.</p></section> <section aria-labelledby="knows-heading" class="rounded-panel border border-border bg-surface p-3"><h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">What ${escape_html(acting()?.name ?? "the Party")} knows</h2> `);
+		Journal($$renderer, {
+			entries: acting() ? knownBy(journal.data, acting().id) : journal.data.entries,
+			holders: !acting()
+		});
+		$$renderer.push(`<!----></section></aside></main></div>`);
 	});
 }
 export { _page as default };

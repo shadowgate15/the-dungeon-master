@@ -4793,8 +4793,54 @@ var worldLink = sqliteTable("world_link", {
 	factId: integer("fact_id"),
 	toHandle: text("to_handle").notNull()
 }, (t) => [index("world_link_from_idx").on(t.fromHandle), index("world_link_to_idx").on(t.toHandle)]);
+// src/lib/server/db/knowledge-schema.ts
+/** What a Belief points at: a Fact, an Entity's existence, a field's value, or its own claim. */
+var BELIEF_KINDS = [
+	"fact",
+	"entity",
+	"field",
+	"claim"
+];
+/**
+* The Knowledge layer (ADR 0007): what each Holder believes. A Holder is a Character
+* (`holderCharacter`) or an NPC (`holderNpc`), never both. Outdatedness is computed against the
+* live World on read, never stored. A replaced Belief stays as history (`replacedBy`).
+*/
+var belief = sqliteTable("belief", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	holderCharacter: text("holder_character").references(() => character.id, { onDelete: "cascade" }),
+	holderNpc: text("holder_npc"),
+	kind: text("kind", { enum: BELIEF_KINDS }).notNull(),
+	/** The Fact, for `fact` Beliefs. */
+	factId: integer("fact_id"),
+	/** The Entity the Belief is about: the Fact's subject, the Entity, the field's owner, or `about`. */
+	about: text("about"),
+	field: text("field"),
+	/** The field's value as learned, for `field` Beliefs. */
+	value: text("value", { mode: "json" }).$type(),
+	/** A lie or rumour's own claim, with `[[links]]` stored as handles. */
+	claim: text("claim"),
+	/** What the Holder believes, rendered when learned: the text the Holder keeps. */
+	text: text("text").notNull(),
+	/** The name of what it is about, as the Holder learned it. */
+	aboutName: text("about_name"),
+	source: text("source"),
+	sessionId: text("session_id"),
+	eventId: integer("event_id"),
+	learnedMinute: integer("learned_minute").notNull(),
+	replacedBy: integer("replaced_by"),
+	retiredAt: integer("retired_at"),
+	retiredReason: text("retired_reason")
+}, (t) => [
+	index("belief_holder_character_idx").on(t.holderCharacter),
+	index("belief_holder_npc_idx").on(t.holderNpc),
+	index("belief_about_idx").on(t.about),
+	check("belief_one_holder_check", sql`(${t.holderCharacter} IS NULL) <> (${t.holderNpc} IS NULL)`),
+	check("belief_kind_check", sql.raw(`kind IN (${BELIEF_KINDS.map((k) => `'${k}'`).join(", ")})`))
+]);
 // src/lib/server/db/schema.ts
 var schema_exports = /* @__PURE__ */ __exportAll({
+	BELIEF_KINDS: () => BELIEF_KINDS,
 	ability: () => ability,
 	abilityScoreMethod: () => abilityScoreMethod,
 	activityLine: () => activityLine,
@@ -4804,6 +4850,7 @@ var schema_exports = /* @__PURE__ */ __exportAll({
 	backgroundOption: () => backgroundOption,
 	backgroundOptionAlignment: () => backgroundOptionAlignment,
 	backgroundProficiency: () => backgroundProficiency,
+	belief: () => belief,
 	campaign: () => campaign,
 	character: () => character,
 	characterChoice: () => characterChoice,
@@ -6684,6 +6731,6 @@ function canonicalFolder(folder) {
 		return resolved;
 	}
 }
-export { feature as $, abilityScoreMethod as A, and as At, classLevel as B, DATABASE_URL as Bt, entityAlias as C, ABILITY_METHODS as Ct, ENTITY_TYPES as D, SOLO_PLAYER as Dt, worldLink as E, CUSTOM_BACKGROUND_SLUG as Et, backgroundOptionAlignment as F, like as Ft, classTable as G, classProficiency as H, DUNGEON_MASTER_HOME as Ht, backgroundProficiency as I, or as It, equipment as J, condition as K, choiceGroup as L, sql as Lt, background as M, inArray as Mt, backgroundEquipment as N, isNotNull as Nt, NPC_STATUSES as O, asc as Ot, backgroundOption as P, isNull as Pt, equipmentWeaponProperty as Q, choiceOption as R, Column as Rt, entity as S, weaponProperty as St, pageRevision as T, CUSTOM_BACKGROUND_FEATURE_MAX as Tt, classSavingThrow as U, DUNGEON_MASTER_PORT as Ut, classLevelFeature as V, DUNGEON_MASTER_CAMPAIGNS as Vt, classStartingEquipment as W, DUNGEON_MASTER_VERSION as Wt, equipmentCategoryItem as X, equipmentCategory as Y, equipmentContent as Z, characterSpell as _, subrace as _t, seedRulesData as a, monsterProficiency as at, floor as b, trait as bt, openDatabase as c, raceAbilityBonus as ct, character as d, ruleSection as dt, language as et, characterChoice as f, rulesDataset as ft, characterSkill as g, subclass as gt, characterItem as h, spellClass as ht, userStateDir as i, monsterConditionImmunity as it, alignment as j, eq as jt, ability as k, desc as kt, activityLine as l, raceLanguage as lt, characterEquipment as m, spell as mt, canonicalFolder as n, magicSchool as nt, loadRulesDataset as o, proficiency as ot, characterDraft as p, skill as pt, damageType as q, defaultCampaignRoot as r, monster as rt, migrateDatabase as s, race as st, campaignDatabasePath as t, magicItem as tt, campaign as u, raceTrait as ut, declaration as v, subraceAbilityBonus as vt, fact as w, BACKSTORY_MAX as wt, session as x, traitProficiency as xt, event as y, subraceTrait as yt, choiceOptionItem as z, is as zt };
+export { equipmentWeaponProperty as $, ability as A, desc as At, choiceOptionItem as B, is as Bt, entity as C, weaponProperty as Ct, worldLink as D, CUSTOM_BACKGROUND_SLUG as Dt, pageRevision as E, CUSTOM_BACKGROUND_FEATURE_MAX as Et, backgroundOption as F, isNull as Ft, classStartingEquipment as G, DUNGEON_MASTER_VERSION as Gt, classLevelFeature as H, DUNGEON_MASTER_CAMPAIGNS as Ht, backgroundOptionAlignment as I, like as It, damageType as J, classTable as K, backgroundProficiency as L, or as Lt, alignment as M, eq as Mt, background as N, inArray as Nt, ENTITY_TYPES as O, SOLO_PLAYER as Ot, backgroundEquipment as P, isNotNull as Pt, equipmentContent as Q, choiceGroup as R, sql as Rt, belief as S, traitProficiency as St, fact as T, BACKSTORY_MAX as Tt, classProficiency as U, DUNGEON_MASTER_HOME as Ut, classLevel as V, DATABASE_URL as Vt, classSavingThrow as W, DUNGEON_MASTER_PORT as Wt, equipmentCategory as X, equipment as Y, equipmentCategoryItem as Z, characterSpell as _, subclass as _t, seedRulesData as a, monsterConditionImmunity as at, floor as b, subraceTrait as bt, openDatabase as c, race as ct, character as d, raceTrait as dt, feature as et, characterChoice as f, ruleSection as ft, characterSkill as g, spellClass as gt, characterItem as h, spell as ht, userStateDir as i, monster as it, abilityScoreMethod as j, and as jt, NPC_STATUSES as k, asc as kt, activityLine as l, raceAbilityBonus as lt, characterEquipment as m, skill as mt, canonicalFolder as n, magicItem as nt, loadRulesDataset as o, monsterProficiency as ot, characterDraft as p, rulesDataset as pt, condition as q, defaultCampaignRoot as r, magicSchool as rt, migrateDatabase as s, proficiency as st, campaignDatabasePath as t, language as tt, campaign as u, raceLanguage as ut, declaration as v, subrace as vt, entityAlias as w, ABILITY_METHODS as wt, session as x, trait as xt, event as y, subraceAbilityBonus as yt, choiceOption as z, Column as zt };
 
 //# sourceMappingURL=paths.js.map

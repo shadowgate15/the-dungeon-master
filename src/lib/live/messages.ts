@@ -6,6 +6,7 @@ export type LiveMessage =
   /** A Declaration was sent, edited or withdrawn on the Campaign's open Floor. */
   | { type: 'floor'; campaign: string }
   /** The Campaign's timeline or awaiting Narration changed (a Floor closed, the DM called a tool). */
+  /** Also any DM write, so the Journal (fed by DM-only Reveals) refreshes with it. */
   | { type: 'timeline'; campaign: string }
   /** A permission prompt from the DM's session appeared or cleared. */
   | { type: 'permission'; campaign: string }
@@ -19,6 +20,9 @@ export const floorQueryKey = (campaign: string) => ['floor', campaign] as const
 /** The query holding a Campaign's timeline. */
 export const timelineQueryKey = (campaign: string) => ['timeline', campaign] as const
 
+/** The query holding the Player's Journal: what their Characters believe. */
+export const journalQueryKey = (campaign: string) => ['journal', campaign] as const
+
 /** The query holding the permission prompt a Campaign's session is waiting on. */
 export const permissionQueryKey = (campaign: string) => ['permission', campaign] as const
 
@@ -30,7 +34,7 @@ export function staleQueries(message: LiveMessage): QueryKey[] {
     case 'floor':
       return [floorQueryKey(message.campaign)]
     case 'timeline':
-      return [timelineQueryKey(message.campaign)]
+      return [timelineQueryKey(message.campaign), journalQueryKey(message.campaign)]
     case 'permission':
       return [permissionQueryKey(message.campaign)]
   }
