@@ -76,7 +76,11 @@ export const worldTools = [
         event: {
           kind: 'entity_established',
           summary: `Established ${result.handle} (${input.name})`,
-          data: { handle: result.handle, type: input.type },
+          data: {
+            handle: result.handle,
+            type: input.type,
+            ...(input.distinct_from.length && { distinct_from: input.distinct_from })
+          },
           dmOnly
         }
       }
@@ -171,7 +175,7 @@ export const worldTools = [
         event: {
           kind: 'fact_superseded',
           summary: `Fact ${old} superseded by Fact ${by}`,
-          data: { old, by },
+          data: { old, by, subject: result.subject },
           dmOnly
         }
       }

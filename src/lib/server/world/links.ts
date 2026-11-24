@@ -62,6 +62,11 @@ export function resolveLinks(text: string, all: Known[]) {
   return { text: resolved, links: [...links], unresolved }
 }
 
+/** Every `[[link]]` target in a text, as written (a handle once stored, or an unresolved name). */
+export function linkTargets(text: string): string[] {
+  return [...text.matchAll(LINK)].map((m) => target(m[1]))
+}
+
 /** The handles a stored text links to, following merges. */
 export function linkedHandles(text: string, all: Known[]): string[] {
   return resolveLinks(text, all).links
