@@ -317,3 +317,49 @@ describe('the creation conversation', () => {
     expect(library.conversation(campaignId).list()).toEqual([])
   })
 })
+
+describe('the DM away', () => {
+  /** The play module with no DM listening on the Campaign's channel. */
+  const awayPlay = () =>
+    createPlay({ library, channels: createChannels(), publish: (m) => pushed.push(m) })
+
+  it('refuses every play input: Declarations, Done, rolls and answers, End Session, Cut to', () => {
+    const wren = addFighter('Wren')
+    const away = awayPlay()
+
+    expect(() => away.floor(campaignId)).toThrow(DmAwayError)
+    expect(() => away.done(campaignId)).toThrow(DmAwayError)
+    expect(() => away.roll(campaignId, 'call', 'part')).toThrow(DmAwayError)
+    expect(() => away.answer(campaignId, 'call', 'part', 'Left')).toThrow(DmAwayError)
+    expect(() => away.endSession(campaignId)).toThrow(DmAwayError)
+    expect(() => away.spotlight(campaignId, wren)).toThrow(DmAwayError)
+    expect(host.events(folder).map((e) => e.kind)).toEqual(['change'])
+  })
+
+  it('keeps a waiting Floor and an open Call for the next opening', () => {
+    const wren = addFighter('Wren')
+    play.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })
+    call('narrate', {
+      text: 'The lock is stiff.',
+      call: {
+        kind: 'check',
+        character: 'char:wren',
+        skill: 'sleight-of-hand',
+        tier: 'hard',
+        reason: 'stiff lock'
+      }
+    })
+    const away = awayPlay()
+
+    expect(() => away.done(campaignId)).toThrow(DmAwayError)
+    expect(library.floor(campaignId).current().declarations).toHaveLength(1)
+    expect(away.timeline(campaignId).call).not.toBeNull()
+  })
+
+  it('lets the console be browsed', () => {
+    addFighter('Wren')
+    const away = awayPlay()
+    expect(away.timeline(campaignId).entries).toEqual([])
+    expect(away.scene(campaignId)).toBeDefined()
+  })
+})

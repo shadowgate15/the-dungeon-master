@@ -1,7 +1,7 @@
 import { asc, eq, inArray, sql } from 'drizzle-orm'
 import { changedDraftFields, emptyDraft, type CharacterDraft } from '#lib/character/draft.ts'
 import { detailToDraft } from '#lib/character/edit.ts'
-import { SOLO_PLAYER, type CharacterStatus } from '#lib/character/enums.ts'
+import { BACKSTORY_MAX, SOLO_PLAYER, TEXT_MAX, type CharacterStatus } from '#lib/character/enums.ts'
 import {
   levelUpIssue,
   levelUpOffer,
@@ -23,6 +23,29 @@ import {
   type CharacterDetail
 } from './service'
 import { loadWizardRules } from './wizard-rules'
+
+/** An edit only the DM may make while no DM is at the table to make it. */
+export class DmOnlyEditError extends Error {}
+
+/** The Character details a Player may edit at any time, in or out of a sitting. */
+export type CharacterDetails = {
+  notes?: string | null
+  personality?: string | null
+  appearance?: string | null
+  /** Only before Begin, or with the DM at the table. */
+  backstory?: string | null
+}
+
+const DETAIL_LIMITS = {
+  notes: BACKSTORY_MAX,
+  personality: TEXT_MAX,
+  appearance: TEXT_MAX,
+  backstory: BACKSTORY_MAX
+} as const
+
+/** "notes, personality and appearance". */
+const listed = (words: string[]) =>
+  words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`
 
 /** The Campaign has no draft with this id. */
 export class DraftNotFoundError extends Error {}
@@ -60,10 +83,28 @@ const stepLabel = (step: StepId) => STEPS.find((s) => s.id === step)?.label ?? s
  * A Campaign's Characters and Character drafts, over its database. Drafts are stored with the
  * Campaign so a reload loses nothing (and the DM's tools can write into them later); a draft joins
  * the Party only when it is saved, which needs every wizard step to be valid.
+ *
+ * `attended` says whether a DM is at the table. Without one, a Player edit belongs to no Session
+ * and, after Begin, is limited to what moves no clock and sets no number code didn't compute.
  */
-export function createParty(db: Database, now: () => number = Date.now) {
+export function createParty(
+  db: Database,
+  now: () => number = Date.now,
+  { attended = () => true }: { attended?: () => boolean } = {}
+) {
   const rules = loadWizardRules()
   const characters = createCharacterService(db, now)
+
+  const begun = () => db.select({ at: campaign.begunAt }).from(campaign).get()?.at != null
+
+  /** Refuses an edit the DM must make, while the Campaign has begun and the DM is away. */
+  function dmOnly(what: string) {
+    if (begun() && !attended()) {
+      throw new DmOnlyEditError(
+        `${what} is the DM’s to change once the Campaign has begun. Run dm in the Campaign folder and ask at the table.`
+      )
+    }
+  }
 
   function row(id: string) {
     const found = db.select().from(characterDraft).where(eq(characterDraft.id, id)).get()
@@ -95,7 +136,7 @@ export function createParty(db: Database, now: () => number = Date.now) {
   function noteChange(id: string, summary: string) {
     const row = db.select().from(character).where(eq(character.id, id)).get()!
     const handle = characterHandle(row.name)
-    logChange(db, { handle, version: row.version, summary }, { at: now() })
+    logChange(db, { handle, version: row.version, summary }, { at: now(), offline: !attended() })
   }
 
   function detail(id: string) {
@@ -217,8 +258,12 @@ export function createParty(db: Database, now: () => number = Date.now) {
       return { character: found, draft: detailToDraft(rules, found) }
     },
 
-    /** Replaces a saved Character's choices from the edit wizard's draft. */
+    /**
+     * Replaces a saved Character's choices from the edit wizard's draft. It resets play state (HP,
+     * slots, coin, inventory), so once the Campaign has begun it is the DM's while the DM is away.
+     */
     updateCharacter(id: string, draft: CharacterDraft): Character {
+      dmOnly('Rewriting a Character in the wizard')
       return db.transaction(() => {
         const updated = characters.update(id, input(draft))
         db.update(character)
@@ -278,6 +323,41 @@ export function createParty(db: Database, now: () => number = Date.now) {
           .returning()
           .get()
         noteChange(id, `the Player levelled ${updated.name} up to level ${offer.level}`)
+        return updated
+      })
+    },
+
+    /**
+     * Edits a Character's notes, personality, appearance or backstory, leaving play state alone.
+     * Backstory after Begin is the DM's while the DM is away.
+     */
+    updateDetails(id: string, details: CharacterDetails): Character {
+      const fields = (Object.keys(DETAIL_LIMITS) as (keyof CharacterDetails)[]).filter(
+        (f) => details[f] !== undefined
+      )
+      if (fields.includes('backstory')) dmOnly('Backstory')
+      const values: CharacterDetails = {}
+      for (const f of fields) {
+        const value: unknown = details[f]
+        if (value !== null && typeof value !== 'string') {
+          throw new CharacterValidationError(`${f} must be text`)
+        }
+        const trimmed = value?.trim() || null
+        if (trimmed && trimmed.length > DETAIL_LIMITS[f]) {
+          throw new CharacterValidationError(`${f} must be at most ${DETAIL_LIMITS[f]} characters`)
+        }
+        values[f] = trimmed
+      }
+      if (fields.length === 0) throw new CharacterValidationError('Nothing to change')
+      return db.transaction(() => {
+        const updated = db
+          .update(character)
+          .set({ ...values, version: sql`${character.version} + 1`, updatedAt: now() })
+          .where(eq(character.id, id))
+          .returning()
+          .get()
+        if (!updated) throw new CharacterNotFoundError('Character not found')
+        noteChange(id, `the Player edited ${updated.name}’s ${listed(fields)}`)
         return updated
       })
     }

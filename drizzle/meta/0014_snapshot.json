@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "43e75354-d18f-407f-916a-e5ad741e0209",
+  "id": "aec7bdd1-688c-4dfe-b5f0-a161a92b8f06",
   "prevId": "820edc4f-9c5d-4693-8583-c756ebcc68a0",
   "tables": {
     "activity_line": {
@@ -233,13 +233,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "hit_dice": {
-          "name": "hit_dice",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "answer": {
           "name": "answer",
           "type": "text",
@@ -428,6 +421,14 @@
           "autoincrement": false,
           "default": 0
         },
+        "offline_noticed_through": {
+          "name": "offline_noticed_through",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "clock_minute": {
           "name": "clock_minute",
           "type": "integer",
@@ -571,6 +572,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "level": {
           "name": "level",
           "type": "integer",
@@ -708,14 +716,6 @@
         },
         "hit_dice_spent": {
           "name": "hit_dice_spent",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "levels_awarded": {
-          "name": "levels_awarded",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -1167,14 +1167,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "equipped": {
-          "name": "equipped",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
         }
       },
       "indexes": {},

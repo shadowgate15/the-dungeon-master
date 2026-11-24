@@ -3,12 +3,13 @@ import { play } from '#lib/server/bridge/index.ts'
 import { library } from '#lib/server/campaign/index.ts'
 import { CampaignMissingError, CampaignNotFoundError } from '#lib/server/campaign/library.ts'
 import { CallClosedError, CallRefusedError } from '#lib/server/play/calls.ts'
+import { DmAwayError } from '#lib/server/play/play.ts'
 import type { RequestHandler } from './$types'
 
 /**
  * The Player answers one part of the open Call: `{ roll: true }` rolls a Check in code,
  * `{ answer }` answers a question. Returns `{ complete }`, true once the whole Call is answered and
- * the DM is woken. 409 `{ error }` when the Call is no longer open; 400 for a refused answer or an
+ * the DM is woken. 409 `{ error }` when the Call is no longer open or the DM is away; 400 for a refused answer or an
  * archived Campaign; 404 for an unknown Campaign.
  */
 export const POST: RequestHandler = async ({ params, request }) => {
@@ -27,7 +28,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
         : play.answer(params.id, params.call, params.part, body.answer as string)
     return json(outcome)
   } catch (e) {
-    if (e instanceof CallClosedError) return json({ error: e.message }, { status: 409 })
+    if (e instanceof CallClosedError || e instanceof DmAwayError)
+      return json({ error: e.message }, { status: 409 })
     if (e instanceof CallRefusedError) return json({ error: e.message }, { status: 400 })
     if (e instanceof CampaignNotFoundError || e instanceof CampaignMissingError) {
       return json({ error: e.message }, { status: 404 })

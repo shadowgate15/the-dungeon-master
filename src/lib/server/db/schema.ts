@@ -72,6 +72,8 @@ export const campaign = sqliteTable(
     begunAt: integer('begun_at'),
     /** The last Event the DM has heard about: change notices cover the Player's edits after it. */
     noticedThrough: integer('noticed_through').notNull().default(0),
+    /** The last offline edit a sitting's opening has told the DM about ("changed since last sitting"). */
+    offlineNoticedThrough: integer('offline_noticed_through').notNull().default(0),
     /** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
     clockMinute: integer('clock_minute').notNull().default(0),
     /** The Scene: the handle of the Place the spotlight is on, or null before it is first set. */
@@ -149,6 +151,8 @@ export const character = sqliteTable(
     bond: text('bond'),
     flaw: text('flaw'),
     backstory: text('backstory'),
+    /** The Player's own notes on the Character; editable any time, with or without the DM. */
+    notes: text('notes'),
     level: integer('level').notNull().default(1),
     raceId: ref('race_id', () => race.id),
     subraceId: optionalRef('subrace_id', () => subrace.id),
