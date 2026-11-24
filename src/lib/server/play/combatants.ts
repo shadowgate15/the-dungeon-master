@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { canAct } from '#lib/character/acting.ts'
 import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
-import type { DerivedStats } from '#lib/rules/derive-stats.ts'
+import type { AbilityKey, DerivedStats } from '#lib/rules/derive-stats.ts'
 import { createCharacterService, type CharacterDetail } from '../character/service'
 import { loadWizardRules } from '../character/wizard-rules'
 import type { Database, Queryable } from '../db/connect'
@@ -29,6 +29,8 @@ export type Combatant =
       player: string
       detail: CharacterDetail
       stats: DerivedStats
+      /** The Character's features, by slug and name. */
+      features: { slug: string; name: string }[]
       ac: number
       hp: number
       maxHp: number
@@ -52,11 +54,12 @@ const ok = <T>(s: { status: 'ok'; value: T } | { status: 'pending' }): T | null 
 function characterStats(db: Queryable, id: string) {
   // Reads only: the service's reads run as well inside a tool's transaction.
   const detail = createCharacterService(db as Database).get(id)!
-  const { stats } = buildSummary(loadWizardRules(), {
+  const { stats, resolved } = buildSummary(loadWizardRules(), {
     ...detailToSummaryData(detail),
     equipment: detail.inventory
   })
-  return { detail, stats }
+  const features = resolved.features.map((f) => ({ slug: f.slug, name: f.name }))
+  return { detail, stats, features }
 }
 
 function characterCombatant(db: Queryable, ref: string): Combatant | null {
@@ -65,7 +68,7 @@ function characterCombatant(db: Queryable, ref: string): Combatant | null {
     (c) => c.handle === key || c.id === ref || c.name.toLowerCase() === key
   )
   if (!holder) return null
-  const { detail, stats } = characterStats(db, holder.id)
+  const { detail, stats, features } = characterStats(db, holder.id)
   return {
     kind: 'character',
     handle: holder.handle,
@@ -74,6 +77,7 @@ function characterCombatant(db: Queryable, ref: string): Combatant | null {
     player: holder.player,
     detail,
     stats,
+    features,
     // Armor isn't equipped yet (#333): AC is unarmored until it is.
     ac: ok(stats.unarmoredAc)?.value ?? 10,
     hp: detail.currentHp,
@@ -127,6 +131,17 @@ export function combatant(db: Queryable, ref: string): Combatant {
   const found = ref.startsWith('npc:') ? npcCombatant(db, ref) : characterCombatant(db, ref)
   if (!found) throw ToolError.unknownHandle(ref)
   return found
+}
+
+/** A combatant's saving throw bonus: a Character's derived save, a stat block's proficiency or ability. */
+export function saveBonus(who: Combatant, ability: AbilityKey): number {
+  if (who.kind === 'character') return ok(who.stats.savingThrows[ability])?.modifier ?? 0
+  const proficient = (who.monster.proficiencies as { proficiency: string; value: number }[]).find(
+    (p) => p.proficiency === `saving-throw-${ability}`
+  )
+  if (proficient) return proficient.value
+  const score = (who.monster.abilityScores as Record<AbilityKey, number>)[ability] ?? 10
+  return Math.floor((score - 10) / 2)
 }
 
 /** A Character who acts must be able to. */

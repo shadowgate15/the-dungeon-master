@@ -21,19 +21,19 @@ import { nextStep, rollStep, sequenceText } from './sequences'
  * The DC for each difficulty tier, from the SRD's "Typical Difficulty Classes" table
  * (`rule:ability-checks` in the Rules Data). Server-only: no DC ever reaches a Player payload.
  */
-const DC_BY_TIER = { easy: 10, medium: 15, hard: 20, 'very hard': 25 } as const
+export const DC_BY_TIER = { easy: 10, medium: 15, hard: 20, 'very hard': 25 } as const
 export const TIERS = Object.keys(DC_BY_TIER) as (keyof typeof DC_BY_TIER)[]
 export type Tier = keyof typeof DC_BY_TIER
 
 const SKILL_NAMES = new Map(skills.map((s) => [s.slug, s.name]))
-const ABILITY_NAMES = new Map(abilities.map((a) => [a.slug, a.fullName]))
+export const ABILITY_NAMES = new Map(abilities.map((a) => [a.slug, a.fullName]))
 
 const skillSlug = z
   .string()
   .transform((s) => s.trim().toLowerCase().replace(/\s+/g, '-'))
   .refine((s) => SKILL_NAMES.has(s), { message: `Expected a skill: ${[...SKILL_NAMES.keys()]}` })
 
-const saveKey = z
+export const saveKey = z
   .string()
   .transform((s) => {
     const key = s.trim().toLowerCase()
