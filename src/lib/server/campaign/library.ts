@@ -5,6 +5,7 @@ import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import { campaign } from '../db/schema'
 import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
+import { journal } from '../knowledge/journal'
 import { openSession, timeline } from '../play/log'
 import { playerScene, spotlightRequest } from '../play/scene'
 import { seedRulesData } from '../rules/seed'
@@ -183,11 +184,12 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
       return createFloor(database(find(id).folder), now)
     },
 
-    /** The Campaign's record of play: the Player's timeline and its Sessions. */
+    /** The Campaign's record of play: the Player's timeline and Journal, and its Sessions. */
     record(id: string) {
       const db = database(find(id).folder)
       return {
         timeline: () => timeline(db),
+        journal: () => journal(db),
         openSession: () => openSession(db, now()),
         scene: () => playerScene(db),
         spotlight: (character: string, player: string) => spotlightRequest(db, character, player)

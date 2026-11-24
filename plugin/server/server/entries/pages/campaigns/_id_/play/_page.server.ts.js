@@ -1,5 +1,5 @@
 import { t as error } from "../../../../../chunks/exports.js";
-import { M as canAct, P as loadWizardRules, i as sessions, n as library } from "../../../../../chunks/campaign.js";
+import { I as loadWizardRules, P as canAct, i as sessions, n as library } from "../../../../../chunks/campaign.js";
 import { a as permissions, o as play } from "../../../../../chunks/bridge.js";
 import { n as detailToSummaryData, t as buildSummary } from "../../../../../chunks/summary.js";
 import { s as ABILITY_KEYS } from "../../../../../chunks/schema.js";
@@ -65,7 +65,7 @@ function playSheets(party) {
 	return party.list().flatMap((m) => m.kind === "character" ? [toPlaySheet(party.character(m.id).character)] : []);
 }
 // src/routes/campaigns/[id]/play/+page.server.ts
-/** The play console: the Party's sheets, the open Floor, the timeline and any permission prompt, begun or not. */
+/** The play console: the Party's sheets, the open Floor, the timeline, the Journal and any permission prompt, begun or not. */
 var load = ({ params }) => {
 	const entry = library.get(params.id);
 	if (!entry) error(404, "Campaign not found");
@@ -81,6 +81,7 @@ var load = ({ params }) => {
 		floor: library.floor(entry.id).current(),
 		timeline: play.timeline(entry.id),
 		scene: play.scene(entry.id),
+		journal: library.record(entry.id).journal(),
 		permission: permissions.pending(entry.id),
 		attached: sessions.list()
 	};

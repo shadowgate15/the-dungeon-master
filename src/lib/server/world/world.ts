@@ -273,6 +273,9 @@ export function createWorld({ db, stamp }: ToolContext) {
   }
 
   return {
+    /** Every Entity as link resolution sees it, retired and merged ones included. */
+    known,
+
     /** Entities whose name or aliases are close to any of `names`, retired ones aside. */
     nearMatches(names: string[]) {
       return known()
@@ -385,8 +388,6 @@ export function createWorld({ db, stamp }: ToolContext) {
         facts: facts.map((f) => factView(f, all)),
         links,
         backlinks,
-        // Beliefs arrive with the Knowledge layer; until then nothing is believed about anything.
-        beliefs: 0,
         ...(revisions && { revisions })
       }
     },

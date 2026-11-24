@@ -1,4 +1,4 @@
-import { At as desc, Bt as is, C as entity, Et as CUSTOM_BACKGROUND_FEATURE_MAX, Ft as isNull, Ht as DUNGEON_MASTER_CAMPAIGNS, K as classTable, M as alignment, Mt as eq, N as background, Nt as inArray, Ot as SOLO_PLAYER, Rt as sql, S as session, Tt as BACKSTORY_MAX, Ut as DUNGEON_MASTER_HOME, Y as equipment, _ as characterSpell, _t as subclass, a as seedRulesData, b as floor, c as openDatabase, ct as race, d as character, f as characterChoice, g as characterSkill, h as characterItem, ht as spell, i as userStateDir, j as abilityScoreMethod, jt as and, kt as asc, l as activityLine, m as characterEquipment, mt as skill, n as canonicalFolder, o as loadRulesDataset, p as characterDraft, r as defaultCampaignRoot, s as migrateDatabase, t as campaignDatabasePath, u as campaign, v as declaration, vt as subrace, wt as ABILITY_METHODS, x as returnedDraft, y as event, zt as Column } from "./paths.js";
+import { At as asc, Bt as Column, C as belief, Dt as CUSTOM_BACKGROUND_FEATURE_MAX, Et as BACKSTORY_MAX, Ft as isNotNull, It as isNull, M as abilityScoreMethod, Mt as and, N as alignment, Nt as eq, P as background, Pt as inArray, S as session, Tt as ABILITY_METHODS, Ut as DUNGEON_MASTER_CAMPAIGNS, Vt as is, Wt as DUNGEON_MASTER_HOME, X as equipment, _ as characterSpell, a as seedRulesData, b as floor, c as openDatabase, d as character, f as characterChoice, g as characterSkill, gt as spell, h as characterItem, ht as skill, i as userStateDir, jt as desc, kt as SOLO_PLAYER, l as activityLine, lt as race, m as characterEquipment, n as canonicalFolder, o as loadRulesDataset, p as characterDraft, q as classTable, r as defaultCampaignRoot, s as migrateDatabase, t as campaignDatabasePath, u as campaign, v as declaration, vt as subclass, w as entity, x as returnedDraft, y as event, yt as subrace, zt as sql } from "./paths.js";
 import { D as equipmentGroupKeys, M as resolveFeatures, O as equipmentGroups, a as WIZARD_RULES_KEYS, c as resolverDraft, d as STEPS, o as emptyDraft, r as deriveStats, t as tryDraftToCharacterInput } from "./save.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { o as parseCampaignSeed, r as campaignSeedCard } from "./seed.js";
@@ -790,14 +790,14 @@ function parseClock(text) {
 }
 // src/lib/server/world/names.ts
 /** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
-var plain = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+var plain$1 = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 /** The slug part of a handle: `Mira Voss` → `mira-voss`. */
 function slug(name) {
-	return plain(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
+	return plain$1(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
 }
 /** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
 function normalizeName(name) {
-	return plain(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+	return plain$1(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
 }
 function distance(a, b) {
 	let row = Array.from({ length: b.length + 1 }, (_, i) => i);
@@ -1240,6 +1240,81 @@ function createFloor(db, now = Date.now) {
 		}
 	};
 }
+// src/lib/server/knowledge/holders.ts
+/**
+* Every Character in the Campaign with its readable handle, `char:` plus its name's slug. Two
+* Characters with the same slug are told apart by creation order (`char:wren-2`).
+*/
+function characterHolders(db) {
+	const taken = /* @__PURE__ */ new Set();
+	return db.select({
+		id: character.id,
+		name: character.name,
+		player: character.controllingPlayer
+	}).from(character).orderBy(asc(character.createdAt), asc(character.id)).all().map((c) => {
+		const base = `char:${slug(c.name) || "character"}`;
+		let handle = base;
+		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
+		taken.add(handle);
+		return {
+			...c,
+			handle
+		};
+	});
+}
+/**
+* The Characters present in the Scene. There is no Scene yet (#328 adds it and presence from
+* whereabouts), so until then every Character in the Party is present.
+*/
+function charactersInScene(db) {
+	return characterHolders(db);
+}
+// src/lib/server/knowledge/journal.ts
+/** Shows `[[Name]]` links as plain names for the Player. */
+var plain = (text) => text.replace(/\[\[([^[\]|]+)(?:\|[^[\]]*)?\]\]/g, "$1");
+/**
+* The Player's Journal: their Characters' current Beliefs as each was learned, one entry per
+* thing believed with every Character who holds it. Built from the Knowledge layer only, never
+* from the World layer or an NPC's Beliefs, and with the truth stripped (ADR 0007).
+*/
+function journal(db, player) {
+	const characters = characterHolders(db).filter((c) => player === void 0 || c.player === player);
+	const types = new Map(db.select({
+		handle: entity.handle,
+		type: entity.type
+	}).from(entity).all().map((e) => [e.handle, e.type]));
+	const rows = db.select().from(belief).where(and(isNotNull(belief.holderCharacter), isNull(belief.replacedBy), isNull(belief.retiredAt))).orderBy(asc(belief.id)).all();
+	const entries = /* @__PURE__ */ new Map();
+	for (const b of rows) {
+		const holder = characters.find((c) => c.id === b.holderCharacter);
+		const type = b.about === null ? void 0 : types.get(b.about);
+		if (!holder || !type) continue;
+		const text = plain(b.text);
+		const source = b.source === null ? null : plain(b.source);
+		const key = JSON.stringify([
+			b.aboutName,
+			type,
+			text,
+			source
+		]);
+		const entry = entries.get(key) ?? {
+			id: `b${b.id}`,
+			about: {
+				name: b.aboutName ?? "",
+				type
+			},
+			text,
+			source,
+			holders: []
+		};
+		if (!entry.holders.some((h) => h.id === holder.id)) entry.holders.push({
+			id: holder.id,
+			name: holder.name
+		});
+		entries.set(key, entry);
+	}
+	return { entries: [...entries.values()] };
+}
 // src/lib/server/campaign/registry.ts
 /**
 * The list of Campaign folders the server knows, as `registry.json` in the user-level state
@@ -1417,11 +1492,12 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		floor(id) {
 			return createFloor(database(find(id).folder), now);
 		},
-		/** The Campaign's record of play: the Player's timeline and its Sessions. */
+		/** The Campaign's record of play: the Player's timeline and Journal, and its Sessions. */
 		record(id) {
 			const db = database(find(id).folder);
 			return {
 				timeline: () => timeline(db),
+				journal: () => journal(db),
 				openSession: () => openSession(db, now()),
 				scene: () => playerScene(db),
 				spotlight: (character, player) => spotlightRequest(db, character, player)
@@ -1500,6 +1576,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { formatClock as A, characterRefs as C, isNearName as D, scenePlace as E, CharacterNotFoundError as F, CharacterValidationError as I, SESSION_LIVE_MESSAGE as L, canAct as M, DraftNotFoundError as N, normalizeName as O, loadWizardRules as P, advanceClock as S, present as T, logEvent as _, CampaignArchivedError as a, ClockBackwardsError as b, CampaignNotFoundError as c, DeclarationNotFoundError as d, DeclarationRefusedError as f, logActivity as g, currentStamp as h, sessions as i, parseClock as j, slug as k, NotACampaignFolderError as l, returnStrandedDrafts as m, library as n, CampaignExistsError as o, DmBusyError as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, nextEventId as v, currentMinute as w, SpotlightRefusedError as x, setAwaitingNarration as y };
+export { normalizeName as A, SpotlightRefusedError as C, present as D, currentMinute as E, DraftNotFoundError as F, loadWizardRules as I, CharacterNotFoundError as L, formatClock as M, parseClock as N, scenePlace as O, canAct as P, CharacterValidationError as R, ClockBackwardsError as S, characterRefs as T, currentStamp as _, CampaignArchivedError as a, nextEventId as b, CampaignNotFoundError as c, characterHolders as d, charactersInScene as f, returnStrandedDrafts as g, DmBusyError as h, sessions as i, slug as j, isNearName as k, NotACampaignFolderError as l, DeclarationRefusedError as m, library as n, CampaignExistsError as o, DeclarationNotFoundError as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, logActivity as v, advanceClock as w, setAwaitingNarration as x, logEvent as y, SESSION_LIVE_MESSAGE as z };
 
 //# sourceMappingURL=campaign.js.map

@@ -10,7 +10,7 @@ return {
 	app_path: "_app",
 	assets: new Set(["robots.txt"]),
 	mime_types: {".txt":"text/plain"},
-	client: {start:"_app/immutable/entry/start.DHP3e-iK.js",app:"_app/immutable/entry/app.D61BpdTb.js",imports:["_app/immutable/entry/start.DHP3e-iK.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/kFbcn9Ny.js","_app/immutable/chunks/pd6cx8RH.js","_app/immutable/chunks/BH4ECt33.js","_app/immutable/chunks/BeSO2yj4.js","_app/immutable/chunks/9lSbqI6C.js","_app/immutable/entry/app.D61BpdTb.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
+	client: {start:"_app/immutable/entry/start.DHP3e-iK.js",app:"_app/immutable/entry/app.CwGNdSso.js",imports:["_app/immutable/entry/start.DHP3e-iK.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/kFbcn9Ny.js","_app/immutable/chunks/pd6cx8RH.js","_app/immutable/chunks/BH4ECt33.js","_app/immutable/chunks/BeSO2yj4.js","_app/immutable/chunks/9lSbqI6C.js","_app/immutable/entry/app.CwGNdSso.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
 	
 	nodes: [
 		__memo(() => import('./nodes/0.js')),
@@ -21,7 +21,8 @@ return {
 		__memo(() => import('./nodes/5.js')),
 		__memo(() => import('./nodes/6.js')),
 		__memo(() => import('./nodes/7.js')),
-		__memo(() => import('./nodes/8.js'))
+		__memo(() => import('./nodes/8.js')),
+		__memo(() => import('./nodes/9.js'))
 	],
 	remotes: {
 		
@@ -98,6 +99,13 @@ return {
 			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/floor/returned/_returned_/_server.ts.js'))
 		},
 		{
+			id: "/api/campaigns/[id]/journal",
+			pattern: /^\/api\/campaigns\/([^/]+?)\/journal\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
+			page: null,
+			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/journal/_server.ts.js'))
+		},
+		{
 			id: "/api/campaigns/[id]/permission",
 			pattern: /^\/api\/campaigns\/([^/]+?)\/permission\/?$/,
 			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
@@ -161,31 +169,38 @@ return {
 			endpoint: null
 		},
 		{
+			id: "/campaigns/[id]/journal",
+			pattern: /^\/campaigns\/([^/]+?)\/journal\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
+			page: { layouts: [0,], errors: [1,], leaf: 5 },
+			endpoint: null
+		},
+		{
 			id: "/campaigns/[id]/party",
 			pattern: /^\/campaigns\/([^/]+?)\/party\/?$/,
 			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
-			page: { layouts: [0,], errors: [1,], leaf: 5 },
+			page: { layouts: [0,], errors: [1,], leaf: 6 },
 			endpoint: null
 		},
 		{
 			id: "/campaigns/[id]/play",
 			pattern: /^\/campaigns\/([^/]+?)\/play\/?$/,
 			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
-			page: { layouts: [0,], errors: [1,], leaf: 6 },
+			page: { layouts: [0,], errors: [1,], leaf: 7 },
 			endpoint: null
 		},
 		{
 			id: "/credits",
 			pattern: /^\/credits\/?$/,
 			params: [],
-			page: { layouts: [0,], errors: [1,], leaf: 7 },
+			page: { layouts: [0,], errors: [1,], leaf: 8 },
 			endpoint: null
 		},
 		{
 			id: "/theme",
 			pattern: /^\/theme\/?$/,
 			params: [],
-			page: { layouts: [0,], errors: [1,], leaf: 8 },
+			page: { layouts: [0,], errors: [1,], leaf: 9 },
 			endpoint: null
 		}
 	],

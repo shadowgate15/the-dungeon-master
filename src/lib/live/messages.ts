@@ -7,7 +7,8 @@ export type LiveMessage =
   | { type: 'floor'; campaign: string }
   /**
    * The DM called a tool or a Floor closed: the timeline and awaiting Narration changed, and with
-   * them possibly the Scene and the open Floor (`move`, `set_scene`, `advance_time`).
+   * them possibly the Scene and the open Floor (`move`, `set_scene`, `advance_time`) and the
+   * Journal (fed by DM-only Reveals).
    */
   | { type: 'timeline'; campaign: string }
   /** A permission prompt from the DM's session appeared or cleared. */
@@ -25,6 +26,9 @@ export const timelineQueryKey = (campaign: string) => ['timeline', campaign] as 
 /** The query holding a Campaign's Scene, as the rail shows it. */
 export const sceneQueryKey = (campaign: string) => ['scene', campaign] as const
 
+/** The query holding the Player's Journal: what their Characters believe. */
+export const journalQueryKey = (campaign: string) => ['journal', campaign] as const
+
 /** The query holding the permission prompt a Campaign's session is waiting on. */
 export const permissionQueryKey = (campaign: string) => ['permission', campaign] as const
 
@@ -39,7 +43,8 @@ export function staleQueries(message: LiveMessage): QueryKey[] {
       return [
         timelineQueryKey(message.campaign),
         sceneQueryKey(message.campaign),
-        floorQueryKey(message.campaign)
+        floorQueryKey(message.campaign),
+        journalQueryKey(message.campaign)
       ]
     case 'permission':
       return [permissionQueryKey(message.campaign)]

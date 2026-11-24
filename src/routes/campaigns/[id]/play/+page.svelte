@@ -5,12 +5,15 @@
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
   import SceneRail from '#lib/play/SceneRail.svelte'
+  import Journal from '#lib/play/Journal.svelte'
+  import { knownBy } from '#lib/play/journal.ts'
   import PermissionCard from '#lib/play/PermissionCard.svelte'
   import Timeline from '#lib/play/Timeline.svelte'
   import { createPermissionQuery, permissionActions } from '#lib/play/permission-client.ts'
   import {
     createFloorQuery,
     createSceneQuery,
+    createJournalQuery,
     createTimelineQuery,
     floorActions,
     FloorChangeError
@@ -32,6 +35,10 @@
   const scene = createSceneQuery(
     () => data.campaign.id,
     () => data.scene
+  )
+  const journal = createJournalQuery(
+    () => data.campaign.id,
+    () => data.journal
   )
   const actions = floorActions(() => data.campaign.id)
   const permission = createPermissionQuery(
@@ -83,6 +90,10 @@
       >{data.campaign.name}</Link
     >
     <DmBadge size="sm" attached={sessions.data.includes(data.campaign.id)} />
+    <Link
+      href={resolve('/campaigns/[id]/journal', { id: data.campaign.id })}
+      class="ml-auto text-sm">Journal</Link
+    >
   </header>
 
   <main
@@ -122,11 +133,17 @@
 
     <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm">
       <SceneRail scene={scene.data} />
-      <section class="rounded-panel border border-border bg-surface p-3">
-        <h2 class="mb-1 text-xs font-semibold text-muted uppercase">
+      <section
+        aria-labelledby="knows-heading"
+        class="rounded-panel border border-border bg-surface p-3"
+      >
+        <h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">
           What {acting?.name ?? 'the Party'} knows
         </h2>
-        <p class="text-muted">Nothing yet.</p>
+        <Journal
+          entries={acting ? knownBy(journal.data, acting.id) : journal.data.entries}
+          holders={!acting}
+        />
       </section>
     </aside>
   </main>

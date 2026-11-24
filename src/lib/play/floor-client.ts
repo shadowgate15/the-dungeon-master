@@ -1,6 +1,12 @@
 import { createQuery, useQueryClient } from '@tanstack/svelte-query'
-import { floorQueryKey, sceneQueryKey, timelineQueryKey } from '#lib/live/messages.ts'
+import {
+  floorQueryKey,
+  journalQueryKey,
+  sceneQueryKey,
+  timelineQueryKey
+} from '#lib/live/messages.ts'
 import type { OpenFloor, PendingDeclaration } from './floor'
+import type { Journal } from './journal'
 import type { SceneView } from './scene'
 import type { Timeline } from './timeline'
 
@@ -41,6 +47,19 @@ export function createSceneQuery(campaign: () => string, initial: () => SceneVie
       const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/scene`)
       if (!res.ok) throw new FloorChangeError('The Scene could not be loaded')
       return (await res.json()) as SceneView
+    },
+    initialData: initial()
+  }))
+}
+
+/** The Player's Journal, starting from the server-rendered one; live updates keep it fresh. */
+export function createJournalQuery(campaign: () => string, initial: () => Journal) {
+  return createQuery(() => ({
+    queryKey: journalQueryKey(campaign()),
+    queryFn: async (): Promise<Journal> => {
+      const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/journal`)
+      if (!res.ok) throw new Error('The Journal could not be loaded')
+      return (await res.json()) as Journal
     },
     initialData: initial()
   }))

@@ -47,8 +47,15 @@
     {
       "idx": 6,
       "version": "6",
-      "when": 1795478924637,
-      "tag": "0006_scene_clock",
+      "when": 1795478939471,
+      "tag": "0006_beliefs",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795496876245,
+      "tag": "0007_scene_clock",
       "breakpoints": true
     }
   ]
