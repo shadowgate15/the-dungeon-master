@@ -1,5 +1,6 @@
 import { asc, desc, isNull, sql } from 'drizzle-orm'
-import type { Timeline, TimelineEntry } from '#lib/play/timeline.ts'
+import type { HpState } from '#lib/play/hp-state.ts'
+import type { RollOutcome, Timeline, TimelineEntry } from '#lib/play/timeline.ts'
 import type { Queryable } from '../db/connect'
 import type { Stamp } from '../tools/contract'
 import { activityLine, campaign, event, session } from '../db/schema'
@@ -123,9 +124,15 @@ function entryFor(e: typeof event.$inferSelect): TimelineEntry | null {
       dice: (data.dice as number[]).map(Number),
       modifier: Number(data.modifier),
       total: Number(data.total),
-      outcome: data.success ? 'success' : 'failure',
+      outcome:
+        'outcome' in data
+          ? (data.outcome as RollOutcome | null)
+          : data.success
+            ? 'success'
+            : 'failure',
       mode,
-      reason: mode === 'normal' ? null : String(data.reason ?? '')
+      reason: mode === 'normal' ? null : String(data.reason ?? ''),
+      target: (data.target as { name: string; state: HpState } | null | undefined) ?? null
     }
   }
   if (e.kind === 'answer') {

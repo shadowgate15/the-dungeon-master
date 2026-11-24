@@ -11,10 +11,11 @@ import type { ChannelEvent } from '../bridge/channels'
 import { createCharacterService } from '../character/service'
 import { loadWizardRules } from '../character/wizard-rules'
 import type { Database, Queryable } from '../db/connect'
-import { call, callPart, campaign, character, type CheckResult } from '../db/schema'
+import { call, callPart, campaign, character, type CheckResult, type Sequence } from '../db/schema'
 import type { Dice } from '../dice'
 import { ToolError } from '../tools/contract'
 import { logEvent, setAwaitingNarration } from './log'
+import { nextStep, rollStep, sequenceText } from './sequences'
 
 /**
  * The DC for each difficulty tier, from the SRD's "Typical Difficulty Classes" table
@@ -116,8 +117,13 @@ function openCallRow(db: Queryable) {
   return db.select().from(call).where(eq(call.state, 'open')).get()
 }
 
-/** What a Check part rolls, as the Player reads it. */
-function labelOf(part: { skill: string | null; save: string | null }): string | null {
+/** What a part rolls, as the Player reads it. */
+function labelOf(part: {
+  skill: string | null
+  save: string | null
+  sequence?: Sequence | null
+}): string | null {
+  if (part.sequence) return part.sequence.label
   if (part.skill) return `${SKILL_NAMES.get(part.skill) ?? part.skill} check`
   if (part.save) return `${ABILITY_NAMES.get(part.save) ?? part.save} save`
   return null
@@ -132,13 +138,6 @@ export function openCall(
   input: CallInput,
   { at, openedBy }: { at: number; openedBy: number | null }
 ): string {
-  if (typeof input === 'string') {
-    throw new ToolError(
-      'unknown_call',
-      `No pending Call has the id ${input}`,
-      'Attach a pending Call id an action tool returned, or pass the Call inline'
-    )
-  }
   if (openCallRow(db)) {
     throw new ToolError(
       'call_open',
@@ -146,6 +145,7 @@ export function openCall(
       'Wait for its call_result, or narrate without a call'
     )
   }
+  if (typeof input === 'string') return attachPending(db, input, openedBy)
   const id = db
     .insert(call)
     .values({
@@ -185,6 +185,91 @@ export function openCall(
   return id
 }
 
+/** Opens a pending Call an action tool made: the Narration attaching it shows it to the Players. */
+function attachPending(db: Queryable, id: string, openedBy: number | null): string {
+  const attached = db
+    .update(call)
+    .set({ state: 'open', openedBy })
+    .where(and(eq(call.id, id), eq(call.state, 'pending')))
+    .returning({ id: call.id })
+    .get()
+  if (!attached) {
+    throw new ToolError(
+      'unknown_call',
+      `No pending Call has the id ${id}`,
+      'Attach a pending Call id an action tool returned, or pass the Call inline'
+    )
+  }
+  return attached.id
+}
+
+/** One roll sequence for one Character, addressed to its Controlling Player. */
+export type PendingPart = {
+  characterId: string
+  player: string
+  sequence: Sequence
+  mode?: RollMode
+  reason?: string | null
+}
+
+/**
+ * Stores an action tool's roll sequences as a pending Call, hidden from the Players until the
+ * closing `narrate(..., call: id)` attaches it. Returns its id.
+ */
+export function createPendingCall(db: Queryable, parts: PendingPart[], at: number): string {
+  const id = db
+    .insert(call)
+    .values({
+      campaignId: db.select({ id: campaign.id }).from(campaign).get()!.id,
+      kind: 'roll_sequence',
+      state: 'pending',
+      createdAt: at
+    })
+    .returning({ id: call.id })
+    .get().id
+  parts.forEach((part, i) => {
+    db.insert(callPart)
+      .values({
+        callId: id,
+        position: i + 1,
+        characterId: part.characterId,
+        player: part.player,
+        sequence: part.sequence,
+        mode: part.mode ?? 'normal',
+        reason: part.reason ?? null
+      })
+      .run()
+  })
+  return id
+}
+
+/** The pending Calls no Narration has attached yet. */
+export function pendingCalls(db: Queryable): string[] {
+  return db
+    .select({ id: call.id })
+    .from(call)
+    .where(eq(call.state, 'pending'))
+    .all()
+    .map((c) => c.id)
+}
+
+/** Drops a pending Call the DM won't attach; refused for any other Call. */
+export function cancelPendingCall(db: Queryable, id: string, at: number) {
+  const cancelled = db
+    .update(call)
+    .set({ state: 'cancelled', closedAt: at })
+    .where(and(eq(call.id, id), eq(call.state, 'pending')))
+    .returning({ id: call.id })
+    .get()
+  if (!cancelled) {
+    throw new ToolError(
+      'unknown_call',
+      `No pending Call has the id ${id}`,
+      'Only a pending Call an action tool returned, not yet attached, can be cancelled'
+    )
+  }
+}
+
 /** The Players at the table: everyone with a Character who can act (solo play: one). */
 function playersAtTable(db: Queryable): string[] {
   const players = new Set(
@@ -221,7 +306,8 @@ export function openCallView(db: Queryable): OpenCall | null {
       label: labelOf(part),
       reason: part.reason,
       mode: part.mode,
-      answered: part.answeredAt !== null
+      answered: part.answeredAt !== null,
+      next: part.sequence ? nextStep(part.sequence) : null
     }))
   }
 }
@@ -251,6 +337,7 @@ export type CallResult = { call: string; players: string[]; parts: Answered[] }
 
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
 function resultLine(p: Answered): string {
+  if (p.sequence) return `[${p.characterName} · ${p.player}] ${sequenceText(p.sequence, p.mode)}`
   if (p.result === null) return `[${p.player}] ${p.answer}`
   const r = p.result
   const dice = r.dice.length > 1 ? `${r.dice.join('/')} (${p.mode}) kept ${r.kept}` : `${r.kept}`
@@ -289,6 +376,8 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     resolve: (part: typeof callPart.$inferSelect) => {
       values: Partial<typeof callPart.$inferInsert>
       event: { kind: string; summary: string; data: Record<string, unknown> }
+      /** Whether the part is finished; a roll sequence takes several clicks. */
+      finished?: boolean
     }
   ): CallResult | null {
     return db.transaction(() => {
@@ -309,9 +398,9 @@ export function createCalls(db: Database, now: () => number = Date.now) {
           .get()
       if (!part) throw new CallClosedError('That Call is no longer open')
       if (part.player !== player) throw new CallRefusedError('That roll is not yours')
-      const { values, event } = resolve(part)
+      const { values, event, finished = true } = resolve(part)
       db.update(callPart)
-        .set({ ...values, answeredAt: at })
+        .set({ ...values, answeredAt: finished ? at : null })
         .where(eq(callPart.id, partId))
         .run()
       logEvent(db, { tool: 'call', ...event, data: { call: callId, ...event.data } }, { at })
@@ -347,6 +436,39 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     })
   }
 
+  /** One click of a roll sequence: code rolls the next step against the hidden number. */
+  function rollSequenceStep(part: typeof callPart.$inferSelect, dice: Dice, player: string) {
+    const rolled = rollStep(db, part.sequence!, dice, { mode: part.mode, reason: part.reason })
+    const name =
+      db
+        .select({ name: character.name })
+        .from(character)
+        .where(eq(character.id, part.characterId!))
+        .get()?.name ?? ''
+    const mode = rolled.roll.kept === null ? 'normal' : part.mode
+    return {
+      values: { sequence: rolled.sequence },
+      finished: rolled.sequence.done,
+      event: {
+        kind: 'roll',
+        summary: `${name} ${rolled.what}: ${rolled.roll.total}${rolled.roll.outcome ? ` (${rolled.roll.outcome})` : ''}`,
+        data: {
+          part: part.id,
+          characterName: name,
+          player,
+          what: rolled.what,
+          mode,
+          reason: mode === 'normal' ? null : part.reason,
+          dice: rolled.roll.dice,
+          modifier: rolled.roll.modifier,
+          total: rolled.roll.total,
+          outcome: rolled.roll.outcome,
+          target: rolled.targetState
+        }
+      }
+    }
+  }
+
   return {
     /** The open Call, Player-safe. */
     open: () => openCallView(db),
@@ -358,6 +480,7 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     roll(callId: string, partId: string, dice: Dice, player: string = SOLO_PLAYER) {
       return answer(callId, partId, player, (part) => {
         if (!part.characterId) throw new CallRefusedError('That part is a question: answer it')
+        if (part.sequence) return rollSequenceStep(part, dice, player)
         const modifier = modifierFor(part.characterId, part)
         const d20 =
           part.mode === 'normal'

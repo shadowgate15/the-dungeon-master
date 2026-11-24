@@ -136,7 +136,8 @@ export const checkCall: OpenCall = {
       label: 'Sleight of Hand check',
       reason: 'The lock is old and stiff',
       mode: 'normal',
-      answered: false
+      answered: false,
+      next: null
     },
     {
       id: 'p2',
@@ -145,7 +146,8 @@ export const checkCall: OpenCall = {
       label: 'Perception check',
       reason: 'Bram knows these streets',
       mode: 'advantage',
-      answered: false
+      answered: false,
+      next: null
     }
   ]
 }
@@ -164,7 +166,8 @@ export const questionCall: OpenCall = {
       label: null,
       reason: null,
       mode: 'normal',
-      answered: false
+      answered: false,
+      next: null
     }
   ]
 }
@@ -181,7 +184,8 @@ export const rollEntries: TimelineEntry[] = [
     total: 19,
     outcome: 'success',
     mode: 'normal',
-    reason: null
+    reason: null,
+    target: null
   },
   {
     type: 'roll',
@@ -193,7 +197,8 @@ export const rollEntries: TimelineEntry[] = [
     total: 16,
     outcome: 'failure',
     mode: 'advantage',
-    reason: 'Bram knows these streets'
+    reason: 'Bram knows these streets',
+    target: null
   },
   { type: 'answer', id: 'e6', player: 'player', question: 'Which door?', text: 'Left' }
 ]
