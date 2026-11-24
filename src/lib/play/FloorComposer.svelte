@@ -5,21 +5,28 @@
 
   /**
    * The pinned composer: the open Floor's pending tray above a box that adds a Declaration for the
-   * acting Character. Every tray entry can be edited or withdrawn until the Floor closes. A pure
-   * view; the console wires the callbacks to the server.
+   * acting Character. Every tray entry can be edited or withdrawn until the Floor closes. Done
+   * closes the Floor (empty or not); Ctrl+Enter is Send & Done. While the DM is answering, drafting
+   * stays open but Done waits. A pure view; the console wires the callbacks to the server.
    */
   let {
     acting,
     declarations,
     onsend,
+    ondone,
     onedit,
     onwithdraw,
+    awaiting = false,
     disabled = false
   }: {
     /** The acting Character's name, or null when no Character can act. */
     acting: string | null
     declarations: PendingDeclaration[]
     onsend: (text: string) => void
+    /** Done; `text` is a Declaration to send first (Send & Done), or null. */
+    ondone: (text: string | null) => void
+    /** The DM is answering the last turn. */
+    awaiting?: boolean
     onedit: (id: string, text: string) => void
     onwithdraw: (id: string) => void
     disabled?: boolean
@@ -38,6 +45,13 @@
     draft = ''
   }
 
+  function done() {
+    if (disabled || awaiting) return
+    const text = draft.trim()
+    ondone(text && !blocked ? text : null)
+    if (text && !blocked) draft = ''
+  }
+
   function save() {
     if (!editing) return
     const text = editing.text.trim()
@@ -46,7 +60,10 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing) {
+      e.preventDefault()
+      done()
+    } else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault()
       send()
     }
@@ -111,10 +128,11 @@
   />
   <div class="flex items-center justify-end gap-2">
     <span class="mr-auto text-xs text-muted"
-      >Enter adds to the tray · Shift+Enter for a new line</span
+      >Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span
     >
     <Button size="sm" variant="secondary" onclick={send} disabled={blocked || !draft.trim()}
       >Send</Button
     >
+    <Button size="sm" onclick={done} disabled={disabled || awaiting}>Done</Button>
   </div>
 </div>

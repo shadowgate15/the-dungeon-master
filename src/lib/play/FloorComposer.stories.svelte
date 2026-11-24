@@ -7,10 +7,18 @@
     title: 'Play/FloorComposer',
     component: FloorComposer,
     tags: ['autodocs'],
-    args: { acting: 'Wren', declarations, onsend: () => {}, onedit: () => {}, onwithdraw: () => {} }
+    args: {
+      acting: 'Wren',
+      declarations,
+      onsend: () => {},
+      ondone: () => {},
+      onedit: () => {},
+      onwithdraw: () => {}
+    }
   })
 </script>
 
 <Story name="With a pending tray" />
 <Story name="Empty Floor" args={{ declarations: [] }} />
+<Story name="DM answering" args={{ awaiting: true }} />
 <Story name="No Character can act" args={{ acting: null, declarations: [] }} />

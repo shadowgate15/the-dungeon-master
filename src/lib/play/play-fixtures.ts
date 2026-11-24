@@ -1,5 +1,6 @@
 import type { PlaySheet } from './sheet'
 import type { PendingDeclaration } from './floor'
+import type { TimelineEntry } from './timeline'
 
 /** Sample sheets for stories and component tests. */
 const base = {
@@ -81,4 +82,12 @@ export const declarations: PendingDeclaration[] = [
     text: 'I keep my back to the stairs.'
   },
   { id: 'd2', character: 'bram', characterName: 'Bram', player: 'player', text: 'I bar the door.' }
+]
+
+/** A short play turn, for the timeline. */
+export const timelineEntries: TimelineEntry[] = [
+  { type: 'declaration', id: 'e1', character: 'Wren', player: 'player', text: 'I pick the lock.' },
+  { type: 'activity', id: 'a1', text: 'DM checks their notes' },
+  { type: 'narration', id: 'e2', text: 'The lock clicks open.', voice: null },
+  { type: 'narration', id: 'e3', text: '"You are late," she says.', voice: 'Mira Voss' }
 ]
