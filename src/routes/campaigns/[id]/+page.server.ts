@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit'
 import { CAMPAIGN_SEED_FIELDS, CampaignSeedError } from '#lib/campaign/seed.ts'
 import { library, sessions } from '#lib/server/campaign/index.ts'
 import { CampaignArchivedError, CampaignMissingError } from '#lib/server/campaign/library.ts'
+import { SeedLockedError } from '#lib/server/creation/begin.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 export const load: PageServerLoad = ({ params }) => {
@@ -33,6 +34,7 @@ export const actions: Actions = {
       if (
         e instanceof CampaignSeedError ||
         e instanceof CampaignArchivedError ||
+        e instanceof SeedLockedError ||
         e instanceof CampaignMissingError
       )
         return fail(400, { seed: card, error: e.message })

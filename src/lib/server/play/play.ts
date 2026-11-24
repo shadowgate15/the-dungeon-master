@@ -128,6 +128,24 @@ export function createPlay({
       return message
     },
 
+    /**
+     * The Player presses Begin: the Seed locks and the DM gets one begin event, which it hands to
+     * `builder`. It needs a DM at the table, and it doesn't set awaiting Narration.
+     */
+    begin(campaignId: string, player: string = SOLO_PLAYER): void {
+      const folder = folderOf(campaignId)
+      if (!channels.listening(folder)) {
+        throw new DmAwayError('The DM is away. Run dm in the Campaign folder, then press Begin.')
+      }
+      library.begin(campaignId)
+      channels.send(folder, {
+        content:
+          'The Player pressed Begin. Hand the Seed and the Party to builder to create the World and the first Arc, then open play.',
+        meta: { kind: 'begin', player }
+      })
+      publish({ type: 'seed', campaign: campaignId })
+    },
+
     /** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */
     openSession(campaignId: string): { id: string; number: number } {
       return library.record(campaignId).openSession()
