@@ -1,7 +1,8 @@
 <script lang="ts">
   import Button from '#lib/ui/Button.svelte'
   import Textarea from '#lib/ui/Textarea.svelte'
-  import type { PendingDeclaration } from './floor'
+  import type { PendingDeclaration, ReturnedDraft } from './floor'
+  import type { SceneView } from './scene'
 
   /**
    * The pinned composer: the open Floor's pending tray above a box that adds a Declaration for the
@@ -17,7 +18,11 @@
     onedit,
     onwithdraw,
     awaiting = false,
-    disabled = false
+    disabled = false,
+    elsewhere = [],
+    oncut = () => {},
+    returned = [],
+    onreturned = () => {}
   }: {
     /** The acting Character's name, or null when no Character can act. */
     acting: string | null
@@ -30,10 +35,28 @@
     onedit: (id: string, text: string) => void
     onwithdraw: (id: string) => void
     disabled?: boolean
+    /** Characters off the spotlight, greyed out beside the box with "Cut to <Name>". */
+    elsewhere?: SceneView['elsewhere']
+    /** A spotlight request for a Character elsewhere. */
+    oncut?: (character: string) => void
+    /** Drafts a cut sent back; the box loads them as unsent text. */
+    returned?: ReturnedDraft[]
+    /** The box has loaded these returned drafts. */
+    onreturned?: (ids: string[]) => void
   } = $props()
 
   let draft = $state('')
   let editing = $state<{ id: string; text: string } | null>(null)
+
+  // A cut sent drafts back: load them into the box as unsent text, once each.
+  const loaded: string[] = []
+  $effect(() => {
+    const fresh = returned.filter((r) => !loaded.includes(r.id))
+    if (!fresh.length) return
+    loaded.push(...fresh.map((r) => r.id))
+    draft = [draft.trim(), ...fresh.map((r) => r.text)].filter(Boolean).join('\n')
+    onreturned(fresh.map((r) => r.id))
+  })
 
   const blocked = $derived(disabled || acting === null)
   const label = (d: PendingDeclaration) => `${d.characterName}: ${d.text}`
@@ -126,6 +149,16 @@
     aria-label={acting ? `What does ${acting} do?` : 'No Character can act'}
     placeholder={acting ? `What does ${acting} do?` : 'No Character can act'}
   />
+  {#if elsewhere.length}
+    <ul class="flex flex-wrap gap-2 text-xs" aria-label="Elsewhere">
+      {#each elsewhere as c (c.id)}
+        <li class="flex items-center gap-1 rounded-control bg-surface px-2 py-1 text-muted">
+          <span>{c.name} · elsewhere{c.whereabouts ? `: ${c.whereabouts}` : ''}</span>
+          <button class="underline" onclick={() => oncut(c.id)}>Cut to {c.name}</button>
+        </li>
+      {/each}
+    </ul>
+  {/if}
   <div class="flex items-center justify-end gap-2">
     <span class="mr-auto text-xs text-muted"
       >Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span

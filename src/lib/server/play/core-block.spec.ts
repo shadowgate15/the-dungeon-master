@@ -4,14 +4,18 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
 import { addCharacter, fighterDraft } from '../character/test-characters'
+import { createToolHost } from '../tools/host'
+import { gameTools } from '../tools/index'
 
 let library: CampaignLibrary
 let campaignId: string
+let folder: string
 
 beforeEach(() => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-core-block-'))
   library = createCampaignLibrary({ home: path.join(tmp, 'home') })
-  campaignId = library.create({ name: 'Ember Road', folder: path.join(tmp, 'ember-road') }).id
+  folder = path.join(tmp, 'ember-road')
+  campaignId = library.create({ name: 'Ember Road', folder }).id
 })
 
 afterEach(() => library.close())
@@ -38,6 +42,28 @@ describe('the core block', () => {
     expect(block).toMatch(/^NPCs present: /m)
     expect(block).toMatch(/^Lint last ran: never/m)
     expect(block).toContain('Party: no Characters yet')
+  })
+
+  it('names the Scene with its time, the NPCs present and each Character’s whereabouts', () => {
+    addCharacter(library, campaignId, fighterDraft('Wren'))
+    const host = createToolHost({ library, tools: gameTools })
+    const call = (name: string, args: Record<string, unknown>) =>
+      expect(host.call(folder, name, args).isError ?? false).toBe(false)
+    call('establish', { type: 'place', name: 'Drowned Lantern', fields: { exits: [] } })
+    call('establish', {
+      type: 'npc',
+      name: 'Marrow',
+      fields: { role: 'fence', description: 'A wary fence', whereabouts: 'place:drowned-lantern' }
+    })
+    call('move', { who: ['char:wren'], to: 'place:drowned-lantern' })
+    call('set_scene', { place: 'place:drowned-lantern' })
+    call('advance_time', { hours: 6, minutes: 20 })
+
+    const block = library.record(campaignId).coreBlock()
+
+    expect(block).toContain('Scene: Drowned Lantern (place:drowned-lantern), day 1, 14:20.')
+    expect(block).toContain('- Marrow (npc:marrow): fence, A wary fence')
+    expect(block).toContain('whereabouts place:drowned-lantern')
   })
 
   it('stays within about 300 tokens for a typical four-Character Party', () => {

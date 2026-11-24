@@ -1,10 +1,11 @@
-import { asc, desc, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 import type { HpState } from '#lib/play/hp-state.ts'
 import type { RollOutcome, Timeline, TimelineEntry } from '#lib/play/timeline.ts'
 import type { Queryable } from '../db/connect'
 import type { Stamp } from '../tools/contract'
 import { activityLine, campaign, event, session } from '../db/schema'
 import { openCallView } from './calls'
+import { currentMinute } from './scene'
 
 export type { Stamp }
 
@@ -19,12 +20,40 @@ export type NewEvent = {
 }
 
 /**
- * The Campaign's current stamp: the open Session (null offline) and the in-fiction minute (0 until
- * the clock exists).
+ * The Campaign's current stamp: the open Session (null offline) and the Campaign clock's minute.
  */
 export function currentStamp(db: Queryable): Stamp {
-  const open = db.select({ id: session.id }).from(session).where(isNull(session.closedAt)).get()
-  return { sessionId: open?.id ?? null, minute: 0 }
+  return { sessionId: currentSession(db)?.id ?? null, minute: currentMinute(db) }
+}
+
+/**
+ * The current Session: the newest one still open, or undefined offline. An older open one is a
+ * sitting that stopped without End Session, waiting for its catch-up close.
+ */
+export function currentSession(db: Queryable) {
+  return db
+    .select()
+    .from(session)
+    .where(isNull(session.closedAt))
+    .orderBy(desc(session.number))
+    .get()
+}
+
+/** Whether any non-recap Narration was logged in the Session. */
+export function hasNarration(db: Queryable, sessionId: string): boolean {
+  return (
+    db
+      .select({ id: event.id })
+      .from(event)
+      .where(
+        and(
+          eq(event.sessionId, sessionId),
+          eq(event.kind, 'narration'),
+          sql`coalesce(json_extract(${event.data}, '$.recap'), 0) = 0`
+        )
+      )
+      .get() !== undefined
+  )
 }
 
 /** The id the next Event will get. The log is append-only, so ids are never reused. */
@@ -66,14 +95,30 @@ export function logActivity(
     .run()
 }
 
-/** The open Session, opened now (numbered after the last) if none is. */
-export function openSession(db: Queryable, at: number): { id: string; number: number } {
-  const open = db
-    .select({ id: session.id, number: session.number })
-    .from(session)
-    .where(isNull(session.closedAt))
-    .get()
-  if (open) return open
+/**
+ * The Session for a DM attaching through `bridge` (one per Claude Code session). A reconnect of
+ * the same bridge keeps its Session, even one End Session closed. A new bridge opens the next
+ * Session; an older open one stays open for its catch-up close, unless it has no Narration, in
+ * which case it closes now with no summary. With no bridge, the current Session is reused.
+ */
+export function openSession(
+  db: Queryable,
+  at: number,
+  bridge?: string
+): { id: string; number: number } {
+  const pick = { id: session.id, number: session.number }
+  if (bridge !== undefined) {
+    const own = db.select(pick).from(session).where(eq(session.bridge, bridge)).get()
+    if (own) return own
+  } else {
+    const current = currentSession(db)
+    if (current) return { id: current.id, number: current.number }
+  }
+  for (const stale of db.select().from(session).where(isNull(session.closedAt)).all()) {
+    if (!hasNarration(db, stale.id)) {
+      db.update(session).set({ closedAt: at }).where(eq(session.id, stale.id)).run()
+    }
+  }
   const last = db
     .select({ number: session.number })
     .from(session)
@@ -81,8 +126,8 @@ export function openSession(db: Queryable, at: number): { id: string; number: nu
     .get()
   return db
     .insert(session)
-    .values({ number: (last?.number ?? 0) + 1, startedAt: at })
-    .returning({ id: session.id, number: session.number })
+    .values({ number: (last?.number ?? 0) + 1, bridge: bridge ?? null, startedAt: at })
+    .returning(pick)
     .get()
 }
 
@@ -161,7 +206,8 @@ function entryFor(e: typeof event.$inferSelect): TimelineEntry | null {
     type: 'narration',
     id,
     text: String(data.text),
-    voice: typeof data.voiceName === 'string' ? data.voiceName : null
+    voice: typeof data.voiceName === 'string' ? data.voiceName : null,
+    ...(data.recap === true ? { recap: true as const } : {})
   }
 }
 

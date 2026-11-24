@@ -1,15 +1,16 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
-import { _ as clsx, a as bind_props, c as ensure_array_like, g as attr, l as head, o as derived, r as attributes, t as attr_class, u as props_id, y as escape_html } from "../../../../../chunks/server2.js";
+import { _ as attr, a as bind_props, c as ensure_array_like, l as head, o as derived, r as attributes, t as attr_class, u as props_id, v as clsx, x as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/forms.js";
 import "../../../../../chunks/paths.js";
-import { n as CreationStepper, r as Select, t as Panel } from "../../../../../chunks/Panel.js";
-import { t as Badge } from "../../../../../chunks/Badge.js";
+import { a as CreationStepper, i as Panel, n as createDraftQuery, o as Select, t as CreationPage } from "../../../../../chunks/CreationPage.js";
+import { n as Badge, r as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
 import { t as Link } from "../../../../../chunks/Link.js";
+import "../../../../../chunks/index-server.js";
 import { n as beforeNavigate, r as goto } from "../../../../../chunks/navigation.js";
 import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
 import { t as Dialog } from "../../../../../chunks/Dialog.js";
 import { s as ABILITY_KEYS } from "../../../../../chunks/schema.js";
-import { C as methodPatch, D as rollTotal, E as rollAbilityScores, M as fixedEquipment, N as ownedEquipment, O as rollTotals, P as resolveFeatures, S as availableValues, T as pointsSpent, _ as groupLabel, a as cappedScore, b as POINT_BUY, d as resolverDraft, f as spellPickFlags, g as groupIssues, h as computeSteps, i as tryDraftToCharacterInput, j as equipmentGroups, k as categoryItems, l as emptyDraft, m as STEPS, o as deriveStats, p as spellsView, r as draftToSummaryData, s as LIMITS, t as buildSummary, u as reconcile, v as skillsStepGroups, w as pointCost, x as STANDARD_ARRAY, y as ABILITY_LABELS } from "../../../../../chunks/summary.js";
+import { A as rollTotal, C as STANDARD_ARRAY, D as pointCost, E as methodPatch, F as fixedEquipment, I as ownedEquipment, L as resolveFeatures, M as categoryItems, O as pointsSpent, P as equipmentGroups, S as POINT_BUY, T as availableValues, _ as groupIssues, a as cappedScore, b as skillsStepGroups, d as reconcile, f as resolverDraft, g as computeSteps, h as STEPS, i as tryDraftToCharacterInput, j as rollTotals, k as rollAbilityScores, m as spellsView, o as deriveStats, p as spellPickFlags, r as draftToSummaryData, s as LIMITS, t as buildSummary, u as emptyDraft, v as groupLabel, x as ABILITY_LABELS } from "../../../../../chunks/summary.js";
 import { t as Field } from "../../../../../chunks/Field.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
 import { t as TextInput } from "../../../../../chunks/TextInput.js";
@@ -312,7 +313,10 @@ function AbilitiesStep($$renderer, $$props) {
 			} else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--> `);
 			if (method() && !(method() === "rolling" && !draft().abilityRolls)) {
-				$$renderer.push(`<!--[0--><table class="w-full text-left text-sm"><thead class="text-muted"><tr><th scope="col" class="py-1 pr-2 font-medium">Ability</th><th scope="col" class="py-1 pr-2 font-medium">Base</th><th scope="col" class="py-1 pr-2 font-medium">Racial</th><th scope="col" class="py-1 font-medium">Score</th></tr></thead><tbody><!--[-->`);
+				$$renderer.push("<!--[0-->");
+				if (wizard.dmFields.includes("baseScores")) $$renderer.push(`<!--[0--><p class="text-xs text-accent">✎ DM arranged these scores. Change any to make them yours.</p>`);
+				else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--> <table class="w-full text-left text-sm"><thead class="text-muted"><tr><th scope="col" class="py-1 pr-2 font-medium">Ability</th><th scope="col" class="py-1 pr-2 font-medium">Base</th><th scope="col" class="py-1 pr-2 font-medium">Racial</th><th scope="col" class="py-1 font-medium">Score</th></tr></thead><tbody><!--[-->`);
 				const each_array_3 = ensure_array_like(ABILITY_KEYS);
 				for (let $$index_4 = 0, $$length = each_array_3.length; $$index_4 < $$length; $$index_4++) {
 					let key = each_array_3[$$index_4];
@@ -411,41 +415,6 @@ function AbilitiesStep($$renderer, $$props) {
 	});
 }
 // src/lib/character/ConceptStep.svelte
-function select($$renderer, label, options, value, set) {
-	{
-		function children($$renderer, id, describedby) {
-			var bind_get = () => value;
-			var bind_set = set;
-			Select($$renderer, {
-				id,
-				"aria-describedby": describedby,
-				get value() {
-					return bind_get();
-				},
-				set value($$value) {
-					bind_set($$value);
-				},
-				children: ($$renderer) => {
-					$$renderer.push(`<!--[-->`);
-					const each_array = ensure_array_like(options);
-					for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
-						let option = each_array[$$index];
-						$$renderer.option({ value: option.value }, ($$renderer) => {
-							$$renderer.push(`${escape_html(option.label)}`);
-						});
-					}
-					$$renderer.push(`<!--]-->`);
-				},
-				$$slots: { default: true }
-			});
-		}
-		Field($$renderer, {
-			label,
-			children,
-			$$slots: { default: true }
-		});
-	}
-}
 function ConceptStep($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		let { wizard } = $$props;
@@ -486,6 +455,7 @@ function ConceptStep($$renderer, $$props) {
 				rows: 5
 			}
 		];
+		const dm = (field) => wizard.dmFields.includes(field);
 		const choose = {
 			value: "",
 			label: "Choose…"
@@ -494,6 +464,42 @@ function ConceptStep($$renderer, $$props) {
 			value: e.slug,
 			label: e.name
 		}))];
+		function select($$renderer, field, label, options, value, set) {
+			{
+				function children($$renderer, id, describedby) {
+					var bind_get = () => value;
+					var bind_set = set;
+					Select($$renderer, {
+						id,
+						"aria-describedby": describedby,
+						get value() {
+							return bind_get();
+						},
+						set value($$value) {
+							bind_set($$value);
+						},
+						children: ($$renderer) => {
+							$$renderer.push(`<!--[-->`);
+							const each_array = ensure_array_like(options);
+							for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
+								let option = each_array[$$index];
+								$$renderer.option({ value: option.value }, ($$renderer) => {
+									$$renderer.push(`${escape_html(option.label)}`);
+								});
+							}
+							$$renderer.push(`<!--]-->`);
+						},
+						$$slots: { default: true }
+					});
+				}
+				Field($$renderer, {
+					label,
+					dm: dm(field),
+					children,
+					$$slots: { default: true }
+				});
+			}
+		}
 		let $$settled = true;
 		let $$inner_renderer;
 		function $$render_inner($$renderer) {
@@ -515,6 +521,7 @@ function ConceptStep($$renderer, $$props) {
 				}
 				Field($$renderer, {
 					label: "Name",
+					dm: dm("name"),
 					children,
 					$$slots: { default: true }
 				});
@@ -523,27 +530,27 @@ function ConceptStep($$renderer, $$props) {
 			if (draft().name.length > LIMITS.name) $$renderer.push(`<!--[0--><span class="text-danger">Over the ${escape_html(LIMITS.name)} character limit.</span>`);
 			else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--></p></div> <div class="grid gap-3 sm:grid-cols-2">`);
-			select($$renderer, "Race", opts(rules().races), draft().race ?? "", (v) => wizard.update({ race: v || null }));
+			select($$renderer, "race", "Race", opts(rules().races), draft().race ?? "", (v) => wizard.update({ race: v || null }));
 			$$renderer.push(`<!----> `);
 			if (subraces().length > 0) {
 				$$renderer.push("<!--[0-->");
-				select($$renderer, "Subrace", opts(subraces()), draft().subrace ?? "", (v) => wizard.update({ subrace: v || null }));
+				select($$renderer, "subrace", "Subrace", opts(subraces()), draft().subrace ?? "", (v) => wizard.update({ subrace: v || null }));
 			} else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--> `);
-			select($$renderer, "Class", opts(rules().classes), draft().class ?? "", (v) => wizard.update({ class: v || null }));
+			select($$renderer, "class", "Class", opts(rules().classes), draft().class ?? "", (v) => wizard.update({ class: v || null }));
 			$$renderer.push(`<!----> `);
 			if (subclassGroup()) {
 				$$renderer.push("<!--[0-->");
-				select($$renderer, "Subclass", opts(subclassGroup().options), draft().subclass ?? "", (v) => wizard.update({ subclass: v || null }));
+				select($$renderer, "subclass", "Subclass", opts(subclassGroup().options), draft().subclass ?? "", (v) => wizard.update({ subclass: v || null }));
 				$$renderer.push(`<!----> `);
 				if (single()) $$renderer.push(`<!--[0--><p class="text-sm text-muted">The SRD offers only one, so it is selected for you.</p>`);
 				else $$renderer.push("<!--[-1-->");
 				$$renderer.push(`<!--]-->`);
 			} else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--> `);
-			select($$renderer, "Background", opts(rules().backgrounds), draft().background ?? "", (v) => wizard.update({ background: v || null }));
+			select($$renderer, "background", "Background", opts(rules().backgrounds), draft().background ?? "", (v) => wizard.update({ background: v || null }));
 			$$renderer.push(`<!----> `);
-			select($$renderer, "Alignment", opts(rules().alignments, {
+			select($$renderer, "alignment", "Alignment", opts(rules().alignments, {
 				value: "",
 				label: "Unspecified"
 			}), draft().alignment ?? "", (v) => wizard.update({ alignment: v || null }));
@@ -570,6 +577,7 @@ function ConceptStep($$renderer, $$props) {
 					}
 					Field($$renderer, {
 						label: field.label,
+						dm: dm(field.key),
 						children,
 						$$slots: { default: true }
 					});
@@ -1633,6 +1641,8 @@ var CharacterWizard = class {
 	dirty = false;
 	saving = false;
 	saveError = null;
+	dmFields = [];
+	#stored = null;
 	constructor(rules, defs = STEPS, initial, target = null, step = "concept") {
 		this.rules = rules;
 		this.target = target;
@@ -1667,6 +1677,29 @@ var CharacterWizard = class {
 		this.draft = draft;
 		this.notices.push(...notices);
 		this.dirty = true;
+		this.dmFields = this.dmFields.filter((f) => !(f in patch));
+	}
+	/**
+	* Takes in the stored draft after the DM wrote to it: the fields the DM changed land in the
+	* open draft without marking it unsaved, and its "✎ DM" marks show. The Player's other unsaved
+	* changes stay.
+	*/
+	adopt(stored) {
+		const previous = this.#stored;
+		this.#stored = stored.draft;
+		if (previous) {
+			const changed = stored.dmFields.filter((f) => JSON.stringify(stored.draft[f]) !== JSON.stringify(previous[f]));
+			if (changed.length > 0) {
+				const patch = Object.fromEntries(changed.map((f) => [f, stored.draft[f]]));
+				const { draft, notices } = reconcile(this.rules, {
+					...this.draft,
+					...patch
+				});
+				this.draft = draft;
+				this.notices.push(...notices);
+			}
+		}
+		this.dmFields = stored.dmFields.filter((f) => JSON.stringify(this.draft[f]) === JSON.stringify(stored.draft[f]));
 	}
 	/** Rolls a new ability set in code; a reroll replaces the whole set, so assignments reset. */
 	rollAbilities() {
@@ -1712,8 +1745,13 @@ var CharacterWizard = class {
 function PartyWizard($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/** The Party step, already resolved: where saving and abandoning return to. */
-		let { rules, draft, step, target, backHref } = $$props;
+		/** A stored draft's version and the fields the DM set ("✎ DM"). */
+		let { rules, draft, step, target, backHref, stored } = $$props;
 		const wizard = new CharacterWizard(rules, void 0, draft, target, step);
+		if ("draft" in target && stored) createDraftQuery(() => target.campaign, () => target.draft, () => ({
+			draft,
+			...stored
+		}));
 		/** Abandoning a stored draft discards it; leaving an edit just drops the changes. */
 		async function abandon() {
 			if ("draft" in target) await fetch(resolve("/api/campaigns/[id]/drafts/[draft]", {
@@ -1733,6 +1771,8 @@ function PartyWizard($$renderer, $$props) {
 function _page($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		let { data, form } = $$props;
+		const sessions = createSessionsQuery(() => data.attached);
+		const attached = derived(() => sessions.data.includes(data.campaign.id));
 		const seedHref = derived(() => resolve("/campaigns/[id]", { id: data.campaign.id }));
 		const partyHref = derived(() => resolve("/campaigns/[id]/party", { id: data.campaign.id }));
 		const archived = derived(() => data.campaign.status === "archived");
@@ -1742,110 +1782,125 @@ function _page($$renderer, $$props) {
 				$$renderer.push(`<title>Party · ${escape_html(data.campaign.name)}</title>`);
 			});
 		});
-		$$renderer.push(`<main class="mx-auto max-w-7xl space-y-6 p-6">`);
-		Link($$renderer, {
-			href: resolve("/campaigns"),
-			class: "text-sm",
-			children: ($$renderer) => {
-				$$renderer.push(`<!---->All Campaigns`);
+		CreationPage($$renderer, {
+			pane: data.campaign.status === "missing" ? null : {
+				campaign: data.campaign.id,
+				folder: data.campaign.path,
+				attached: attached(),
+				messages: data.conversation,
+				disabled: archived()
 			},
-			$$slots: { default: true }
-		});
-		$$renderer.push(`<!----> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
-		if (data.campaign.status !== "missing") {
-			$$renderer.push("<!--[0-->");
-			Link($$renderer, {
-				href: resolve("/campaigns/[id]/play", { id: data.campaign.id }),
-				class: "ml-auto text-sm",
-				children: ($$renderer) => {
-					$$renderer.push(`<!---->Play console`);
-				},
-				$$slots: { default: true }
-			});
-		} else $$renderer.push("<!--[-1-->");
-		$$renderer.push(`<!--]--></div> <p class="text-xs text-muted">${escape_html(data.campaign.path)}</p></header> `);
-		if (data.campaign.status === "missing") {
-			$$renderer.push("<!--[0-->");
-			Alert($$renderer, {
-				variant: "warning",
-				children: ($$renderer) => {
-					$$renderer.push(`<!---->This Campaign's folder is missing. Re-add it from the Campaign library to open it.`);
-				},
-				$$slots: { default: true }
-			});
-		} else {
-			$$renderer.push("<!--[-1-->");
-			CreationStepper($$renderer, {
-				current: "Party",
-				hrefs: {
-					Seed: seedHref(),
-					Party: partyHref()
-				},
-				unavailable: ["Begin"]
-			});
-			$$renderer.push(`<!----> `);
-			if (archived()) {
-				$$renderer.push("<!--[0-->");
-				Alert($$renderer, {
-					variant: "warning",
+			children: ($$renderer) => {
+				Link($$renderer, {
+					href: resolve("/campaigns"),
+					class: "text-sm",
 					children: ($$renderer) => {
-						$$renderer.push(`<!---->This Campaign is archived. Restore it to change it.`);
+						$$renderer.push(`<!---->All Campaigns`);
 					},
 					$$slots: { default: true }
 				});
-			} else $$renderer.push("<!--[-1-->");
-			$$renderer.push(`<!--]--> `);
-			Panel($$renderer, {
-				title: "Party",
-				children: ($$renderer) => {
-					$$renderer.push(`<div class="space-y-3">`);
-					PartyList($$renderer, {
-						campaignId: data.campaign.id,
-						members: data.members,
-						selected: openId()
+				$$renderer.push(`<!----> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
+				if (data.campaign.status !== "missing") {
+					$$renderer.push("<!--[0-->");
+					DmBadge($$renderer, { attached: attached() });
+					$$renderer.push(`<!----> `);
+					Link($$renderer, {
+						href: resolve("/campaigns/[id]/play", { id: data.campaign.id }),
+						class: "ml-auto text-sm",
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->Play console`);
+						},
+						$$slots: { default: true }
+					});
+					$$renderer.push(`<!---->`);
+				} else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--></div> <p class="text-xs text-muted">${escape_html(data.campaign.path)}</p></header> `);
+				if (data.campaign.status === "missing") {
+					$$renderer.push("<!--[0-->");
+					Alert($$renderer, {
+						variant: "warning",
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->This Campaign's folder is missing. Re-add it from the Campaign library to open it.`);
+						},
+						$$slots: { default: true }
+					});
+				} else {
+					$$renderer.push("<!--[-1-->");
+					CreationStepper($$renderer, {
+						current: "Party",
+						hrefs: {
+							Seed: seedHref(),
+							Party: partyHref()
+						},
+						unavailable: ["Begin"]
 					});
 					$$renderer.push(`<!----> `);
-					if (form?.error) {
+					if (archived()) {
 						$$renderer.push("<!--[0-->");
 						Alert($$renderer, {
-							variant: "danger",
+							variant: "warning",
 							children: ($$renderer) => {
-								$$renderer.push(`<!---->${escape_html(form.error)}`);
+								$$renderer.push(`<!---->This Campaign is archived. Restore it to change it.`);
 							},
 							$$slots: { default: true }
 						});
 					} else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--> `);
-					if (!archived()) {
-						$$renderer.push(`<!--[0--><form method="POST" action="?/newDraft">`);
-						Button($$renderer, {
-							type: "submit",
-							children: ($$renderer) => {
-								$$renderer.push(`<!---->New Character`);
-							},
-							$$slots: { default: true }
+					Panel($$renderer, {
+						title: "Party",
+						children: ($$renderer) => {
+							$$renderer.push(`<div class="space-y-3">`);
+							PartyList($$renderer, {
+								campaignId: data.campaign.id,
+								members: data.members,
+								selected: openId()
+							});
+							$$renderer.push(`<!----> `);
+							if (form?.error) {
+								$$renderer.push("<!--[0-->");
+								Alert($$renderer, {
+									variant: "danger",
+									children: ($$renderer) => {
+										$$renderer.push(`<!---->${escape_html(form.error)}`);
+									},
+									$$slots: { default: true }
+								});
+							} else $$renderer.push("<!--[-1-->");
+							$$renderer.push(`<!--]--> `);
+							if (!archived()) {
+								$$renderer.push(`<!--[0--><form method="POST" action="?/newDraft">`);
+								Button($$renderer, {
+									type: "submit",
+									children: ($$renderer) => {
+										$$renderer.push(`<!---->New Character`);
+									},
+									$$slots: { default: true }
+								});
+								$$renderer.push(`<!----></form>`);
+							} else $$renderer.push("<!--[-1-->");
+							$$renderer.push(`<!--]--></div>`);
+						},
+						$$slots: { default: true }
+					});
+					$$renderer.push(`<!----> `);
+					if (data.open && !archived()) {
+						$$renderer.push(`<!--[0--><!---->`);
+						PartyWizard($$renderer, {
+							rules: data.open.rules,
+							draft: data.open.draft,
+							step: data.open.step,
+							target: data.open.target,
+							backHref: partyHref(),
+							stored: "stored" in data.open ? data.open.stored : void 0
 						});
-						$$renderer.push(`<!----></form>`);
+						$$renderer.push(`<!---->`);
 					} else $$renderer.push("<!--[-1-->");
-					$$renderer.push(`<!--]--></div>`);
-				},
-				$$slots: { default: true }
-			});
-			$$renderer.push(`<!----> `);
-			if (data.open && !archived()) {
-				$$renderer.push(`<!--[0--><!---->`);
-				PartyWizard($$renderer, {
-					rules: data.open.rules,
-					draft: data.open.draft,
-					step: data.open.step,
-					target: data.open.target,
-					backHref: partyHref()
-				});
-				$$renderer.push(`<!---->`);
-			} else $$renderer.push("<!--[-1-->");
-			$$renderer.push(`<!--]-->`);
-		}
-		$$renderer.push(`<!--]--></main>`);
+					$$renderer.push(`<!--]-->`);
+				}
+				$$renderer.push(`<!--]-->`);
+			},
+			$$slots: { default: true }
+		});
 	});
 }
 export { _page as default };

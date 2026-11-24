@@ -66,8 +66,16 @@ export const campaign = sqliteTable(
     archivedAt: integer('archived_at'),
     /** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
     awaitingNarrationSince: integer('awaiting_narration_since'),
+    /** The Seed fields the DM set last ("✎ DM" on the card); a Player edit of a field drops it. */
+    dmSeedFields: text('dm_seed_fields', { mode: 'json' }).$type<string[]>().notNull().default([]),
+    /** When the Player pressed Begin (#335); null while the Campaign is still being created. */
+    begunAt: integer('begun_at'),
     /** The last Event the DM has heard about: change notices cover the Player's edits after it. */
-    noticedThrough: integer('noticed_through').notNull().default(0)
+    noticedThrough: integer('noticed_through').notNull().default(0),
+    /** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
+    clockMinute: integer('clock_minute').notNull().default(0),
+    /** The Scene: the handle of the Place the spotlight is on, or null before it is first set. */
+    scene: text('scene')
   },
   () => [
     check('campaign_tone_check', oneOf('tone', TONES)),
@@ -298,8 +306,25 @@ export const characterDraft = sqliteTable('character_draft', {
   data: text('data', { mode: 'json' }).$type<unknown>().notNull(),
   /** The wizard step the draft was last on. */
   step: text('step').$type<StepId>().notNull(),
+  /** The draft's Entity version: bumped by every write that changes it, from the wizard or the DM. */
+  version: integer('version').notNull().default(1),
+  /** The draft fields the DM set last ("✎ DM" in the wizard); a Player edit of a field drops it. */
+  dmFields: text('dm_fields', { mode: 'json' }).$type<string[]>().notNull().default([]),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull()
+})
+
+/**
+ * The creation conversation in the DM pane: the Player's messages, the DM's replies and muted lines
+ * for the DM's field writes. Out of fiction, so it is never part of the Event log.
+ */
+export const conversationMessage = sqliteTable('conversation_message', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  author: text('author', { enum: ['player', 'dm', 'dm_write'] }).notNull(),
+  /** The Player who wrote it; null for the DM's lines. */
+  player: text('player'),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull()
 })
 
 /**
@@ -355,6 +380,8 @@ export const session = sqliteTable('session', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   number: integer('number').notNull().unique(),
+  /** The bridge (one per Claude Code session) whose attach opened it; a reconnect reuses it. */
+  bridge: text('bridge'),
   startedAt: integer('started_at').notNull(),
   closedAt: integer('closed_at'),
   summary: text('summary'),
@@ -507,6 +534,22 @@ export const npcCombat = sqliteTable('npc_combat', {
     .$type<string[]>()
     .notNull()
     .$defaultFn(() => [])
+})
+
+/**
+ * A Declaration sent back to its Player's composer as unsent text: its Character left the Scene
+ * when the spotlight cut away before the Floor closed. The console loads it, then clears it.
+ */
+export const returnedDraft = sqliteTable('returned_draft', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id')
+    .notNull()
+    .references(() => character.id, { onDelete: 'cascade' }),
+  player: text('player').notNull(),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull()
 })
 
 export * from './rules-schema'

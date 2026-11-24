@@ -47,3 +47,14 @@ describe('the session-opening skill', () => {
     expect(skill.meta.description).not.toBe('')
   })
 })
+
+describe('the ending-a-sitting skill', () => {
+  it('is where the agent sends the DM on End Session', () => {
+    const skill = parse(path.join(plugin, 'skills/ending-a-sitting/SKILL.md'))
+    expect(skill.meta.name).toBe('ending-a-sitting')
+    expect(skill.meta.description).not.toBe('')
+    expect(parse(path.join(plugin, 'agents/dm.md')).body).toContain(
+      'the-dungeon-master:ending-a-sitting'
+    )
+  })
+})

@@ -8,19 +8,22 @@
       "_config.js"
     ]
   },
-  "_Badge.js": {
-    "file": "chunks/Badge.js",
-    "name": "Badge",
-    "imports": [
-      "_server2.js",
-      "_Button.js"
-    ]
-  },
   "_Button.js": {
     "file": "chunks/Button.js",
     "name": "Button",
     "imports": [
       "_server2.js"
+    ]
+  },
+  "_CreationPage.js": {
+    "file": "chunks/CreationPage.js",
+    "name": "CreationPage",
+    "imports": [
+      "_server2.js",
+      "_messages.js",
+      "_useQueryClient.js",
+      "_Button.js",
+      "_Textarea.js"
     ]
   },
   "_Dialog.js": {
@@ -38,7 +41,7 @@
     "imports": [
       "_server2.js",
       "_messages.js",
-      "_Badge.js"
+      "_Button.js"
     ]
   },
   "_Field.js": {
@@ -51,13 +54,6 @@
   "_Link.js": {
     "file": "chunks/Link.js",
     "name": "Link",
-    "imports": [
-      "_server2.js"
-    ]
-  },
-  "_Panel.js": {
-    "file": "chunks/Panel.js",
-    "name": "Panel",
     "imports": [
       "_server2.js"
     ]
@@ -95,8 +91,10 @@
     "imports": [
       "_seed.js",
       "_campaign.js",
+      "_seed2.js",
       "_schemas.js",
-      "_seed2.js"
+      "_summary.js",
+      "_schema.js"
     ]
   },
   "_campaign.js": {
@@ -511,7 +509,7 @@
       "node_modules/.pnpm/@tanstack+svelte-query-devtools@6.3.7_@tanstack+svelte-query@6.3.7_svelte@5.57.3_@types_8ea849ea8105e537a5386474a23c1746/node_modules/@tanstack/svelte-query-devtools/dist/index.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.4JgxQ-gZ.css"
+      "_app/immutable/assets/_layout.B1JO9sXN.css"
     ],
     "assets": [
       "_app/immutable/assets/metamorphous-latin-ext-400-normal.D08n4oeX.woff2",
@@ -568,12 +566,26 @@
       "_respond.js"
     ]
   },
+  "src/routes/api/campaigns/[id]/conversation/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/conversation/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/conversation/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/conversation/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_bridge.js",
+      "_campaign.js",
+      "_respond.js"
+    ]
+  },
   "src/routes/api/campaigns/[id]/drafts/[draft]/+server.ts": {
     "file": "entries/endpoints/api/campaigns/_id_/drafts/_draft_/_server.ts.js",
     "name": "entries/endpoints/api/campaigns/_id_/drafts/_draft_/_server.ts",
     "src": "src/routes/api/campaigns/[id]/drafts/[draft]/+server.ts",
     "isEntry": true,
     "imports": [
+      "_exports.js",
+      "_campaign.js",
       "_respond.js"
     ]
   },
@@ -585,6 +597,17 @@
     "imports": [
       "_exports.js",
       "_respond.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/end-session/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/end-session/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/end-session/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/end-session/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_campaign.js",
+      "_bridge.js"
     ]
   },
   "src/routes/api/campaigns/[id]/floor/+server.ts": {
@@ -629,6 +652,15 @@
       "_bridge.js"
     ]
   },
+  "src/routes/api/campaigns/[id]/floor/returned/[returned]/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/floor/returned/_returned_/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/floor/returned/_returned_/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/floor/returned/[returned]/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_respond2.js"
+    ]
+  },
   "src/routes/api/campaigns/[id]/journal/+server.ts": {
     "file": "entries/endpoints/api/campaigns/_id_/journal/_server.ts.js",
     "name": "entries/endpoints/api/campaigns/_id_/journal/_server.ts",
@@ -648,6 +680,49 @@
       "_exports.js",
       "_bridge.js",
       "_campaign.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/scene/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/scene/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/scene/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/scene/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_bridge.js",
+      "_campaign.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/seed/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/seed/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/seed/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/seed/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_campaign.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/sessions/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/sessions/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/sessions/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/sessions/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_campaign.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/spotlight/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/spotlight/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/spotlight/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/spotlight/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_bridge.js",
+      "_campaign.js",
+      "_respond.js"
     ]
   },
   "src/routes/api/campaigns/[id]/timeline/+server.ts": {
@@ -714,7 +789,6 @@
       "_state.js",
       "_navigation.js",
       "_paths.js",
-      "_Badge.js",
       "_DmBadge.js",
       "_Link.js",
       "_forms.js",
@@ -748,12 +822,14 @@
       "_enums.js",
       "_Button.js",
       "_Field.js",
-      "_Panel.js",
+      "_CreationPage.js",
       "_Textarea.js",
       "_TextInput.js",
       "_seed2.js",
       "_Link.js",
-      "_DmBadge.js"
+      "_DmBadge.js",
+      "_useQueryClient.js",
+      "_index-server.js"
     ]
   },
   "src/routes/campaigns/[id]/journal/+page.server.ts": {
@@ -801,9 +877,10 @@
       "_server2.js",
       "_forms.js",
       "_paths.js",
-      "_Panel.js",
-      "_Badge.js",
+      "_CreationPage.js",
+      "_DmBadge.js",
       "_Link.js",
+      "_index-server.js",
       "_navigation.js",
       "_Button.js",
       "_Dialog.js",
@@ -836,7 +913,6 @@
       "_paths.js",
       "_DmBadge.js",
       "_Button.js",
-      "_Badge.js",
       "_Textarea.js",
       "_floor-client.js",
       "_messages.js",

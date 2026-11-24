@@ -1,5 +1,10 @@
 /** A Campaign's session attached state changed. */
-export type SessionChange = { campaign: string; attached: boolean }
+export type SessionChange = {
+  campaign: string
+  attached: boolean
+  /** The bridge's session id (one per Claude Code session). */
+  session: string
+}
 
 type Listener = (change: SessionChange) => void
 
@@ -27,7 +32,7 @@ export function createSessions() {
       if (held) held.streams++
       else {
         live.set(campaign, { session, streams: 1 })
-        emit({ campaign, attached: true })
+        emit({ campaign, attached: true, session })
       }
       return true
     },
@@ -38,7 +43,7 @@ export function createSessions() {
       if (!held || held.session !== session) return
       if (--held.streams > 0) return
       live.delete(campaign)
-      emit({ campaign, attached: false })
+      emit({ campaign, attached: false, session })
     },
 
     /** Whether a session is attached to the Campaign. */

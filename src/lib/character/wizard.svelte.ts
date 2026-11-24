@@ -41,6 +41,10 @@ export class CharacterWizard {
   saving = $state(false)
   /** Why the last save failed, shown on the Review step; null when none has failed. */
   saveError = $state<string | null>(null)
+  /** The draft fields the DM set and the Player has not changed since, each marked "✎ DM". */
+  dmFields = $state<string[]>([])
+  /** The stored draft last taken in, so a DM write applies only the fields it changed. */
+  #stored: CharacterDraft | null = null
 
   /** Resolver output for the draft: choice groups, grants, structural issues. */
   resolved: ResolvedFeatures
@@ -98,6 +102,37 @@ export class CharacterWizard {
     this.draft = draft
     this.notices.push(...notices)
     this.dirty = true
+    this.dmFields = this.dmFields.filter((f) => !(f in patch))
+  }
+
+  /**
+   * Takes in the stored draft after the DM wrote to it: the fields the DM changed land in the
+   * open draft without marking it unsaved, and its "✎ DM" marks show. The Player's other unsaved
+   * changes stay.
+   */
+  adopt(stored: { draft: CharacterDraft; dmFields: string[] }) {
+    const previous = this.#stored
+    this.#stored = stored.draft
+    if (previous) {
+      const changed = stored.dmFields.filter(
+        (f) =>
+          JSON.stringify(stored.draft[f as keyof CharacterDraft]) !==
+          JSON.stringify(previous[f as keyof CharacterDraft])
+      )
+      if (changed.length > 0) {
+        const patch = Object.fromEntries(
+          changed.map((f) => [f, stored.draft[f as keyof CharacterDraft]])
+        )
+        const { draft, notices } = reconcile(this.rules, { ...this.draft, ...patch })
+        this.draft = draft
+        this.notices.push(...notices)
+      }
+    }
+    this.dmFields = stored.dmFields.filter(
+      (f) =>
+        JSON.stringify(this.draft[f as keyof CharacterDraft]) ===
+        JSON.stringify(stored.draft[f as keyof CharacterDraft])
+    )
   }
 
   /** Rolls a new ability set in code; a reroll replaces the whole set, so assignments reset. */

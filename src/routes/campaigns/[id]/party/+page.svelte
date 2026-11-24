@@ -8,9 +8,15 @@
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
   import Panel from '#lib/ui/Panel.svelte'
+  import CreationPage from '#lib/creation/CreationPage.svelte'
+  import DmBadge from '#lib/campaign/DmBadge.svelte'
+  import { createSessionsQuery } from '#lib/live/client.ts'
   import type { PageProps } from './$types'
 
   let { data, form }: PageProps = $props()
+
+  const sessions = createSessionsQuery(() => data.attached)
+  const attached = $derived(sessions.data.includes(data.campaign.id))
 
   const seedHref = $derived(resolve('/campaigns/[id]', { id: data.campaign.id }))
   const partyHref = $derived(resolve('/campaigns/[id]/party', { id: data.campaign.id }))
@@ -26,12 +32,23 @@
 
 <svelte:head><title>Party · {data.campaign.name}</title></svelte:head>
 
-<main class="mx-auto max-w-7xl space-y-6 p-6">
+<CreationPage
+  pane={data.campaign.status === 'missing'
+    ? null
+    : {
+        campaign: data.campaign.id,
+        folder: data.campaign.path,
+        attached,
+        messages: data.conversation,
+        disabled: archived
+      }}
+>
   <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
   <header class="space-y-1">
     <div class="flex items-center gap-3">
       <h1 class="font-display text-2xl">{data.campaign.name}</h1>
       {#if data.campaign.status !== 'missing'}
+        <DmBadge {attached} />
         <Link
           href={resolve('/campaigns/[id]/play', { id: data.campaign.id })}
           class="ml-auto text-sm">Play console</Link
@@ -76,8 +93,9 @@
           step={data.open.step}
           target={data.open.target}
           backHref={partyHref}
+          stored={'stored' in data.open ? data.open.stored : undefined}
         />
       {/key}
     {/if}
   {/if}
-</main>
+</CreationPage>

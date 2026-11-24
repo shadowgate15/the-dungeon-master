@@ -33,6 +33,24 @@ describe('Timeline', () => {
     await expect.poll(() => items.elements().length).toBe(0)
   })
 
+  it('marks the recap Narration "Previously"', async () => {
+    render(Timeline, {
+      entries: [
+        {
+          type: 'narration',
+          id: 'e1',
+          text: 'The ledger is in your hands.',
+          voice: null,
+          recap: true
+        }
+      ],
+      awaitingSince: null
+    })
+
+    const item = page.getByRole('list', { name: 'Timeline' }).getByRole('listitem').nth(0)
+    await expect.element(item).toHaveTextContent(/Previously\s*The ledger is in your hands\./)
+  })
+
   it('shows a turn that went wrong as an alert', async () => {
     render(Timeline, {
       entries: [{ type: 'error', id: 'e9', text: 'The DM ended its turn without a Narration.' }],

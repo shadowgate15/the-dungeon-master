@@ -1,22 +1,26 @@
 import { ft as resolve } from "../../../../chunks/internal.js";
-import { _ as clsx, a as bind_props, c as ensure_array_like, l as head, o as derived, t as attr_class, y as escape_html } from "../../../../chunks/server2.js";
+import { a as bind_props, b as run, c as ensure_array_like, l as head, o as derived, t as attr_class, v as clsx, x as escape_html } from "../../../../chunks/server2.js";
 import "../../../../chunks/forms.js";
 import "../../../../chunks/paths.js";
 import { a as SCALES, n as LENGTHS, o as TECH_LEVELS, r as MAGIC_LEVELS, s as TONES, t as GENRE_FLAVORS } from "../../../../chunks/enums.js";
 import { n as Alert, t as Button } from "../../../../chunks/Button.js";
 import { t as Field } from "../../../../chunks/Field.js";
-import { n as CreationStepper, r as Select, t as Panel } from "../../../../chunks/Panel.js";
+import { a as CreationStepper, i as Panel, o as Select, r as createSeedQuery, t as CreationPage } from "../../../../chunks/CreationPage.js";
 import { t as Textarea } from "../../../../chunks/Textarea.js";
 import { t as TextInput } from "../../../../chunks/TextInput.js";
 import { a as missingSeedFields, i as emptyCampaignSeed } from "../../../../chunks/seed2.js";
 import { t as Link } from "../../../../chunks/Link.js";
-import { n as createSessionsQuery, t as DmBadge } from "../../../../chunks/DmBadge.js";
+import { r as createSessionsQuery, t as DmBadge } from "../../../../chunks/DmBadge.js";
+import { t as useQueryClient } from "../../../../chunks/useQueryClient.js";
+import "../../../../chunks/index-server.js";
 // src/lib/campaign/CampaignSeedCard.svelte
 function CampaignSeedCard($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/** The live card. Inputs are named after the Seed fields for form posts. */
 		/** Read-only: every field is disabled. */
-		let { seed = void 0, disabled = false } = $$props;
+		/** The fields the DM set, each marked "✎ DM". */
+		let { seed = void 0, disabled = false, dmFields = [] } = $$props;
+		const dm = (field) => dmFields.includes(field);
 		const required = [{
 			name: "tone",
 			label: "Tone",
@@ -90,6 +94,7 @@ function CampaignSeedCard($$renderer, $$props) {
 				}
 				Field($$renderer, {
 					label: p.label,
+					dm: dm(p.name),
 					children,
 					$$slots: { default: true }
 				});
@@ -117,6 +122,7 @@ function CampaignSeedCard($$renderer, $$props) {
 				}
 				Field($$renderer, {
 					label: "Name",
+					dm: dm("name"),
 					children,
 					$$slots: { default: true }
 				});
@@ -141,6 +147,7 @@ function CampaignSeedCard($$renderer, $$props) {
 				}
 				Field($$renderer, {
 					label: "Premise",
+					dm: dm("premise"),
 					children,
 					$$slots: { default: true }
 				});
@@ -182,6 +189,7 @@ function CampaignSeedCard($$renderer, $$props) {
 				}
 				Field($$renderer, {
 					label: "World name",
+					dm: dm("worldName"),
 					children,
 					$$slots: { default: true }
 				});
@@ -217,6 +225,17 @@ function _page($$renderer, $$props) {
 			...form && "seed" in form ? form.seed : {}
 		};
 		const archived = derived(() => data.campaign.status === "archived");
+		const attached = derived(() => sessions.data.includes(data.campaign.id));
+		useQueryClient();
+		const stored = createSeedQuery(() => data.campaign.id, () => ({
+			seed: {
+				...emptyCampaignSeed(),
+				...data.seed ?? {}
+			},
+			dmFields: data.dmFields
+		}));
+		run(() => stored.data);
+		const dmFields = derived(() => stored.data.dmFields.filter((f) => seed[f] === stored.data.seed[f]));
 		let $$settled = true;
 		let $$inner_renderer;
 		function $$render_inner($$renderer) {
@@ -225,108 +244,121 @@ function _page($$renderer, $$props) {
 					$$renderer.push(`<title>${escape_html(data.campaign.name)}</title>`);
 				});
 			});
-			$$renderer.push(`<main class="mx-auto max-w-3xl space-y-6 p-6">`);
-			Link($$renderer, {
-				href: resolve("/campaigns"),
-				class: "text-sm",
-				children: ($$renderer) => {
-					$$renderer.push(`<!---->All Campaigns`);
+			CreationPage($$renderer, {
+				width: "narrow",
+				pane: data.campaign.status === "missing" ? null : {
+					campaign: data.campaign.id,
+					folder: data.campaign.path,
+					attached: attached(),
+					messages: data.conversation,
+					disabled: archived()
 				},
-				$$slots: { default: true }
-			});
-			$$renderer.push(`<!----> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
-			if (data.campaign.status !== "missing") {
-				$$renderer.push("<!--[0-->");
-				DmBadge($$renderer, { attached: sessions.data.includes(data.campaign.id) });
-				$$renderer.push(`<!----> `);
-				Link($$renderer, {
-					href: resolve("/campaigns/[id]/play", { id: data.campaign.id }),
-					class: "ml-auto text-sm",
-					children: ($$renderer) => {
-						$$renderer.push(`<!---->Play console`);
-					},
-					$$slots: { default: true }
-				});
-				$$renderer.push(`<!---->`);
-			} else $$renderer.push("<!--[-1-->");
-			$$renderer.push(`<!--]--></div> <p class="text-xs text-muted">${escape_html(data.campaign.path)}</p></header> `);
-			if (data.campaign.status === "missing") {
-				$$renderer.push("<!--[0-->");
-				Alert($$renderer, {
-					variant: "warning",
-					children: ($$renderer) => {
-						$$renderer.push(`<!---->This Campaign's folder is missing. Re-add it from the Campaign library to open it.`);
-					},
-					$$slots: { default: true }
-				});
-			} else {
-				$$renderer.push("<!--[-1-->");
-				CreationStepper($$renderer, {
-					current: "Seed",
-					hrefs: {
-						Seed: resolve("/campaigns/[id]", { id: data.campaign.id }),
-						Party: resolve("/campaigns/[id]/party", { id: data.campaign.id })
-					},
-					unavailable: ["Begin"]
-				});
-				$$renderer.push(`<!----> `);
-				if (archived()) {
-					$$renderer.push("<!--[0-->");
-					Alert($$renderer, {
-						variant: "warning",
+				children: ($$renderer) => {
+					Link($$renderer, {
+						href: resolve("/campaigns"),
+						class: "text-sm",
 						children: ($$renderer) => {
-							$$renderer.push(`<!---->This Campaign is archived. Restore it to change it.`);
+							$$renderer.push(`<!---->All Campaigns`);
 						},
 						$$slots: { default: true }
 					});
-				} else $$renderer.push("<!--[-1-->");
-				$$renderer.push(`<!--]--> `);
-				Panel($$renderer, {
-					title: "Seed",
-					children: ($$renderer) => {
-						$$renderer.push(`<form method="POST" action="?/saveSeed" class="space-y-3">`);
-						CampaignSeedCard($$renderer, {
-							disabled: archived(),
-							get seed() {
-								return seed;
+					$$renderer.push(`<!----> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
+					if (data.campaign.status !== "missing") {
+						$$renderer.push("<!--[0-->");
+						DmBadge($$renderer, { attached: attached() });
+						$$renderer.push(`<!----> `);
+						Link($$renderer, {
+							href: resolve("/campaigns/[id]/play", { id: data.campaign.id }),
+							class: "ml-auto text-sm",
+							children: ($$renderer) => {
+								$$renderer.push(`<!---->Play console`);
 							},
-							set seed($$value) {
-								seed = $$value;
-								$$settled = false;
-							}
+							$$slots: { default: true }
+						});
+						$$renderer.push(`<!---->`);
+					} else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--></div> <p class="text-xs text-muted">${escape_html(data.campaign.path)}</p></header> `);
+					if (data.campaign.status === "missing") {
+						$$renderer.push("<!--[0-->");
+						Alert($$renderer, {
+							variant: "warning",
+							children: ($$renderer) => {
+								$$renderer.push(`<!---->This Campaign's folder is missing. Re-add it from the Campaign library to open it.`);
+							},
+							$$slots: { default: true }
+						});
+					} else {
+						$$renderer.push("<!--[-1-->");
+						CreationStepper($$renderer, {
+							current: "Seed",
+							hrefs: {
+								Seed: resolve("/campaigns/[id]", { id: data.campaign.id }),
+								Party: resolve("/campaigns/[id]/party", { id: data.campaign.id })
+							},
+							unavailable: ["Begin"]
 						});
 						$$renderer.push(`<!----> `);
-						if (form && "error" in form && form.error) {
+						if (archived()) {
 							$$renderer.push("<!--[0-->");
 							Alert($$renderer, {
-								variant: "danger",
+								variant: "warning",
 								children: ($$renderer) => {
-									$$renderer.push(`<!---->${escape_html(form.error)}`);
+									$$renderer.push(`<!---->This Campaign is archived. Restore it to change it.`);
 								},
 								$$slots: { default: true }
 							});
 						} else $$renderer.push("<!--[-1-->");
 						$$renderer.push(`<!--]--> `);
-						if (!archived()) {
-							$$renderer.push(`<!--[0--><div class="flex items-center gap-3">`);
-							Button($$renderer, {
-								type: "submit",
-								children: ($$renderer) => {
-									$$renderer.push(`<!---->Save Seed`);
-								},
-								$$slots: { default: true }
-							});
-							$$renderer.push(`<!----> `);
-							$$renderer.push("<!--[-1-->");
-							$$renderer.push(`<!--]--></div>`);
-						} else $$renderer.push("<!--[-1-->");
-						$$renderer.push(`<!--]--></form>`);
-					},
-					$$slots: { default: true }
-				});
-				$$renderer.push(`<!---->`);
-			}
-			$$renderer.push(`<!--]--></main>`);
+						Panel($$renderer, {
+							title: "Seed",
+							children: ($$renderer) => {
+								$$renderer.push(`<form method="POST" action="?/saveSeed" class="space-y-3">`);
+								CampaignSeedCard($$renderer, {
+									disabled: archived(),
+									dmFields: dmFields(),
+									get seed() {
+										return seed;
+									},
+									set seed($$value) {
+										seed = $$value;
+										$$settled = false;
+									}
+								});
+								$$renderer.push(`<!----> `);
+								if (form && "error" in form && form.error) {
+									$$renderer.push("<!--[0-->");
+									Alert($$renderer, {
+										variant: "danger",
+										children: ($$renderer) => {
+											$$renderer.push(`<!---->${escape_html(form.error)}`);
+										},
+										$$slots: { default: true }
+									});
+								} else $$renderer.push("<!--[-1-->");
+								$$renderer.push(`<!--]--> `);
+								if (!archived()) {
+									$$renderer.push(`<!--[0--><div class="flex items-center gap-3">`);
+									Button($$renderer, {
+										type: "submit",
+										children: ($$renderer) => {
+											$$renderer.push(`<!---->Save Seed`);
+										},
+										$$slots: { default: true }
+									});
+									$$renderer.push(`<!----> `);
+									$$renderer.push("<!--[-1-->");
+									$$renderer.push(`<!--]--></div>`);
+								} else $$renderer.push("<!--[-1-->");
+								$$renderer.push(`<!--]--></form>`);
+							},
+							$$slots: { default: true }
+						});
+						$$renderer.push(`<!---->`);
+					}
+					$$renderer.push(`<!--]-->`);
+				},
+				$$slots: { default: true }
+			});
 		}
 		do {
 			$$settled = true;

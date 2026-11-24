@@ -1,7 +1,7 @@
 import { a as redirect, n as fail, t as error } from "../../../../../chunks/exports.js";
 import { ft as resolve } from "../../../../../chunks/internal.js";
 import "../../../../../chunks/paths.js";
-import { Z as CharacterNotFoundError, et as loadWizardRules, m as DraftNotFoundError, n as library } from "../../../../../chunks/campaign.js";
+import { b as DraftNotFoundError, i as sessions, it as CharacterNotFoundError, n as library, st as loadWizardRules } from "../../../../../chunks/campaign.js";
 // src/routes/campaigns/[id]/party/+page.server.ts
 /**
 * The Party step: the Campaign's saved Characters and drafts. `?draft=<id>` opens a stored draft
@@ -17,10 +17,13 @@ var load = ({ params, url }) => {
 		path: entry.path,
 		status: entry.status
 	};
+	const attached = sessions.list();
 	if (entry.status === "missing") return {
 		campaign,
 		members: [],
-		open: null
+		open: null,
+		attached,
+		conversation: []
 	};
 	const party = library.party(entry.id);
 	const draftId = url.searchParams.get("draft");
@@ -28,7 +31,7 @@ var load = ({ params, url }) => {
 	let open = null;
 	try {
 		if (draftId) {
-			const { id, draft, step } = party.draft(draftId);
+			const { id, draft, step, version, dmFields } = party.draft(draftId);
 			open = {
 				rules: loadWizardRules(),
 				draft,
@@ -36,6 +39,10 @@ var load = ({ params, url }) => {
 				target: {
 					campaign: entry.id,
 					draft: id
+				},
+				stored: {
+					version,
+					dmFields
 				}
 			};
 		} else if (characterId) {
@@ -57,7 +64,9 @@ var load = ({ params, url }) => {
 	return {
 		campaign,
 		members: party.list(),
-		open
+		open,
+		attached,
+		conversation: library.conversation(entry.id).list()
 	};
 };
 var actions = { 

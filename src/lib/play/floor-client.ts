@@ -1,7 +1,15 @@
 import { createQuery, useQueryClient } from '@tanstack/svelte-query'
-import { floorQueryKey, journalQueryKey, timelineQueryKey } from '#lib/live/messages.ts'
+import {
+  floorQueryKey,
+  journalQueryKey,
+  sessionHistoryQueryKey,
+  sceneQueryKey,
+  timelineQueryKey
+} from '#lib/live/messages.ts'
 import type { OpenFloor, PendingDeclaration } from './floor'
 import type { Journal } from './journal'
+import type { SessionHistory } from './sessions'
+import type { SceneView } from './scene'
 import type { Timeline } from './timeline'
 
 /** A Floor change the server refused, with its message for the Player. */
@@ -33,6 +41,19 @@ export function createTimelineQuery(campaign: () => string, initial: () => Timel
   }))
 }
 
+/** The Campaign's Scene for the rail, starting from the server-rendered one. */
+export function createSceneQuery(campaign: () => string, initial: () => SceneView) {
+  return createQuery(() => ({
+    queryKey: sceneQueryKey(campaign()),
+    queryFn: async (): Promise<SceneView> => {
+      const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/scene`)
+      if (!res.ok) throw new FloorChangeError('The Scene could not be loaded')
+      return (await res.json()) as SceneView
+    },
+    initialData: initial()
+  }))
+}
+
 /** The Player's Journal, starting from the server-rendered one; live updates keep it fresh. */
 export function createJournalQuery(campaign: () => string, initial: () => Journal) {
   return createQuery(() => ({
@@ -44,6 +65,30 @@ export function createJournalQuery(campaign: () => string, initial: () => Journa
     },
     initialData: initial()
   }))
+}
+
+/** The Player's read-only Session history, starting from the server-rendered one. */
+export function createSessionHistoryQuery(campaign: () => string, initial: () => SessionHistory) {
+  return createQuery(() => ({
+    queryKey: sessionHistoryQueryKey(campaign()),
+    queryFn: async (): Promise<SessionHistory> => {
+      const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/sessions`)
+      if (!res.ok) throw new Error('The Session history could not be loaded')
+      return (await res.json()) as SessionHistory
+    },
+    initialData: initial()
+  }))
+}
+
+/** End Session: asks the DM to close the sitting. */
+export async function endSession(campaign: string): Promise<void> {
+  const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign)}/end-session`, {
+    method: 'POST'
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new FloorChangeError(body.error ?? 'The session could not be ended')
+  }
 }
 
 /** Send, edit, withdraw and Done on the Campaign's open Floor; each refreshes the Floor and timeline. */
@@ -83,6 +128,22 @@ export function floorActions(campaign: () => string) {
     },
     async withdraw(id: string): Promise<void> {
       await call(`${base()}/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    },
+    /** The composer loaded drafts a cut sent back; the server stops holding them. */
+    async clearReturned(ids: string[]): Promise<void> {
+      for (const id of ids) {
+        await call(
+          `/api/campaigns/${encodeURIComponent(campaign())}/floor/returned/${encodeURIComponent(id)}`,
+          { method: 'DELETE' }
+        )
+      }
+    },
+    /** "Cut to <Name>": a spotlight request to the DM. Doesn't make the DM answer a turn. */
+    async cut(character: string): Promise<void> {
+      await call(`/api/campaigns/${encodeURIComponent(campaign())}/spotlight`, {
+        method: 'POST',
+        body: JSON.stringify({ character })
+      })
     },
     /** Done: closes the Floor (once every Player has pressed it) and wakes the DM. */
     async done(): Promise<void> {

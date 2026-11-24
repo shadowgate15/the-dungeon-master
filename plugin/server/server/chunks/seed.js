@@ -4871,6 +4871,7 @@ var schema_exports = /* @__PURE__ */ __exportAll({
 	classStartingEquipment: () => classStartingEquipment,
 	classTable: () => classTable,
 	condition: () => condition,
+	conversationMessage: () => conversationMessage,
 	damageType: () => damageType,
 	declaration: () => declaration,
 	entity: () => entity,
@@ -4897,6 +4898,7 @@ var schema_exports = /* @__PURE__ */ __exportAll({
 	raceAbilityBonus: () => raceAbilityBonus,
 	raceLanguage: () => raceLanguage,
 	raceTrait: () => raceTrait,
+	returnedDraft: () => returnedDraft,
 	ruleSection: () => ruleSection,
 	rulesDataset: () => rulesDataset,
 	session: () => session,
@@ -4939,8 +4941,16 @@ var campaign = sqliteTable("campaign", {
 	archivedAt: integer("archived_at"),
 	/** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
 	awaitingNarrationSince: integer("awaiting_narration_since"),
+	/** The Seed fields the DM set last ("✎ DM" on the card); a Player edit of a field drops it. */
+	dmSeedFields: text("dm_seed_fields", { mode: "json" }).$type().notNull().default([]),
+	/** When the Player pressed Begin (#335); null while the Campaign is still being created. */
+	begunAt: integer("begun_at"),
 	/** The last Event the DM has heard about: change notices cover the Player's edits after it. */
-	noticedThrough: integer("noticed_through").notNull().default(0)
+	noticedThrough: integer("noticed_through").notNull().default(0),
+	/** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
+	clockMinute: integer("clock_minute").notNull().default(0),
+	/** The Scene: the handle of the Place the spotlight is on, or null before it is first set. */
+	scene: text("scene")
 }, () => [
 	check("campaign_tone_check", oneOf("tone", TONES)),
 	check("campaign_length_check", oneOf("length", LENGTHS)),
@@ -5114,8 +5124,28 @@ var characterDraft = sqliteTable("character_draft", {
 	data: text("data", { mode: "json" }).$type().notNull(),
 	/** The wizard step the draft was last on. */
 	step: text("step").$type().notNull(),
+	/** The draft's Entity version: bumped by every write that changes it, from the wizard or the DM. */
+	version: integer("version").notNull().default(1),
+	/** The draft fields the DM set last ("✎ DM" in the wizard); a Player edit of a field drops it. */
+	dmFields: text("dm_fields", { mode: "json" }).$type().notNull().default([]),
 	createdAt: integer("created_at").notNull(),
 	updatedAt: integer("updated_at").notNull()
+});
+/**
+* The creation conversation in the DM pane: the Player's messages, the DM's replies and muted lines
+* for the DM's field writes. Out of fiction, so it is never part of the Event log.
+*/
+var conversationMessage = sqliteTable("conversation_message", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	author: text("author", { enum: [
+		"player",
+		"dm",
+		"dm_write"
+	] }).notNull(),
+	/** The Player who wrote it; null for the DM's lines. */
+	player: text("player"),
+	text: text("text").notNull(),
+	createdAt: integer("created_at").notNull()
 });
 /**
 * A Floor: the DM waiting on the Players' Declarations. At most one is open per Campaign; until it
@@ -5152,6 +5182,8 @@ var declaration = sqliteTable("declaration", {
 var session = sqliteTable("session", {
 	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
 	number: integer("number").notNull().unique(),
+	/** The bridge (one per Claude Code session) whose attach opened it; a reconnect reuses it. */
+	bridge: text("bridge"),
 	startedAt: integer("started_at").notNull(),
 	closedAt: integer("closed_at"),
 	summary: text("summary"),
@@ -5239,6 +5271,17 @@ var npcCombat = sqliteTable("npc_combat", {
 	hp: integer("hp").notNull(),
 	maxHp: integer("max_hp").notNull(),
 	conditions: text("conditions", { mode: "json" }).$type().notNull().$defaultFn(() => [])
+});
+/**
+* A Declaration sent back to its Player's composer as unsent text: its Character left the Scene
+* when the spotlight cut away before the Floor closed. The console loads it, then clears it.
+*/
+var returnedDraft = sqliteTable("returned_draft", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	characterId: text("character_id").notNull().references(() => character.id, { onDelete: "cascade" }),
+	player: text("player").notNull(),
+	text: text("text").notNull(),
+	createdAt: integer("created_at").notNull()
 });
 // src/lib/server/db/connect.ts
 /** The only place connections are opened, so foreign keys are always enforced. */
@@ -7157,6 +7200,6 @@ function seedRulesData(db, dataset = loadRulesDataset(), now = Date.now) {
 		}).run();
 	});
 }
-export { and as $, entityAlias as A, equipment as B, declaration as C, session as D, npcCombat as E, NPC_STATUSES as F, subrace as G, skill as H, abilityScoreMethod as I, CUSTOM_BACKGROUND_FEATURE_MAX as J, ABILITY_METHODS as K, alignment as L, pageRevision as M, worldLink as N, belief as O, ENTITY_TYPES as P, desc as Q, background as R, characterSpell as S, floor as T, spell as U, race as V, subclass as W, SOLO_PLAYER as X, CUSTOM_BACKGROUND_SLUG as Y, asc as Z, characterChoice as _, defaultCampaignRoot as a, like as at, characterItem as b, skills_default as c, Column as ct, openDatabase as d, DUNGEON_MASTER_CAMPAIGNS as dt, eq as et, activityLine as f, DUNGEON_MASTER_HOME as ft, character as g, campaign as h, canonicalFolder as i, isNull as it, fact as j, entity as k, abilities_default as l, is as lt, callPart as m, DUNGEON_MASTER_VERSION as mt, createRulesRepository as n, inArray as nt, userStateDir as o, or as ot, call as p, DUNGEON_MASTER_PORT as pt, BACKSTORY_MAX as q, campaignDatabasePath as r, isNotNull as rt, loadRulesDataset as s, sql as st, seedRulesData as t, gt as tt, migrateDatabase as u, DATABASE_URL as ut, characterDraft as v, event as w, characterSkill as x, characterEquipment as y, classTable as z };
+export { asc as $, belief as A, background as B, conversationMessage as C, npcCombat as D, floor as E, worldLink as F, spell as G, equipment as H, ENTITY_TYPES as I, ABILITY_METHODS as J, subclass as K, NPC_STATUSES as L, entityAlias as M, fact as N, returnedDraft as O, pageRevision as P, SOLO_PLAYER as Q, abilityScoreMethod as R, characterSpell as S, event as T, race as U, classTable as V, skill as W, CUSTOM_BACKGROUND_FEATURE_MAX as X, BACKSTORY_MAX as Y, CUSTOM_BACKGROUND_SLUG as Z, characterChoice as _, DUNGEON_MASTER_VERSION as _t, defaultCampaignRoot as a, isNotNull as at, characterItem as b, skills_default as c, ne as ct, openDatabase as d, Column as dt, desc as et, activityLine as f, is as ft, character as g, DUNGEON_MASTER_PORT as gt, campaign as h, DUNGEON_MASTER_HOME as ht, canonicalFolder as i, inArray as it, entity as j, session as k, abilities_default as l, or as lt, callPart as m, DUNGEON_MASTER_CAMPAIGNS as mt, createRulesRepository as n, eq as nt, userStateDir as o, isNull as ot, call as p, DATABASE_URL as pt, subrace as q, campaignDatabasePath as r, gt as rt, loadRulesDataset as s, like as st, seedRulesData as t, and as tt, migrateDatabase as u, sql as ut, characterDraft as v, declaration as w, characterSkill as x, characterEquipment as y, alignment as z };
 
 //# sourceMappingURL=seed.js.map

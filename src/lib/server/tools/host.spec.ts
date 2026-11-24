@@ -7,6 +7,7 @@ import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library
 import { campaign } from '../db/schema'
 import { ToolError, readTool, writeTool, type ToolResult } from './contract'
 import { createToolHost, type ToolHost } from './host'
+import { creationTools } from './creation-tools'
 import { seedTools } from './seed-tools'
 
 let library: CampaignLibrary
@@ -49,7 +50,7 @@ beforeEach(() => {
   library = createCampaignLibrary({ home: path.join(tmp, 'home') })
   folder = path.join(tmp, 'ember-road')
   library.create({ name: 'Ember Road', folder })
-  host = createToolHost({ library, tools: [...seedTools, ...fixtureTools] })
+  host = createToolHost({ library, tools: [...seedTools, ...creationTools, ...fixtureTools] })
 })
 
 afterEach(() => library.close())
@@ -144,12 +145,22 @@ describe('game tool host', () => {
     ok(host.call(folder, 'seed', {}))
     expect(host.events(folder)).toEqual([])
 
-    ok(host.call(folder, 'set_seed', { version: 1, premise: 'Escort a relic.', tone: 'tense' }))
-    ok(host.call(folder, 'set_seed', { version: 2, length: 'short' }))
+    ok(host.call(folder, 'enter_combat', {}))
+    ok(host.call(folder, 'enter_combat', {}))
 
     expect(host.events(folder)).toEqual([
-      expect.objectContaining({ tool: 'set_seed', kind: 'seed_changed', session: null, minute: 0 }),
-      expect.objectContaining({ tool: 'set_seed', kind: 'seed_changed', session: null, minute: 0 })
+      expect.objectContaining({
+        tool: 'enter_combat',
+        kind: 'combat_started',
+        session: null,
+        minute: 0
+      }),
+      expect.objectContaining({
+        tool: 'enter_combat',
+        kind: 'combat_started',
+        session: null,
+        minute: 0
+      })
     ])
   })
 

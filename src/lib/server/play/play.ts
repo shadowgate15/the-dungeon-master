@@ -1,5 +1,6 @@
 import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import type { LiveMessage } from '#lib/live/messages.ts'
+import type { SceneView } from '#lib/play/scene.ts'
 import type { Timeline } from '#lib/play/timeline.ts'
 import type { ChannelEvent, Channels } from '../bridge/channels'
 import type { Sessions } from '../bridge/sessions'
@@ -9,6 +10,10 @@ import type { DoneOutcome } from '../floor/floor'
 import { callResultEvent, type CallResult } from './calls'
 
 export { DmBusyError } from '../floor/floor'
+export { SpotlightRefusedError } from './scene'
+
+/** A creation conversation message needs a DM at the table to hear it. */
+export class DmAwayError extends Error {}
 
 type Options = {
   library: CampaignLibrary
@@ -94,9 +99,52 @@ export function createPlay({
       return answered(campaignId, result)
     },
 
-    /** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */
-    openSession(campaignId: string): { id: string; number: number } {
-      return library.record(campaignId).openSession()
+    /**
+     * A Player's "Cut to <Name>": one spotlight channel event to the DM. Doesn't await Narration.
+     * Refused (`SpotlightRefusedError`) for a Character who is already in the Scene.
+     */
+    spotlight(campaignId: string, character: string, player: string = SOLO_PLAYER): void {
+      const request = library.record(campaignId).spotlight(character, player)
+      channels.send(folderOf(campaignId), request)
+    },
+
+    /** The Scene as the Player's rail shows it. */
+    scene(campaignId: string): SceneView {
+      return library.record(campaignId).scene()
+    },
+
+    /**
+     * The Player writes in the DM pane: the message is kept for the pane and reaches the DM as one
+     * conversation event. It is out of fiction, so it never touches the Floor or the Event log.
+     */
+    converse(campaignId: string, text: string, player: string = SOLO_PLAYER) {
+      const folder = folderOf(campaignId)
+      if (!channels.listening(folder)) {
+        throw new DmAwayError('The DM is away. Run dm in the Campaign folder to ask for help.')
+      }
+      const message = library.conversation(campaignId).add({ text, player })
+      channels.send(folder, { content: text, meta: { kind: 'conversation', player } })
+      publish({ type: 'conversation', campaign: campaignId })
+      return message
+    },
+
+    /**
+     * The Player presses End Session: the DM gets one `end_session` event and closes the sitting
+     * (closing beat, summary, Arc review, lint) with the ending-a-sitting skill.
+     */
+    endSession(campaignId: string) {
+      channels.send(folderOf(campaignId), {
+        content: 'The Player pressed End Session. Close the sitting.',
+        meta: { kind: 'end_session' }
+      })
+    },
+
+    /**
+     * Opens the Campaign's Session as a DM attaches through `bridge`; a reconnecting bridge keeps
+     * its own Session.
+     */
+    openSession(campaignId: string, bridge?: string): { id: string; number: number } {
+      return library.record(campaignId).openSession(bridge)
     },
 
     /**
@@ -144,7 +192,7 @@ export type Play = ReturnType<typeof createPlay>
 
 /** Opens a Campaign's Session whenever a DM attaches to it; returns the unsubscribe. */
 export function openSessionsOnAttach(sessions: Sessions, play: Play): () => void {
-  return sessions.onChange(({ campaign, attached }) => {
-    if (attached) play.openSession(campaign)
+  return sessions.onChange(({ campaign, attached, session }) => {
+    if (attached) play.openSession(campaign, session)
   })
 }
