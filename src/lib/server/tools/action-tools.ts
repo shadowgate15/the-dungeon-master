@@ -32,6 +32,7 @@ import {
   type Sequence,
   type StepRolled
 } from '../play/sequences'
+import { spendTurnResource } from '../play/combat'
 import { createRulesRepository } from '../rules/repository'
 import { ToolError, writeTool, type ToolEvent } from './contract'
 
@@ -214,6 +215,14 @@ function resolve(
   }
 }
 
+/** Adds an action-economy reminder to a tool's result. */
+function withReminder<T extends { result: Record<string, unknown> }>(
+  reminder: string | null,
+  out: T
+): T {
+  return reminder ? { ...out, result: { ...out.result, reminder } } : out
+}
+
 const abilityName = (ability: AbilityKey) => ABILITY_NAMES.get(ability) ?? ability
 
 /** Rolls an effect's damage once, for every target's save. */
@@ -366,8 +375,8 @@ export const actionTools = [
     description:
       "Make a weapon or natural attack. A Character attacker returns a pending Call: attach it with your closing narrate(text, call: id) and the Player rolls to hit, then damage (you hear one call_result). An NPC attacker rolls and applies at once, in the dice log. The target's AC stays hidden from the Player.",
     input: z.object({
-      actor: z.string().min(1).describe('Who attacks: char:… or npc:…'),
-      target: z.string().min(1).describe('Who is attacked: char:… or npc:…'),
+      actor: z.string().min(1).describe('Who attacks: char:…, npc:… or creature:…'),
+      target: z.string().min(1).describe('Who is attacked: char:…, npc:… or creature:…'),
       with: z.string().trim().min(1).describe('The weapon or stat block action, such as longsword'),
       ...adv
     }),
@@ -378,9 +387,13 @@ export const actionTools = [
       const target = combatant(db, input.target)
       const attack = findAttack(actor, input.with)
       const sequence = attackSequence(attack.name, target, attack.bonus, attack.damage)
-      return resolve(db, dice, now, [{ roller: actor, sequence, mode: modeOf(input) }], {
-        summary: `${actor.name}'s ${sequence.label} on ${target.name}`
-      })
+      const reminder = spendTurnResource(db, actor.handle, actor.name, 'action')
+      return withReminder(
+        reminder,
+        resolve(db, dice, now, [{ roller: actor, sequence, mode: modeOf(input) }], {
+          summary: `${actor.name}'s ${sequence.label} on ${target.name}`
+        })
+      )
     }
   }),
 
@@ -442,7 +455,13 @@ export const actionTools = [
       const slot =
         caster.kind === 'character' && input.level > 0 ? spendSlot(db, caster, input.level) : null
       const damage = spellDamage(spell, input.level, powers.level)
-      const result = { cast: spell.name, level: input.level, slot }
+      const reminder = spendTurnResource(
+        db,
+        caster.handle,
+        caster.name,
+        /bonus action/i.test(String(spell.castingTime ?? '')) ? 'bonusAction' : 'action'
+      )
+      const result = { cast: spell.name, level: input.level, slot, ...(reminder && { reminder }) }
       const summary = `${caster.name} casts ${spell.name}${targets.length ? ` on ${targets.map((t) => t.name).join(', ')}` : ''}`
 
       if (spell.attackType) {
