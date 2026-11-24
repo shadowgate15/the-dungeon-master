@@ -230,3 +230,25 @@ describe('what the Player sees after Begin', () => {
     ])
   })
 })
+
+describe('party', () => {
+  it('gives builder each Character’s handle, concept and story to build from', () => {
+    addCharacter(library, campaignId, {
+      ...fighterDraft('Wren'),
+      backstory: 'Raised by the lighthouse keeper of Saltgate.'
+    })
+    expect(call('party').payload).toEqual({
+      characters: [
+        expect.objectContaining({
+          handle: 'char:wren',
+          name: 'Wren',
+          level: 1,
+          race: 'Human',
+          class: 'Fighter',
+          background: 'Acolyte',
+          backstory: 'Raised by the lighthouse keeper of Saltgate.'
+        })
+      ]
+    })
+  })
+})

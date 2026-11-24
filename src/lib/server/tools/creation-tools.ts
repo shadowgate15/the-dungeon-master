@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, ne } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   CAMPAIGN_SEED_FIELDS,
@@ -21,7 +21,8 @@ import { ABILITY_KEYS } from '#lib/rules/registry.ts'
 import { loadWizardRules } from '../character/wizard-rules'
 import { SeedLockedError, creationStage, refuseLockedSeed } from '../creation/begin'
 import { addConversationLine } from '../creation/conversation'
-import { campaign, characterDraft } from '../db/schema'
+import { background, campaign, character, characterDraft, classTable, race } from '../db/schema'
+import { characterHolders } from '../knowledge/holders'
 import { ToolError, creationTool, expectVersion, readTool, type ToolContext } from './contract'
 import { SEED_HANDLE, currentSeed, seedView } from './seed-tools'
 
@@ -195,6 +196,48 @@ export const creationTools = [
           version: d.version
         }))
       return { state, missing, characters, drafts }
+    }
+  }),
+
+  readTool({
+    name: 'party',
+    description:
+      'The Party as builder needs it: each Character’s handle (char:…), name, level, race, class, background, alignment, appearance, personality, ideal, bond, flaw and backstory. Build the World and the Arc from these.',
+    input: z.object({}),
+    activity: 'DM reads the Party',
+    run: (ctx) => {
+      const handles = new Map(characterHolders(ctx.db).map((c) => [c.id, c.handle]))
+      const rows = ctx.db
+        .select({
+          id: character.id,
+          name: character.name,
+          level: character.level,
+          race: race.name,
+          class: classTable.name,
+          background: background.name,
+          customBackground: character.customBackgroundName,
+          alignment: character.alignment,
+          appearance: character.appearance,
+          personality: character.personality,
+          ideal: character.ideal,
+          bond: character.bond,
+          flaw: character.flaw,
+          backstory: character.backstory
+        })
+        .from(character)
+        .innerJoin(race, eq(race.id, character.raceId))
+        .innerJoin(classTable, eq(classTable.id, character.classId))
+        .innerJoin(background, eq(background.id, character.backgroundId))
+        .where(ne(character.status, 'departed'))
+        .orderBy(asc(character.createdAt))
+        .all()
+      return {
+        characters: rows.map(({ id, customBackground, ...c }) => ({
+          handle: handles.get(id),
+          ...c,
+          background: customBackground ?? c.background
+        }))
+      }
     }
   }),
 
