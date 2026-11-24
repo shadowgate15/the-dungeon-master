@@ -675,6 +675,8 @@ var SESSIONS_QUERY_KEY = ["sessions"];
 var floorQueryKey = (campaign) => ["floor", campaign];
 /** The query holding a Campaign's timeline. */
 var timelineQueryKey = (campaign) => ["timeline", campaign];
+/** The query holding the permission prompt a Campaign's session is waiting on. */
+var permissionQueryKey = (campaign) => ["permission", campaign];
 // src/lib/live/client.ts
 /** The ids of the Campaigns with a DM at the table, starting from the server-rendered list. */
 function createSessionsQuery(initial) {
@@ -699,6 +701,6 @@ function DmBadge($$renderer, $$props) {
 		$$slots: { default: true }
 	});
 }
-export { createQuery as a, timelineQueryKey as i, createSessionsQuery as n, floorQueryKey as r, DmBadge as t };
+export { timelineQueryKey as a, permissionQueryKey as i, createSessionsQuery as n, createQuery as o, floorQueryKey as r, DmBadge as t };
 
 //# sourceMappingURL=DmBadge.js.map

@@ -1,5 +1,5 @@
-import { At as and, C as entityAlias, D as ENTITY_TYPES, Dt as SOLO_PLAYER, E as worldLink, Ft as like, Ht as DUNGEON_MASTER_HOME, It as or, Lt as sql, Nt as isNotNull, O as NPC_STATUSES, Ot as asc, Pt as isNull, S as entity, T as pageRevision, Ut as DUNGEON_MASTER_PORT, Wt as DUNGEON_MASTER_VERSION, i as userStateDir, jt as eq, kt as desc, n as canonicalFolder, u as campaign, w as fact, y as event } from "./paths.js";
-import { _ as nextEventId, c as CampaignNotFoundError, g as logEvent, h as logActivity, i as sessions, l as NotACampaignFolderError, m as currentStamp, n as library, r as live, v as setAwaitingNarration, w as SESSION_LIVE_MESSAGE } from "./campaign.js";
+import { A as worldLink, Bt as or, C as event, D as entityAlias, E as entity, Ft as eq, Jt as DUNGEON_MASTER_VERSION, Kt as DUNGEON_MASTER_HOME, Lt as isNotNull, M as NPC_STATUSES, Mt as asc, Nt as desc, O as fact, Pt as and, Rt as isNull, Vt as sql, i as userStateDir, j as ENTITY_TYPES, jt as SOLO_PLAYER, k as pageRevision, m as campaign, n as canonicalFolder, qt as DUNGEON_MASTER_PORT, zt as like } from "./paths.js";
+import { C as setAwaitingNarration, D as readTool, E as expectVersion, O as writeTool, P as SESSION_LIVE_MESSAGE, S as nextEventId, T as ToolError, _ as callResultEvent, b as logActivity, c as CampaignNotFoundError, g as callInput, i as sessions, l as NotACampaignFolderError, n as library, r as live, v as openCall, w as PLUGIN_NAME, x as logEvent, y as currentStamp } from "./campaign.js";
 import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -16,63 +16,6 @@ function writeRuntimeFile(home, runtime) {
 	fs.writeFileSync(tmp, JSON.stringify(runtime) + "\n", { mode: 384 });
 	fs.renameSync(tmp, file);
 }
-// src/lib/server/tools/contract.ts
-/**
-* The shared contract every game tool follows: short snake_case names, per-Entity versions on
-* every read and write, one transaction and one Event per mutating call, and errors shaped
-* `{code, message, next}`.
-*/
-/** The plugin's name, which namespaces the skills a tool points to. */
-var PLUGIN_NAME = "the-dungeon-master";
-/**
-* A refusal the DM can act on: what went wrong and the call to make next. `details` adds
-* structured data to the payload (such as the matches a near-duplicate refusal found).
-*/
-var ToolError = class ToolError extends Error {
-	code;
-	next;
-	details;
-	constructor(code, message, next, details) {
-		super(message);
-		this.code = code;
-		this.next = next;
-		this.details = details;
-	}
-	/** The handle names no Entity. */
-	static unknownHandle(handle) {
-		return new ToolError("unknown_handle", `No Entity has the handle ${handle}`, "Check the handle against a recent read and call again");
-	}
-	/** The write passed an old version: someone changed the Entity since the DM read it. */
-	static staleVersion(handle, given, current, read) {
-		return new ToolError("stale_version", `${handle} is at version ${current}, not ${given}: it changed since you read it`, read);
-	}
-	/** The input breaks a rule the forms enforce too. */
-	static invalidInput(tool, message) {
-		return new ToolError("invalid_input", message, `Fix the arguments and call ${tool} again`);
-	}
-};
-/** Refuses a write whose version is not the Entity's current one. */
-function expectVersion(entity, given) {
-	if (entity.version !== given) throw ToolError.staleVersion(entity.handle, given, entity.version, entity.read);
-}
-/** A tool that only reads. It logs nothing. */
-function readTool(tool) {
-	return {
-		...tool,
-		activity: tool.activity,
-		mutates: false,
-		run: tool.run
-	};
-}
-/** A tool that changes state: one transaction, exactly one Event. */
-function writeTool(tool) {
-	return {
-		...tool,
-		activity: tool.activity,
-		mutates: true,
-		run: tool.run
-	};
-}
 // src/lib/server/tools/narration-tools.ts
 /** The NPC a Narration is voiced by; refused unless the handle names a live NPC. */
 function speaker({ db }, handle) {
@@ -86,21 +29,31 @@ var narrationTools = [writeTool({
 	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine.",
 	input: object({
 		text: string().trim().min(1),
-		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks")
+		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks"),
+		call: callInput.optional().describe("Ask the Players: inline {kind: \"check\", character, skill | save, tier, adv?, reason} (or a list of them, one roll per Character) or {kind: \"question\", text, choices?}. A Call ends your turn; its call_result wakes you.")
 	}),
 	activity: null,
-	run: (ctx, { text, voice }) => {
+	run: (ctx, { text, voice, call }) => {
 		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
 		setAwaitingNarration(ctx.db, null);
+		const callId = call === void 0 ? null : openCall(ctx.db, call, {
+			at: ctx.now,
+			openedBy: ctx.stamp.eventId
+		});
 		return {
-			result: { narrated: true },
+			result: callId ? {
+				narrated: true,
+				call: callId,
+				next: "End your turn: the Players answer the Call"
+			} : { narrated: true },
 			event: {
 				kind: "narration",
 				summary: npc ? `${npc.name}: ${text}` : text,
 				data: {
 					text,
 					voice: npc?.handle ?? null,
-					voiceName: npc?.name ?? null
+					voiceName: npc?.name ?? null,
+					call: callId
 				}
 			}
 		};
@@ -453,7 +406,10 @@ function createWorld({ db, stamp }) {
 	/** A Fact that a supersession or retirement may still change. */
 	function currentFact(id) {
 		const found = findFact(id);
-		if (!isCurrent(found)) throw new ToolError("not_current", `Fact ${id} is already ${found.retiredAt !== null ? "retired" : `superseded by Fact ${found.supersededBy}`}`, `Open ${found.subject} with history to see its Facts`);
+		if (!isCurrent(found)) {
+			const state = found.retiredAt !== null ? "retired" : `superseded by Fact ${found.supersededBy}`;
+			throw new ToolError("not_current", `Fact ${id} is already ${state}`, `Open ${found.subject} with history to see its Facts`);
+		}
 		return found;
 	}
 	/**
@@ -1230,6 +1186,7 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 /**
 * A closed Floor as the DM hears it: one `floor` channel event, one body line per Declaration in
 * send order (`[d1 Wren · player] picks the lock`). An empty body hands the DM the initiative.
+* `withdrawn_call` names the open Call the Declarations withdrew.
 */
 function floorEvent(closed) {
 	return {
@@ -1237,7 +1194,8 @@ function floorEvent(closed) {
 		meta: {
 			kind: "floor",
 			floor_id: closed.floor,
-			players: closed.players.join(",")
+			players: closed.players.join(","),
+			...closed.withdrawnCall ? { withdrawn_call: closed.withdrawnCall } : {}
 		}
 	};
 }
@@ -1245,11 +1203,19 @@ function floorEvent(closed) {
 * The play turn across the server: the Players' Done wakes the DM over its channel, Sessions open
 * as the DM attaches, and the Player's timeline is read from the Event log.
 */
-function createPlay({ library, channels, publish }) {
+function createPlay({ library, channels, publish, dice = (id) => campaignDice.for(id) }) {
 	function folderOf(campaignId) {
 		const entry = library.get(campaignId);
 		if (!entry) throw new CampaignNotFoundError("Campaign not found");
 		return entry.path;
+	}
+	function answered(campaignId, result) {
+		if (result) channels.send(folderOf(campaignId), callResultEvent(result));
+		publish({
+			type: "timeline",
+			campaign: campaignId
+		});
+		return { complete: result !== null };
 	}
 	return {
 		/**
@@ -1268,6 +1234,17 @@ function createPlay({ library, channels, publish }) {
 				campaign: campaignId
 			});
 			return outcome;
+		},
+		/**
+		* The Player clicks one roll of the open Call; code rolls it. The roll that completes the Call
+		* wakes the DM with one call_result event and sets awaiting Narration.
+		*/
+		roll(campaignId, callId, partId, player = SOLO_PLAYER) {
+			return answered(campaignId, library.calls(campaignId).roll(callId, partId, dice(campaignId), player));
+		},
+		/** The Player answers a question Call; the last answer wakes the DM like a roll does. */
+		answer(campaignId, callId, partId, text, player = SOLO_PLAYER) {
+			return answered(campaignId, library.calls(campaignId).answer(callId, partId, text, player));
 		},
 		/** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */
 		openSession(campaignId) {
@@ -1296,7 +1273,8 @@ function authorized(request, token) {
 }
 var encoder = new TextEncoder();
 /**
-* A Campaign's channel events as Server-Sent Events, until the bridge hangs up. While the stream
+* A Campaign's channel events (`event: channel`) and permission verdicts (`event: permission`)
+* as Server-Sent Events, until the bridge hangs up. While the stream
 * is open, the bridge's session is attached to the Campaign.
 */
 function eventStream(channels, folder, detach) {
@@ -1306,9 +1284,11 @@ function eventStream(channels, folder, detach) {
 			const write = (text) => controller.enqueue(encoder.encode(text));
 			write(": open\n\n");
 			const unlisten = channels.listen(folder, (event) => write(`event: channel\ndata: ${JSON.stringify(event)}\n\n`));
+			const unlistenVerdicts = channels.listenVerdicts(folder, (verdict) => write(`event: permission\ndata: ${JSON.stringify(verdict)}\n\n`));
 			const keepAlive = setInterval(() => write(": ka\n\n"), 15e3);
 			stop = () => {
 				unlisten();
+				unlistenVerdicts();
 				clearInterval(keepAlive);
 				detach();
 			};
@@ -1334,8 +1314,10 @@ var SESSION_LIVE = {
 *   attaches the bridge's session (`x-dm-session`). A second session is refused (409).
 * - `POST register` with `{folder}`: registers a Campaign folder (the launcher), answering
 *   `{id, name, attached}`.
+* - `POST permission_request` with `{campaign, request_id, tool_name, description, input_preview}`:
+*   the session's permission prompt, shown to the Player; the verdict comes back on `events`.
 */
-function createBridgeApi({ library, host, channels, sessions, token }) {
+function createBridgeApi({ library, host, channels, sessions, permissions, token }) {
 	return async function handle(request) {
 		if (!authorized(request, token)) return json({ error: "bad token" }, 401);
 		const url = new URL(request.url);
@@ -1353,6 +1335,7 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 				}],
 				isError: true
 			});
+			if (entry) permissions.movedOn(entry.id);
 			return json(host.call(campaign, name, args));
 		}
 		if (route === "events" && request.method === "GET") {
@@ -1363,6 +1346,22 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 			const session = request.headers.get("x-dm-session") ?? crypto.randomUUID();
 			if (!sessions.attach(entry.id, session)) return json(SESSION_LIVE, 409);
 			return eventStream(channels, campaign, () => sessions.detach(entry.id, session));
+		}
+		if (route === "permission_request" && request.method === "POST") {
+			const body = await request.json();
+			const { campaign, request_id, tool_name } = body;
+			if (!campaign || !request_id || !tool_name) return json({ error: "campaign, request_id and tool_name are required" }, 400);
+			const entry = library.entryAt(campaign);
+			if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404);
+			const session = request.headers.get("x-dm-session") ?? "";
+			if (sessions.heldByOther(entry.id, session)) return json(SESSION_LIVE, 409);
+			permissions.request(entry.id, campaign, {
+				requestId: request_id,
+				toolName: tool_name,
+				description: body.description ?? "",
+				inputPreview: body.input_preview ?? ""
+			});
+			return json({ ok: true });
 		}
 		if (route === "register" && request.method === "POST") {
 			const { folder } = await request.json();
@@ -1386,6 +1385,7 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 /** Channel events per Campaign folder, delivered to the bridges listening for it. */
 function createChannels() {
 	const listeners = /* @__PURE__ */ new Map();
+	const verdictListeners = /* @__PURE__ */ new Map();
 	const key = canonicalFolder;
 	return {
 		/** Starts listening for a Campaign's events; returns the unsubscribe. */
@@ -1401,6 +1401,74 @@ function createChannels() {
 		},
 		send(folder, event) {
 			for (const listener of listeners.get(key(folder)) ?? []) listener(event);
+		},
+		/** Starts listening for the verdicts the Player gives the Campaign's session; returns the unsubscribe. */
+		listenVerdicts(folder, listener) {
+			const set = verdictListeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
+			verdictListeners.set(key(folder), set);
+			set.add(listener);
+			return () => set.delete(listener);
+		},
+		/** Relays a permission verdict to the Campaign's session. */
+		sendVerdict(folder, verdict) {
+			for (const listener of verdictListeners.get(key(folder)) ?? []) listener(verdict);
+		}
+	};
+}
+// src/lib/server/bridge/permissions.ts
+/**
+* The permission prompts the DM's session is waiting on, one per Campaign, held in memory: they
+* die with the session. The terminal's dialog stays open beside the browser's card and the first
+* answer wins, but Claude Code never tells a channel server the terminal answered. So the server
+* infers it, clearing the card when:
+* - the session moves on: its next tool call for the Campaign;
+* - a newer prompt arrives (only the newest shows);
+* - the session leaves.
+*/
+function createPermissions({ channels, sessions, publish }) {
+	const pending = /* @__PURE__ */ new Map();
+	function clear(campaign) {
+		if (pending.delete(campaign)) publish({
+			type: "permission",
+			campaign
+		});
+	}
+	sessions.onChange(({ campaign, attached }) => {
+		if (!attached) clear(campaign);
+	});
+	return {
+		/** The session raised a prompt: the Player's console shows it, replacing any older one. */
+		request(campaign, folder, request) {
+			pending.set(campaign, {
+				folder,
+				request
+			});
+			publish({
+				type: "permission",
+				campaign
+			});
+		},
+		/** The prompt the Campaign's session is waiting on, or null. */
+		pending(campaign) {
+			return pending.get(campaign)?.request ?? null;
+		},
+		/**
+		* The Player answers in the browser: the verdict goes to the session and the card clears.
+		* False when the prompt is no longer waiting (answered in the terminal, or replaced).
+		*/
+		answer(campaign, requestId, behavior) {
+			const held = pending.get(campaign);
+			if (!held || held.request.requestId !== requestId) return false;
+			channels.sendVerdict(held.folder, {
+				request_id: requestId,
+				behavior
+			});
+			clear(campaign);
+			return true;
+		},
+		/** The session moved on (it called a tool), so any prompt was answered in the terminal. */
+		movedOn(campaign) {
+			clear(campaign);
 		}
 	};
 }
@@ -1422,11 +1490,18 @@ var play = createPlay({
 	publish: live.publish
 });
 openSessionsOnAttach(sessions, play);
+/** The permission prompts the DM's sessions are waiting on, relayed to the Player. */
+var permissions = createPermissions({
+	channels,
+	sessions,
+	publish: live.publish
+});
 var bridgeApi = createBridgeApi({
 	library,
 	host,
 	channels,
 	sessions,
+	permissions,
 	token
 });
 /** The known localhost port, unless overridden for tests. */
@@ -1440,6 +1515,6 @@ function announceServer() {
 		version: DUNGEON_MASTER_VERSION || void 0
 	});
 }
-export { play as a, host as i, bridgeApi as n, port as o, channels as r, announceServer as t };
+export { permissions as a, host as i, bridgeApi as n, play as o, channels as r, port as s, announceServer as t };
 
 //# sourceMappingURL=bridge.js.map

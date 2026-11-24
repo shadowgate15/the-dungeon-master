@@ -5,7 +5,9 @@
   import CallCard from '#lib/play/CallCard.svelte'
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
+  import PermissionCard from '#lib/play/PermissionCard.svelte'
   import Timeline from '#lib/play/Timeline.svelte'
+  import { createPermissionQuery, permissionActions } from '#lib/play/permission-client.ts'
   import {
     callActions,
     createFloorQuery,
@@ -36,6 +38,12 @@
     rolling = true
     attempt(change).finally(() => (rolling = false))
   }
+
+  const permission = createPermissionQuery(
+    () => data.campaign.id,
+    () => data.permission
+  )
+  const answers = permissionActions(() => data.campaign.id)
 
   /** Done, sending the composer's text first for Send & Done. */
   function done(text: string | null) {
@@ -95,6 +103,13 @@
         />
       {/if}
       {#if problem}<Alert variant="danger">{problem}</Alert>{/if}
+      {#if permission.data}
+        {@const request = permission.data}
+        <PermissionCard
+          {request}
+          onanswer={(behavior) => answers.answer(request.requestId, behavior)}
+        />
+      {/if}
       {#if archived}
         <Alert variant="warning">This Campaign is archived. Restore it to play.</Alert>
       {:else}

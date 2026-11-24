@@ -9,6 +9,7 @@ import {
   type CallToolResult,
   type JSONRPCMessage
 } from '@modelcontextprotocol/sdk/types.js'
+import { z } from 'zod'
 import { campaignDatabasePath, userStateDir } from '../lib/server/campaign/paths'
 import { readRuntimeFile } from '../lib/server/runtime'
 
@@ -35,6 +36,17 @@ const NOT_RUNNING: CallToolResult = {
 }
 
 class ServerDown extends Error {}
+
+/** Claude Code asking the channel server to relay a permission prompt (`claude/channel/permission`). */
+const PermissionRequestNotification = z.object({
+  method: z.literal('notifications/claude/channel/permission_request'),
+  params: z.object({
+    request_id: z.string(),
+    tool_name: z.string(),
+    description: z.string().optional(),
+    input_preview: z.string().optional()
+  })
+})
 
 type Env = Record<string, string | undefined>
 
@@ -120,7 +132,28 @@ export async function startBridge({ env = process.env, cwd = process.cwd() } = {
     }
   })
 
-  /** Relays the Campaign's channel events, reconnecting while the server is away. */
+  // Permission prompts go to the Player's console in the order raised (the newest one shows); the
+  // verdict comes back on the event stream.
+  let prompts = Promise.resolve()
+  server.setNotificationHandler(PermissionRequestNotification, ({ params }) => {
+    if (!folder) return
+    prompts = prompts.then(async () => {
+      try {
+        await api('permission_request', {
+          method: 'POST',
+          body: JSON.stringify({ campaign: folder, ...params })
+        })
+      } catch (e) {
+        // The terminal's dialog still stands; the Player answers there.
+        if (!(e instanceof ServerDown)) log('permission request:', e)
+      }
+    })
+  })
+
+  /**
+   * Relays the Campaign's channel events and the Player's permission verdicts, reconnecting while
+   * the server is away.
+   */
   async function relayChannel(campaign: string) {
     let refused = false
     for (;;) {
@@ -147,6 +180,11 @@ export async function startBridge({ env = process.env, cwd = process.cwd() } = {
             if (/^event: channel$/m.test(block) && data) {
               await server.notification({
                 method: 'notifications/claude/channel',
+                params: JSON.parse(data)
+              })
+            } else if (/^event: permission$/m.test(block) && data) {
+              await server.notification({
+                method: 'notifications/claude/channel/permission',
                 params: JSON.parse(data)
               })
             }

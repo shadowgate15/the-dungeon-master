@@ -100,7 +100,8 @@
     "name": "campaign",
     "imports": [
       "_paths.js",
-      "_save.js",
+      "_summary.js",
+      "_schemas.js",
       "_schema.js",
       "_seed.js"
     ]
@@ -213,14 +214,6 @@
       "_campaign.js"
     ]
   },
-  "_save.js": {
-    "file": "chunks/save.js",
-    "name": "save",
-    "imports": [
-      "_schema.js",
-      "_schemas.js"
-    ]
-  },
   "_schema.js": {
     "file": "chunks/schema.js",
     "name": "schema",
@@ -271,7 +264,8 @@
     "file": "chunks/summary.js",
     "name": "summary",
     "imports": [
-      "_save.js"
+      "_schema.js",
+      "_schemas.js"
     ]
   },
   "_theme.js": {
@@ -492,7 +486,7 @@
       "node_modules/.pnpm/@tanstack+svelte-query-devtools@6.3.7_@tanstack+svelte-query@6.3.7_svelte@5.57.3_@types_8ea849ea8105e537a5386474a23c1746/node_modules/@tanstack/svelte-query-devtools/dist/index.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.BaaNlv_-.css"
+      "_app/immutable/assets/_layout.DieN1qZo.css"
     ],
     "assets": [
       "_app/immutable/assets/metamorphous-latin-ext-400-normal.D08n4oeX.woff2",
@@ -526,6 +520,17 @@
     "isEntry": true,
     "imports": [
       "_bridge.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/calls/[call]/parts/[part]/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/calls/_call_/parts/_part_/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/calls/_call_/parts/_part_/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/calls/[call]/parts/[part]/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_bridge.js",
+      "_campaign.js"
     ]
   },
   "src/routes/api/campaigns/[id]/characters/[character]/+server.ts": {
@@ -597,6 +602,17 @@
       "_exports.js",
       "_campaign.js",
       "_bridge.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/permission/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/permission/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/permission/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/permission/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_bridge.js",
+      "_campaign.js"
     ]
   },
   "src/routes/api/campaigns/[id]/timeline/+server.ts": {
@@ -731,11 +747,10 @@
       "_navigation.js",
       "_Dialog.js",
       "_schema.js",
-      "_save.js",
+      "_summary.js",
       "_Field.js",
       "_Textarea.js",
-      "_TextInput.js",
-      "_summary.js"
+      "_TextInput.js"
     ]
   },
   "src/routes/campaigns/[id]/play/+page.server.ts": {
@@ -761,8 +776,8 @@
       "_server2.js",
       "_paths2.js",
       "_DmBadge.js",
-      "_Badge.js",
       "_Button.js",
+      "_Badge.js",
       "_Textarea.js",
       "_useQueryClient.js"
     ]

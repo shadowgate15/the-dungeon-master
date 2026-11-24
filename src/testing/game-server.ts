@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net'
 import { Readable } from 'node:stream'
 import { BRIDGE_API, createBridgeApi } from '../lib/server/bridge/api'
 import { createChannels } from '../lib/server/bridge/channels'
+import { createPermissions } from '../lib/server/bridge/permissions'
 import { createSessions } from '../lib/server/bridge/sessions'
 import { createCampaignLibrary } from '../lib/server/campaign/library'
 import { createLiveUpdates, LIVE_STREAM } from '../lib/server/live'
@@ -23,8 +24,9 @@ export async function startTestGameServer({ home }: { home: string }) {
   const host = createToolHost({ library, tools: gameTools, publish: live.publish })
   const play = createPlay({ library, channels, publish: live.publish })
   openSessionsOnAttach(sessions, play)
+  const permissions = createPermissions({ channels, sessions, publish: live.publish })
   const token = 'test-token'
-  const api = createBridgeApi({ library, host, channels, sessions, token })
+  const api = createBridgeApi({ library, host, channels, sessions, permissions, token })
   const seen: string[] = []
 
   const server = http.createServer(async (req, res) => {
@@ -61,6 +63,7 @@ export async function startTestGameServer({ home }: { home: string }) {
     sessions,
     host,
     play,
+    permissions,
 
     /** Requests the server has received, as `METHOD /path`. */
     requests: () => [...seen],
