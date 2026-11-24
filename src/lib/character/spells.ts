@@ -41,7 +41,7 @@ export interface SpellOption {
 export function classSpellOptions(
   rules: Pick<WizardRules, 'spells'>,
   classSlug: string | null,
-  level: 0 | 1
+  level: number
 ): SpellOption[] {
   if (!classSlug) return []
   return rules.spells

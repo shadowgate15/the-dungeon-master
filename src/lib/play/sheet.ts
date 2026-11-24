@@ -1,3 +1,4 @@
+import type { LevelUpOffer } from '#lib/character/level-up.ts'
 import type { AbilityKey } from '#lib/rules/derive-stats.ts'
 
 /**
@@ -30,4 +31,6 @@ export interface PlaySheet {
   features: { slug: string; name: string; spent: number }[]
   inventory: { name: string; quantity: number; equipped: boolean }[]
   coin: { cp: number; sp: number; ep: number; gp: number; pp: number }
+  /** The level-up the DM awarded and the Player has not taken; null hides the control. */
+  levelUp: LevelUpOffer | null
 }

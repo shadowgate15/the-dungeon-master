@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { MAX_LEVEL } from '#lib/character/level-up.ts'
 import { formatClock } from '#lib/play/clock.ts'
 import type { Queryable } from '../db/connect'
 import { equippable, isBodyArmor } from '#lib/rules/armor-class.ts'
@@ -356,6 +357,41 @@ export const restTools = [
           kind: 'coin',
           summary: `${who.name}: ${change}`,
           data: { character: who.handle, change: input.change, coin: coin satisfies Coin }
+        }
+      }
+    }
+  }),
+
+  writeTool({
+    name: 'award_level',
+    description:
+      'Award a milestone level to Characters. Each Player then takes the level-up in the UI, choosing any new spells; code applies HP, slots and features. You cannot level a Character yourself.',
+    input: z.object({
+      characters: z.array(z.string().min(1)).min(1).describe('char:… handles')
+    }),
+    activity: 'DM awards a level',
+    run: ({ db }, input) => {
+      const awarded = restingCharacters(db, input.characters).map((c) => {
+        const levels = c.detail.levelsAwarded + 1
+        if (c.detail.level + levels > MAX_LEVEL) {
+          throw new ToolError(
+            'max_level',
+            `${c.name} is already at level ${MAX_LEVEL}`,
+            'Leave them out of the award'
+          )
+        }
+        db.update(character).set({ levelsAwarded: levels }).where(eq(character.id, c.id)).run()
+        return { character: c.handle, to_take: levels, next_level: c.detail.level + 1 }
+      })
+      return {
+        result: {
+          awarded,
+          next: 'The Player levels up in the UI; you hear of it as a change'
+        },
+        event: {
+          kind: 'level_awarded',
+          summary: `Level awarded to ${awarded.map((a) => a.character).join(', ')}`,
+          data: { awarded }
         }
       }
     }

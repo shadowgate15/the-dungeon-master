@@ -240,3 +240,63 @@ describe('inventory', () => {
     expect(sheet('Wren').coin).toEqual({ ...start, gp: start.gp + 5 })
   })
 })
+
+describe('milestone levels', () => {
+  const party = () => library.party(campaignId)
+
+  it('refuses a level-up until the DM awards one, then takes exactly one', () => {
+    const id = addWren()
+    expect(sheet('Wren').levelUp).toBeNull()
+    expect(() => party().levelUp(id, {})).toThrow(/No level to take/)
+
+    ok('award_level', { characters: ['char:wren'] })
+    expect(host.events(folder).at(-1)).toMatchObject({ kind: 'level_awarded' })
+    expect(sheet('Wren').levelUp).toEqual({
+      level: 2,
+      cantrips: { count: 0, options: [] },
+      spells: { count: 0, options: [] }
+    })
+    ok('damage', { target: 'char:wren', amount: 3, type: 'slashing' })
+
+    party().levelUp(id, {})
+
+    expect(sheet('Wren').headline).toBe('Human Fighter 2')
+    // d10 average 6 + Con 2 = 8 more HP, at most and now.
+    expect(sheet('Wren').hp).toEqual({ current: 17, max: 20, temp: 0 })
+    expect(sheet('Wren').hitDice).toEqual({ die: 10, total: 2, spent: 0 })
+    expect(sheet('Wren').features.map((f) => f.slug)).toContain('action-surge-1-use')
+    expect(sheet('Wren').levelUp).toBeNull()
+    expect(host.events(folder).at(-1)).toMatchObject({
+      tool: 'player',
+      kind: 'change',
+      summary: 'the Player levelled Wren up to level 2'
+    })
+    expect(() => party().levelUp(id, {})).toThrow(/No level to take/)
+  })
+
+  it('has a Wizard add two spells to the spellbook from the class list, up to the highest slot', () => {
+    const id = addIlyra()
+    ok('award_level', { characters: ['char:ilyra'] })
+    const offer = sheet('Ilyra').levelUp!
+    expect(offer.cantrips.count).toBe(0)
+    expect(offer.spells.count).toBe(2)
+    const slugs = offer.spells.options.map((o) => o.slug)
+    expect(slugs).toContain('sleep')
+    expect(slugs).not.toContain('cure-wounds')
+    expect(slugs).not.toContain('misty-step')
+    // Already in the spellbook.
+    expect(slugs).not.toContain('alarm')
+
+    expect(() => party().levelUp(id, { spells: ['sleep'] })).toThrow(/2 spells/)
+    expect(() => party().levelUp(id, { spells: ['sleep', 'cure-wounds'] })).toThrow(/cure-wounds/)
+    party().levelUp(id, { spells: ['sleep', 'shield'] })
+
+    expect(sheet('Ilyra').spellSlots).toEqual([{ level: 1, max: 3, spent: 0 }])
+    expect(
+      library
+        .party(campaignId)
+        .character(id)
+        .character.spells.map((s) => s.spell)
+    ).toEqual(expect.arrayContaining(['sleep', 'shield']))
+  })
+})

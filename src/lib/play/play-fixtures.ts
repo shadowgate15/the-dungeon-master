@@ -15,8 +15,23 @@ const base = {
   features: [],
   inventory: [],
   hitDice: null,
-  coin: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 }
+  coin: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
+  levelUp: null
 } satisfies Partial<PlaySheet>
+
+/** A level the DM awarded with two spells to pick, as a Wizard's spellbook asks. */
+export const levelUpOffer: NonNullable<PlaySheet['levelUp']> = {
+  level: 2,
+  cantrips: { count: 0, options: [] },
+  spells: {
+    count: 2,
+    options: [
+      { slug: 'magic-missile', name: 'Magic Missile' },
+      { slug: 'shield', name: 'Shield' },
+      { slug: 'sleep', name: 'Sleep' }
+    ]
+  }
+}
 
 export const sheets: PlaySheet[] = [
   {
@@ -213,6 +228,27 @@ export const rollEntries: TimelineEntry[] = [
 ]
 
 /** An attack Call mid-sequence: Wren has rolled to hit and rolls damage next. */
+/** A short rest's Call: Wren has two of three d10 Hit Dice left to spend. */
+export const hitDiceCall: OpenCall = {
+  id: 'call-3',
+  kind: 'hit_dice',
+  text: 'How many Hit Dice do you spend?',
+  choices: [],
+  parts: [
+    {
+      id: 'part-5',
+      character: 'Wren',
+      player: 'player',
+      label: 'Hit Dice',
+      reason: null,
+      mode: 'normal',
+      answered: false,
+      next: null,
+      hitDice: { die: 10, available: 2 }
+    }
+  ]
+}
+
 export const attackCall: OpenCall = {
   id: 'c3',
   kind: 'roll_sequence',

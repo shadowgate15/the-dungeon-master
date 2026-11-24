@@ -9,7 +9,7 @@ import { loadWizardRules } from '../character/wizard-rules'
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : `${n}`)
 
-function toPlaySheet(c: CharacterDetail): PlaySheet {
+function toPlaySheet(c: CharacterDetail, levelUp: PlaySheet['levelUp']): PlaySheet {
   const rules = loadWizardRules()
   // The summary's equipment is the starting kit; the sheet shows what the Character carries now.
   const { stats, names, resolved } = buildSummary(rules, {
@@ -58,7 +58,8 @@ function toPlaySheet(c: CharacterDetail): PlaySheet {
       quantity: i.quantity,
       equipped: i.equipped ?? false
     })),
-    coin: c.coin
+    coin: c.coin,
+    levelUp
   }
 }
 
@@ -66,5 +67,9 @@ function toPlaySheet(c: CharacterDetail): PlaySheet {
 export function playSheets(party: Party): PlaySheet[] {
   return party
     .list()
-    .flatMap((m) => (m.kind === 'character' ? [toPlaySheet(party.character(m.id).character)] : []))
+    .flatMap((m) =>
+      m.kind === 'character'
+        ? [toPlaySheet(party.character(m.id).character, party.levelUpOffer(m.id))]
+        : []
+    )
 }

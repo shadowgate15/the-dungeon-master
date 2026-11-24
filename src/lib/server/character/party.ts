@@ -1,11 +1,18 @@
-import { asc, eq, sql } from 'drizzle-orm'
+import { asc, eq, inArray, sql } from 'drizzle-orm'
 import { changedDraftFields, emptyDraft, type CharacterDraft } from '#lib/character/draft.ts'
 import { detailToDraft } from '#lib/character/edit.ts'
 import { SOLO_PLAYER, type CharacterStatus } from '#lib/character/enums.ts'
+import {
+  levelUpIssue,
+  levelUpOffer,
+  MAX_LEVEL,
+  type LevelUpOffer
+} from '#lib/character/level-up.ts'
 import { tryDraftToCharacterInput } from '#lib/character/save.ts'
+import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
 import { STEPS, type StepId } from '#lib/character/steps.ts'
 import type { Database } from '../db/connect'
-import { campaign, character, characterDraft } from '../db/schema'
+import { campaign, character, characterDraft, characterSpell, spell } from '../db/schema'
 import { characterHandle } from '../play/core-block'
 import { logChange } from '../play/notices'
 import {
@@ -89,6 +96,28 @@ export function createParty(db: Database, now: () => number = Date.now) {
     const row = db.select().from(character).where(eq(character.id, id)).get()!
     const handle = characterHandle(row.name)
     logChange(db, { handle, version: row.version, summary }, { at: now() })
+  }
+
+  function detail(id: string) {
+    const found = characters.get(id)
+    if (!found) throw new CharacterNotFoundError('Character not found')
+    return found
+  }
+
+  function maxHp(c: CharacterDetail): number {
+    const { stats } = buildSummary(rules, { ...detailToSummaryData(c), equipment: c.inventory })
+    return stats.hitPoints.status === 'ok' ? stats.hitPoints.value : c.currentHp
+  }
+
+  /** The level-up the DM awarded and the Character has not taken, or null. */
+  function offerFor(c: CharacterDetail): LevelUpOffer | null {
+    if (c.levelsAwarded <= 0 || c.level >= MAX_LEVEL) return null
+    return levelUpOffer(
+      rules,
+      c.classSlug,
+      c.level + 1,
+      c.spells.map((s) => s.spell)
+    )
   }
 
   /** The draft as the service's input; refused while any step is not valid. */
@@ -197,6 +226,58 @@ export function createParty(db: Database, now: () => number = Date.now) {
           .where(eq(character.id, id))
           .run()
         noteChange(id, `the Player edited ${updated.name}`)
+        return updated
+      })
+    },
+
+    /** The level-up waiting for the Player: what one more level asks them to pick, or null. */
+    levelUpOffer(id: string): LevelUpOffer | null {
+      return offerFor(detail(id))
+    },
+
+    /**
+     * Takes one level the DM awarded (`award_level`): the level rises, HP rises with the new
+     * maximum, and the picked cantrips and spells are learned. Play state is kept. Refused without
+     * an awarded level, or when the picks do not fit the offer.
+     */
+    levelUp(id: string, picks: { cantrips?: string[]; spells?: string[] }): Character {
+      return db.transaction(() => {
+        const before = detail(id)
+        const offer = offerFor(before)
+        if (!offer) {
+          throw new CharacterValidationError('No level to take: the DM awards levels')
+        }
+        const issue = levelUpIssue(offer, picks)
+        if (issue) throw new CharacterValidationError(issue)
+        db.update(character)
+          .set({
+            level: offer.level,
+            levelsAwarded: before.levelsAwarded - 1,
+            version: sql`${character.version} + 1`,
+            updatedAt: now()
+          })
+          .where(eq(character.id, id))
+          .run()
+        const learned = [...(picks.cantrips ?? []), ...(picks.spells ?? [])]
+        if (learned.length > 0) {
+          const ids = db
+            .select({ id: spell.id })
+            .from(spell)
+            .where(inArray(spell.slug, learned))
+            .all()
+          db.insert(characterSpell)
+            .values(ids.map((s) => ({ characterId: id, spellId: s.id, source: 'class' as const })))
+            .run()
+        }
+        const after = detail(id)
+        const gained = Math.max(0, maxHp(after) - maxHp(before))
+        const updated = db
+          .update(character)
+          .set({ currentHp: before.currentHp > 0 ? before.currentHp + gained : 0 })
+          .where(eq(character.id, id))
+          .returning()
+          .get()
+        noteChange(id, `the Player levelled ${updated.name} up to level ${offer.level}`)
         return updated
       })
     }
