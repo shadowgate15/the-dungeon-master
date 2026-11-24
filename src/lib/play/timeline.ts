@@ -4,8 +4,11 @@ import type { OpenCall, RollMode } from './call'
 export type TimelineEntry =
   /** What a Player said one Character does, once its Floor closed. */
   | { type: 'declaration'; id: string; character: string; player: string; text: string }
-  /** The DM's Narration; `voice` names the NPC speaking, if any. */
-  | { type: 'narration'; id: string; text: string; voice: string | null }
+  /**
+   * The DM's Narration; `voice` names the NPC speaking, if any. `recap` marks the opening recap
+   * of a sitting, shown as "Previously".
+   */
+  | { type: 'narration'; id: string; text: string; voice: string | null; recap?: true }
   /**
    * One roll of a Call, in one line: who, what, the d20s (both on advantage, with the reason),
    * the modifier, the total and the outcome. Never the DC.

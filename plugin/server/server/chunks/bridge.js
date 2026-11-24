@@ -1,7 +1,7 @@
 import { $t as DUNGEON_MASTER_VERSION, A as entityAlias, Bt as inArray, F as NPC_STATUSES, Ft as asc, Gt as or, Ht as isNull, It as desc, Kt as sql, Lt as and, M as pageRevision, N as worldLink, O as belief, P as ENTITY_TYPES, Pt as SOLO_PLAYER, Qt as DUNGEON_MASTER_PORT, Rt as eq, Ut as like, Vt as isNotNull, Wt as ne, Zt as DUNGEON_MASTER_HOME, _ as characterDraft, a as userStateDir, h as character, j as fact, k as entity, m as campaign, w as event } from "./seed.js";
-import { A as PLUGIN_NAME, B as ClockBackwardsError, C as nextEventId, D as callInput, F as writeTool, G as present, H as advanceClock, J as normalizeName, K as scenePlace, M as creationTool, N as expectVersion, O as callResultEvent, P as readTool, Q as SESSION_LIVE_MESSAGE, S as logEvent, U as characterRefs, W as currentMinute, X as formatClock, Y as slug$1, Z as parseClock, _ as returnStrandedDrafts, b as currentStamp, c as CampaignNotFoundError, d as addConversationLine, f as characterHolders, i as sessions, j as ToolError, k as openCall, l as NotACampaignFolderError, n as library, p as charactersInScene, q as isNearName, r as live, w as setAwaitingNarration, x as logActivity, y as createDmChannels, z as loadWizardRules } from "./campaign.js";
+import { $ as slug$1, C as createDmChannels, D as nextEventId, E as logEvent, F as ToolError, I as creationTool, J as currentMinute, K as advanceClock, L as expectVersion, M as callResultEvent, N as openCall, O as setAwaitingNarration, P as PLUGIN_NAME, Q as normalizeName, R as readTool, T as logActivity, U as loadWizardRules, W as ClockBackwardsError, X as scenePlace, Y as present, Z as isNearName, _ as charactersInScene, c as CampaignNotFoundError, d as addConversationLine, et as formatClock, f as closeSession, g as characterHolders, h as sessionsView, i as sessions, j as callInput, l as NotACampaignFolderError, m as indexNarration, n as library, nt as SESSION_LIVE_MESSAGE, p as history, q as characterRefs, r as live, tt as parseClock, w as currentStamp, x as returnStrandedDrafts, z as writeTool } from "./campaign.js";
 import { a as missingSeedFields, n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
-import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
+import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { d as reconcile, j as rollTotals, l as changedDraftFields, u as emptyDraft, w as arrangementProblem, y as lengthIssue } from "./summary.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -1241,16 +1241,20 @@ function speaker({ db }, handle) {
 /** Telling the Players what happens. */
 var narrationTools = [writeTool({
 	name: "narrate",
-	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine.",
+	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine. Pass recap: true for the opening recap of a sitting: it shows as \"Previously\", answers nothing and is left out of later summaries.",
 	input: object({
 		text: string().trim().min(1),
 		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks"),
-		call: callInput.optional().describe("Ask the Players: inline {kind: \"check\", character, skill | save, tier, adv?, reason} (or a list of them, one roll per Character) or {kind: \"question\", text, choices?}. A Call ends your turn; its call_result wakes you.")
+		call: callInput.optional().describe("Ask the Players: inline {kind: \"check\", character, skill | save, tier, adv?, reason} (or a list of them, one roll per Character) or {kind: \"question\", text, choices?}. A Call ends your turn; its call_result wakes you."),
+		recap: boolean().optional().describe("The opening recap of a sitting")
 	}),
 	activity: null,
-	run: (ctx, { text, voice, call }) => {
+	run: (ctx, { text, voice, call, recap = false }) => {
 		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
-		setAwaitingNarration(ctx.db, null);
+		if (!recap) {
+			setAwaitingNarration(ctx.db, null);
+			indexNarration(ctx.db, ctx.stamp.eventId, text);
+		}
 		const callId = call === void 0 ? null : openCall(ctx.db, call, {
 			at: ctx.now,
 			openedBy: ctx.stamp.eventId
@@ -1268,7 +1272,8 @@ var narrationTools = [writeTool({
 					text,
 					voice: npc?.handle ?? null,
 					voiceName: npc?.name ?? null,
-					call: callId
+					call: callId,
+					...recap ? { recap: true } : {}
 				}
 			}
 		};
@@ -1502,6 +1507,56 @@ var sceneTools = [
 				}
 			};
 		}
+	})
+];
+// src/lib/server/tools/session-tools.ts
+/** The most words a Session summary may have (the target is about 250). */
+var SUMMARY_WORDS = 300;
+/** Continuity between sittings: Session summaries and the Event log. */
+var sessionTools = [
+	writeTool({
+		name: "close_session",
+		description: "Close a Session with its summary: about 250 words or fewer of Player-safe past-tense prose about what the Characters did and learned (only what they know), plus open threads (unresolved hooks the Characters know about). Closes the current Session; pass session (a number) for the catch-up close of an older unclosed one. A Session with no Narration closes with no summary.",
+		input: object({
+			summary: string().trim().min(1).refine((s) => s.split(/\s+/).length <= SUMMARY_WORDS, { message: `Keep the summary to about 250 words (at most ${SUMMARY_WORDS})` }),
+			threads: array(string().trim().min(1)).max(12),
+			session: number().int().positive().optional().describe("Session number, for a catch-up")
+		}),
+		activity: "DM writes the Session summary",
+		run: (ctx, input) => {
+			const closed = closeSession(ctx.db, {
+				...input,
+				at: ctx.now
+			});
+			return {
+				result: closed,
+				event: {
+					kind: "session_closed",
+					summary: `Session ${closed.session} closed`,
+					data: closed
+				}
+			};
+		}
+	}),
+	readTool({
+		name: "sessions",
+		description: "Session summaries and open threads, newest first (last limits how many). Also says which Session is current, which older ones are unclosed (catch-up close them first) and whether a recap is due this sitting.",
+		input: object({ last: number().int().positive().optional() }),
+		activity: "DM remembers earlier sittings",
+		run: ({ db }, { last }) => sessionsView(db, last)
+	}),
+	readTool({
+		name: "history",
+		description: "The Event log, newest first. Filter by about (a handle the Event mentions), session (number), since (only Events after this Event id) and query (full-text over Narration). Includes DM-only Events, so never show them to the Players as they are. Recaps are left out.",
+		input: object({
+			about: string().min(1).optional(),
+			session: number().int().positive().optional(),
+			since: number().int().nonnegative().optional(),
+			query: string().trim().min(1).optional(),
+			limit: number().int().positive().max(200).optional()
+		}),
+		activity: "DM looks back over the story",
+		run: ({ db }, input) => ({ events: history(db, input) })
 	})
 ];
 // src/lib/server/tools/world-tools.ts
@@ -1757,7 +1812,8 @@ var gameTools = [
 	...worldTools,
 	...knowledgeTools,
 	...narrationTools,
-	...sceneTools
+	...sceneTools,
+	...sessionTools
 ];
 // src/lib/server/dice.ts
 var MAX_COUNT = 100;
@@ -2126,9 +2182,22 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 			});
 			return message;
 		},
-		/** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */
-		openSession(campaignId) {
-			return library.record(campaignId).openSession();
+		/**
+		* The Player presses End Session: the DM gets one `end_session` event and closes the sitting
+		* (closing beat, summary, Arc review, lint) with the ending-a-sitting skill.
+		*/
+		endSession(campaignId) {
+			channels.send(folderOf(campaignId), {
+				content: "The Player pressed End Session. Close the sitting.",
+				meta: { kind: "end_session" }
+			});
+		},
+		/**
+		* Opens the Campaign's Session as a DM attaches through `bridge`; a reconnecting bridge keeps
+		* its own Session.
+		*/
+		openSession(campaignId, bridge) {
+			return library.record(campaignId).openSession(bridge);
 		},
 		/**
 		* The Stop hook asks whether the DM may end its turn. It may not while a closed Floor awaits
@@ -2160,8 +2229,8 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 }
 /** Opens a Campaign's Session whenever a DM attaches to it; returns the unsubscribe. */
 function openSessionsOnAttach(sessions, play) {
-	return sessions.onChange(({ campaign, attached }) => {
-		if (attached) play.openSession(campaign);
+	return sessions.onChange(({ campaign, attached, session }) => {
+		if (attached) play.openSession(campaign, session);
 	});
 }
 var json = (body, status = 200) => new Response(JSON.stringify(body), {

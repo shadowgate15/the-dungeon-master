@@ -380,6 +380,8 @@ export const session = sqliteTable('session', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   number: integer('number').notNull().unique(),
+  /** The bridge (one per Claude Code session) whose attach opened it; a reconnect reuses it. */
+  bridge: text('bridge'),
   startedAt: integer('started_at').notNull(),
   closedAt: integer('closed_at'),
   summary: text('summary'),

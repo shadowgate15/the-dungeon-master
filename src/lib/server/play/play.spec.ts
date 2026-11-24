@@ -232,6 +232,15 @@ describe('DM activity', () => {
   })
 })
 
+describe('End Session', () => {
+  it('wakes the DM with one end_session event and leaves awaiting Narration alone', () => {
+    play.endSession(campaignId)
+
+    expect(heard).toEqual([{ content: expect.any(String), meta: { kind: 'end_session' } }])
+    expect(play.timeline(campaignId).awaitingSince).toBeNull()
+  })
+})
+
 describe('spotlight requests', () => {
   it('asks the DM to cut to a Character elsewhere, without awaiting Narration', () => {
     addFighter('Wren')

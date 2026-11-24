@@ -17,10 +17,12 @@
     createSceneQuery,
     createJournalQuery,
     createTimelineQuery,
+    endSession,
     floorActions,
     FloorChangeError
   } from '#lib/play/floor-client.ts'
   import Alert from '#lib/ui/Alert.svelte'
+  import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
 
   let { data } = $props()
@@ -80,6 +82,19 @@
   const actors = $derived(sheets.filter((s) => s.canAct && inScene.has(s.id)))
   const acting = $derived(actors.find((s) => s.id === picked) ?? actors[0] ?? null)
   const archived = $derived(data.campaign.status === 'archived')
+  const attached = $derived(sessions.data.includes(data.campaign.id))
+
+  // Ending lasts until the DM leaves; the next sitting starts with the button live again.
+  let ending = $state(false)
+  $effect(() => {
+    if (!attached) ending = false
+  })
+  function end() {
+    attempt(async () => {
+      await endSession(data.campaign.id)
+      ending = true
+    })
+  }
 
   let problem = $state<string | null>(null)
   async function attempt(change: () => Promise<unknown>) {
@@ -100,10 +115,13 @@
     <Link href={resolve('/campaigns/[id]', { id: data.campaign.id })} class="text-sm"
       >{data.campaign.name}</Link
     >
-    <DmBadge size="sm" attached={sessions.data.includes(data.campaign.id)} />
+    <DmBadge size="sm" {attached} />
     <Link
       href={resolve('/campaigns/[id]/journal', { id: data.campaign.id })}
-      class="ml-auto text-sm">Journal</Link
+      class="ml-auto text-sm">Journal and Session history</Link
+    >
+    <Button size="sm" variant="secondary" disabled={!attached || archived || ending} onclick={end}
+      >{ending ? 'Ending the session…' : 'End Session'}</Button
     >
   </header>
 

@@ -1,5 +1,5 @@
 import { _ as attr, a as bind_props, c as ensure_array_like, f as spread_props, r as attributes, s as element, t as attr_class, v as clsx, x as escape_html } from "./server2.js";
-import { c as seedQueryKey, n as conversationQueryKey, r as draftQueryKey, u as createQuery } from "./messages.js";
+import { c as seedQueryKey, d as createQuery, n as conversationQueryKey, r as draftQueryKey } from "./messages.js";
 import { t as useQueryClient } from "./useQueryClient.js";
 import { t as Button } from "./Button.js";
 import { t as Textarea } from "./Textarea.js";

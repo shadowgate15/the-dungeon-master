@@ -12,7 +12,10 @@ The SessionStart hook has given you the core block: the Scene, the Party, the NP
    - `party_empty`: point the Player, with `reply`, to the Party step in the web UI and offer help with a Character, then wait.
    - `ready`: tell the Player, with `reply`, that they can press Begin when the Party is ready, then wait.
    - `begun`: read the Campaign Seed with `seed` and go on to step 2.
-2. If anything awaits Narration (a closed Floor or Call result that arrived before you were here), answer it now with `narrate`.
-3. Otherwise, set the scene from the core block in a short Narration and hand the Floor to the Players.
+2. Call `sessions` with `last: 2`. It says which Session is current, which older ones are `unclosed` and whether a recap is due.
+3. **Catch-up close.** For each unclosed Session (a sitting that stopped without End Session), read it with `history` (`session` set to its number), then call `close_session(summary, threads, session)`. Write the summary exactly as ending-a-sitting says: about 250 words or fewer, past tense, Player-safe, with open threads. Do this silently; the Player sees only the summary in their Session history.
+4. **Recap.** If `recap_due` is true, `narrate` a short recap with `recap: true`: a few sentences freshly voiced from the last one or two summaries and their threads, and the core block. Never draw on the World layer (Pages, Facts, the Arc) for it, and never read the stored summary out as it is. End by handing the Floor back. There is no recap on the first sitting after Begin; `recap_due` is false then. A recap answers nothing.
+5. If anything awaits Narration (a closed Floor or Call result that arrived before you were here), answer it now with `narrate`, after the recap.
+6. Otherwise, if you gave no recap, set the scene from the core block in a short Narration and hand the Floor to the Players.
 
 Do not invent anything the core block or the tools do not give you. Keep the opening brief: the Players came to play.

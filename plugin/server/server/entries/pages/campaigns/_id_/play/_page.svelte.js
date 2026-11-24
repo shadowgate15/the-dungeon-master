@@ -4,8 +4,8 @@ import "../../../../../chunks/paths.js";
 import { n as Badge, r as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
 import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
-import { a as createSceneQuery, c as Journal, i as createJournalQuery, n as callActions, o as createTimelineQuery, r as createFloorQuery, s as floorActions, t as FloorChangeError } from "../../../../../chunks/floor-client.js";
-import { o as permissionQueryKey, u as createQuery } from "../../../../../chunks/messages.js";
+import { a as createSceneQuery, c as endSession, i as createJournalQuery, l as floorActions, n as callActions, r as createFloorQuery, s as createTimelineQuery, t as FloorChangeError, u as Journal } from "../../../../../chunks/floor-client.js";
+import { d as createQuery, o as permissionQueryKey } from "../../../../../chunks/messages.js";
 import { t as useQueryClient } from "../../../../../chunks/useQueryClient.js";
 import { t as Link } from "../../../../../chunks/Link.js";
 // src/lib/play/CallCard.svelte
@@ -458,6 +458,9 @@ function Timeline($$renderer, $$props) {
 				let entry = each_array_1[$$index_1];
 				if (entry.type === "narration") {
 					$$renderer.push(`<!--[0--><li class="max-w-[85%] self-start rounded-panel bg-raised px-3 py-2 text-sm">`);
+					if (entry.recap) $$renderer.push(`<!--[0--><span class="block text-xs font-semibold text-muted uppercase">Previously</span>`);
+					else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--> `);
 					if (entry.voice) $$renderer.push(`<!--[0--><span class="block text-xs font-semibold text-primary">${escape_html(entry.voice)}</span>`);
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
@@ -563,6 +566,14 @@ function _page($$renderer, $$props) {
 		const actors = derived(() => sheets().filter((s) => s.canAct && inScene().has(s.id)));
 		const acting = derived(() => actors().find((s) => s.id === picked) ?? actors()[0] ?? null);
 		const archived = derived(() => data.campaign.status === "archived");
+		const attached = derived(() => sessions.data.includes(data.campaign.id));
+		let ending = false;
+		function end() {
+			attempt(async () => {
+				await endSession(data.campaign.id);
+				ending = true;
+			});
+		}
 		let problem = null;
 		async function attempt(change) {
 			problem = null;
@@ -590,14 +601,25 @@ function _page($$renderer, $$props) {
 		$$renderer.push(`<!----> `);
 		DmBadge($$renderer, {
 			size: "sm",
-			attached: sessions.data.includes(data.campaign.id)
+			attached: attached()
 		});
 		$$renderer.push(`<!----> `);
 		Link($$renderer, {
 			href: resolve("/campaigns/[id]/journal", { id: data.campaign.id }),
 			class: "ml-auto text-sm",
 			children: ($$renderer) => {
-				$$renderer.push(`<!---->Journal`);
+				$$renderer.push(`<!---->Journal and Session history`);
+			},
+			$$slots: { default: true }
+		});
+		$$renderer.push(`<!----> `);
+		Button($$renderer, {
+			size: "sm",
+			variant: "secondary",
+			disabled: !attached() || archived() || ending,
+			onclick: end,
+			children: ($$renderer) => {
+				$$renderer.push(`<!---->${escape_html(ending ? "Ending the session…" : "End Session")}`);
 			},
 			$$slots: { default: true }
 		});
