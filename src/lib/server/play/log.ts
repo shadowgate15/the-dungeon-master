@@ -3,6 +3,7 @@ import type { Timeline, TimelineEntry } from '#lib/play/timeline.ts'
 import type { Queryable } from '../db/connect'
 import type { Stamp } from '../tools/contract'
 import { activityLine, campaign, event, session } from '../db/schema'
+import { openCallView } from './calls'
 
 export type { Stamp }
 
@@ -95,7 +96,7 @@ export function setAwaitingNarration(db: Queryable, since: number | null) {
 }
 
 /** Event kinds the Player's timeline shows. */
-const SHOWN = new Set(['declaration', 'narration'])
+const SHOWN = new Set(['declaration', 'narration', 'roll', 'answer'])
 
 /** One logged Event as a timeline entry, or null for one the timeline does not show. */
 function entryFor(e: typeof event.$inferSelect): TimelineEntry | null {
@@ -108,6 +109,30 @@ function entryFor(e: typeof event.$inferSelect): TimelineEntry | null {
       id,
       character: String(data.characterName),
       player: String(data.player),
+      text: String(data.text)
+    }
+  }
+  if (e.kind === 'roll') {
+    const mode = data.mode === 'advantage' || data.mode === 'disadvantage' ? data.mode : 'normal'
+    return {
+      type: 'roll',
+      id,
+      character: String(data.characterName),
+      what: String(data.what),
+      dice: (data.dice as number[]).map(Number),
+      modifier: Number(data.modifier),
+      total: Number(data.total),
+      outcome: data.success ? 'success' : 'failure',
+      mode,
+      reason: mode === 'normal' ? null : String(data.reason ?? '')
+    }
+  }
+  if (e.kind === 'answer') {
+    return {
+      type: 'answer',
+      id,
+      player: String(data.player),
+      question: String(data.question ?? ''),
       text: String(data.text)
     }
   }
@@ -140,5 +165,5 @@ export function timeline(db: Queryable): Timeline {
     if (entry) entries.push(entry)
   }
   flushUntil(Infinity)
-  return { entries, awaitingSince: awaitingNarrationSince(db) }
+  return { entries, awaitingSince: awaitingNarrationSince(db), call: openCallView(db) }
 }

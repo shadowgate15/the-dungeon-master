@@ -4,6 +4,7 @@ import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import type { OpenFloor, PendingDeclaration } from '#lib/play/floor.ts'
 import type { Database } from '../db/connect'
 import { campaign, character, declaration, floor } from '../db/schema'
+import { withdrawOpenCall } from '../play/calls'
 import { awaitingNarrationSince, logEvent, setAwaitingNarration } from '../play/log'
 
 /** The Character can't put a Declaration on the Floor (unknown, dead or departed, not theirs). */
@@ -18,7 +19,14 @@ export class DmBusyError extends Error {}
 /** What Done did: closed the Floor (with what was on it), or recorded the Player as waiting. */
 export type DoneOutcome =
   | { closed: false }
-  | { closed: true; floor: string; players: string[]; declarations: PendingDeclaration[] }
+  | {
+      closed: true
+      floor: string
+      players: string[]
+      declarations: PendingDeclaration[]
+      /** The open Call the Declarations withdrew, if any. */
+      withdrawnCall: string | null
+    }
 
 /** Declarations are a sentence or a short paragraph, not an essay. */
 export const DECLARATION_MAX = 2000
@@ -150,8 +158,8 @@ export function createFloor(db: Database, now: () => number = Date.now) {
 
     /**
      * The Player presses Done. Once every Player at the table has, the Floor closes in one
-     * transaction: its Declarations are logged (stamped with the Session) in send order and the
-     * Campaign awaits Narration. An empty Floor closes too, handing the DM the initiative. Refused
+     * transaction: its Declarations are logged (stamped with the Session) in send order, they
+     * withdraw any open Call, and the Campaign awaits Narration. An empty Floor closes too, handing the DM the initiative. Refused
      * while the DM is still answering the last Floor.
      */
     done(player: string = SOLO_PLAYER): DoneOutcome {
@@ -191,8 +199,10 @@ export function createFloor(db: Database, now: () => number = Date.now) {
             { at }
           )
         }
+        // Declarations answer the moment instead of the Call: the Players chose not to roll.
+        const withdrawnCall = declarations.length > 0 ? withdrawOpenCall(db, at) : null
         setAwaitingNarration(db, at)
-        return { closed: true, floor: floorId, players: done, declarations }
+        return { closed: true, floor: floorId, players: done, declarations, withdrawnCall }
       })
     },
 

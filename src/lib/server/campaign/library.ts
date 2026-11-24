@@ -5,6 +5,7 @@ import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import { campaign } from '../db/schema'
 import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
+import { createCalls, type Calls } from '../play/calls'
 import { openSession, timeline } from '../play/log'
 import { seedRulesData } from '../rules/seed'
 import { campaignSeedCard, parseCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
@@ -180,6 +181,11 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
     /** The Campaign's open Floor and the Declarations on it. */
     floor(id: string): Floor {
       return createFloor(database(find(id).folder), now)
+    },
+
+    /** The Campaign's Calls, as the Players roll and answer them. */
+    calls(id: string): Calls {
+      return createCalls(database(find(id).folder), now)
     },
 
     /** The Campaign's record of play: the Player's timeline and its Sessions. */
