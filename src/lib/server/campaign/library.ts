@@ -6,7 +6,9 @@ import { campaign } from '../db/schema'
 import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
 import { journal } from '../knowledge/journal'
-import { openSession, timeline } from '../play/log'
+import { coreBlock } from '../play/core-block'
+import { logChange } from '../play/notices'
+import { logEvent, openSession, timeline } from '../play/log'
 import { seedRulesData } from '../rules/seed'
 import {
   CAMPAIGN_SEED_FIELDS,
@@ -185,10 +187,15 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
       }
       const seed = parseCampaignSeed(card)
       const edited = new Set(CAMPAIGN_SEED_FIELDS.filter((f) => seed[f] !== found[f]))
-      const saved = update(id, {
-        ...seed,
-        version: found.version + 1,
-        dmSeedFields: found.dmSeedFields.filter((f) => !edited.has(f as never))
+      const saved = database(folder).transaction((tx) => {
+        const row = update(id, {
+          ...seed,
+          version: found.version + 1,
+          dmSeedFields: found.dmSeedFields.filter((f) => !edited.has(f as never))
+        })
+        const summary = 'the Player edited the Campaign Seed'
+        logChange(tx, { handle: 'campaign', version: row.version, summary }, { at: now() })
+        return row
       })
       registry.put({ id, path: folder, name: saved.name })
       return saved
@@ -220,7 +227,16 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
       return {
         timeline: () => timeline(db),
         journal: () => journal(db),
-        openSession: () => openSession(db, now())
+        openSession: () => openSession(db, now()),
+        /** The DM's core block. */
+        coreBlock: () => coreBlock({ party: createParty(db, now) }),
+        /** Logs a turn that went wrong, as the Player sees it in the timeline. */
+        turnError: (text: string) =>
+          logEvent(
+            db,
+            { tool: 'stop', kind: 'turn_error', summary: text, data: { text } },
+            { at: now() }
+          )
       }
     },
 

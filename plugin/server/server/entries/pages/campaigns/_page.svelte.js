@@ -2,7 +2,7 @@ import { ft as resolve } from "../../../chunks/internal.js";
 import { _ as attr, a as bind_props, c as ensure_array_like, o as derived, p as stringify, r as attributes, t as attr_class, v as clsx, x as escape_html } from "../../../chunks/server2.js";
 import { t as page } from "../../../chunks/state.js";
 import { i as replaceState } from "../../../chunks/navigation.js";
-import "../../../chunks/paths2.js";
+import "../../../chunks/paths.js";
 import { n as Badge, r as createSessionsQuery, t as DmBadge } from "../../../chunks/DmBadge.js";
 import { t as Link } from "../../../chunks/Link.js";
 import "../../../chunks/forms.js";

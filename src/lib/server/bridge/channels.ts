@@ -8,13 +8,18 @@ export type ChannelEvent = { content: string; meta: Record<string, string> }
 
 type Listener = (event: ChannelEvent) => void
 
+type Options = {
+  /** Rewrites each event just before it is delivered (the DM's change notices ride on it). */
+  annotate?: (folder: string, event: ChannelEvent) => ChannelEvent
+}
+
 /** The Player's answer to a permission prompt, relayed as `notifications/claude/channel/permission`. */
 export type PermissionVerdict = { request_id: string; behavior: 'allow' | 'deny' }
 
 type VerdictListener = (verdict: PermissionVerdict) => void
 
 /** Channel events per Campaign folder, delivered to the bridges listening for it. */
-export function createChannels() {
+export function createChannels({ annotate }: Options = {}) {
   const listeners = new Map<string, Set<Listener>>()
   const verdictListeners = new Map<string, Set<VerdictListener>>()
   const key = canonicalFolder
@@ -34,7 +39,10 @@ export function createChannels() {
     },
 
     send(folder: string, event: ChannelEvent) {
-      for (const listener of listeners.get(key(folder)) ?? []) listener(event)
+      const set = listeners.get(key(folder))
+      if (!set?.size) return
+      const delivered = annotate ? annotate(folder, event) : event
+      for (const listener of set) listener(delivered)
     },
 
     /** Starts listening for the verdicts the Player gives the Campaign's session; returns the unsubscribe. */

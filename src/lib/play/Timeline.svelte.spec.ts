@@ -33,6 +33,17 @@ describe('Timeline', () => {
     await expect.poll(() => items.elements().length).toBe(0)
   })
 
+  it('shows a turn that went wrong as an alert', async () => {
+    render(Timeline, {
+      entries: [{ type: 'error', id: 'e9', text: 'The DM ended its turn without a Narration.' }],
+      awaitingSince: null
+    })
+
+    await expect
+      .element(page.getByRole('alert'))
+      .toHaveTextContent('The DM ended its turn without a Narration.')
+  })
+
   it('shows the DM working on the turn as Ns / ~20s', async () => {
     render(Timeline, { entries: [], awaitingSince: Date.now() - 5_000 })
 

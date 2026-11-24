@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "87d755c0-8cbd-4883-9e65-fae1885ea099",
+  "id": "01e2a64c-29f6-44be-a22c-89c15e2218ab",
   "prevId": "9768addb-1967-4b57-89b2-2184b74f4e19",
   "tables": {
     "activity_line": {
@@ -158,20 +158,13 @@
           "notNull": false,
           "autoincrement": false
         },
-        "dm_seed_fields": {
-          "name": "dm_seed_fields",
-          "type": "text",
+        "noticed_through": {
+          "name": "noticed_through",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'[]'"
-        },
-        "begun_at": {
-          "name": "begun_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "default": 0
         }
       },
       "indexes": {},
@@ -236,6 +229,14 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'alive'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
         },
         "name": {
           "name": "name",
@@ -727,22 +728,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "dm_fields": {
-          "name": "dm_fields",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1070,51 +1055,6 @@
           "value": "source IS NULL OR source IN ('class', 'race', 'background')"
         }
       }
-    },
-    "conversation_message": {
-      "name": "conversation_message",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "author": {
-          "name": "author",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "player": {
-          "name": "player",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
     },
     "declaration": {
       "name": "declaration",

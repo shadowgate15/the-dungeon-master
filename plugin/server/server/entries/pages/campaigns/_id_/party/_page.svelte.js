@@ -1,7 +1,7 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
 import { _ as attr, a as bind_props, c as ensure_array_like, l as head, o as derived, r as attributes, t as attr_class, u as props_id, v as clsx, x as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/forms.js";
-import "../../../../../chunks/paths2.js";
+import "../../../../../chunks/paths.js";
 import { a as CreationStepper, i as Panel, n as createDraftQuery, o as Select, t as CreationPage } from "../../../../../chunks/CreationPage.js";
 import { n as Badge, r as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
 import { t as Link } from "../../../../../chunks/Link.js";
@@ -10,11 +10,10 @@ import { n as beforeNavigate, r as goto } from "../../../../../chunks/navigation
 import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
 import { t as Dialog } from "../../../../../chunks/Dialog.js";
 import { s as ABILITY_KEYS } from "../../../../../chunks/schema.js";
-import { C as methodPatch, D as rollTotal, E as rollAbilityScores, F as resolveFeatures, N as fixedEquipment, O as rollTotals, P as ownedEquipment, S as availableValues, T as pointsSpent, _ as skillsStepGroups, b as STANDARD_ARRAY, c as reconcile, d as spellsView, f as STEPS, h as groupLabel, i as LIMITS, j as equipmentGroups, k as categoryItems, l as resolverDraft, m as groupIssues, n as cappedScore, p as computeSteps, r as deriveStats, s as emptyDraft, t as tryDraftToCharacterInput, u as spellPickFlags, v as ABILITY_LABELS, w as pointCost, y as POINT_BUY } from "../../../../../chunks/save.js";
+import { A as rollTotal, C as STANDARD_ARRAY, D as pointCost, E as methodPatch, F as fixedEquipment, I as ownedEquipment, L as resolveFeatures, M as categoryItems, O as pointsSpent, P as equipmentGroups, S as POINT_BUY, T as availableValues, _ as groupIssues, a as cappedScore, b as skillsStepGroups, d as reconcile, f as resolverDraft, g as computeSteps, h as STEPS, i as tryDraftToCharacterInput, j as rollTotals, k as rollAbilityScores, m as spellsView, o as deriveStats, p as spellPickFlags, r as draftToSummaryData, s as LIMITS, t as buildSummary, u as emptyDraft, v as groupLabel, x as ABILITY_LABELS } from "../../../../../chunks/summary.js";
 import { t as Field } from "../../../../../chunks/Field.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
 import { t as TextInput } from "../../../../../chunks/TextInput.js";
-import { r as draftToSummaryData, t as buildSummary } from "../../../../../chunks/summary.js";
 // src/lib/campaign/PartyList.svelte
 function PartyList($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {

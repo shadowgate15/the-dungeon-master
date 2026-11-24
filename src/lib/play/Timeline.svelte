@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Alert from '#lib/ui/Alert.svelte'
   import { EXPECTED_TURN_SECONDS, type TimelineEntry } from './timeline'
 
   /**
@@ -63,6 +64,8 @@
         <span class="block text-xs font-semibold text-muted">{entry.character}</span>
         <span class="whitespace-pre-wrap">{entry.text}</span>
       </li>
+    {:else if entry.type === 'error'}
+      <li class="self-stretch"><Alert variant="danger">{entry.text}</Alert></li>
     {:else}
       <li class="self-start text-xs text-muted">⚙ {entry.text}</li>
     {/if}

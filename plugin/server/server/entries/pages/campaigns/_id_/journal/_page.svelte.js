@@ -1,6 +1,6 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
 import { l as head, x as escape_html } from "../../../../../chunks/server2.js";
-import "../../../../../chunks/paths2.js";
+import "../../../../../chunks/paths.js";
 import { o as Journal, r as createJournalQuery } from "../../../../../chunks/floor-client.js";
 import { t as Link } from "../../../../../chunks/Link.js";
 // src/routes/campaigns/[id]/journal/+page.svelte

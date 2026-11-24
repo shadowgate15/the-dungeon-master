@@ -1,2 +1,0 @@
-import "./internal.js";
-export {};

@@ -75,6 +75,29 @@ export function createPlay({ library, channels, publish }: Options) {
       return library.record(campaignId).openSession()
     },
 
+    /**
+     * The Stop hook asks whether the DM may end its turn. It may not while a closed Floor awaits
+     * Narration; on the second attempt (`again`) it may, and the Player's timeline shows an error.
+     */
+    stopCheck(campaignId: string, again: boolean): { block: boolean; reason?: string } {
+      const record = library.record(campaignId)
+      if (record.timeline().awaitingSince === null) return { block: false }
+      if (!again) {
+        return {
+          block: true,
+          reason: 'A closed Floor awaits Narration. Answer it with narrate before ending your turn.'
+        }
+      }
+      record.turnError('The DM ended its turn without a Narration.')
+      publish({ type: 'timeline', campaign: campaignId })
+      return { block: false }
+    },
+
+    /** The DM's core block, for SessionStart and after compaction. */
+    coreBlock(campaignId: string): string {
+      return library.record(campaignId).coreBlock()
+    },
+
     /** The Player's timeline and whether the DM is working on a turn. */
     timeline(campaignId: string): Timeline {
       return library.record(campaignId).timeline()

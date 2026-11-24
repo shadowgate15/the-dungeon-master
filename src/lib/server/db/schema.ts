@@ -69,7 +69,9 @@ export const campaign = sqliteTable(
     /** The Seed fields the DM set last ("✎ DM" on the card); a Player edit of a field drops it. */
     dmSeedFields: text('dm_seed_fields', { mode: 'json' }).$type<string[]>().notNull().default([]),
     /** When the Player pressed Begin (#335); null while the Campaign is still being created. */
-    begunAt: integer('begun_at')
+    begunAt: integer('begun_at'),
+    /** The last Event the DM has heard about: change notices cover the Player's edits after it. */
+    noticedThrough: integer('noticed_through').notNull().default(0)
   },
   () => [
     check('campaign_tone_check', oneOf('tone', TONES)),
@@ -133,6 +135,8 @@ export const character = sqliteTable(
     /** The Player who controls this Character; exactly one, transferable. */
     controllingPlayer: text('controlling_player').notNull(),
     status: text('status', { enum: CHARACTER_STATUSES }).notNull().default('alive'),
+    /** The Character's Entity version: bumped by every edit, named in change notices. */
+    version: integer('version').notNull().default(1),
     name: text('name').notNull(),
     alignment: text('alignment', { enum: ALIGNMENTS }),
     appearance: text('appearance'),

@@ -6,6 +6,8 @@ export type TimelineEntry =
   | { type: 'narration'; id: string; text: string; voice: string | null }
   /** A muted `⚙ DM …` line: what the DM did with one tool call. */
   | { type: 'activity'; id: string; text: string }
+  /** Something went wrong with the turn, such as the DM ending it without a Narration. */
+  | { type: 'error'; id: string; text: string }
 
 /** The Player's timeline, and when the DM started on the turn awaiting Narration (null if none). */
 export type Timeline = { entries: TimelineEntry[]; awaitingSince: number | null }
