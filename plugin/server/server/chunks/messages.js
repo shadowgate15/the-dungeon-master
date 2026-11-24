@@ -676,6 +676,8 @@ var floorQueryKey = (campaign) => ["floor", campaign];
 var timelineQueryKey = (campaign) => ["timeline", campaign];
 /** The query holding the Player's Journal: what their Characters believe. */
 var journalQueryKey = (campaign) => ["journal", campaign];
-export { createQuery as a, timelineQueryKey as i, floorQueryKey as n, SvelteMap as o, journalQueryKey as r, SESSIONS_QUERY_KEY as t };
+/** The query holding the permission prompt a Campaign's session is waiting on. */
+var permissionQueryKey = (campaign) => ["permission", campaign];
+export { timelineQueryKey as a, permissionQueryKey as i, floorQueryKey as n, createQuery as o, journalQueryKey as r, SvelteMap as s, SESSIONS_QUERY_KEY as t };
 
 //# sourceMappingURL=messages.js.map

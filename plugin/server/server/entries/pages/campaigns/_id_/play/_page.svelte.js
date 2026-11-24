@@ -6,6 +6,8 @@ import { t as Badge } from "../../../../../chunks/Badge.js";
 import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
 import { a as floorActions, i as createTimelineQuery, n as createFloorQuery, o as Journal, r as createJournalQuery, t as FloorChangeError } from "../../../../../chunks/floor-client.js";
+import { i as permissionQueryKey, o as createQuery } from "../../../../../chunks/messages.js";
+import { t as useQueryClient } from "../../../../../chunks/useQueryClient.js";
 import { t as Link } from "../../../../../chunks/Link.js";
 // src/lib/ui/Meter.svelte
 function Meter($$renderer, $$props) {
@@ -277,6 +279,42 @@ function FloorComposer($$renderer, $$props) {
 // src/lib/play/journal.ts
 /** The entries a Character holds: "What <Character> knows". */
 var knownBy = (journal, character) => journal.entries.filter((e) => e.holders.some((h) => h.id === character));
+// src/lib/play/PermissionCard.svelte
+function PermissionCard($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		/**
+		* The permission prompt the DM's session is waiting on, inline above the composer (never a modal
+		* or toast). The terminal's dialog stays open too; the first answer wins.
+		*/
+		let { request, onanswer } = $$props;
+		$$renderer.push(`<div role="group" aria-label="Permission request" class="flex shrink-0 flex-col gap-2 rounded-panel border-2 border-warning bg-warning-bg p-3 text-warning"><p class="text-sm font-semibold">Behind the screen: the DM asks permission</p> `);
+		if (request.description) $$renderer.push(`<!--[0--><p class="text-sm">${escape_html(request.description)}</p>`);
+		else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]--> <code class="rounded bg-black/10 px-2 py-1 text-xs break-all">${escape_html(request.toolName)}`);
+		if (request.inputPreview) $$renderer.push(`<!--[0-->: ${escape_html(request.inputPreview)}`);
+		else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]--></code> <div class="flex gap-2">`);
+		Button($$renderer, {
+			size: "sm",
+			onclick: () => onanswer("allow"),
+			children: ($$renderer) => {
+				$$renderer.push(`<!---->Allow`);
+			},
+			$$slots: { default: true }
+		});
+		$$renderer.push(`<!----> `);
+		Button($$renderer, {
+			size: "sm",
+			variant: "secondary",
+			onclick: () => onanswer("deny"),
+			children: ($$renderer) => {
+				$$renderer.push(`<!---->Deny`);
+			},
+			$$slots: { default: true }
+		});
+		$$renderer.push(`<!----></div></div>`);
+	});
+}
 // src/lib/play/Timeline.svelte
 function Timeline($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -332,6 +370,38 @@ function Timeline($$renderer, $$props) {
 		$$renderer.push(`<!--]-->`);
 	});
 }
+// src/lib/play/permission-client.ts
+var url = (campaign) => `/api/campaigns/${encodeURIComponent(campaign)}/permission`;
+/** The permission prompt the Campaign's session is waiting on, starting from the server-rendered one. */
+function createPermissionQuery(campaign, initial) {
+	return createQuery(() => ({
+		queryKey: permissionQueryKey(campaign()),
+		queryFn: async () => {
+			const res = await fetch(url(campaign()));
+			if (!res.ok) return null;
+			return (await res.json()).request;
+		},
+		initialData: initial()
+	}));
+}
+/**
+* Answers the prompt. When the terminal answered first the server refuses it, and the card clears
+* either way.
+*/
+function permissionActions(campaign) {
+	const queryClient = useQueryClient();
+	return { async answer(requestId, behavior) {
+		await fetch(url(campaign()), {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				request_id: requestId,
+				behavior
+			})
+		});
+		await queryClient.invalidateQueries({ queryKey: permissionQueryKey(campaign()) });
+	} };
+}
 // src/routes/campaigns/[id]/play/+page.svelte
 function _page($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -341,6 +411,8 @@ function _page($$renderer, $$props) {
 		const timeline = createTimelineQuery(() => data.campaign.id, () => data.timeline);
 		const journal = createJournalQuery(() => data.campaign.id, () => data.journal);
 		const actions = floorActions(() => data.campaign.id);
+		const permission = createPermissionQuery(() => data.campaign.id, () => data.permission);
+		const answers = permissionActions(() => data.campaign.id);
 		/** Done, sending the composer's text first for Send & Done. */
 		function done(text) {
 			attempt(async () => {
@@ -410,6 +482,15 @@ function _page($$renderer, $$props) {
 					$$renderer.push(`<!---->${escape_html(problem)}`);
 				},
 				$$slots: { default: true }
+			});
+		} else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]--> `);
+		if (permission.data) {
+			$$renderer.push("<!--[0-->");
+			const request = permission.data;
+			PermissionCard($$renderer, {
+				request,
+				onanswer: (behavior) => answers.answer(request.requestId, behavior)
 			});
 		} else $$renderer.push("<!--[-1-->");
 		$$renderer.push(`<!--]--> `);
