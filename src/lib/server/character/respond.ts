@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit'
 import { library } from '../campaign/index'
 import { CampaignMissingError, CampaignNotFoundError } from '../campaign/library'
-import { DraftNotFoundError, type Party } from './party'
+import { DmOnlyEditError, DraftNotFoundError, type Party } from './party'
 import { CharacterNotFoundError, CharacterValidationError } from './service'
 
 const UNREADABLE = 'The Character could not be read. Try saving again.'
@@ -18,7 +18,7 @@ export async function readJson<T>(request: Request): Promise<T | undefined> {
 /**
  * Runs a Party change for an API route. A broken rule comes back as 400 `{ error }` so the wizard
  * keeps the draft and shows it; an unknown Campaign, draft or Character as 404 `{ error }`. An
- * archived Campaign is read-only.
+ * archived Campaign is read-only. An edit that is the DM's while the DM is away is 409 `{ error }`.
  */
 export function changeParty(
   campaignId: string,
@@ -32,6 +32,7 @@ export function changeParty(
     }
     return change(library.party(campaignId))
   } catch (e) {
+    if (e instanceof DmOnlyEditError) return json({ error: e.message }, { status: 409 })
     if (e instanceof CharacterValidationError) return json({ error: e.message }, { status: 400 })
     if (
       e instanceof CampaignNotFoundError ||

@@ -1,15 +1,19 @@
 import { expect, test, type Page } from '@playwright/test'
 import { fighterDraft } from '../lib/server/character/test-characters'
+import { startFakeDm, type FakeDm } from '../testing/fake-dm'
+import { E2E_HOME } from '../../playwright.config'
 
-async function createCampaign(page: Page, name: string): Promise<string> {
+/** Creates a Campaign through the New Campaign dialog; returns its id and folder. */
+async function createCampaign(page: Page, name: string) {
   await page.goto('/campaigns')
   await page.waitForLoadState('networkidle')
   await page.getByRole('link', { name: 'New Campaign' }).click()
   const dialog = page.getByRole('dialog', { name: 'New Campaign' })
   await dialog.getByLabel('Name', { exact: true }).fill(name)
+  const folder = await dialog.getByLabel('Folder').inputValue()
   await dialog.getByRole('button', { name: 'Create Campaign' }).click()
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
-  return page.url().split('/').at(-1)!
+  return { id: page.url().split('/').at(-1)!, folder }
 }
 
 /** Saves a finished Fighter into the Party through the Party step's draft API. */
@@ -24,12 +28,19 @@ async function addFighter(page: Page, campaign: string, name: string) {
   expect(res.status()).toBe(201)
 }
 
+let dm: FakeDm | undefined
+test.afterEach(async () => {
+  await dm?.kill()
+  dm = undefined
+})
+
 test('Declarations wait in the pending tray, editable and withdrawable, across a reload', async ({
   page
 }) => {
-  const campaign = await createCampaign(page, `Tray Test ${Date.now()}`)
+  const { id: campaign, folder } = await createCampaign(page, `Tray Test ${Date.now()}`)
   await addFighter(page, campaign, 'Wren')
   await addFighter(page, campaign, 'Bram')
+  dm = await startFakeDm({ folder, home: E2E_HOME })
 
   await page.goto(`/campaigns/${campaign}/play`)
   await page.waitForLoadState('networkidle')
@@ -59,8 +70,9 @@ test('Declarations wait in the pending tray, editable and withdrawable, across a
 
 test('the console is bound to the viewport and the composer stays pinned', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 })
-  const campaign = await createCampaign(page, `Viewport Test ${Date.now()}`)
+  const { id: campaign, folder } = await createCampaign(page, `Viewport Test ${Date.now()}`)
   await addFighter(page, campaign, 'Wren')
+  dm = await startFakeDm({ folder, home: E2E_HOME })
 
   await page.goto(`/campaigns/${campaign}/play`)
   await page.waitForLoadState('networkidle')

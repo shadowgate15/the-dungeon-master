@@ -45,8 +45,9 @@ function hook(event: string, input: Record<string, unknown>): Promise<unknown> {
   })
 }
 
-/** Leaves a closed Floor awaiting Narration. */
+/** Leaves a closed Floor awaiting Narration, with a DM at the table to hear it. */
 function closeFloor() {
+  server.channels.listen(folder, () => {})
   const wren = addCharacter(server.library, campaignId, fighterDraft('Wren'))
   server.library.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })
   server.play.done(campaignId)
@@ -112,6 +113,22 @@ describe('SessionStart', () => {
     expect(context).toContain('# Core block')
     expect(context).toContain('- Wren (char:wren): HP 12/12')
     expect(context).toContain('the-dungeon-master:session-opening')
+  })
+
+  it('tells the DM what changed since the last sitting, once', async () => {
+    const wren = addCharacter(server.library, campaignId, fighterDraft('Wren'))
+    server.library.party(campaignId).updateDetails(wren, { appearance: 'A scar across one brow.' })
+    const start = async () =>
+      (
+        (await hook('session-start', { hook_event_name: 'SessionStart', source: 'startup' })) as {
+          hookSpecificOutput: { additionalContext: string }
+        }
+      ).hookSpecificOutput.additionalContext
+
+    const context = await start()
+    expect(context).toContain('# Core block')
+    expect(context).toMatch(/^- char:wren v2: the Player edited Wren’s appearance$/m)
+    expect(await start()).not.toContain('Changed since last sitting')
   })
 
   it('re-injects the core block after compaction, without reopening the session', async () => {

@@ -99,6 +99,13 @@ describe('Timeline', () => {
     await expect.poll(() => page.getByRole('listitem').elements().length).toBe(1)
   })
 
+  it('ends the progress bar with "The DM left mid-turn" when the DM is away', async () => {
+    render(Timeline, { entries: [], awaitingSince: Date.now() - 5000, away: true })
+
+    await expect.element(page.getByText(/The DM left mid-turn/)).toBeVisible()
+    await expect.element(page.getByRole('progressbar')).not.toBeInTheDocument()
+  })
+
   it("shows an attack's hit or miss, and the target's state after damage, never its HP", async () => {
     render(Timeline, { entries: attackRollEntries, awaitingSince: null })
 
