@@ -97,7 +97,40 @@ export function setAwaitingNarration(db: Queryable, since: number | null) {
 }
 
 /** Event kinds the Player's timeline shows. */
-const SHOWN = new Set(['declaration', 'narration', 'turn_error', 'roll', 'answer'])
+const SHOWN = new Set(['declaration', 'narration', 'turn_error', 'roll', 'rolls', 'answer'])
+
+/** One roll in the dice log: a Player's click on a Call, or one of an NPC's rolls. */
+function rollEntry(id: string, data: Record<string, unknown>): TimelineEntry {
+  const mode = data.mode === 'advantage' || data.mode === 'disadvantage' ? data.mode : 'normal'
+  return {
+    type: 'roll',
+    id,
+    character: String(data.characterName),
+    what: String(data.what),
+    dice: (data.dice as number[]).map(Number),
+    modifier: Number(data.modifier),
+    total: Number(data.total),
+    outcome:
+      'outcome' in data
+        ? (data.outcome as RollOutcome | null)
+        : data.success
+          ? 'success'
+          : 'failure',
+    mode,
+    reason: mode === 'normal' ? null : String(data.reason ?? ''),
+    target: (data.target as { name: string; state: HpState } | null | undefined) ?? null
+  }
+}
+
+/** One logged Event as timeline entries: none, one, or one per roll of an NPC's `rolls`. */
+function entriesFor(e: typeof event.$inferSelect): TimelineEntry[] {
+  if (e.kind === 'rolls' && !e.dmOnly) {
+    const rolls = (e.data?.rolls ?? []) as Record<string, unknown>[]
+    return rolls.map((r, i) => rollEntry(`e${e.id}-${i}`, r))
+  }
+  const entry = entryFor(e)
+  return entry ? [entry] : []
+}
 
 /** One logged Event as a timeline entry, or null for one the timeline does not show. */
 function entryFor(e: typeof event.$inferSelect): TimelineEntry | null {
@@ -114,27 +147,7 @@ function entryFor(e: typeof event.$inferSelect): TimelineEntry | null {
     }
   }
   if (e.kind === 'turn_error') return { type: 'error', id, text: String(data.text) }
-  if (e.kind === 'roll') {
-    const mode = data.mode === 'advantage' || data.mode === 'disadvantage' ? data.mode : 'normal'
-    return {
-      type: 'roll',
-      id,
-      character: String(data.characterName),
-      what: String(data.what),
-      dice: (data.dice as number[]).map(Number),
-      modifier: Number(data.modifier),
-      total: Number(data.total),
-      outcome:
-        'outcome' in data
-          ? (data.outcome as RollOutcome | null)
-          : data.success
-            ? 'success'
-            : 'failure',
-      mode,
-      reason: mode === 'normal' ? null : String(data.reason ?? ''),
-      target: (data.target as { name: string; state: HpState } | null | undefined) ?? null
-    }
-  }
+  if (e.kind === 'roll') return rollEntry(id, data)
   if (e.kind === 'answer') {
     return {
       type: 'answer',
@@ -169,8 +182,7 @@ export function timeline(db: Queryable): Timeline {
   }
   for (const e of db.select().from(event).orderBy(asc(event.id)).all()) {
     flushUntil(e.id)
-    const entry = entryFor(e)
-    if (entry) entries.push(entry)
+    entries.push(...entriesFor(e))
   }
   flushUntil(Infinity)
   return { entries, awaitingSince: awaitingNarrationSince(db), call: openCallView(db) }

@@ -7,6 +7,7 @@ import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library
 import { addCharacter, fighterDraft } from '../character/test-characters'
 import { createDice } from '../dice'
 import { createPlay, type Play } from '../play/play'
+import { playSheets } from '../play/sheets'
 import { gameTools } from '.'
 import { createToolHost, type ToolHost } from './host'
 
@@ -186,5 +187,101 @@ describe('a Character attack', () => {
       code: 'unknown_attack',
       next: expect.stringContaining('Crossbow, light')
     })
+  })
+})
+
+describe('an NPC attack', () => {
+  it('rolls and applies at once, and shows in the dice log without the AC or HP numbers', () => {
+    addWren()
+    const grik = addGrik()
+
+    load([20, 14], [6, 4])
+    const result = ok('attack', { actor: grik, target: 'char:wren', with: 'scimitar' })
+
+    expect(result.rolled).toBe(
+      'Scimitar attack on Wren (char:wren): d20 14 + 4 = 18 vs AC 12 → hit; damage 1d6+2: 4 + 2 = 6 slashing → Wren 6/12 HP (bloodied)'
+    )
+    expect(result.targets).toEqual([{ handle: 'char:wren', hp: 6 }])
+    expect(playSheets(library.party(campaignId))[0].hp).toMatchObject({ current: 6, max: 12 })
+    expect(timeline().entries.filter((e) => e.type === 'roll')).toEqual([
+      expect.objectContaining({
+        character: 'Grik',
+        what: 'Scimitar attack',
+        dice: [14],
+        total: 18,
+        outcome: 'hit'
+      }),
+      expect.objectContaining({
+        character: 'Grik',
+        what: 'Scimitar damage',
+        dice: [4],
+        total: 6,
+        target: null
+      })
+    ])
+    expect(heard).toEqual([])
+  })
+
+  it("shows an NPC target's HP as a state, never as numbers", () => {
+    const grik = addGrik()
+    const snag = ok('establish', {
+      type: 'npc',
+      name: 'Snag',
+      fields: { stat_block: 'monster:goblin' }
+    }).handle as string
+
+    load([20, 18], [6, 4])
+    ok('attack', { actor: snag, target: grik, with: 'scimitar' })
+
+    const rolls = timeline().entries.filter((e) => e.type === 'roll')
+    expect(rolls[1]).toMatchObject({ target: { name: 'Grik', state: 'near death' } })
+    expect(JSON.stringify(timeline())).not.toMatch(/\bAC\b|\/7\b|\bhp\b/i)
+  })
+})
+
+describe('the Stop hook', () => {
+  it('blocks a turn that ends with an unattached pending Call, until cancel_call clears it', () => {
+    addWren()
+    const grik = addGrik()
+    const { pending_call: id } = ok('attack', {
+      actor: 'char:wren',
+      target: grik,
+      with: 'crossbow'
+    })
+
+    const stop = play.stopCheck(campaignId, false)
+    expect(stop).toMatchObject({ block: true, reason: expect.stringContaining(id) })
+
+    ok('cancel_call', { id })
+    expect(play.stopCheck(campaignId, false)).toEqual({ block: false })
+  })
+
+  it('lets the turn end on the second attempt, and the timeline shows the error', () => {
+    addWren()
+    const grik = addGrik()
+    ok('attack', { actor: 'char:wren', target: grik, with: 'crossbow' })
+
+    expect(play.stopCheck(campaignId, true)).toEqual({ block: false })
+    expect(timeline().entries.at(-1)).toMatchObject({ type: 'error' })
+    expect(play.stopCheck(campaignId, false), 'the stale Call is dropped').toEqual({ block: false })
+  })
+
+  it('does not block once narrate attaches the Call', () => {
+    addWren()
+    const grik = addGrik()
+    const { pending_call: id } = ok('attack', {
+      actor: 'char:wren',
+      target: grik,
+      with: 'crossbow'
+    })
+    ok('narrate', { text: 'Wren fires.', call: id })
+
+    expect(play.stopCheck(campaignId, false)).toEqual({ block: false })
+  })
+
+  it('refuses to cancel a Call that is not pending', () => {
+    const { isError, payload } = call('cancel_call', { id: 'nope' })
+    expect(isError).toBe(true)
+    expect(payload).toMatchObject({ code: 'unknown_call' })
   })
 })
