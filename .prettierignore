@@ -15,4 +15,5 @@ bun.lockb
 
 # The generated plugin bundles and server build (pnpm build:plugin)
 /plugin/bin/*.mjs
+/plugin/hooks/*.mjs
 /plugin/server/

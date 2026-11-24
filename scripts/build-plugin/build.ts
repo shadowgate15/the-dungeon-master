@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { buildBridge, buildLauncher } from '../build-bridge/build.ts'
+import { buildBridge, buildHooks, buildLauncher } from '../build-bridge/build.ts'
 
 const root = path.resolve(import.meta.dirname, '../..')
 
@@ -20,6 +20,7 @@ const BETTER_SQLITE3_FILES = ['package.json', 'LICENSE', 'README.md', 'lib', 'pr
 async function buildPlugin() {
   await buildBridge()
   await buildLauncher()
+  await buildHooks()
 
   const vite = spawnSync(path.join(root, 'node_modules/.bin/vite'), ['build'], {
     cwd: root,
