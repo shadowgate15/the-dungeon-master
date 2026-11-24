@@ -673,6 +673,8 @@ function createQuery(options, queryClient) {
 var SESSIONS_QUERY_KEY = ["sessions"];
 /** The query holding a Campaign's open Floor. */
 var floorQueryKey = (campaign) => ["floor", campaign];
+/** The query holding a Campaign's timeline. */
+var timelineQueryKey = (campaign) => ["timeline", campaign];
 // src/lib/live/client.ts
 /** The ids of the Campaigns with a DM at the table, starting from the server-rendered list. */
 function createSessionsQuery(initial) {
@@ -697,6 +699,6 @@ function DmBadge($$renderer, $$props) {
 		$$slots: { default: true }
 	});
 }
-export { createQuery as i, createSessionsQuery as n, floorQueryKey as r, DmBadge as t };
+export { createQuery as a, timelineQueryKey as i, createSessionsQuery as n, floorQueryKey as r, DmBadge as t };
 
 //# sourceMappingURL=DmBadge.js.map

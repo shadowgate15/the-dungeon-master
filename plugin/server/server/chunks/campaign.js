@@ -1,4 +1,4 @@
-import { A as background, At as inArray, Bt as DUNGEON_MASTER_HOME, Ct as CUSTOM_BACKGROUND_FEATURE_MAX, Et as asc, Ft as sql, It as Column, K as equipment, Lt as is, O as abilityScoreMethod, Ot as and, St as BACKSTORY_MAX, Tt as SOLO_PLAYER, U as classTable, _ as declaration, a as seedRulesData, at as race, c as openDatabase, d as characterChoice, dt as skill, f as characterDraft, ft as spell, g as characterSpell, h as characterSkill, ht as subrace, i as userStateDir, k as alignment, kt as eq, l as campaign, m as characterItem, mt as subclass, n as canonicalFolder, o as loadRulesDataset, p as characterEquipment, r as defaultCampaignRoot, s as migrateDatabase, t as campaignDatabasePath, u as character, xt as ABILITY_METHODS, y as floor, zt as DUNGEON_MASTER_CAMPAIGNS } from "./paths.js";
+import { A as abilityScoreMethod, At as and, Ct as ABILITY_METHODS, Dt as SOLO_PLAYER, G as classTable, Ht as DUNGEON_MASTER_HOME, J as equipment, Lt as sql, M as background, Mt as inArray, Ot as asc, Pt as isNull, Rt as Column, Tt as CUSTOM_BACKGROUND_FEATURE_MAX, Vt as DUNGEON_MASTER_CAMPAIGNS, _ as characterSpell, _t as subrace, a as seedRulesData, b as floor, c as openDatabase, d as character, f as characterChoice, g as characterSkill, gt as subclass, h as characterItem, i as userStateDir, j as alignment, jt as eq, kt as desc, l as activityLine, m as characterEquipment, mt as spell, n as canonicalFolder, o as loadRulesDataset, p as characterDraft, pt as skill, r as defaultCampaignRoot, s as migrateDatabase, st as race, t as campaignDatabasePath, u as campaign, v as declaration, wt as BACKSTORY_MAX, x as session, y as event, zt as is } from "./paths.js";
 import { D as equipmentGroupKeys, M as resolveFeatures, O as equipmentGroups, a as WIZARD_RULES_KEYS, c as resolverDraft, d as STEPS, o as emptyDraft, r as deriveStats, t as tryDraftToCharacterInput } from "./save.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { o as parseCampaignSeed, r as campaignSeedCard } from "./seed.js";
@@ -756,11 +756,127 @@ function createParty(db, now = Date.now) {
 function canAct(character) {
 	return character.status === "alive";
 }
+// src/lib/server/play/log.ts
+/**
+* The Campaign's current stamp: the open Session (null offline) and the in-fiction minute (0 until
+* the clock exists).
+*/
+function currentStamp(db) {
+	return {
+		sessionId: db.select({ id: session.id }).from(session).where(isNull(session.closedAt)).get()?.id ?? null,
+		minute: 0
+	};
+}
+/** The id the next Event will get. The log is append-only, so ids are never reused. */
+function nextEventId(db) {
+	return (db.get(sql`SELECT max(${event.id}) AS id FROM ${event}`)?.id ?? 0) + 1;
+}
+/** Appends one Event, stamped with `stamp`; returns its id. */
+function logEvent(db, entry, { stamp = currentStamp(db), at, id = nextEventId(db) }) {
+	db.insert(event).values({
+		id,
+		sessionId: stamp.sessionId,
+		minute: stamp.minute,
+		tool: entry.tool,
+		kind: entry.kind,
+		summary: entry.summary,
+		data: entry.data ?? null,
+		dmOnly: entry.dmOnly ?? false,
+		createdAt: at
+	}).run();
+	return id;
+}
+/** Writes a Player-safe DM activity line after the Event `afterEvent` (the latest one by default). */
+function logActivity(db, text, { at, afterEvent = nextEventId(db) - 1 }) {
+	db.insert(activityLine).values({
+		text,
+		afterEvent,
+		sessionId: currentStamp(db).sessionId,
+		createdAt: at
+	}).run();
+}
+/** The open Session, opened now (numbered after the last) if none is. */
+function openSession(db, at) {
+	const open = db.select({
+		id: session.id,
+		number: session.number
+	}).from(session).where(isNull(session.closedAt)).get();
+	if (open) return open;
+	const last = db.select({ number: session.number }).from(session).orderBy(desc(session.number)).get();
+	return db.insert(session).values({
+		number: (last?.number ?? 0) + 1,
+		startedAt: at
+	}).returning({
+		id: session.id,
+		number: session.number
+	}).get();
+}
+/** When the open turn started waiting on the DM, or null when nothing awaits Narration. */
+function awaitingNarrationSince(db) {
+	return db.select({ at: campaign.awaitingNarrationSince }).from(campaign).get()?.at ?? null;
+}
+/** Sets (a timestamp) or clears (null) the Campaign's awaiting Narration flag. */
+function setAwaitingNarration(db, since) {
+	db.update(campaign).set({ awaitingNarrationSince: since }).run();
+}
+/** Event kinds the Player's timeline shows. */
+var SHOWN = /* @__PURE__ */ new Set(["declaration", "narration"]);
+/** One logged Event as a timeline entry, or null for one the timeline does not show. */
+function entryFor(e) {
+	if (e.dmOnly || !SHOWN.has(e.kind)) return null;
+	const data = e.data ?? {};
+	const id = `e${e.id}`;
+	if (e.kind === "declaration") return {
+		type: "declaration",
+		id,
+		character: String(data.characterName),
+		player: String(data.player),
+		text: String(data.text)
+	};
+	return {
+		type: "narration",
+		id,
+		text: String(data.text),
+		voice: typeof data.voiceName === "string" ? data.voiceName : null
+	};
+}
+/**
+* The Player's timeline: Declarations and Narrations from the Event log (never DM-only Events),
+* with each DM activity line after the Event it follows, plus the awaiting Narration flag. Every
+* entry is built here from Player-safe fields; nothing raw passes through.
+*/
+function timeline(db) {
+	const lines = db.select().from(activityLine).orderBy(asc(activityLine.id)).all();
+	const entries = [];
+	let next = 0;
+	const flushUntil = (eventId) => {
+		while (next < lines.length && lines[next].afterEvent < eventId) {
+			const line = lines[next++];
+			entries.push({
+				type: "activity",
+				id: `a${line.id}`,
+				text: line.text
+			});
+		}
+	};
+	for (const e of db.select().from(event).orderBy(asc(event.id)).all()) {
+		flushUntil(e.id);
+		const entry = entryFor(e);
+		if (entry) entries.push(entry);
+	}
+	flushUntil(Infinity);
+	return {
+		entries,
+		awaitingSince: awaitingNarrationSince(db)
+	};
+}
 // src/lib/server/floor/floor.ts
 /** The Character can't put a Declaration on the Floor (unknown, dead or departed, not theirs). */
 var DeclarationRefusedError = class extends Error {};
 /** The open Floor holds no Declaration with this id. */
 var DeclarationNotFoundError = class extends Error {};
+/** Done while the DM is still answering the last closed Floor. */
+var DmBusyError = class extends Error {};
 /** Declarations are a sentence or a short paragraph, not an essay. */
 var DECLARATION_MAX = 2e3;
 /**
@@ -770,6 +886,17 @@ var DECLARATION_MAX = 2e3;
 function createFloor(db, now = Date.now) {
 	function openFloorId() {
 		return db.select({ id: floor.id }).from(floor).where(eq(floor.state, "open")).get()?.id;
+	}
+	function openFloor(at) {
+		return openFloorId() ?? db.insert(floor).values({
+			campaignId: db.select({ id: campaign.id }).from(campaign).get().id,
+			createdAt: at
+		}).returning({ id: floor.id }).get().id;
+	}
+	/** The Players at the table: everyone with a Character who can act. */
+	function playersAtTable() {
+		const actors = db.select().from(character).all().filter(canAct);
+		return [...new Set(actors.map((c) => c.controllingPlayer))];
 	}
 	function cleanText(text) {
 		const trimmed = typeof text === "string" ? text.trim() : "";
@@ -781,19 +908,21 @@ function createFloor(db, now = Date.now) {
 		const floorId = openFloorId();
 		if (!(floorId && db.select({ id: declaration.id }).from(declaration).where(and(eq(declaration.id, id), eq(declaration.floorId, floorId))).get())) throw new DeclarationNotFoundError("Declaration not found on the open Floor");
 	}
+	/** The open Floor (empty until something is sent). */
+	function current() {
+		const floorId = openFloorId();
+		if (!floorId) return { declarations: [] };
+		return { declarations: db.select({
+			id: declaration.id,
+			character: declaration.characterId,
+			characterName: character.name,
+			player: declaration.player,
+			text: declaration.text
+		}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all() };
+	}
 	return {
 		/** The open Floor (empty until something is sent). */
-		current() {
-			const floorId = openFloorId();
-			if (!floorId) return { declarations: [] };
-			return { declarations: db.select({
-				id: declaration.id,
-				character: declaration.characterId,
-				characterName: character.name,
-				player: declaration.player,
-				text: declaration.text
-			}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all() };
-		},
+		current,
 		/**
 		* Puts a Declaration for one Character on the open Floor, opening it if none is. Refused for a
 		* Character who can't act or whom `player` doesn't control.
@@ -806,10 +935,7 @@ function createFloor(db, now = Date.now) {
 				if (!canAct(actor)) throw new DeclarationRefusedError(`${actor.name} can't act`);
 				if (actor.controllingPlayer !== player) throw new DeclarationRefusedError(`${actor.name} is not your Character`);
 				const at = now();
-				const floorId = openFloorId() ?? db.insert(floor).values({
-					campaignId: db.select({ id: campaign.id }).from(campaign).get().id,
-					createdAt: at
-				}).returning({ id: floor.id }).get().id;
+				const floorId = openFloor(at);
 				const last = db.select({ n: max(declaration.position) }).from(declaration).where(eq(declaration.floorId, floorId)).get()?.n;
 				return {
 					id: db.insert(declaration).values({
@@ -825,6 +951,51 @@ function createFloor(db, now = Date.now) {
 					characterName: actor.name,
 					player,
 					text: clean
+				};
+			});
+		},
+		/**
+		* The Player presses Done. Once every Player at the table has, the Floor closes in one
+		* transaction: its Declarations are logged (stamped with the Session) in send order and the
+		* Campaign awaits Narration. An empty Floor closes too, handing the DM the initiative. Refused
+		* while the DM is still answering the last Floor.
+		*/
+		done(player = SOLO_PLAYER) {
+			return db.transaction(() => {
+				if (awaitingNarrationSince(db) !== null) throw new DmBusyError("The DM is still answering the last turn");
+				const at = now();
+				const floorId = openFloor(at);
+				const row = db.select().from(floor).where(eq(floor.id, floorId)).get();
+				const done = row.done.includes(player) ? row.done : [...row.done, player];
+				if (!playersAtTable().every((p) => done.includes(p))) {
+					db.update(floor).set({ done }).where(eq(floor.id, floorId)).run();
+					return { closed: false };
+				}
+				const declarations = current().declarations;
+				db.update(floor).set({
+					done,
+					state: "closed",
+					closedAt: at
+				}).where(eq(floor.id, floorId)).run();
+				for (const d of declarations) logEvent(db, {
+					tool: "done",
+					kind: "declaration",
+					summary: `${d.characterName}: ${d.text}`,
+					data: {
+						floor: floorId,
+						declaration: d.id,
+						character: d.character,
+						characterName: d.characterName,
+						player: d.player,
+						text: d.text
+					}
+				}, { at });
+				setAwaitingNarration(db, at);
+				return {
+					closed: true,
+					floor: floorId,
+					players: done,
+					declarations
 				};
 			});
 		},
@@ -1021,6 +1192,14 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		floor(id) {
 			return createFloor(database(find(id).folder), now);
 		},
+		/** The Campaign's record of play: the Player's timeline and its Sessions. */
+		record(id) {
+			const db = database(find(id).folder);
+			return {
+				timeline: () => timeline(db),
+				openSession: () => openSession(db, now())
+			};
+		},
 		/**
 		* The database of the registered Campaign in this folder, or undefined when the folder is not
 		* a registered Campaign (or its database is gone). How game tools find their Campaign.
@@ -1094,6 +1273,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { CharacterValidationError as _, CampaignArchivedError as a, CampaignNotFoundError as c, DeclarationNotFoundError as d, DeclarationRefusedError as f, CharacterNotFoundError as g, loadWizardRules as h, sessions as i, NotACampaignFolderError as l, DraftNotFoundError as m, library as n, CampaignExistsError as o, canAct as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, SESSION_LIVE_MESSAGE as v };
+export { CharacterValidationError as C, CharacterNotFoundError as S, nextEventId as _, CampaignArchivedError as a, DraftNotFoundError as b, CampaignNotFoundError as c, DeclarationNotFoundError as d, DeclarationRefusedError as f, logEvent as g, logActivity as h, sessions as i, NotACampaignFolderError as l, currentStamp as m, library as n, CampaignExistsError as o, DmBusyError as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, setAwaitingNarration as v, SESSION_LIVE_MESSAGE as w, loadWizardRules as x, canAct as y };
 
 //# sourceMappingURL=campaign.js.map
