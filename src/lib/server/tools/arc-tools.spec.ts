@@ -90,3 +90,28 @@ describe('create_arc', () => {
     expect(call('create_arc', empty).isError).toBe(true)
   })
 })
+
+/** The current Arc's version, read the way the DM must before any Arc write. */
+const version = () => call('arc').payload.current.version as number
+
+describe('arc', () => {
+  it('reads the current Arc, or null in a gap', () => {
+    expect(call('arc').payload).toEqual({ current: null })
+    call('create_arc', relicArc)
+    expect(call('arc').payload.current).toMatchObject({ title: 'The Ember Relic', version: 1 })
+  })
+
+  it('with history, also returns the concluded and retired Arcs', () => {
+    call('create_arc', relicArc)
+    call('retire_arc', { version: version(), reason: 'The relic was destroyed.' })
+    call('create_arc', { ...relicArc, title: 'The Ashen Crown' })
+
+    const { payload } = call('arc', { history: true })
+
+    expect(payload.current.title).toBe('The Ashen Crown')
+    expect(payload.history).toEqual([
+      expect.objectContaining({ title: 'The Ember Relic', state: 'retired' })
+    ])
+    expect(call('arc').payload).not.toHaveProperty('history')
+  })
+})

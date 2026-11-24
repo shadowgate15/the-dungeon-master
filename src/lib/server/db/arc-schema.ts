@@ -62,7 +62,11 @@ export const beat = sqliteTable(
     state: text('state', { enum: BEAT_STATES }).notNull().default('pending'),
     /** Why it was reached or abandoned. */
     reason: text('reason'),
-    resolvedAt: integer('resolved_at')
+    resolvedAt: integer('resolved_at'),
+    /** The stamp of the change that resolved it: the Event, the Session and the in-fiction minute. */
+    resolvedEvent: integer('resolved_event'),
+    resolvedSession: text('resolved_session'),
+    resolvedMinute: integer('resolved_minute')
   },
   (t) => [check('beat_state', sql`${t.state} IN ('pending', 'reached', 'abandoned')`)]
 )
