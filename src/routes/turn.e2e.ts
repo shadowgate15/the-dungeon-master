@@ -116,3 +116,63 @@ test('a two-Character Floor arrives as one event and gets one Narration', async 
   await dm.settled()
   await dm.close()
 })
+
+test('a Check Call: Declaration, Done, the roll clicked in the browser, and Narration', async ({
+  page
+}) => {
+  const { id, folder } = await createCampaign(page, `Call Test ${Date.now()}`)
+  await addFighter(page, id, 'Wren')
+  dm = await startFakeDm({ folder, home: E2E_HOME })
+  await openConsole(page, id)
+
+  dm.script(
+    {
+      on: 'floor',
+      run: async () => {
+        const opened = await dm!.call('narrate', {
+          text: 'The lock is old and rusted.',
+          call: {
+            kind: 'check',
+            character: 'Wren',
+            skill: 'sleight-of-hand',
+            tier: 'hard',
+            reason: 'The lock is old and stiff'
+          }
+        })
+        expect(opened.isError).toBe(false)
+      }
+    },
+    {
+      on: 'call_result',
+      run: async (event) => {
+        expect(event.content).toMatch(
+          /^\[Wren · player\] Sleight of Hand check: d20 \d+ [+-] \d+ = \d+ vs DC 20 \(hard\) → (success|failure)$/
+        )
+        await dm!.call('narrate', { text: 'The tumblers fall into place.' })
+      }
+    }
+  )
+
+  await page.getByRole('textbox', { name: 'What does Wren do?' }).fill('I pick the lock.')
+  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Done' }).click()
+
+  const card = page.getByRole('region', { name: 'Call' })
+  await expect(card.getByText('Sleight of Hand check')).toBeVisible()
+  await expect(card.getByText('The lock is old and stiff')).toBeVisible()
+  await expect(card).not.toContainText(/DC|20|hard/)
+
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+  await page.getByRole('button', { name: 'Roll Sleight of Hand check for Wren' }).click()
+
+  const timeline = page.getByRole('list', { name: 'Timeline' })
+  await expect(timeline.getByText(/Sleight of Hand check/)).toBeVisible()
+  await expect(timeline.getByText('The tumblers fall into place.')).toBeVisible()
+  await expect(card).toHaveCount(0)
+  await dm.settled()
+
+  const res = await page.request.get(`/api/campaigns/${id}/timeline`)
+  expect(JSON.stringify(await res.json())).not.toMatch(/"dc"|"tier"|"hard"/)
+  await dm.close()
+})

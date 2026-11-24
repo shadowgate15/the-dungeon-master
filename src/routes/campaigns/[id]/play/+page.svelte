@@ -2,10 +2,12 @@
   import { resolve } from '$app/paths'
   import DmBadge from '#lib/campaign/DmBadge.svelte'
   import { createSessionsQuery } from '#lib/live/client.ts'
+  import CallCard from '#lib/play/CallCard.svelte'
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
   import Timeline from '#lib/play/Timeline.svelte'
   import {
+    callActions,
     createFloorQuery,
     createTimelineQuery,
     floorActions,
@@ -26,6 +28,14 @@
     () => data.timeline
   )
   const actions = floorActions(() => data.campaign.id)
+  const calls = callActions(() => data.campaign.id)
+  let rolling = $state(false)
+
+  /** Rolls or answers one part of the open Call, one click at a time. */
+  function answerCall(change: () => Promise<unknown>) {
+    rolling = true
+    attempt(change).finally(() => (rolling = false))
+  }
 
   /** Done, sending the composer's text first for Send & Done. */
   function done(text: string | null) {
@@ -75,6 +85,15 @@
 
     <section aria-label="Story" class="flex min-h-0 flex-col gap-2">
       <Timeline entries={timeline.data.entries} awaitingSince={timeline.data.awaitingSince} />
+      {#if timeline.data.call && !archived}
+        {@const open = timeline.data.call}
+        <CallCard
+          call={open}
+          disabled={rolling}
+          onroll={(part) => answerCall(() => calls.roll(open.id, part))}
+          onanswer={(part, answer) => answerCall(() => calls.answer(open.id, part, answer))}
+        />
+      {/if}
       {#if problem}<Alert variant="danger">{problem}</Alert>{/if}
       {#if archived}
         <Alert variant="warning">This Campaign is archived. Restore it to play.</Alert>
