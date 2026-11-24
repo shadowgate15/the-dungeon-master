@@ -5,6 +5,7 @@ import type { CampaignLibrary } from '../campaign/library'
 import type { Database, Queryable } from '../db/connect'
 import { event } from '../db/schema'
 import { campaignDice, type Dice } from '../dice'
+import { addConversationLine } from '../creation/conversation'
 import { currentStamp, logActivity, logEvent, nextEventId } from '../play/log'
 import {
   PLUGIN_NAME,
@@ -66,7 +67,7 @@ function activityLine(
 ): string | null {
   const { activity } = tool
   if (activity === undefined) {
-    if (!tool.mutates) return 'DM checks their notes'
+    if (tool.mutates === false) return 'DM checks their notes'
     return dmOnly ? null : 'DM updates the game'
   }
   return typeof activity === 'function' ? activity(input as never, result) : activity
@@ -100,12 +101,12 @@ export function createToolHost({
     return { db, campaignId: entry.id }
   }
 
-  /** Runs one call; returns its result and whether the Player's timeline changed. */
+  /** Runs one call; returns its result and what the browser must refetch. */
   function run(
     tool: GameTool,
     folder: string,
     args: unknown
-  ): { result: Record<string, unknown>; campaignId: string; changed: boolean } {
+  ): { result: Record<string, unknown>; changed: LiveMessage[] } {
     const { db, campaignId } = campaignDb(folder)
     const parsed = tool.input.safeParse(args ?? {})
     if (!parsed.success) {
@@ -113,14 +114,27 @@ export function createToolHost({
     }
     const at = now()
     const context = { folder, campaignId, dice: dice(campaignId), now: at }
-    if (!tool.mutates) {
+    const timelineChanged: LiveMessage[] = [{ type: 'timeline', campaign: campaignId }]
+    if (tool.mutates === false) {
       const result = tool.run(
         { ...context, db, stamp: { ...stamp(db), eventId: null } },
         parsed.data
       )
       const line = activityLine(tool, parsed.data, result, false)
       if (line) logActivity(db, line, { at })
-      return { result, campaignId, changed: line !== null }
+      return { result, changed: line === null ? [] : timelineChanged }
+    }
+    if (tool.mutates === 'creation') {
+      // Out of fiction: no Event and no activity line, only the muted line in the conversation.
+      return db.transaction((tx) => {
+        const { result, line, changed } = tool.run(
+          { ...context, db: tx, stamp: { ...stamp(tx), eventId: null } },
+          parsed.data
+        )
+        if (!line) return { result, changed }
+        addConversationLine(tx, { author: 'dm_write', text: line }, at)
+        return { result, changed: [...changed, { type: 'conversation', campaign: campaignId }] }
+      })
     }
     return db.transaction((tx) => {
       const current = stamp(tx)
@@ -133,7 +147,7 @@ export function createToolHost({
       logEvent(tx, { tool: tool.name, ...logged }, { stamp: current, at, id: eventId })
       const line = activityLine(tool, parsed.data, result, logged.dmOnly ?? false)
       if (line) logActivity(tx, line, { at, afterEvent: eventId })
-      return { result: withSkill(result, skill), campaignId, changed: true }
+      return { result: withSkill(result, skill), changed: timelineChanged }
     })
   }
 
@@ -154,8 +168,8 @@ export function createToolHost({
         if (!tool) {
           throw new ToolError('unknown_tool', `There is no tool named ${name}`, 'Use a listed tool')
         }
-        const { result, campaignId, changed } = run(tool, folder, args)
-        if (changed) publish({ type: 'timeline', campaign: campaignId })
+        const { result, changed } = run(tool, folder, args)
+        for (const message of changed) publish(message)
         return json(result)
       } catch (e) {
         if (e instanceof ToolError) return failure(e)
