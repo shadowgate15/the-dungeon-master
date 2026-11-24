@@ -1,21 +1,34 @@
 <script lang="ts">
   import Badge from '#lib/ui/Badge.svelte'
   import Meter from '#lib/ui/Meter.svelte'
+  import LevelUp from './LevelUp.svelte'
   import type { PlaySheet } from './sheet'
 
   /**
    * The console's left column: one tab per Character, and the selected tab's full sheet. The
    * selected tab is the acting Character; only Characters who can act are selectable. A pure view
-   * of the server's `PlaySheet`s.
+   * of the server's `PlaySheet`s. A level the DM awarded shows a Level up control when `onlevelup`
+   * is given.
    */
   let {
     sheets,
     acting,
-    onselect = () => {}
-  }: { sheets: PlaySheet[]; acting: string | null; onselect?: (id: string) => void } = $props()
+    onselect = () => {},
+    onlevelup
+  }: {
+    sheets: PlaySheet[]
+    acting: string | null
+    onselect?: (id: string) => void
+    onlevelup?: (id: string, picks: { cantrips: string[]; spells: string[] }) => void
+  } = $props()
 
   const shown = $derived(sheets.find((s) => s.id === acting) ?? sheets[0])
   const signed = (n: number) => (n >= 0 ? `+${n}` : `${n}`)
+  const DENOMINATIONS = ['pp', 'gp', 'ep', 'sp', 'cp'] as const
+  const coinText = (coin: PlaySheet['coin']) =>
+    DENOMINATIONS.filter((d) => coin[d] > 0)
+      .map((d) => `${coin[d]} ${d}`)
+      .join(', ') || 'None'
   const title = (slug: string) => slug.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
 </script>
 
@@ -56,6 +69,12 @@
         <p class="text-muted">{shown.headline}</p>
       </div>
 
+      {#if shown.levelUp && onlevelup}
+        {#key shown.id}
+          <LevelUp offer={shown.levelUp} onlevelup={(picks) => onlevelup(shown.id, picks)} />
+        {/key}
+      {/if}
+
       <div class="grid grid-cols-[1fr_auto] items-end gap-3">
         <div role="group" aria-label="HP">
           <div class="flex justify-between text-xs">
@@ -84,6 +103,15 @@
           <div class="text-lg font-semibold">{shown.ac?.value ?? '—'}</div>
         </div>
       </div>
+
+      {#if shown.hitDice}
+        <p role="group" aria-label="Hit Dice" class="flex justify-between">
+          <span>Hit Dice</span><span
+            >{shown.hitDice.total - shown.hitDice.spent} / {shown.hitDice.total} d{shown.hitDice
+              .die}</span
+          >
+        </p>
+      {/if}
 
       {#if shown.conditions.length || shown.concentration}
         <div class="flex flex-wrap gap-1">
@@ -146,9 +174,14 @@
         <h3 class="text-xs font-semibold text-muted uppercase">Inventory</h3>
         <ul>
           {#each shown.inventory as i (i.name)}
-            <li>{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ''}</li>
+            <li>
+              {i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ''}{i.equipped ? ' (equipped)' : ''}
+            </li>
           {:else}<li class="text-muted">Nothing carried</li>{/each}
         </ul>
+        <p role="group" aria-label="Coin" class="mt-1 flex justify-between">
+          <span class="text-muted">Coin</span><span>{coinText(shown.coin)}</span>
+        </p>
       </section>
     </div>
   {:else}

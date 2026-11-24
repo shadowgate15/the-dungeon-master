@@ -1,7 +1,7 @@
 import { page } from 'vitest/browser'
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-svelte'
-import { sheets } from './play-fixtures'
+import { levelUpOffer, sheets } from './play-fixtures'
 import CharacterSheet from './CharacterSheet.svelte'
 
 describe('CharacterSheet', () => {
@@ -48,5 +48,49 @@ describe('CharacterSheet', () => {
 
     await expect.element(page.getByRole('tab', { name: /Wren/ })).toBeEnabled()
     await expect.element(page.getByRole('tab', { name: /Osric/ })).toBeDisabled()
+  })
+
+  it('shows Hit Dice, coin and what is equipped', async () => {
+    render(CharacterSheet, { sheets, acting: 'wren' })
+
+    const sheet = page.getByRole('tabpanel', { name: 'Wren' })
+    await expect
+      .element(sheet.getByRole('group', { name: 'Hit Dice' }))
+      .toHaveTextContent('1 / 1 d10')
+    await expect
+      .element(sheet.getByRole('group', { name: 'Coin' }))
+      .toHaveTextContent('12 gp, 4 sp')
+    await expect.element(sheet.getByText('Leather Armor (equipped)')).toBeVisible()
+    await expect
+      .element(sheet.getByRole('group', { name: 'AC' }))
+      .toHaveAttribute('title', 'AC (Leather Armor)')
+  })
+
+  it('hides Level up until the DM awards a level', async () => {
+    render(CharacterSheet, { sheets, acting: 'wren', onlevelup: () => {} })
+
+    await expect.element(page.getByRole('button', { name: /Level up/ })).not.toBeInTheDocument()
+  })
+
+  it('levels up with the picked spells once the DM awards a level', async () => {
+    const taken: { id: string; picks: { cantrips: string[]; spells: string[] } }[] = []
+    const awarded = sheets.map((s) => (s.id === 'wren' ? { ...s, levelUp: levelUpOffer } : s))
+    render(CharacterSheet, {
+      sheets: awarded,
+      acting: 'wren',
+      onlevelup: (id: string, picks: { cantrips: string[]; spells: string[] }) =>
+        taken.push({ id, picks })
+    })
+
+    await page.getByRole('button', { name: 'Level up to 2' }).click()
+    const take = page.getByRole('button', { name: 'Take level 2' })
+    await expect.element(take).toBeDisabled()
+    await page.getByRole('checkbox', { name: 'Sleep' }).click()
+    await page.getByRole('checkbox', { name: 'Shield' }).click()
+    // Two spells are picked: the rest cannot be.
+    await expect.element(page.getByRole('checkbox', { name: 'Magic Missile' })).toBeDisabled()
+    await take.click()
+
+    expect(taken).toEqual([{ id: 'wren', picks: { cantrips: [], spells: ['shield', 'sleep'] } }])
   })
 })
