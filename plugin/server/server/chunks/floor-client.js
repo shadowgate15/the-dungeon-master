@@ -1,5 +1,5 @@
 import { _ as attr, c as ensure_array_like, o as derived, x as escape_html } from "./server2.js";
-import { a as journalQueryKey, d as createQuery, f as SvelteMap, i as floorQueryKey, l as sessionHistoryQueryKey, s as sceneQueryKey, u as timelineQueryKey } from "./messages.js";
+import { a as journalQueryKey, d as timelineQueryKey, f as createQuery, i as floorQueryKey, l as sessionHistoryQueryKey, p as SvelteMap, s as sceneQueryKey, u as sheetsQueryKey } from "./messages.js";
 import { t as useQueryClient } from "./useQueryClient.js";
 // src/lib/play/Journal.svelte
 function Journal($$renderer, $$props) {
@@ -80,6 +80,27 @@ function createTimelineQuery(campaign, initial) {
 		},
 		initialData: initial()
 	}));
+}
+/** The Party's play sheets, starting from the server-rendered ones; every DM write refreshes them. */
+function createSheetsQuery(campaign, initial) {
+	return createQuery(() => ({
+		queryKey: sheetsQueryKey(campaign()),
+		queryFn: async () => {
+			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/sheets`);
+			if (!res.ok) throw new Error("The sheets could not be loaded");
+			return await res.json();
+		},
+		initialData: initial()
+	}));
+}
+/** Takes the level the DM awarded with the picked spells; throws the server's refusal. */
+async function levelUp(campaign, character, picks) {
+	const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign)}/characters/${encodeURIComponent(character)}/level-up`, {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify(picks)
+	});
+	if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The level-up was refused");
 }
 /** The Campaign's Scene for the rail, starting from the server-rendered one. */
 function createSceneQuery(campaign, initial) {
@@ -190,6 +211,6 @@ function callActions(campaign) {
 		answer: (call, part, answer) => post(call, part, { answer })
 	};
 }
-export { createSceneQuery as a, endSession as c, createJournalQuery as i, floorActions as l, callActions as n, createSessionHistoryQuery as o, createFloorQuery as r, createTimelineQuery as s, FloorChangeError as t, Journal as u };
+export { createSceneQuery as a, createTimelineQuery as c, levelUp as d, Journal as f, createJournalQuery as i, endSession as l, callActions as n, createSessionHistoryQuery as o, createFloorQuery as r, createSheetsQuery as s, FloorChangeError as t, floorActions as u };
 
 //# sourceMappingURL=floor-client.js.map

@@ -690,8 +690,10 @@ var conversationQueryKey = (campaign) => ["conversation", campaign];
 var journalQueryKey = (campaign) => ["journal", campaign];
 /** The query holding the Player's read-only Session history (`close_session` is a DM write). */
 var sessionHistoryQueryKey = (campaign) => ["session-history", campaign];
+/** The query holding the Party's play sheets: tools change them, so every write stales them. */
+var sheetsQueryKey = (campaign) => ["sheets", campaign];
 /** The query holding the permission prompt a Campaign's session is waiting on. */
 var permissionQueryKey = (campaign) => ["permission", campaign];
-export { journalQueryKey as a, seedQueryKey as c, createQuery as d, SvelteMap as f, floorQueryKey as i, sessionHistoryQueryKey as l, conversationQueryKey as n, permissionQueryKey as o, draftQueryKey as r, sceneQueryKey as s, SESSIONS_QUERY_KEY as t, timelineQueryKey as u };
+export { journalQueryKey as a, seedQueryKey as c, timelineQueryKey as d, createQuery as f, floorQueryKey as i, sessionHistoryQueryKey as l, conversationQueryKey as n, permissionQueryKey as o, SvelteMap as p, draftQueryKey as r, sceneQueryKey as s, SESSIONS_QUERY_KEY as t, sheetsQueryKey as u };
 
 //# sourceMappingURL=messages.js.map

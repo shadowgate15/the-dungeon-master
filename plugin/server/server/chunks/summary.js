@@ -671,8 +671,8 @@ function resolveFeatures(rules, draft) {
 		cls.proficiencies.forEach((p) => addProficiency(p, "class", "fixed", null));
 		dataGroups("class", cls.slug, cls.choiceGroups, "class");
 		overlayGroups("class", cls.slug, "class");
-		const levelOne = rules.classLevels.find((l) => l.class === cls.slug && l.level === 1);
-		for (const slug of levelOne?.features ?? []) {
+		const classFeatures = rules.classLevels.filter((l) => l.class === cls.slug && l.level <= (draft.level ?? 1)).sort((a, b) => a.level - b.level).flatMap((l) => l.features);
+		for (const slug of classFeatures) {
 			const f = features.get(slug);
 			if (!f) continue;
 			active.add(slug);
@@ -686,8 +686,8 @@ function resolveFeatures(rules, draft) {
 	if (activeSubclass) {
 		applyOverlayGrants("subclass", activeSubclass.slug, "class", "subclass");
 		overlayGroups("subclass", activeSubclass.slug, "class");
-		const levelOne = rules.subclassLevels.find((l) => l.subclass === activeSubclass.slug && l.level === 1);
-		for (const slug of levelOne?.features ?? []) {
+		const subclassFeatures = rules.subclassLevels.filter((l) => l.subclass === activeSubclass.slug && l.level <= (draft.level ?? 1)).sort((a, b) => a.level - b.level).flatMap((l) => l.features);
+		for (const slug of subclassFeatures) {
 			const f = features.get(slug);
 			if (!f) continue;
 			active.add(slug);
@@ -697,7 +697,7 @@ function resolveFeatures(rules, draft) {
 				source: "subclass"
 			});
 		}
-		for (const s of activeSubclass.spells) if (s.minClassLevel <= 1) addSpell(s.spell, "subclass");
+		for (const s of activeSubclass.spells) if (s.minClassLevel <= (draft.level ?? 1)) addSpell(s.spell, "subclass");
 	}
 	if (background) {
 		background.proficiencies.forEach((p) => addProficiency(p, "background", "fixed", null));
@@ -2054,7 +2054,8 @@ function buildSummary(rules, data) {
 		class: data.class,
 		subclass: data.subclass,
 		background: data.background,
-		picks: data.picks
+		picks: data.picks,
+		level: data.level
 	});
 	const owned = [...fixedEquipment(rules, data).flatMap((f) => f.items), ...data.equipment ?? []].reduce((all, e) => {
 		const row = all.find((r) => r.item === e.item);
@@ -2097,6 +2098,6 @@ function buildSummary(rules, data) {
 		spells: [...new Set(spellSlugs)].map((slug) => spellsBySlug.get(slug)).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
 	};
 }
-export { rollTotal as A, STANDARD_ARRAY as C, pointCost as D, methodPatch as E, fixedEquipment as F, ownedEquipment as I, resolveFeatures as L, categoryItems as M, equipmentGroupKeys as N, pointsSpent as O, equipmentGroups as P, POINT_BUY as S, availableValues as T, groupIssues as _, cappedScore as a, skillsStepGroups as b, WIZARD_RULES_KEYS as c, reconcile as d, resolverDraft as f, computeSteps as g, STEPS as h, tryDraftToCharacterInput as i, rollTotals as j, rollAbilityScores as k, changedDraftFields as l, spellsView as m, detailToSummaryData as n, deriveStats as o, spellPickFlags as p, draftToSummaryData as r, LIMITS as s, buildSummary as t, emptyDraft as u, groupLabel as v, arrangementProblem as w, ABILITY_LABELS as x, lengthIssue as y };
+export { rollAbilityScores as A, POINT_BUY as C, methodPatch as D, availableValues as E, equipmentGroups as F, fixedEquipment as I, ownedEquipment as L, rollTotals as M, categoryItems as N, pointCost as O, equipmentGroupKeys as P, resolveFeatures as R, ABILITY_LABELS as S, arrangementProblem as T, computeSteps as _, cappedScore as a, lengthIssue as b, WIZARD_RULES_KEYS as c, reconcile as d, resolverDraft as f, STEPS as g, spellsView as h, tryDraftToCharacterInput as i, rollTotal as j, pointsSpent as k, changedDraftFields as l, spellPickFlags as m, detailToSummaryData as n, deriveStats as o, classSpellOptions as p, draftToSummaryData as r, LIMITS as s, buildSummary as t, emptyDraft as u, groupIssues as v, STANDARD_ARRAY as w, skillsStepGroups as x, groupLabel as y };
 
 //# sourceMappingURL=summary.js.map

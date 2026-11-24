@@ -5103,6 +5103,8 @@ var character = sqliteTable("character", {
 		0
 	]),
 	hitDiceSpent: integer("hit_dice_spent").notNull().default(0),
+	/** Milestone levels the DM awarded (`award_level`) that the Player hasn't taken yet. */
+	levelsAwarded: integer("levels_awarded").notNull().default(0),
 	/** Spent uses by feature slug. */
 	featureUses: text("feature_uses", { mode: "json" }).$type().notNull().$defaultFn(() => ({})),
 	/** Condition slugs. */
@@ -5175,7 +5177,9 @@ var characterChoice = sqliteTable("character_choice", {
 var characterItem = sqliteTable("character_item", {
 	characterId: owner(),
 	itemId: ref("item_id", () => equipment.id),
-	quantity: integer("quantity").notNull()
+	quantity: integer("quantity").notNull(),
+	/** Worn or wielded: equipped armor and a shield set the Character's AC. */
+	equipped: integer("equipped", { mode: "boolean" }).notNull().default(false)
 }, (t) => [primaryKey({ columns: [t.characterId, t.itemId] }), check("character_item_quantity_check", sql.raw("quantity >= 1"))]);
 /**
 * A Character draft: the unsaved state of a new Character while the wizard is open, stored with
@@ -5278,7 +5282,8 @@ var call = sqliteTable("call", {
 	kind: text("kind", { enum: [
 		"check",
 		"question",
-		"roll_sequence"
+		"roll_sequence",
+		"hit_dice"
 	] }).notNull(),
 	state: text("state", { enum: [
 		"pending",
@@ -5324,6 +5329,8 @@ var callPart = sqliteTable("call_part", {
 	result: text("result", { mode: "json" }).$type(),
 	/** A roll sequence's steps (with the hidden AC or DC) and its rolls so far. */
 	sequence: text("sequence", { mode: "json" }).$type(),
+	/** A short rest's Hit Dice: what the Character can spend and, once answered, what it rolled. */
+	hitDice: text("hit_dice", { mode: "json" }).$type(),
 	answer: text("answer"),
 	answeredAt: integer("answered_at")
 }, (t) => [index("call_part_call_idx").on(t.callId)]);
