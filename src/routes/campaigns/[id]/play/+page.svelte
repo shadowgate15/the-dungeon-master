@@ -4,9 +4,12 @@
   import { createSessionsQuery } from '#lib/live/client.ts'
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
+  import Journal from '#lib/play/Journal.svelte'
+  import { knownBy } from '#lib/play/journal.ts'
   import Timeline from '#lib/play/Timeline.svelte'
   import {
     createFloorQuery,
+    createJournalQuery,
     createTimelineQuery,
     floorActions,
     FloorChangeError
@@ -24,6 +27,10 @@
   const timeline = createTimelineQuery(
     () => data.campaign.id,
     () => data.timeline
+  )
+  const journal = createJournalQuery(
+    () => data.campaign.id,
+    () => data.journal
   )
   const actions = floorActions(() => data.campaign.id)
 
@@ -61,6 +68,10 @@
       >{data.campaign.name}</Link
     >
     <DmBadge size="sm" attached={sessions.data.includes(data.campaign.id)} />
+    <Link
+      href={resolve('/campaigns/[id]/journal', { id: data.campaign.id })}
+      class="ml-auto text-sm">Journal</Link
+    >
   </header>
 
   <main
@@ -96,11 +107,17 @@
         <h2 class="mb-1 text-xs font-semibold text-muted uppercase">Clock and Scene</h2>
         <p class="text-muted">The Scene is set once play begins.</p>
       </section>
-      <section class="rounded-panel border border-border bg-surface p-3">
-        <h2 class="mb-1 text-xs font-semibold text-muted uppercase">
+      <section
+        aria-labelledby="knows-heading"
+        class="rounded-panel border border-border bg-surface p-3"
+      >
+        <h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">
           What {acting?.name ?? 'the Party'} knows
         </h2>
-        <p class="text-muted">Nothing yet.</p>
+        <Journal
+          entries={acting ? knownBy(journal.data, acting.id) : journal.data.entries}
+          holders={!acting}
+        />
       </section>
     </aside>
   </main>

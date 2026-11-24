@@ -1,6 +1,7 @@
 import { createQuery, useQueryClient } from '@tanstack/svelte-query'
-import { floorQueryKey, timelineQueryKey } from '#lib/live/messages.ts'
+import { floorQueryKey, journalQueryKey, timelineQueryKey } from '#lib/live/messages.ts'
 import type { OpenFloor, PendingDeclaration } from './floor'
+import type { Journal } from './journal'
 import type { Timeline } from './timeline'
 
 /** A Floor change the server refused, with its message for the Player. */
@@ -27,6 +28,19 @@ export function createTimelineQuery(campaign: () => string, initial: () => Timel
       const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/timeline`)
       if (!res.ok) throw new FloorChangeError('The timeline could not be loaded')
       return (await res.json()) as Timeline
+    },
+    initialData: initial()
+  }))
+}
+
+/** The Player's Journal, starting from the server-rendered one; live updates keep it fresh. */
+export function createJournalQuery(campaign: () => string, initial: () => Journal) {
+  return createQuery(() => ({
+    queryKey: journalQueryKey(campaign()),
+    queryFn: async (): Promise<Journal> => {
+      const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/journal`)
+      if (!res.ok) throw new Error('The Journal could not be loaded')
+      return (await res.json()) as Journal
     },
     initialData: initial()
   }))

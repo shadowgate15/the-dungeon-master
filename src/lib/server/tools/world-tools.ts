@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import { ENTITY_TYPES } from '#lib/world/entity-types.ts'
+import { createKnowledge } from '../knowledge/knowledge'
 import { createWorld } from '../world/world'
-import { readTool, writeTool } from './contract'
+import { readTool, ToolError, writeTool } from './contract'
+import { revealTarget, revealTargetFields, revealTargetRule } from './knowledge-tools'
 
 /** Every World-layer event is DM-only: the World layer never reaches the Player. */
 const dmOnly = true
@@ -28,13 +30,16 @@ export const worldTools = [
     description:
       'Open an Entity: typed fields, version, Page, current Facts (superseded and retired ones and every Page revision with history), links, backlinks and the count of Beliefs about it.',
     input: z.object({ handle, history: z.boolean().default(false) }),
-    run: (ctx, { handle, history }) => createWorld(ctx).open(handle, history)
+    run: (ctx, { handle, history }) => ({
+      ...createWorld(ctx).open(handle, history),
+      beliefs: createKnowledge(ctx).countAbout(handle)
+    })
   }),
 
   writeTool({
     name: 'establish',
     description:
-      'Establish a new NPC, Place, Faction or Topic. Refuses a name close to an existing Entity (returning the matches) unless you list them in distinct_from. [[Name]] links in the Page and Facts resolve to handles; unresolved ones come back with near-matches.',
+      "Establish a new NPC, Place, Faction or Topic. Refuses a name close to an existing Entity (returning the matches) unless you list them in distinct_from. [[Name]] links in the Page and Facts resolve to handles; unresolved ones come back with near-matches. An NPC's knows seeds its Beliefs, secrets included: each item is `of` (a Fact id, handle or handle.field) or a `claim` + `about`, as in reveal.",
     input: z.object({
       type: z.enum(ENTITY_TYPES),
       name: z.string().trim().min(1),
@@ -42,10 +47,30 @@ export const worldTools = [
       fields: z.record(z.string(), z.unknown()).default({}),
       page: z.string().optional(),
       facts: z.array(newFact).default([]),
-      distinct_from: z.array(handle).default([])
+      distinct_from: z.array(handle).default([]),
+      knows: z
+        .array(
+          z
+            .object({ ...revealTargetFields, source: z.string().trim().min(1).optional() })
+            .refine(...revealTargetRule)
+        )
+        .default([])
     }),
-    run: (ctx, input) => {
-      const result = createWorld(ctx).establish(input)
+    run: (ctx, { knows, ...input }) => {
+      if (knows.length && input.type !== 'npc') {
+        throw ToolError.invalidInput(
+          'establish',
+          `Only an NPC knows things; a ${input.type} holds no Beliefs`
+        )
+      }
+      const established = createWorld(ctx).establish(input)
+      const knowledge = createKnowledge(ctx)
+      const beliefs = knows.flatMap(({ source, ...item }) =>
+        knowledge
+          .reveal({ ...revealTarget(item), source, holders: [established.handle] }, 'establish')
+          .beliefs.map((b) => b.id)
+      )
+      const result = { ...established, beliefs }
       return {
         result,
         event: {
@@ -156,7 +181,7 @@ export const worldTools = [
   writeTool({
     name: 'retire',
     description:
-      "Retire a Fact (pass its subject's version) or a whole Entity (its version), with a reason. Retiring an Entity retires its current Facts and returns them. Retired records stay on file but are no longer used.",
+      "Retire a Fact (pass its subject's version) or a whole Entity (its version), with a reason. Retiring an Entity retires its current Facts and every Belief pointing at it, and returns them. Retired records stay on file but are no longer used.",
     input: z
       .object({
         fact: z.int().optional(),
@@ -173,9 +198,11 @@ export const worldTools = [
         fact !== undefined
           ? world.retireFact(fact, version, reason)
           : world.retireEntity(handle!, version, reason)
+      const retired_beliefs =
+        fact !== undefined ? [] : createKnowledge(ctx).retireAbout(handle!, reason)
       const what = fact !== undefined ? `Fact ${fact}` : handle!
       return {
-        result,
+        result: { ...result, retired_beliefs },
         event: {
           kind: 'retired',
           summary: `Retired ${what}: ${reason}`,
@@ -183,7 +210,8 @@ export const worldTools = [
             fact,
             handle: result.handle,
             reason,
-            facts: result.retired_facts.map((f) => f.id)
+            facts: result.retired_facts.map((f) => f.id),
+            beliefs: retired_beliefs
           },
           dmOnly
         }
@@ -194,14 +222,16 @@ export const worldTools = [
   writeTool({
     name: 'merge',
     description:
-      'Merge a duplicate Entity into another: moves its Facts, aliases (and its name, as an alias) and incoming links, appends its Page to the survivor as a new revision, and retires it. Pass both versions.',
+      'Merge a duplicate Entity into another: moves its Facts, Beliefs, aliases (and its name, as an alias) and incoming links, appends its Page to the survivor as a new revision, and retires it. Pass both versions.',
     input: z.object({
       from: handle,
       into: handle,
       versions: z.object({ from: z.int(), into: z.int() })
     }),
     run: (ctx, { from, into, versions }) => {
-      const result = createWorld(ctx).merge(from, into, versions)
+      const merged = createWorld(ctx).merge(from, into, versions)
+      const beliefs = createKnowledge(ctx).move(from, into)
+      const result = { ...merged, moved: { ...merged.moved, beliefs } }
       return {
         result,
         event: {

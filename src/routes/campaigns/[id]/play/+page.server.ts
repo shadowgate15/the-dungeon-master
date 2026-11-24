@@ -4,7 +4,7 @@ import { play } from '#lib/server/bridge/index.ts'
 import { playSheets } from '#lib/server/play/sheets.ts'
 import type { PageServerLoad } from './$types'
 
-/** The play console: the Party's sheets, the open Floor and the timeline, begun or not. */
+/** The play console: the Party's sheets, the open Floor, the timeline and the Journal, begun or not. */
 export const load: PageServerLoad = ({ params }) => {
   const entry = library.get(params.id)
   if (!entry) error(404, 'Campaign not found')
@@ -14,6 +14,7 @@ export const load: PageServerLoad = ({ params }) => {
     sheets: playSheets(library.party(entry.id)),
     floor: library.floor(entry.id).current(),
     timeline: play.timeline(entry.id),
+    journal: library.record(entry.id).journal(),
     attached: sessions.list()
   }
 }
