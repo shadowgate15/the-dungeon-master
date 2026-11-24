@@ -76,16 +76,22 @@ function sceneView(db: Queryable) {
 
 const count = z.int().min(0)
 
-const advanceInput = z.union([
-  z.strictObject({
-    to: z.union([count, z.string()]).describe('A clock reading ("day 3, 14:20") or a minute')
-  }),
-  z
-    .strictObject({ minutes: count.optional(), hours: count.optional(), days: count.optional() })
-    .refine((d) => d.minutes !== undefined || d.hours !== undefined || d.days !== undefined, {
-      message: 'Pass minutes, hours or days, or to'
-    })
-])
+const advanceInput = z
+  .strictObject({
+    minutes: count.optional(),
+    hours: count.optional(),
+    days: count.optional(),
+    to: z
+      .union([count, z.string()])
+      .optional()
+      .describe('A clock reading ("day 3, 14:20") or a minute, instead of minutes/hours/days')
+  })
+  .refine(
+    (d) =>
+      (d.to === undefined) !==
+      (d.minutes === undefined && d.hours === undefined && d.days === undefined),
+    { message: 'Pass minutes, hours or days, or to (not both)' }
+  )
 
 /** Where the spotlight is and what time it is. */
 export const sceneTools = [
@@ -222,7 +228,7 @@ export const sceneTools = [
     run: ({ db }, input) => {
       const from = currentMinute(db)
       let to: number
-      if ('to' in input) {
+      if (input.to !== undefined) {
         const parsed = typeof input.to === 'number' ? input.to : parseClock(input.to)
         if (parsed === null) {
           throw ToolError.invalidInput(
