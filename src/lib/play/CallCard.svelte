@@ -37,7 +37,7 @@
       aria-label={part.character ?? part.player}
       class="flex flex-wrap items-center gap-2"
     >
-      {#if call.kind !== 'question'}
+      {#if call.kind !== 'question' && call.kind !== 'hit_dice'}
         <span class="font-medium">{part.character}</span>
         <span>{part.label}</span>
         {#if part.mode !== 'normal'}
