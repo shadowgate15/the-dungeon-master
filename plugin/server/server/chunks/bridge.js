@@ -1,7 +1,7 @@
-import { I as fact, K as race, N as belief, P as entity, T as event, U as background, W as classTable, at as eq, bt as DUNGEON_MASTER_PORT, ct as inArray, ft as ne, g as character, h as campaign, it as and, mt as sql, n as createRulesRepository, nt as asc, o as userStateDir, pt as or, tt as SOLO_PLAYER, ut as isNull, v as characterDraft, xt as DUNGEON_MASTER_VERSION, yt as DUNGEON_MASTER_HOME, z as ENTITY_TYPES } from "./seed.js";
-import { $ as combatant, A as currentStamp, At as SESSION_LIVE_MESSAGE, B as callInput, Ct as writeTool, Dt as charactersInScene, E as returnStrandedDrafts, Et as characterHolders, F as ABILITY_NAMES, G as saveKey, H as cancelPendingCall, J as rollAll, K as attackSequence, M as logEvent, N as nextEventId, Ot as formatClock, P as setAwaitingNarration, Q as applyHealing, R as DC_BY_TIER, S as sessionsView, St as readTool, Tt as resolveLinks, U as createPendingCall, V as callResultEvent, W as openCall, X as sequenceText, Y as saveSequence, Z as applyDamage, _ as createArc, _t as fieldNames, b as history, bt as creationTool, c as CampaignNotFoundError, ct as ClockBackwardsError, dt as characterRefs, et as mustAct, f as SeedLockedError, ft as currentMinute, g as CurrentArcError, gt as createWorld, h as refuseLockedSeed, ht as lintWorld, i as sessions, j as logActivity, k as createDmChannels, kt as parseClock, l as NotACampaignFolderError, m as creationStage, mt as scenePlace, n as library, nt as setConditions, pt as present, q as damageSequence, r as live, rt as hpState, st as loadWizardRules, tt as saveBonus, ut as advanceClock, v as addConversationLine, vt as PLUGIN_NAME, wt as renderLinks, x as indexNarration, xt as expectVersion, y as closeSession, yt as ToolError, z as TIERS } from "./campaign.js";
+import { I as fact, K as race, N as belief, P as entity, St as DUNGEON_MASTER_VERSION, T as event, U as background, W as classTable, at as eq, bt as DUNGEON_MASTER_HOME, ct as inArray, g as character, h as campaign, ht as sql, it as and, mt as or, n as createRulesRepository, nt as asc, o as userStateDir, pt as ne, tt as SOLO_PLAYER, ut as isNull, v as characterDraft, xt as DUNGEON_MASTER_PORT, z as ENTITY_TYPES } from "./seed.js";
+import { $ as saveBonus, A as logEvent, At as expectVersion, B as cancelPendingCall, Ct as pastArcs, D as createDmChannels, Dt as PLUGIN_NAME, Et as reviseArc, Ft as SESSION_LIVE_MESSAGE, G as damageSequence, H as openCall, I as DC_BY_TIER, J as sequenceText, K as rollAll, L as TIERS, M as setAwaitingNarration, Mt as writeTool, N as ABILITY_NAMES, Nt as formatClock, O as currentStamp, Ot as ToolError, Pt as parseClock, Q as mustAct, R as callInput, St as currentArc, Tt as retireArc, U as saveKey, V as createPendingCall, W as attackSequence, X as applyHealing, Y as applyDamage, Z as combatant, _ as closeSession, _t as resolveLinks, at as loadWizardRules, b as sessionsView, bt as CurrentArcError, c as CampaignNotFoundError, ct as advanceClock, dt as present, et as setConditions, f as SeedLockedError, ft as scenePlace, g as addConversationLine, gt as renderLinks, h as refuseLockedSeed, ht as fieldNames, i as sessions, j as nextEventId, jt as readTool, k as logActivity, kt as creationTool, l as NotACampaignFolderError, lt as characterRefs, m as creationStage, mt as createWorld, n as library, ot as ClockBackwardsError, pt as lintWorld, q as saveSequence, r as live, tt as hpState, ut as currentMinute, v as history, vt as characterHolders, w as returnStrandedDrafts, wt as resolveBeat, xt as createArc, y as indexNarration, yt as charactersInScene, z as callResultEvent } from "./campaign.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
-import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
+import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { d as reconcile, j as rollTotals, l as changedDraftFields, u as emptyDraft, w as arrangementProblem, y as lengthIssue } from "./summary.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -619,44 +619,175 @@ var actionTools = [
 ];
 // src/lib/server/tools/arc-tools.ts
 var words = string().trim().min(1);
+var version = number().int().positive();
+var position = number().int().positive();
+/** Arc changes point the DM at the replanning procedure. */
+var ARC_REVIEW = "arc-review";
 /** The Arc: the DM's hidden plan. Every Arc event is DM-only and never reaches the Player. */
-var arcTools = [writeTool({
-	name: "create_arc",
-	description: "Create the current Arc (builder calls it at Begin and for each later Arc): a title, premise, stakes, the Acts in order (each a name, a purpose and its Beats in order, each a title and a description) and the intended resolution. Refused while a current Arc exists. Returns the Arc with its Beat handles and version. Never reaches the Player.",
-	input: object({
-		title: words,
-		premise: words,
-		stakes: words,
-		acts: array(object({
-			name: words,
-			purpose: words,
-			beats: array(object({
-				title: words,
-				description: words
-			})).min(1)
-		})).min(1),
-		resolution: words
+var arcTools = [
+	readTool({
+		name: "arc",
+		description: "Read the current Arc in full: its Acts, their Beats with descriptions, states and reasons, and the version every Arc write must pass. With history, also the concluded and retired Arcs (their resolutions and abandoned Beats are dangling threads). Never reaches the Player.",
+		input: object({ history: boolean().optional() }),
+		activity: null,
+		run: (ctx, { history }) => ({
+			current: currentArc(ctx.db),
+			...history ? { history: pastArcs(ctx.db) } : {}
+		})
 	}),
-	activity: null,
-	run: (ctx, input) => {
-		let created;
-		try {
-			created = createArc(ctx.db, input, ctx.now);
-		} catch (e) {
-			if (!(e instanceof CurrentArcError)) throw e;
-			throw new ToolError("current_arc", e.message, "Read the current Arc; conclude or retire it before creating another");
+	writeTool({
+		name: "resolve_beat",
+		description: "Settle a pending Beat: reached when play clearly established its outcome, abandoned when the story made it impossible or irrelevant, with a one-line reason. Call it before narrate when play settles a Beat. Reaching a Beat in a later Act abandons the pending Beats of earlier Acts; the result lists them. When no Beat is left pending the Arc concludes and you must load arc-review. Never reaches the Player.",
+		input: object({
+			beat: words,
+			version,
+			to: _enum(["reached", "abandoned"]),
+			reason: words
+		}),
+		activity: null,
+		run: (ctx, input) => {
+			const result = resolveBeat(ctx, input);
+			const concluded = result.arc.state === "concluded";
+			return {
+				result,
+				...concluded ? { skill: ARC_REVIEW } : {},
+				event: {
+					kind: "beat_resolved",
+					summary: `${input.beat} ${input.to}: ${input.reason}${concluded ? " (Arc concluded)" : ""}`,
+					data: {
+						beat: input.beat,
+						to: input.to,
+						abandoned: result.abandoned.map((b) => b.handle),
+						concluded
+					},
+					dmOnly: true
+				}
+			};
 		}
-		return {
-			result: created,
-			event: {
-				kind: "arc_created",
-				summary: `Arc created: ${created.title}`,
-				data: { title: created.title },
-				dmOnly: true
+	}),
+	writeTool({
+		name: "revise_arc",
+		description: "Revise the current Arc in one atomic call: edit its title, premise, stakes or resolution; edit an Act (numbered from 1) or add one before an existing Act; edit, add or move pending Beats (positions within an Act from 1, the end by default). Reached and abandoned Beats stay as history, nothing goes after the final Act, and there is no delete: abandon a dropped Beat with resolve_beat. An unplanned turning point is a new Beat you then resolve as reached. Never reaches the Player.",
+		input: object({
+			version,
+			ops: array(discriminatedUnion("op", [
+				object({
+					op: literal("edit_arc"),
+					title: words.optional(),
+					premise: words.optional(),
+					stakes: words.optional(),
+					resolution: words.optional()
+				}),
+				object({
+					op: literal("edit_act"),
+					act: position,
+					name: words.optional(),
+					purpose: words.optional()
+				}),
+				object({
+					op: literal("add_act"),
+					before: position,
+					name: words,
+					purpose: words
+				}),
+				object({
+					op: literal("edit_beat"),
+					beat: words,
+					title: words.optional(),
+					description: words.optional()
+				}),
+				object({
+					op: literal("add_beat"),
+					act: position,
+					position: position.optional(),
+					title: words,
+					description: words
+				}),
+				object({
+					op: literal("move_beat"),
+					beat: words,
+					act: position,
+					position: position.optional()
+				})
+			])).min(1)
+		}),
+		activity: null,
+		run: (ctx, input) => {
+			const result = reviseArc(ctx, input);
+			return {
+				result,
+				event: {
+					kind: "arc_revised",
+					summary: `Arc revised: ${input.ops.map((o) => o.op).join(", ")}`,
+					data: {
+						ops: input.ops,
+						added: result.added
+					},
+					dmOnly: true
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "retire_arc",
+		description: "Retire the current Arc when its premise or stakes no longer fit (otherwise revise it): every pending Beat is abandoned with the reason and returned. Then load arc-review. Never reaches the Player.",
+		input: object({
+			version,
+			reason: words
+		}),
+		activity: null,
+		run: (ctx, input) => {
+			const result = retireArc(ctx, input);
+			return {
+				result,
+				skill: ARC_REVIEW,
+				event: {
+					kind: "arc_retired",
+					summary: `Arc retired: ${result.title}: ${input.reason}`,
+					data: { abandoned: result.abandoned.map((b) => b.handle) },
+					dmOnly: true
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "create_arc",
+		description: "Create the current Arc (builder calls it at Begin and for each later Arc): a title, premise, stakes, the Acts in order (each a name, a purpose and its Beats in order, each a title and a description) and the intended resolution. Refused while a current Arc exists. Returns the Arc with its Beat handles and version. Never reaches the Player.",
+		input: object({
+			title: words,
+			premise: words,
+			stakes: words,
+			acts: array(object({
+				name: words,
+				purpose: words,
+				beats: array(object({
+					title: words,
+					description: words
+				})).min(1)
+			})).min(1),
+			resolution: words
+		}),
+		activity: null,
+		run: (ctx, input) => {
+			let created;
+			try {
+				created = createArc(ctx.db, input, ctx.now);
+			} catch (e) {
+				if (!(e instanceof CurrentArcError)) throw e;
+				throw new ToolError("current_arc", e.message, "Read the current Arc; conclude or retire it before creating another");
 			}
-		};
-	}
-})];
+			return {
+				result: created,
+				event: {
+					kind: "arc_created",
+					summary: `Arc created: ${created.title}`,
+					data: { title: created.title },
+					dmOnly: true
+				}
+			};
+		}
+	})
+];
 // src/lib/server/tools/seed-tools.ts
 /** The Seed is one Entity per Campaign, so its handle is fixed. */
 var SEED_HANDLE = "campaign";
