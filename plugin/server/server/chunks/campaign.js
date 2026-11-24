@@ -1,4 +1,4 @@
-import { $ as CUSTOM_BACKGROUND_FEATURE_MAX, A as act, B as NPC_STATUSES, C as conversationMessage, D as npcCombat, E as floor, F as entityAlias, G as equipment, H as alignment, I as fact, J as spell, K as race, L as pageRevision, M as beat, N as belief, O as returnedDraft, P as entity, Q as BACKSTORY_MAX, R as worldLink, S as characterSpell, T as event, U as background, V as abilityScoreMethod, W as classTable, X as subrace, Y as subclass, Z as ABILITY_METHODS, _ as characterChoice, a as defaultCampaignRoot, at as eq, b as characterItem, c as skills_default, ct as inArray, d as openDatabase, dt as like, f as activityLine, ft as ne, g as character, gt as is, h as campaign, ht as Column, i as canonicalFolder, it as and, j as arc, k as session, l as abilities_default, lt as isNotNull, m as callPart, mt as sql, n as createRulesRepository, nt as asc, o as userStateDir, ot as gt, p as call, pt as or, q as skill, r as campaignDatabasePath, rt as desc, s as loadRulesDataset, st as gte, t as seedRulesData, tt as SOLO_PLAYER, u as migrateDatabase, ut as isNull, v as characterDraft, vt as DUNGEON_MASTER_CAMPAIGNS, w as declaration, x as characterSkill, y as characterEquipment, yt as DUNGEON_MASTER_HOME, z as ENTITY_TYPES } from "./seed.js";
+import { $ as CUSTOM_BACKGROUND_FEATURE_MAX, A as act, B as NPC_STATUSES, C as conversationMessage, D as npcCombat, E as floor, F as entityAlias, G as equipment, H as alignment, I as fact, J as spell, K as race, L as pageRevision, M as beat, N as belief, O as returnedDraft, P as entity, Q as BACKSTORY_MAX, R as worldLink, S as characterSpell, T as event, U as background, V as abilityScoreMethod, W as classTable, X as subrace, Y as subclass, Z as ABILITY_METHODS, _ as characterChoice, _t as is, a as defaultCampaignRoot, at as eq, b as characterItem, bt as DUNGEON_MASTER_HOME, c as skills_default, ct as inArray, d as openDatabase, dt as like, f as activityLine, ft as lt, g as character, gt as Column, h as campaign, ht as sql, i as canonicalFolder, it as and, j as arc, k as session, l as abilities_default, lt as isNotNull, m as callPart, mt as or, n as createRulesRepository, nt as asc, o as userStateDir, ot as gt, p as call, pt as ne, q as skill, r as campaignDatabasePath, rt as desc, s as loadRulesDataset, st as gte, t as seedRulesData, tt as SOLO_PLAYER, u as migrateDatabase, ut as isNull, v as characterDraft, w as declaration, x as characterSkill, y as characterEquipment, yt as DUNGEON_MASTER_CAMPAIGNS, z as ENTITY_TYPES } from "./seed.js";
 import { L as resolveFeatures, N as equipmentGroupKeys, P as equipmentGroups, c as WIZARD_RULES_KEYS, f as resolverDraft, h as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, t as buildSummary, u as emptyDraft } from "./summary.js";
 import { _ as prettifyError, c as literal, f as strictObject, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
@@ -114,6 +114,9 @@ function createLiveUpdates({ sessions }) {
 	};
 }
 // node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/functions/aggregate.js
+function count(expression) {
+	return sql`count(${expression || sql.raw("*")})`.mapWith(Number);
+}
 function max(expression) {
 	return sql`max(${expression})`.mapWith(is(expression, Column) ? expression : String);
 }
@@ -222,6 +225,74 @@ function parseClock(text) {
 	const minute = (day - 1) * DAY + hours * 60 + minutes - START;
 	return minute < 0 ? null : minute;
 }
+// src/lib/server/tools/contract.ts
+/**
+* The shared contract every game tool follows: short snake_case names, per-Entity versions on
+* every read and write, one transaction and one Event per mutating call, and errors shaped
+* `{code, message, next}`.
+*/
+/** The plugin's name, which namespaces the skills a tool points to. */
+var PLUGIN_NAME = "the-dungeon-master";
+/**
+* A refusal the DM can act on: what went wrong and the call to make next. `details` adds
+* structured data to the payload (such as the matches a near-duplicate refusal found).
+*/
+var ToolError = class ToolError extends Error {
+	code;
+	next;
+	details;
+	constructor(code, message, next, details) {
+		super(message);
+		this.code = code;
+		this.next = next;
+		this.details = details;
+	}
+	/** The handle names no Entity. */
+	static unknownHandle(handle) {
+		return new ToolError("unknown_handle", `No Entity has the handle ${handle}`, "Check the handle against a recent read and call again");
+	}
+	/** The write passed an old version: someone changed the Entity since the DM read it. */
+	static staleVersion(handle, given, current, read) {
+		return new ToolError("stale_version", `${handle} is at version ${current}, not ${given}: it changed since you read it`, read);
+	}
+	/** The input breaks a rule the forms enforce too. */
+	static invalidInput(tool, message) {
+		return new ToolError("invalid_input", message, `Fix the arguments and call ${tool} again`);
+	}
+};
+/** Refuses a write whose version is not the Entity's current one. */
+function expectVersion(entity, given) {
+	if (entity.version !== given) throw ToolError.staleVersion(entity.handle, given, entity.version, entity.read);
+}
+/** A tool that only reads. It logs nothing. */
+function readTool(tool) {
+	return {
+		...tool,
+		activity: tool.activity,
+		mutates: false,
+		run: tool.run
+	};
+}
+/** A tool that changes state: one transaction, exactly one Event. */
+function writeTool(tool) {
+	return {
+		...tool,
+		activity: tool.activity,
+		mutates: true,
+		run: tool.run
+	};
+}
+/**
+* A tool that changes creation state (the Seed card, Character drafts, the creation conversation):
+* one transaction, and no Event, since the Event log starts with the story.
+*/
+function creationTool(tool) {
+	return {
+		...tool,
+		mutates: "creation",
+		run: tool.run
+	};
+}
 // src/lib/server/world/names.ts
 /** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
 var plain$1 = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -255,6 +326,287 @@ function isNearName(a, b) {
 	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
 	const words = new Set(long.split(" "));
 	return short.split(" ").every((w) => words.has(w));
+}
+// src/lib/server/story/arc.ts
+/** There is already a current Arc; a Campaign has at most one. */
+var CurrentArcError = class extends Error {};
+/** The current Arc in full, as the DM reads it, or null in a gap between Arcs. */
+function currentArc(db) {
+	const found = currentRow(db);
+	return found ? arcView(db, found) : null;
+}
+/** The Arcs that have left current (concluded or retired), oldest first. */
+function pastArcs(db) {
+	return db.select().from(arc).where(ne(arc.state, "current")).orderBy(asc(arc.createdAt)).all().map((found) => arcView(db, found));
+}
+var currentRow = (db) => db.select().from(arc).where(eq(arc.state, "current")).get();
+function arcView(db, found) {
+	const acts = db.select().from(act).where(eq(act.arcId, found.id)).orderBy(asc(act.position)).all();
+	const beats = acts.length ? db.select().from(beat).where(inArray(beat.actId, acts.map((a) => a.id))).orderBy(asc(beat.position)).all() : [];
+	return {
+		title: found.title,
+		premise: found.premise,
+		stakes: found.stakes,
+		resolution: found.resolution,
+		state: found.state,
+		version: found.version,
+		...found.state === "current" ? {} : { endReason: found.endReason },
+		acts: acts.map((a, i) => ({
+			number: i + 1,
+			name: a.name,
+			purpose: a.purpose,
+			beats: beats.filter((b) => b.actId === a.id).map((b) => ({
+				handle: b.handle,
+				title: b.title,
+				description: b.description,
+				state: b.state,
+				reason: b.reason,
+				...b.state === "pending" ? {} : {
+					event: b.resolvedEvent,
+					minute: b.resolvedMinute
+				}
+			}))
+		}))
+	};
+}
+/** A Beat handle from its title, unique across every Arc the Campaign has had. */
+function beatHandle(db, title, taken) {
+	const base = `beat:${slug$1(title)}`;
+	for (let n = 1;; n++) {
+		const handle = n === 1 ? base : `${base}-${n}`;
+		if (taken.has(handle)) continue;
+		if (db.select({ handle: beat.handle }).from(beat).where(eq(beat.handle, handle)).get()) continue;
+		taken.add(handle);
+		return handle;
+	}
+}
+/** Creates the current Arc; refused (`CurrentArcError`) while one exists. */
+function createArc(db, input, at) {
+	if (db.select({ id: arc.id }).from(arc).where(eq(arc.state, "current")).get()) throw new CurrentArcError("A current Arc already exists");
+	const created = db.insert(arc).values({
+		title: input.title,
+		premise: input.premise,
+		stakes: input.stakes,
+		resolution: input.resolution,
+		createdAt: at
+	}).returning().get();
+	const taken = /* @__PURE__ */ new Set();
+	input.acts.forEach((a, position) => {
+		const { id } = db.insert(act).values({
+			arcId: created.id,
+			position,
+			name: a.name,
+			purpose: a.purpose
+		}).returning({ id: act.id }).get();
+		a.beats.forEach((b, i) => {
+			db.insert(beat).values({
+				handle: beatHandle(db, b.title, taken),
+				actId: id,
+				position: i,
+				title: b.title,
+				description: b.description
+			}).run();
+		});
+	});
+	return arcView(db, created);
+}
+/** Discards every Arc (Start over, before the story has a Narration). */
+function discardArcs(db) {
+	db.delete(arc).run();
+}
+/** The Event kinds that change the Arc; the drift count restarts at the latest of them. */
+var ARC_CHANGES = [
+	"arc_created",
+	"beat_resolved",
+	"arc_revised",
+	"arc_retired"
+];
+/**
+* The drift count: Player Declarations since the last Arc change (`create_arc`, `resolve_beat`,
+* `revise_arc`, or the Arc ending), or since the log began.
+*/
+function driftCount(db) {
+	const last = db.select({ id: event.id }).from(event).where(inArray(event.kind, ARC_CHANGES)).orderBy(desc(event.id)).limit(1).get();
+	const where = [eq(event.kind, "declaration")];
+	if (last) where.push(gt(event.id, last.id));
+	return db.select({ n: count() }).from(event).where(and(...where)).get()?.n ?? 0;
+}
+var READ_ARC = "Read arc() for the current version and call again";
+/** The current Arc at `version`, or a refusal the DM can act on. */
+function writableArc(db, version) {
+	const found = currentRow(db);
+	if (!found) throw new ToolError("no_current_arc", "There is no current Arc", "Read arc(); in a gap, have builder draft the next Arc with create_arc");
+	expectVersion({
+		handle: "The Arc",
+		version: found.version,
+		read: READ_ARC
+	}, version);
+	return found;
+}
+/** A Beat of the current Arc by handle, with the position of its Act. */
+function beatOf(db, arcId, handle) {
+	const found = db.select({
+		beat,
+		actPosition: act.position
+	}).from(beat).innerJoin(act, eq(beat.actId, act.id)).where(and(eq(beat.handle, handle), eq(act.arcId, arcId))).get();
+	if (!found) throw new ToolError("unknown_beat", `The current Arc has no Beat ${handle}`, "Check the handle against arc() and call again");
+	return found;
+}
+/** Refuses a change to a Beat that has left pending. */
+function expectPending(b) {
+	if (b.state !== "pending") throw new ToolError("beat_not_pending", `${b.handle} is ${b.state}; a Beat leaves pending once and stays as history`, "Add a new Beat with revise_arc instead");
+}
+var beatSummary = (b) => ({
+	handle: b.handle,
+	title: b.title,
+	state: b.state
+});
+/** Abandons Beats with a reason and stamp; returns them. */
+function abandon(ctx, beats, reason) {
+	return beats.map((b) => stampBeat(ctx, b, "abandoned", reason));
+}
+function stampBeat({ db, stamp, now }, b, state, reason) {
+	return db.update(beat).set({
+		state,
+		reason,
+		resolvedAt: now,
+		resolvedEvent: stamp.eventId,
+		resolvedSession: stamp.sessionId,
+		resolvedMinute: stamp.minute
+	}).where(eq(beat.handle, b.handle)).returning().get();
+}
+/** The pending Beats of an Arc, Act by Act. */
+function pendingBeats(db, arcId) {
+	return db.select({ beat }).from(beat).innerJoin(act, eq(beat.actId, act.id)).where(and(eq(act.arcId, arcId), eq(beat.state, "pending"))).orderBy(asc(act.position), asc(beat.position)).all().map((r) => r.beat);
+}
+/** Ends the current Arc (concluded or retired) and bumps its version. */
+function endArc(db, found, state, reason, at) {
+	return db.update(arc).set({
+		state,
+		endedAt: at,
+		endReason: reason,
+		version: found.version + 1
+	}).where(eq(arc.id, found.id)).returning().get();
+}
+var bump = (db, found) => db.update(arc).set({ version: found.version + 1 }).where(eq(arc.id, found.id)).returning().get();
+/**
+* Settles a pending Beat. Reaching a Beat in a later Act abandons every pending Beat of the earlier
+* Acts (the cascade); when no Beat is left pending, the Arc concludes.
+*/
+function resolveBeat(ctx, input) {
+	const { db } = ctx;
+	const found = writableArc(db, input.version);
+	const target = beatOf(db, found.id, input.beat);
+	expectPending(target.beat);
+	const resolved = stampBeat(ctx, target.beat, input.to, input.reason);
+	const cascaded = abandon(ctx, input.to === "reached" ? db.select({ beat }).from(beat).innerJoin(act, eq(beat.actId, act.id)).where(and(eq(act.arcId, found.id), eq(beat.state, "pending"), lt(act.position, target.actPosition))).all().map((r) => r.beat) : [], `Play moved past its Act when ${resolved.handle} was reached`);
+	const after = pendingBeats(db, found.id).length === 0 ? endArc(db, found, "concluded", input.reason, ctx.now) : bump(db, found);
+	return {
+		resolved: beatSummary(resolved),
+		abandoned: cascaded.map(beatSummary),
+		arc: {
+			state: after.state,
+			version: after.version
+		}
+	};
+}
+/** Retires the current Arc: every pending Beat is abandoned with the reason. */
+function retireArc(ctx, input) {
+	const found = writableArc(ctx.db, input.version);
+	const abandoned = abandon(ctx, pendingBeats(ctx.db, found.id), input.reason);
+	const after = endArc(ctx.db, found, "retired", input.reason, ctx.now);
+	return {
+		title: after.title,
+		abandoned: abandoned.map(beatSummary),
+		arc: {
+			state: after.state,
+			version: after.version
+		}
+	};
+}
+/**
+* Applies every op in order, or none (the caller's transaction rolls back on a refusal). Only
+* pending Beats change, nothing is deleted, and nothing is added after the final Act.
+*/
+function reviseArc(ctx, input) {
+	const { db } = ctx;
+	const found = writableArc(db, input.version);
+	const acts = () => db.select().from(act).where(eq(act.arcId, found.id)).orderBy(asc(act.position)).all();
+	const actAt = (n) => {
+		const all = acts();
+		if (n > all.length) throw new ToolError("after_final_act", `The Arc has ${all.length} Acts; nothing can be added after the final Act`, "Revise the final Act, or have builder draft the next Arc once this one ends");
+		return all[n - 1];
+	};
+	/** Puts a Beat at a 1-based position of an Act (the end by default), renumbering the Act. */
+	const place = (handle, actId, position) => {
+		const others = db.select({ handle: beat.handle }).from(beat).where(and(eq(beat.actId, actId), ne(beat.handle, handle))).orderBy(asc(beat.position)).all().map((b) => b.handle);
+		const at = Math.min(Math.max((position ?? others.length + 1) - 1, 0), others.length);
+		others.splice(at, 0, handle);
+		others.forEach((h, i) => db.update(beat).set({
+			actId,
+			position: i
+		}).where(eq(beat.handle, h)).run());
+	};
+	const pendingBeat = (handle) => {
+		const target = beatOf(db, found.id, handle).beat;
+		expectPending(target);
+		return target;
+	};
+	/** The fields an edit op sets, so an edit that names none changes nothing. */
+	const fieldsOf = (op, ...keys) => Object.fromEntries(Object.entries(op).filter(([k, v]) => keys.includes(k) && v !== void 0));
+	const edit = (table, where, fields) => {
+		if (Object.keys(fields).length) db.update(table).set(fields).where(where).run();
+	};
+	const added = [];
+	for (const op of input.ops) switch (op.op) {
+		case "edit_arc":
+			edit(arc, eq(arc.id, found.id), fieldsOf(op, "title", "premise", "stakes", "resolution"));
+			break;
+		case "edit_act":
+			edit(act, eq(act.id, actAt(op.act).id), fieldsOf(op, "name", "purpose"));
+			break;
+		case "add_act": {
+			const all = acts();
+			if (op.before > all.length) actAt(op.before);
+			const at = Math.max(op.before, 1) - 1;
+			all.slice(at).forEach((a) => {
+				db.update(act).set({ position: a.position + 1 }).where(eq(act.id, a.id)).run();
+			});
+			db.insert(act).values({
+				arcId: found.id,
+				position: all[at].position,
+				name: op.name,
+				purpose: op.purpose
+			}).run();
+			break;
+		}
+		case "edit_beat":
+			pendingBeat(op.beat);
+			edit(beat, eq(beat.handle, op.beat), fieldsOf(op, "title", "description"));
+			break;
+		case "add_beat": {
+			const target = actAt(op.act);
+			const handle = beatHandle(db, op.title, /* @__PURE__ */ new Set());
+			db.insert(beat).values({
+				handle,
+				actId: target.id,
+				position: Number.MAX_SAFE_INTEGER,
+				title: op.title,
+				description: op.description
+			}).run();
+			place(handle, target.id, op.position);
+			added.push(handle);
+			break;
+		}
+		case "move_beat":
+			pendingBeat(op.beat);
+			place(op.beat, actAt(op.act).id, op.position);
+	}
+	bump(db, found);
+	return {
+		...arcView(db, currentRow(db)),
+		added
+	};
 }
 // src/lib/server/knowledge/holders.ts
 /**
@@ -352,74 +704,6 @@ function renderLinks(text, all) {
 		const named = byName(found.name, all);
 		return named.length === 1 && named[0].handle === found.handle ? `[[${found.name}]]` : `[[${found.handle}]]`;
 	});
-}
-// src/lib/server/tools/contract.ts
-/**
-* The shared contract every game tool follows: short snake_case names, per-Entity versions on
-* every read and write, one transaction and one Event per mutating call, and errors shaped
-* `{code, message, next}`.
-*/
-/** The plugin's name, which namespaces the skills a tool points to. */
-var PLUGIN_NAME = "the-dungeon-master";
-/**
-* A refusal the DM can act on: what went wrong and the call to make next. `details` adds
-* structured data to the payload (such as the matches a near-duplicate refusal found).
-*/
-var ToolError = class ToolError extends Error {
-	code;
-	next;
-	details;
-	constructor(code, message, next, details) {
-		super(message);
-		this.code = code;
-		this.next = next;
-		this.details = details;
-	}
-	/** The handle names no Entity. */
-	static unknownHandle(handle) {
-		return new ToolError("unknown_handle", `No Entity has the handle ${handle}`, "Check the handle against a recent read and call again");
-	}
-	/** The write passed an old version: someone changed the Entity since the DM read it. */
-	static staleVersion(handle, given, current, read) {
-		return new ToolError("stale_version", `${handle} is at version ${current}, not ${given}: it changed since you read it`, read);
-	}
-	/** The input breaks a rule the forms enforce too. */
-	static invalidInput(tool, message) {
-		return new ToolError("invalid_input", message, `Fix the arguments and call ${tool} again`);
-	}
-};
-/** Refuses a write whose version is not the Entity's current one. */
-function expectVersion(entity, given) {
-	if (entity.version !== given) throw ToolError.staleVersion(entity.handle, given, entity.version, entity.read);
-}
-/** A tool that only reads. It logs nothing. */
-function readTool(tool) {
-	return {
-		...tool,
-		activity: tool.activity,
-		mutates: false,
-		run: tool.run
-	};
-}
-/** A tool that changes state: one transaction, exactly one Event. */
-function writeTool(tool) {
-	return {
-		...tool,
-		activity: tool.activity,
-		mutates: true,
-		run: tool.run
-	};
-}
-/**
-* A tool that changes creation state (the Seed card, Character drafts, the creation conversation):
-* one transaction, and no Event, since the Event log starts with the story.
-*/
-function creationTool(tool) {
-	return {
-		...tool,
-		mutates: "creation",
-		run: tool.run
-	};
 }
 // src/lib/server/world/fields.ts
 /** A Place's handle, as a field value that must name an existing Place. */
@@ -1297,6 +1581,25 @@ function npcsPart({ db }) {
 		return `- ${n.name} (${n.handle})${detail ? `: ${detail}` : ""}`;
 	})].join("\n");
 }
+/**
+* The Arc line: the current Act (the Act of the first pending Beat) with its purpose, that Act's
+* pending Beats by handle and title, the next Act's name, and the drift count. No descriptions.
+*/
+function arcPart({ db }) {
+	const drift = `Declarations since the last Beat change: ${driftCount(db)}.`;
+	const found = currentArc(db);
+	const at = found?.acts.findIndex((a) => a.beats.some((b) => b.state === "pending")) ?? -1;
+	if (!found || at === -1) return `Arc: No current Arc. ${drift}`;
+	const current = found.acts[at];
+	const pending = current.beats.filter((b) => b.state === "pending").map((b) => `${b.handle} (${b.title})`);
+	const next = found.acts[at + 1];
+	return [
+		`Arc: Act ${current.number}, ${current.name}: ${current.purpose}`,
+		`- Pending: ${pending.join("; ")}`,
+		`- Next Act: ${next ? next.name : "none, this is the final Act"}`,
+		`- ${drift}`
+	].join("\n");
+}
 /** When lint last ran: the Session (if any) and in-fiction time of its last `lint_ran` Event. */
 function lintPart({ db }) {
 	const last = lastLint(db);
@@ -1311,6 +1614,7 @@ function coreBlock(source) {
 		scenePart(source),
 		partyPart(source),
 		npcsPart(source),
+		arcPart(source),
 		lintPart(source)
 	].join("\n");
 }
@@ -3330,77 +3634,6 @@ function addConversationLine(db, line, at) {
 function conversationLines(db) {
 	return db.select().from(conversationMessage).orderBy(asc(conversationMessage.id)).all();
 }
-// src/lib/server/story/arc.ts
-/** There is already a current Arc; a Campaign has at most one. */
-var CurrentArcError = class extends Error {};
-function arcView(db, found) {
-	const acts = db.select().from(act).where(eq(act.arcId, found.id)).orderBy(asc(act.position)).all();
-	const beats = acts.length ? db.select().from(beat).where(inArray(beat.actId, acts.map((a) => a.id))).orderBy(asc(beat.position)).all() : [];
-	return {
-		title: found.title,
-		premise: found.premise,
-		stakes: found.stakes,
-		resolution: found.resolution,
-		state: found.state,
-		version: found.version,
-		acts: acts.map((a) => ({
-			name: a.name,
-			purpose: a.purpose,
-			beats: beats.filter((b) => b.actId === a.id).map((b) => ({
-				handle: b.handle,
-				title: b.title,
-				description: b.description,
-				state: b.state,
-				reason: b.reason
-			}))
-		}))
-	};
-}
-/** A Beat handle from its title, unique across every Arc the Campaign has had. */
-function beatHandle(db, title, taken) {
-	const base = `beat:${slug$1(title)}`;
-	for (let n = 1;; n++) {
-		const handle = n === 1 ? base : `${base}-${n}`;
-		if (taken.has(handle)) continue;
-		if (db.select({ handle: beat.handle }).from(beat).where(eq(beat.handle, handle)).get()) continue;
-		taken.add(handle);
-		return handle;
-	}
-}
-/** Creates the current Arc; refused (`CurrentArcError`) while one exists. */
-function createArc(db, input, at) {
-	if (db.select({ id: arc.id }).from(arc).where(eq(arc.state, "current")).get()) throw new CurrentArcError("A current Arc already exists");
-	const created = db.insert(arc).values({
-		title: input.title,
-		premise: input.premise,
-		stakes: input.stakes,
-		resolution: input.resolution,
-		createdAt: at
-	}).returning().get();
-	const taken = /* @__PURE__ */ new Set();
-	input.acts.forEach((a, position) => {
-		const { id } = db.insert(act).values({
-			arcId: created.id,
-			position,
-			name: a.name,
-			purpose: a.purpose
-		}).returning({ id: act.id }).get();
-		a.beats.forEach((b, i) => {
-			db.insert(beat).values({
-				handle: beatHandle(db, b.title, taken),
-				actId: id,
-				position: i,
-				title: b.title,
-				description: b.description
-			}).run();
-		});
-	});
-	return arcView(db, created);
-}
-/** Discards every Arc (Start over, before the story has a Narration). */
-function discardArcs(db) {
-	db.delete(arc).run();
-}
 // src/lib/server/creation/begin.ts
 /** Begin is not allowed yet (or any more): the message says why. */
 var BeginRefusedError = class extends Error {};
@@ -3815,6 +4048,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { combatant as $, currentStamp as A, SESSION_LIVE_MESSAGE as At, callInput as B, DeclarationNotFoundError as C, writeTool as Ct, DmOnlyEditError as D, charactersInScene as Dt, returnStrandedDrafts as E, characterHolders as Et, ABILITY_NAMES as F, saveKey as G, cancelPendingCall as H, CallClosedError as I, rollAll as J, attackSequence as K, CallRefusedError as L, logEvent as M, nextEventId as N, DraftNotFoundError as O, formatClock as Ot, setAwaitingNarration as P, applyHealing as Q, DC_BY_TIER as R, sessionsView as S, readTool as St, DmBusyError as T, resolveLinks as Tt, createPendingCall as U, callResultEvent as V, openCall as W, sequenceText as X, saveSequence as Y, applyDamage as Z, createArc as _, fieldNames as _t, CampaignArchivedError as a, CharacterValidationError as at, history as b, creationTool as bt, CampaignNotFoundError as c, ClockBackwardsError as ct, BeginRefusedError as d, characterRefs as dt, mustAct as et, SeedLockedError as f, currentMinute as ft, CurrentArcError as g, createWorld as gt, refuseLockedSeed as h, lintWorld as ht, sessions as i, CharacterNotFoundError as it, logActivity as j, createDmChannels as k, parseClock as kt, NotACampaignFolderError as l, SpotlightRefusedError as lt, creationStage as m, scenePlace as mt, library as n, setConditions as nt, CampaignExistsError as o, playSheets as ot, StartOverRefusedError as p, present as pt, damageSequence as q, live as r, hpState as rt, CampaignMissingError as s, loadWizardRules as st, campaignRoot as t, saveBonus as tt, SessionLiveError as u, advanceClock as ut, addConversationLine as v, PLUGIN_NAME as vt, DeclarationRefusedError as w, renderLinks as wt, indexNarration as x, expectVersion as xt, closeSession as y, ToolError as yt, TIERS as z };
+export { saveBonus as $, logEvent as A, expectVersion as At, cancelPendingCall as B, DmBusyError as C, pastArcs as Ct, createDmChannels as D, PLUGIN_NAME as Dt, DraftNotFoundError as E, reviseArc as Et, CallRefusedError as F, SESSION_LIVE_MESSAGE as Ft, damageSequence as G, openCall as H, DC_BY_TIER as I, sequenceText as J, rollAll as K, TIERS as L, setAwaitingNarration as M, writeTool as Mt, ABILITY_NAMES as N, formatClock as Nt, currentStamp as O, ToolError as Ot, CallClosedError as P, parseClock as Pt, mustAct as Q, callInput as R, DeclarationRefusedError as S, currentArc as St, DmOnlyEditError as T, retireArc as Tt, saveKey as U, createPendingCall as V, attackSequence as W, applyHealing as X, applyDamage as Y, combatant as Z, closeSession as _, resolveLinks as _t, CampaignArchivedError as a, loadWizardRules as at, sessionsView as b, CurrentArcError as bt, CampaignNotFoundError as c, advanceClock as ct, BeginRefusedError as d, present as dt, setConditions as et, SeedLockedError as f, scenePlace as ft, addConversationLine as g, renderLinks as gt, refuseLockedSeed as h, fieldNames as ht, sessions as i, playSheets as it, nextEventId as j, readTool as jt, logActivity as k, creationTool as kt, NotACampaignFolderError as l, characterRefs as lt, creationStage as m, createWorld as mt, library as n, CharacterNotFoundError as nt, CampaignExistsError as o, ClockBackwardsError as ot, StartOverRefusedError as p, lintWorld as pt, saveSequence as q, live as r, CharacterValidationError as rt, CampaignMissingError as s, SpotlightRefusedError as st, campaignRoot as t, hpState as tt, SessionLiveError as u, currentMinute as ut, history as v, characterHolders as vt, returnStrandedDrafts as w, resolveBeat as wt, DeclarationNotFoundError as x, createArc as xt, indexNarration as y, charactersInScene as yt, callResultEvent as z };
 
 //# sourceMappingURL=campaign.js.map

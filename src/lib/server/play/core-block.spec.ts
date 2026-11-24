@@ -83,3 +83,96 @@ describe('the core block', () => {
     expect(tokens(library.record(campaignId).coreBlock())).toBeLessThanOrEqual(300)
   })
 })
+
+describe('the Arc line', () => {
+  let call: (name: string, args?: Record<string, unknown>) => Record<string, unknown>
+  let declare: (...texts: string[]) => void
+
+  beforeEach(() => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    const host = createToolHost({ library, tools: gameTools })
+    call = (name, args = {}) => {
+      const result = host.call(folder, name, args)
+      expect(result.isError ?? false).toBe(false)
+      return JSON.parse(result.content[0].text)
+    }
+    declare = (...texts) => {
+      const floor = library.floor(campaignId)
+      for (const text of texts) floor.send({ character: wren, text })
+      floor.done()
+      call('narrate', { text: 'The world answers.' })
+    }
+  })
+
+  const arcLine = () => {
+    const block = library.record(campaignId).coreBlock()
+    return block.slice(block.indexOf('\nArc:') + 1, block.indexOf('Lint last ran'))
+  }
+
+  const relicArc = {
+    title: 'The Ember Relic',
+    premise: 'A cult wants the relic.',
+    stakes: 'The hills burn.',
+    acts: [
+      {
+        name: 'The Road Out',
+        purpose: 'Learn the relic is hunted.',
+        beats: [
+          { title: 'The Vizier Is the Patron', description: 'Secret one.' },
+          { title: 'Ambush at the Ford', description: 'Secret two.' }
+        ]
+      },
+      {
+        name: 'The Burning Hills',
+        purpose: 'Reach the shrine.',
+        beats: [{ title: 'The Shrine Falls', description: 'Secret three.' }]
+      }
+    ],
+    resolution: 'The relic is sealed.'
+  }
+
+  it('says there is no current Arc, with the drift since the log began', () => {
+    declare('I look around.', 'I check my pack.')
+
+    expect(arcLine()).toBe('Arc: No current Arc. Declarations since the last Beat change: 2.\n')
+  })
+
+  it('names the current Act, its pending Beats, the next Act and the drift', () => {
+    call('create_arc', relicArc)
+    call('resolve_beat', {
+      beat: 'beat:the-vizier-is-the-patron',
+      version: 1,
+      to: 'reached',
+      reason: 'Learned.'
+    })
+    declare('I ride for the ford.')
+
+    expect(arcLine()).toBe(
+      [
+        'Arc: Act 1, The Road Out: Learn the relic is hunted.',
+        '- Pending: beat:ambush-at-the-ford (Ambush at the Ford)',
+        '- Next Act: The Burning Hills',
+        '- Declarations since the last Beat change: 1.',
+        ''
+      ].join('\n')
+    )
+    expect(arcLine()).not.toContain('Secret')
+  })
+
+  it('counts only Player Declarations, and restarts on each Arc change', () => {
+    declare('Before the Arc.')
+    call('create_arc', relicArc)
+    declare('One.', 'Two.')
+    call('roll', { expr: '1d20' })
+    call('advance_time', { minutes: 10 })
+    expect(arcLine()).toContain('Declarations since the last Beat change: 2.')
+
+    call('revise_arc', { version: 1, ops: [{ op: 'edit_arc', stakes: 'Ashford burns.' }] })
+    expect(arcLine()).toContain('Declarations since the last Beat change: 0.')
+
+    declare('Three.')
+    call('retire_arc', { version: 2, reason: 'It no longer fits.' })
+    declare('Four.')
+    expect(arcLine()).toBe('Arc: No current Arc. Declarations since the last Beat change: 1.\n')
+  })
+})
