@@ -4,7 +4,9 @@
   import { createSessionsQuery } from '#lib/live/client.ts'
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
+  import PermissionCard from '#lib/play/PermissionCard.svelte'
   import Timeline from '#lib/play/Timeline.svelte'
+  import { createPermissionQuery, permissionActions } from '#lib/play/permission-client.ts'
   import {
     createFloorQuery,
     createTimelineQuery,
@@ -26,6 +28,11 @@
     () => data.timeline
   )
   const actions = floorActions(() => data.campaign.id)
+  const permission = createPermissionQuery(
+    () => data.campaign.id,
+    () => data.permission
+  )
+  const answers = permissionActions(() => data.campaign.id)
 
   /** Done, sending the composer's text first for Send & Done. */
   function done(text: string | null) {
@@ -76,6 +83,13 @@
     <section aria-label="Story" class="flex min-h-0 flex-col gap-2">
       <Timeline entries={timeline.data.entries} awaitingSince={timeline.data.awaitingSince} />
       {#if problem}<Alert variant="danger">{problem}</Alert>{/if}
+      {#if permission.data}
+        {@const request = permission.data}
+        <PermissionCard
+          {request}
+          onanswer={(behavior) => answers.answer(request.requestId, behavior)}
+        />
+      {/if}
       {#if archived}
         <Alert variant="warning">This Campaign is archived. Restore it to play.</Alert>
       {:else}
