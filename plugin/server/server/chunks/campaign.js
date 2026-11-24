@@ -1,6 +1,6 @@
-import { $ as CUSTOM_BACKGROUND_FEATURE_MAX, A as act, C as conversationMessage, D as npcCombat, E as floor, F as entityAlias, G as equipment, H as alignment, I as fact, J as spell, K as race, L as pageRevision, M as beat, N as belief, O as returnedDraft, P as entity, Q as BACKSTORY_MAX, R as worldLink, S as characterSpell, T as event, U as background, V as abilityScoreMethod, W as classTable, X as subrace, Y as subclass, Z as ABILITY_METHODS, _ as characterChoice, a as defaultCampaignRoot, at as eq, b as characterItem, c as skills_default, ct as inArray, d as openDatabase, f as activityLine, ft as ne, g as character, gt as is, h as campaign, ht as Column, i as canonicalFolder, it as and, j as arc, k as session, l as abilities_default, lt as isNotNull, m as callPart, mt as sql, n as createRulesRepository, nt as asc, o as userStateDir, ot as gt, p as call, q as skill, r as campaignDatabasePath, rt as desc, s as loadRulesDataset, st as gte, t as seedRulesData, tt as SOLO_PLAYER, u as migrateDatabase, ut as isNull, v as characterDraft, vt as DUNGEON_MASTER_CAMPAIGNS, w as declaration, x as characterSkill, y as characterEquipment, yt as DUNGEON_MASTER_HOME } from "./seed.js";
+import { $ as CUSTOM_BACKGROUND_FEATURE_MAX, A as act, B as NPC_STATUSES, C as conversationMessage, D as npcCombat, E as floor, F as entityAlias, G as equipment, H as alignment, I as fact, J as spell, K as race, L as pageRevision, M as beat, N as belief, O as returnedDraft, P as entity, Q as BACKSTORY_MAX, R as worldLink, S as characterSpell, T as event, U as background, V as abilityScoreMethod, W as classTable, X as subrace, Y as subclass, Z as ABILITY_METHODS, _ as characterChoice, a as defaultCampaignRoot, at as eq, b as characterItem, c as skills_default, ct as inArray, d as openDatabase, dt as like, f as activityLine, ft as ne, g as character, gt as is, h as campaign, ht as Column, i as canonicalFolder, it as and, j as arc, k as session, l as abilities_default, lt as isNotNull, m as callPart, mt as sql, n as createRulesRepository, nt as asc, o as userStateDir, ot as gt, p as call, pt as or, q as skill, r as campaignDatabasePath, rt as desc, s as loadRulesDataset, st as gte, t as seedRulesData, tt as SOLO_PLAYER, u as migrateDatabase, ut as isNull, v as characterDraft, vt as DUNGEON_MASTER_CAMPAIGNS, w as declaration, x as characterSkill, y as characterEquipment, yt as DUNGEON_MASTER_HOME, z as ENTITY_TYPES } from "./seed.js";
 import { L as resolveFeatures, N as equipmentGroupKeys, P as equipmentGroups, c as WIZARD_RULES_KEYS, f as resolverDraft, h as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, t as buildSummary, u as emptyDraft } from "./summary.js";
-import { c as literal, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
+import { _ as prettifyError, c as literal, f as strictObject, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { a as missingSeedFields, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import fs from "node:fs";
@@ -256,6 +256,822 @@ function isNearName(a, b) {
 	const words = new Set(long.split(" "));
 	return short.split(" ").every((w) => words.has(w));
 }
+// src/lib/server/knowledge/holders.ts
+/**
+* Every Character in the Campaign with its readable handle, `char:` plus its name's slug. Two
+* Characters with the same slug are told apart by creation order (`char:wren-2`).
+*/
+function characterHolders(db) {
+	const taken = /* @__PURE__ */ new Set();
+	return db.select({
+		id: character.id,
+		name: character.name,
+		player: character.controllingPlayer
+	}).from(character).orderBy(asc(character.createdAt), asc(character.id)).all().map((c) => {
+		const base = `char:${slug$1(c.name) || "character"}`;
+		let handle = base;
+		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
+		taken.add(handle);
+		return {
+			...c,
+			handle
+		};
+	});
+}
+/**
+* The Characters present in the Scene. There is no Scene yet (#328 adds it and presence from
+* whereabouts), so until then every Character in the Party is present.
+*/
+function charactersInScene(db) {
+	return characterHolders(db);
+}
+// src/lib/server/world/links.ts
+/** `[[Name]]`, `[[alias]]` or `[[npc:handle]]`; text after a `|` is a label and ignored. */
+var LINK = /\[\[([^[\]]+?)\]\]/g;
+var HANDLE = new RegExp(`^(${ENTITY_TYPES.join("|")}):[a-z0-9-]+$`);
+var target = (inner) => inner.split("|")[0].trim();
+/** The Entity a merged handle now lives in. */
+function follow(handle, known) {
+	let found = known.get(handle);
+	for (let hops = 0; found?.mergedInto && hops < 10; hops++) found = known.get(found.mergedInto);
+	return found;
+}
+function byName(name, known) {
+	const wanted = normalizeName(name);
+	return known.filter((k) => !k.retired && [k.name, ...k.aliases].some((n) => normalizeName(n) === wanted));
+}
+/**
+* Rewrites `[[Name]]` links to `[[handle]]` so renames never break them. A link that names no
+* Entity, or several, stays as written and is reported with near-matches. Nothing is stubbed.
+*/
+function resolveLinks(text, all) {
+	const known = new Map(all.map((k) => [k.handle, k]));
+	const links = /* @__PURE__ */ new Set();
+	const unresolved = [];
+	return {
+		text: text.replace(LINK, (whole, inner) => {
+			const name = target(inner);
+			if (HANDLE.test(name) && known.has(name)) {
+				links.add(follow(name, known)?.handle ?? name);
+				return `[[${name}]]`;
+			}
+			const found = byName(name, all);
+			if (found.length === 1) {
+				links.add(found[0].handle);
+				return `[[${found[0].handle}]]`;
+			}
+			const near = found.length ? found : all.filter((k) => !k.retired && [k.name, ...k.aliases].some((n) => isNearName(n, name)));
+			if (!unresolved.some((u) => u.link === name)) unresolved.push({
+				link: name,
+				near: near.map((k) => ({
+					handle: k.handle,
+					name: k.name
+				}))
+			});
+			return whole;
+		}),
+		links: [...links],
+		unresolved
+	};
+}
+/** Every `[[link]]` target in a text, as written (a handle once stored, or an unresolved name). */
+function linkTargets(text) {
+	return [...text.matchAll(LINK)].map((m) => target(m[1]));
+}
+/**
+* Shows stored `[[handle]]` links by the Entity's current name (following merges), or by handle
+* when that name would not lead back to it.
+*/
+function renderLinks(text, all) {
+	const known = new Map(all.map((k) => [k.handle, k]));
+	return text.replace(LINK, (whole, inner) => {
+		const handle = target(inner);
+		if (!HANDLE.test(handle)) return whole;
+		const found = follow(handle, known);
+		if (!found) return whole;
+		const named = byName(found.name, all);
+		return named.length === 1 && named[0].handle === found.handle ? `[[${found.name}]]` : `[[${found.handle}]]`;
+	});
+}
+// src/lib/server/tools/contract.ts
+/**
+* The shared contract every game tool follows: short snake_case names, per-Entity versions on
+* every read and write, one transaction and one Event per mutating call, and errors shaped
+* `{code, message, next}`.
+*/
+/** The plugin's name, which namespaces the skills a tool points to. */
+var PLUGIN_NAME = "the-dungeon-master";
+/**
+* A refusal the DM can act on: what went wrong and the call to make next. `details` adds
+* structured data to the payload (such as the matches a near-duplicate refusal found).
+*/
+var ToolError = class ToolError extends Error {
+	code;
+	next;
+	details;
+	constructor(code, message, next, details) {
+		super(message);
+		this.code = code;
+		this.next = next;
+		this.details = details;
+	}
+	/** The handle names no Entity. */
+	static unknownHandle(handle) {
+		return new ToolError("unknown_handle", `No Entity has the handle ${handle}`, "Check the handle against a recent read and call again");
+	}
+	/** The write passed an old version: someone changed the Entity since the DM read it. */
+	static staleVersion(handle, given, current, read) {
+		return new ToolError("stale_version", `${handle} is at version ${current}, not ${given}: it changed since you read it`, read);
+	}
+	/** The input breaks a rule the forms enforce too. */
+	static invalidInput(tool, message) {
+		return new ToolError("invalid_input", message, `Fix the arguments and call ${tool} again`);
+	}
+};
+/** Refuses a write whose version is not the Entity's current one. */
+function expectVersion(entity, given) {
+	if (entity.version !== given) throw ToolError.staleVersion(entity.handle, given, entity.version, entity.read);
+}
+/** A tool that only reads. It logs nothing. */
+function readTool(tool) {
+	return {
+		...tool,
+		activity: tool.activity,
+		mutates: false,
+		run: tool.run
+	};
+}
+/** A tool that changes state: one transaction, exactly one Event. */
+function writeTool(tool) {
+	return {
+		...tool,
+		activity: tool.activity,
+		mutates: true,
+		run: tool.run
+	};
+}
+/**
+* A tool that changes creation state (the Seed card, Character drafts, the creation conversation):
+* one transaction, and no Event, since the Event log starts with the story.
+*/
+function creationTool(tool) {
+	return {
+		...tool,
+		mutates: "creation",
+		run: tool.run
+	};
+}
+// src/lib/server/world/fields.ts
+/** A Place's handle, as a field value that must name an existing Place. */
+var placeHandle = string().regex(/^place:[a-z0-9-]+$/, "Expected a place handle (place:…)");
+var prose = string().trim();
+/**
+* Each Entity type's typed fields. `name` is common to every type and kept outside `fields`. A
+* row field is the single owner of its value: Facts and Pages should not restate it.
+*/
+var FIELD_SCHEMAS = {
+	npc: strictObject({
+		description: prose.optional(),
+		role: prose.optional(),
+		status: _enum(NPC_STATUSES).default("alive"),
+		whereabouts: placeHandle.optional(),
+		stat_block: string().regex(/^monster:[a-z0-9-]+$/, "Expected a monster handle (monster:…)").optional()
+	}),
+	place: strictObject({
+		description: prose.optional(),
+		exits: array(strictObject({
+			name: prose.min(1),
+			to: placeHandle.optional()
+		})).default([])
+	}),
+	faction: strictObject({ description: prose.optional() }),
+	topic: strictObject({})
+};
+/** The handles a type's fields point at, which must name existing Places. */
+function placeRefs(fields) {
+	const refs = [];
+	if (typeof fields.whereabouts === "string") refs.push(fields.whereabouts);
+	if (Array.isArray(fields.exits)) {
+		for (const exit of fields.exits) if (exit.to) refs.push(exit.to);
+	}
+	return refs;
+}
+/** Parses a type's fields, or returns the problem in words. */
+function parseFields(type, fields) {
+	const parsed = FIELD_SCHEMAS[type].safeParse(fields ?? {});
+	if (parsed.success) return {
+		ok: true,
+		fields: parsed.data
+	};
+	return {
+		ok: false,
+		message: prettifyError(parsed.error)
+	};
+}
+/** The field names a type has, besides `name`. */
+function fieldNames(type) {
+	return Object.keys(FIELD_SCHEMAS[type].shape);
+}
+// src/lib/server/world/world.ts
+/**
+* Whether a Fact's claim restates a field's value: it mentions the value's words, or links to the
+* Entity a handle value names.
+*/
+function restates(rendered, stored, value, all) {
+	const mentions = (v) => {
+		if (typeof v === "string") {
+			const linked = all.find((k) => k.handle === v);
+			if (linked && stored.includes(`[[${v}]]`)) return true;
+			const word = (linked?.name ?? v).trim().toLowerCase();
+			return word !== "" && rendered.toLowerCase().includes(word);
+		}
+		if (Array.isArray(v)) return v.some(mentions);
+		if (v && typeof v === "object") return Object.values(v).some(mentions);
+		return false;
+	};
+	return mentions(value);
+}
+/** The World layer over one Campaign database: the DM-only truth (ADR 0007). */
+function createWorld({ db, stamp }) {
+	const read = (handle) => `open ${handle}`;
+	function find(handle) {
+		const found = db.select().from(entity).where(eq(entity.handle, handle)).get();
+		if (!found) throw ToolError.unknownHandle(handle);
+		return found;
+	}
+	/** An Entity a write may change: it exists, isn't retired, and the DM saw its version. */
+	function writable(handle, version) {
+		const found = find(handle);
+		expectVersion({
+			handle,
+			version: found.version,
+			read: read(handle)
+		}, version);
+		if (found.retiredAt !== null) {
+			const where = found.mergedInto ? `; it was merged into ${found.mergedInto}` : "";
+			throw new ToolError("retired", `${handle} is retired (${found.retiredReason})${where}`, found.mergedInto ? `Use ${found.mergedInto} instead` : `Leave ${handle} as it is`);
+		}
+		return found;
+	}
+	function bump(handle) {
+		const { version } = db.update(entity).set({ version: sql`${entity.version} + 1` }).where(eq(entity.handle, handle)).returning({ version: entity.version }).get();
+		return version;
+	}
+	function known() {
+		const aliases = db.select().from(entityAlias).all();
+		return db.select().from(entity).all().map((e) => ({
+			handle: e.handle,
+			name: e.name,
+			aliases: aliases.filter((a) => a.handle === e.handle).map((a) => a.alias),
+			retired: e.retiredAt !== null,
+			mergedInto: e.mergedInto
+		}));
+	}
+	const aliasesOf = (handle) => db.select().from(entityAlias).where(eq(entityAlias.handle, handle)).all().map((a) => a.alias);
+	function checkFields(tool, type, fields) {
+		const parsed = parseFields(type, fields);
+		if (!parsed.ok) throw ToolError.invalidInput(tool, parsed.message);
+		for (const ref of placeRefs(parsed.fields)) {
+			const place = db.select().from(entity).where(eq(entity.handle, ref)).get();
+			if (!place || place.retiredAt !== null) throw ToolError.invalidInput(tool, `${ref} is not an established Place`);
+		}
+		return parsed.fields;
+	}
+	function freeHandle(type, name) {
+		const base = `${type}:${slug$1(name)}`;
+		const taken = new Set(db.select({ handle: entity.handle }).from(entity).where(or(eq(entity.handle, base), like(entity.handle, `${base}-%`))).all().map((e) => e.handle));
+		let handle = base;
+		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
+		return handle;
+	}
+	function page(handle) {
+		return db.select({ text: pageRevision.text }).from(pageRevision).where(eq(pageRevision.handle, handle)).orderBy(desc(pageRevision.id)).get()?.text ?? "";
+	}
+	/** Stores a new Page revision with its links resolved, and re-indexes the Page's links. */
+	function writePage(handle, text) {
+		const resolved = resolveLinks(text, known());
+		db.insert(pageRevision).values({
+			handle,
+			text: resolved.text,
+			sessionId: stamp.sessionId,
+			eventId: stamp.eventId,
+			createdAt: Date.now()
+		}).run();
+		db.delete(worldLink).where(and(eq(worldLink.fromHandle, handle), isNull(worldLink.factId))).run();
+		for (const to of resolved.links) db.insert(worldLink).values({
+			fromHandle: handle,
+			factId: null,
+			toHandle: to
+		}).run();
+		return resolved.unresolved;
+	}
+	const isCurrent = (f) => f.supersededBy === null && f.retiredAt === null;
+	function insertFact(subject, input) {
+		const resolved = resolveLinks(input.claim, known());
+		const validFrom = input.valid_from === void 0 ? stamp.minute : input.valid_from;
+		const row = db.insert(fact).values({
+			subject,
+			claim: resolved.text,
+			validFrom,
+			sessionId: stamp.sessionId,
+			eventId: stamp.eventId,
+			recordedMinute: stamp.minute
+		}).returning().get();
+		for (const to of resolved.links) db.insert(worldLink).values({
+			fromHandle: subject,
+			factId: row.id,
+			toHandle: to
+		}).run();
+		return {
+			row,
+			unresolved: resolved.unresolved
+		};
+	}
+	function factView(f, all) {
+		return {
+			id: f.id,
+			claim: renderLinks(f.claim, all),
+			valid_from: f.validFrom,
+			valid_to: f.supersededBy === null ? null : f.validTo,
+			state: f.retiredAt !== null ? "retired" : f.supersededBy !== null ? "superseded" : "current",
+			...f.supersededBy !== null && { superseded_by: f.supersededBy },
+			...f.retiredAt !== null && { retired_reason: f.retiredReason }
+		};
+	}
+	function findFact(id) {
+		const found = db.select().from(fact).where(eq(fact.id, id)).get();
+		if (!found) throw new ToolError("unknown_fact", `No Fact has the id ${id}`, "Check the id against a recent open");
+		return found;
+	}
+	/** A Fact that a supersession or retirement may still change. */
+	function currentFact(id) {
+		const found = findFact(id);
+		if (!isCurrent(found)) throw new ToolError("not_current", `Fact ${id} is already ${found.retiredAt !== null ? "retired" : `superseded by Fact ${found.supersededBy}`}`, `Open ${found.subject} with history to see its Facts`);
+		return found;
+	}
+	/**
+	* Closes `old` at the start of `by`. A Fact never begins before the one it supersedes; one that
+	* held since before the Campaign may only be superseded by another such Fact or a later one.
+	*/
+	function close(tool, old, by) {
+		if (old.id === by.id) throw ToolError.invalidInput(tool, "A Fact cannot supersede itself");
+		if (old.validFrom !== null && (by.validFrom === null || by.validFrom < old.validFrom)) throw ToolError.invalidInput(tool, `Fact ${old.id} holds from minute ${old.validFrom}; what supersedes it cannot begin earlier`);
+		db.update(fact).set({
+			supersededBy: by.id,
+			validTo: by.validFrom
+		}).where(eq(fact.id, old.id)).run();
+	}
+	/** Retires current Facts with one reason, returning them as the DM saw them. */
+	function retireFacts(facts, reason) {
+		const all = known();
+		for (const f of facts) db.update(fact).set({
+			retiredAt: stamp.minute,
+			retiredReason: reason
+		}).where(eq(fact.id, f.id)).run();
+		return facts.map((f) => ({
+			id: f.id,
+			claim: renderLinks(f.claim, all)
+		}));
+	}
+	/** Entities whose Page or current Facts link to `handle`. */
+	function linkersOf(handle) {
+		const rows = db.select().from(worldLink).where(eq(worldLink.toHandle, handle)).all();
+		return [...new Set(rows.map((l) => l.fromHandle))].filter((h) => h !== handle);
+	}
+	/** Rebuilds an Entity's full-text rows: name and aliases, Page, current Facts. */
+	function reindex(handle) {
+		db.run(sql`DELETE FROM world_search WHERE handle = ${handle}`);
+		const found = find(handle);
+		if (found.retiredAt !== null) return;
+		const all = known();
+		const rows = [
+			["name", [found.name, ...aliasesOf(handle)].join(" · ")],
+			["page", renderLinks(page(handle), all)],
+			...db.select().from(fact).where(eq(fact.subject, handle)).all().filter(isCurrent).map((f) => [`fact:${f.id}`, renderLinks(f.claim, all)])
+		];
+		for (const [source, text] of rows) if (text.trim()) db.run(sql`INSERT INTO world_search (handle, source, text) VALUES (${handle}, ${source}, ${text})`);
+	}
+	return {
+		/** Every Entity as link resolution sees it, retired and merged ones included. */
+		known,
+		/** Entities whose name or aliases are close to any of `names`, retired ones aside. */
+		nearMatches(names) {
+			return known().filter((k) => !k.retired).filter((k) => [k.name, ...k.aliases].some((n) => names.some((m) => isNearName(n, m)))).map((k) => ({
+				handle: k.handle,
+				name: k.name
+			}));
+		},
+		establish(input) {
+			for (const handle of input.distinct_from) find(handle);
+			const matches = this.nearMatches([input.name, ...input.aliases]).filter((m) => !input.distinct_from.includes(m.handle));
+			if (matches.length) throw new ToolError("near_duplicate", `"${input.name}" is close to ${matches.map((m) => `${m.handle} (${m.name})`).join(", ")}`, `Open the match if it is the same Entity; if not, call establish again with distinct_from: ${JSON.stringify(matches.map((m) => m.handle))}`, { matches });
+			const fields = checkFields("establish", input.type, input.fields);
+			const handle = freeHandle(input.type, input.name);
+			db.insert(entity).values({
+				handle,
+				type: input.type,
+				name: input.name,
+				fields,
+				createdAt: Date.now()
+			}).run();
+			for (const alias of new Set(input.aliases)) db.insert(entityAlias).values({
+				handle,
+				alias
+			}).run();
+			const unresolved = input.page ? writePage(handle, input.page) : [];
+			const facts = input.facts.map((f) => {
+				const made = insertFact(handle, f);
+				unresolved.push(...made.unresolved);
+				return made.row.id;
+			});
+			reindex(handle);
+			return {
+				handle,
+				version: 1,
+				facts,
+				unresolved
+			};
+		},
+		open(handle, history) {
+			const found = find(handle);
+			const all = known();
+			const facts = db.select().from(fact).where(eq(fact.subject, handle)).orderBy(asc(fact.id)).all().filter((f) => history || isCurrent(f));
+			const currentFactIds = new Set(db.select().from(fact).all().filter(isCurrent).map((f) => f.id));
+			const live = (l) => l.factId === null || currentFactIds.has(l.factId);
+			const via = (l) => l.factId === null ? "page" : l.factId;
+			const nameOf = (h) => all.find((k) => k.handle === h)?.name ?? h;
+			const links = db.select().from(worldLink).where(eq(worldLink.fromHandle, handle)).all().filter(live).map((l) => ({
+				handle: l.toHandle,
+				name: nameOf(l.toHandle),
+				via: via(l)
+			}));
+			const backlinks = db.select().from(worldLink).where(eq(worldLink.toHandle, handle)).all().filter((l) => live(l) && l.fromHandle !== handle).map((l) => ({
+				handle: l.fromHandle,
+				name: nameOf(l.fromHandle),
+				via: via(l)
+			}));
+			const revisions = history ? db.select().from(pageRevision).where(eq(pageRevision.handle, handle)).orderBy(asc(pageRevision.id)).all().map((r) => ({
+				revision: r.id,
+				text: renderLinks(r.text, all),
+				session: r.sessionId,
+				event: r.eventId
+			})) : void 0;
+			return {
+				handle,
+				type: found.type,
+				name: found.name,
+				aliases: aliasesOf(handle),
+				version: found.version,
+				retired: found.retiredAt === null ? null : {
+					reason: found.retiredReason,
+					merged_into: found.mergedInto
+				},
+				fields: found.fields,
+				page: renderLinks(page(handle), all),
+				facts: facts.map((f) => factView(f, all)),
+				links,
+				backlinks,
+				...revisions && { revisions }
+			};
+		},
+		editPage(handle, version, change) {
+			writable(handle, version);
+			const all = known();
+			const current = renderLinks(page(handle), all);
+			let text;
+			if ("text" in change) {
+				if (current.trim()) throw new ToolError("page_not_empty", `${handle} already has a Page; full text only goes into an empty one`, `Call edit_page with patches of old/new text from open ${handle}`);
+				text = change.text;
+			} else text = change.patches.reduce((t, p) => {
+				const count = t.split(p.old).length - 1;
+				if (count !== 1) throw new ToolError("patch_mismatch", `"${p.old}" appears ${count} times in the Page of ${handle}; it must appear exactly once`, `Open ${handle} and quote a longer, unique stretch of its Page`);
+				return t.replace(p.old, () => p.new);
+			}, current);
+			const unresolved = writePage(handle, text);
+			const next = bump(handle);
+			reindex(handle);
+			return {
+				handle,
+				version: next,
+				unresolved
+			};
+		},
+		setField(handle, version, field, value) {
+			const found = writable(handle, version);
+			let old;
+			if (field === "name") {
+				const parsed = string().trim().min(1).safeParse(value);
+				if (!parsed.success) throw ToolError.invalidInput("set_field", "A name must be text");
+				old = found.name;
+				db.update(entity).set({ name: parsed.data }).where(eq(entity.handle, handle)).run();
+				value = parsed.data;
+			} else {
+				if (!fieldNames(found.type).includes(field)) throw ToolError.invalidInput("set_field", `A ${found.type} has no field ${field}; its fields are name, ${fieldNames(found.type).join(", ")}`);
+				old = found.fields[field] ?? null;
+				const next = { ...found.fields };
+				if (value === null) delete next[field];
+				else next[field] = value;
+				const fields = checkFields("set_field", found.type, next);
+				value = fields[field] ?? null;
+				db.update(entity).set({ fields }).where(eq(entity.handle, handle)).run();
+			}
+			const next = bump(handle);
+			reindex(handle);
+			if (field === "name") for (const from of linkersOf(handle)) reindex(from);
+			const all = known();
+			const warnings = db.select().from(fact).where(eq(fact.subject, handle)).all().filter(isCurrent).filter((f) => restates(renderLinks(f.claim, all), f.claim, value, all)).map((f) => `Fact ${f.id} ("${renderLinks(f.claim, all)}") restates ${field}; the field owns it now, so supersede or retire the Fact`);
+			return {
+				handle,
+				field,
+				old,
+				new: value,
+				version: next,
+				warnings
+			};
+		},
+		addFact(input) {
+			writable(input.subject, input.version);
+			const olds = [...new Set(input.supersedes)].map(currentFact);
+			const made = insertFact(input.subject, input);
+			for (const old of olds) close("add_fact", old, made.row);
+			const version = bump(input.subject);
+			const others = [...new Set(olds.map((o) => o.subject))].filter((h) => h !== input.subject);
+			for (const other of others) bump(other);
+			for (const h of [input.subject, ...others]) reindex(h);
+			return {
+				fact: made.row.id,
+				subject: input.subject,
+				version,
+				valid_from: made.row.validFrom,
+				superseded: olds.map((o) => o.id),
+				unresolved: made.unresolved
+			};
+		},
+		supersede(oldId, byId) {
+			const old = currentFact(oldId);
+			const by = currentFact(byId);
+			close("supersede", old, by);
+			const version = bump(old.subject);
+			reindex(old.subject);
+			return {
+				old: old.id,
+				by: by.id,
+				valid_to: by.validFrom,
+				subject: old.subject,
+				version
+			};
+		},
+		retireFact(id, version, reason) {
+			const found = currentFact(id);
+			writable(found.subject, version);
+			const facts = retireFacts([found], reason);
+			const next = bump(found.subject);
+			reindex(found.subject);
+			return {
+				handle: found.subject,
+				version: next,
+				retired_facts: facts
+			};
+		},
+		retireEntity(handle, version, reason) {
+			writable(handle, version);
+			const facts = retireFacts(db.select().from(fact).where(eq(fact.subject, handle)).all().filter(isCurrent), reason);
+			db.update(entity).set({
+				retiredAt: stamp.minute,
+				retiredReason: reason
+			}).where(eq(entity.handle, handle)).run();
+			const next = bump(handle);
+			reindex(handle);
+			return {
+				handle,
+				version: next,
+				retired_facts: facts
+			};
+		},
+		merge(from, into, versions) {
+			if (from === into) throw ToolError.invalidInput("merge", "An Entity cannot merge into itself");
+			writable(from, versions.from);
+			const survivor = writable(into, versions.into);
+			const before = known();
+			const fromPage = renderLinks(page(from), before);
+			const intoPage = renderLinks(page(into), before);
+			const facts = db.update(fact).set({ subject: into }).where(eq(fact.subject, from)).returning({ id: fact.id }).all();
+			db.update(worldLink).set({ fromHandle: into }).where(and(eq(worldLink.fromHandle, from), isNotNull(worldLink.factId))).run();
+			const links = db.update(worldLink).set({ toHandle: into }).where(eq(worldLink.toHandle, from)).returning({ id: worldLink.id }).all();
+			const taken = new Set([survivor.name, ...aliasesOf(into)].map(normalizeName));
+			const aliases = [db.select().from(entity).where(eq(entity.handle, from)).get().name].concat(aliasesOf(from)).filter((a) => !taken.has(normalizeName(a)) && taken.add(normalizeName(a)));
+			db.delete(entityAlias).where(eq(entityAlias.handle, from)).run();
+			for (const alias of aliases) db.insert(entityAlias).values({
+				handle: into,
+				alias
+			}).run();
+			db.update(entity).set({
+				retiredAt: stamp.minute,
+				retiredReason: `Merged into ${into}`,
+				mergedInto: into
+			}).where(eq(entity.handle, from)).run();
+			const unresolved = fromPage.trim() ? writePage(into, intoPage.trim() ? `${intoPage}\n\n${fromPage}` : fromPage) : [];
+			db.delete(worldLink).where(and(eq(worldLink.fromHandle, from), isNull(worldLink.factId))).run();
+			bump(from);
+			const version = bump(into);
+			for (const h of /* @__PURE__ */ new Set([
+				from,
+				into,
+				...linkersOf(into)
+			])) reindex(h);
+			return {
+				from,
+				into,
+				version,
+				moved: {
+					facts: facts.map((f) => f.id),
+					aliases,
+					links: links.length
+				},
+				unresolved
+			};
+		},
+		search(query, type) {
+			const words = query.match(/[\p{L}\p{N}]+/gu) ?? [];
+			if (!words.length) return [];
+			const match = words.map((w) => `"${w}"*`).join(" OR ");
+			const rows = db.all(sql`
+        SELECT world_search.handle AS handle,
+          snippet(world_search, 2, '«', '»', '…', 12) AS snippet
+        FROM world_search JOIN ${entity} ON ${entity.handle} = world_search.handle
+        WHERE world_search MATCH ${match} AND ${entity.retiredAt} IS NULL
+          ${type ? sql`AND ${entity.type} = ${type}` : sql``}
+        ORDER BY bm25(world_search)
+        LIMIT 100`);
+			const seen = /* @__PURE__ */ new Map();
+			const all = db.select().from(entity).all();
+			for (const r of rows) {
+				if (seen.has(r.handle) || seen.size >= 10) continue;
+				const e = all.find((x) => x.handle === r.handle);
+				seen.set(r.handle, {
+					handle: r.handle,
+					type: e.type,
+					name: e.name,
+					snippet: r.snippet
+				});
+			}
+			return [...seen.values()];
+		}
+	};
+}
+// src/lib/server/world/lint.ts
+var pairKey = (a, b) => [a, b].sort().join(" ");
+/** Every pair of handles the DM declared distinct with establish's distinct_from. */
+function distinctPairs(ctx) {
+	const pairs = /* @__PURE__ */ new Set();
+	const rows = ctx.db.select().from(event).where(eq(event.kind, "entity_established")).all();
+	for (const row of rows) {
+		const from = row.data?.handle;
+		const others = row.data?.distinct_from;
+		if (typeof from !== "string" || !Array.isArray(others)) continue;
+		for (const other of others) pairs.add(pairKey(from, String(other)));
+	}
+	return pairs;
+}
+/**
+* Checks the World for what code can detect (ADR 0007): near-duplicate names, broken links, Facts
+* restating a field, Beliefs on retired Facts and Pages linking to retired Entities. Reads only.
+*/
+function lintWorld(ctx) {
+	const world = createWorld(ctx);
+	const live = world.known().filter((k) => !k.retired).sort((a, b) => a.handle.localeCompare(b.handle));
+	const findings = [];
+	const distinct = distinctPairs(ctx);
+	for (const [i, a] of live.entries()) for (const b of live.slice(i + 1)) {
+		if (distinct.has(pairKey(a.handle, b.handle))) continue;
+		if ([a.name, ...a.aliases].some((x) => [b.name, ...b.aliases].some((y) => isNearName(x, y)))) findings.push({
+			kind: "near_duplicate",
+			entities: [a, b].map((e) => ({
+				handle: e.handle,
+				name: e.name
+			}))
+		});
+	}
+	const known = new Map(world.known().map((k) => [k.handle, k]));
+	const reasons = new Map(ctx.db.select({
+		handle: entity.handle,
+		reason: entity.retiredReason
+	}).from(entity).all().map((e) => [e.handle, e.reason]));
+	const all = [...known.values()];
+	const fields = new Map(ctx.db.select({
+		handle: entity.handle,
+		fields: entity.fields
+	}).from(entity).all().map((e) => [e.handle, e.fields]));
+	for (const t of texts(ctx, live)) {
+		if (t.in === "page") continue;
+		const rendered = renderLinks(t.text, all);
+		for (const [field, value] of Object.entries(fields.get(t.handle) ?? {})) if (restates(rendered, t.text, value, all)) findings.push({
+			kind: "restated_field",
+			handle: t.handle,
+			fact: t.in,
+			claim: rendered,
+			field
+		});
+	}
+	for (const t of texts(ctx, live)) {
+		const retired = /* @__PURE__ */ new Set();
+		for (const link of linkTargets(t.text)) {
+			let found = known.get(link);
+			if (!found) {
+				findings.push({
+					kind: "broken_link",
+					handle: t.handle,
+					in: t.in,
+					link
+				});
+				continue;
+			}
+			for (let hops = 0; found.mergedInto && hops < 10; hops++) found = known.get(found.mergedInto) ?? found;
+			if (t.in === "page" && found.retired && !retired.has(found.handle)) {
+				retired.add(found.handle);
+				findings.push({
+					kind: "retired_link",
+					handle: t.handle,
+					retired: {
+						handle: found.handle,
+						name: found.name,
+						reason: reasons.get(found.handle) ?? null
+					}
+				});
+			}
+		}
+	}
+	findings.push(...retiredFactBeliefs(ctx));
+	return {
+		findings,
+		pages: changedPages(ctx, live, all)
+	};
+}
+/** The Event keys that name the Entities a World write touched. */
+var TOUCHED = [
+	"handle",
+	"subject",
+	"from",
+	"into"
+];
+/** The last `lint_ran` Event, or undefined if lint never ran. */
+function lastLint(db) {
+	return db.select().from(event).where(eq(event.kind, "lint_ran")).orderBy(desc(event.id)).get();
+}
+/**
+* The Pages of live Entities changed since the last lint (every Page before the first), beside
+* their fields, so the DM can judge where a Page contradicts a field.
+*/
+function changedPages(ctx, live, all) {
+	const { db } = ctx;
+	const since = lastLint(db)?.id ?? 0;
+	const touched = new Set(db.select({ data: event.data }).from(event).where(gt(event.id, since)).all().flatMap((e) => TOUCHED.map((k) => e.data?.[k])).filter((h) => typeof h === "string"));
+	return live.filter((e) => touched.has(e.handle)).flatMap((e) => {
+		const row = db.select().from(entity).where(eq(entity.handle, e.handle)).get();
+		const page = pageText(ctx, e.handle);
+		if (!page?.trim()) return [];
+		return [{
+			handle: row.handle,
+			type: row.type,
+			name: row.name,
+			version: row.version,
+			fields: row.fields,
+			page: renderLinks(page, all)
+		}];
+	});
+}
+function pageText({ db }, handle) {
+	return db.select({ text: pageRevision.text }).from(pageRevision).where(eq(pageRevision.handle, handle)).orderBy(desc(pageRevision.id)).get()?.text;
+}
+function retiredFactBeliefs({ db }) {
+	const characters = new Map(characterHolders(db).map((c) => [c.id, c.handle]));
+	return db.select({
+		belief,
+		fact
+	}).from(belief).innerJoin(fact, eq(fact.id, belief.factId)).where(and(eq(belief.kind, "fact"), isNull(belief.replacedBy), isNull(belief.retiredAt))).orderBy(asc(belief.id)).all().filter((r) => r.fact.retiredAt !== null).map((r) => ({
+		kind: "retired_fact_belief",
+		belief: r.belief.id,
+		holder: r.belief.holderNpc ?? characters.get(r.belief.holderCharacter) ?? "?",
+		fact: r.fact.id,
+		reason: r.fact.retiredReason
+	}));
+}
+/** The current Page and current Facts of each live Entity, as stored. */
+function texts({ db }, live) {
+	return live.flatMap((e) => {
+		const page = pageText({ db }, e.handle);
+		const facts = db.select().from(fact).where(eq(fact.subject, e.handle)).orderBy(asc(fact.id)).all().filter((f) => f.supersededBy === null && f.retiredAt === null);
+		return [...page ? [{
+			handle: e.handle,
+			in: "page",
+			text: page
+		}] : [], ...facts.map((f) => ({
+			handle: e.handle,
+			in: f.id,
+			text: f.claim
+		}))];
+	});
+}
 // src/lib/server/play/scene.ts
 /** A move of the clock that would take it backwards. */
 var ClockBackwardsError = class extends Error {};
@@ -481,9 +1297,12 @@ function npcsPart({ db }) {
 		return `- ${n.name} (${n.handle})${detail ? `: ${detail}` : ""}`;
 	})].join("\n");
 }
-/** When lint last ran. */
-function lintPart() {
-	return "Lint last ran: never.";
+/** When lint last ran: the Session (if any) and in-fiction time of its last `lint_ran` Event. */
+function lintPart({ db }) {
+	const last = lastLint(db);
+	if (!last) return "Lint last ran: never.";
+	const number = last.sessionId ? db.select({ number: session.number }).from(session).where(eq(session.id, last.sessionId)).get()?.number : void 0;
+	return `Lint last ran: ${number ? `Session ${number}, ` : ""}${formatClock(last.minute)}.`;
 }
 /** The whole core block. */
 function coreBlock(source) {
@@ -492,7 +1311,7 @@ function coreBlock(source) {
 		scenePart(source),
 		partyPart(source),
 		npcsPart(source),
-		lintPart()
+		lintPart(source)
 	].join("\n");
 }
 // src/lib/server/bridge/channels.ts
@@ -967,109 +1786,12 @@ function createCharacterService(db, now = Date.now, rules = loadRulesDataset()) 
 		}
 	};
 }
-// src/lib/server/tools/contract.ts
-/**
-* The shared contract every game tool follows: short snake_case names, per-Entity versions on
-* every read and write, one transaction and one Event per mutating call, and errors shaped
-* `{code, message, next}`.
-*/
-/** The plugin's name, which namespaces the skills a tool points to. */
-var PLUGIN_NAME = "the-dungeon-master";
-/**
-* A refusal the DM can act on: what went wrong and the call to make next. `details` adds
-* structured data to the payload (such as the matches a near-duplicate refusal found).
-*/
-var ToolError = class ToolError extends Error {
-	code;
-	next;
-	details;
-	constructor(code, message, next, details) {
-		super(message);
-		this.code = code;
-		this.next = next;
-		this.details = details;
-	}
-	/** The handle names no Entity. */
-	static unknownHandle(handle) {
-		return new ToolError("unknown_handle", `No Entity has the handle ${handle}`, "Check the handle against a recent read and call again");
-	}
-	/** The write passed an old version: someone changed the Entity since the DM read it. */
-	static staleVersion(handle, given, current, read) {
-		return new ToolError("stale_version", `${handle} is at version ${current}, not ${given}: it changed since you read it`, read);
-	}
-	/** The input breaks a rule the forms enforce too. */
-	static invalidInput(tool, message) {
-		return new ToolError("invalid_input", message, `Fix the arguments and call ${tool} again`);
-	}
-};
-/** Refuses a write whose version is not the Entity's current one. */
-function expectVersion(entity, given) {
-	if (entity.version !== given) throw ToolError.staleVersion(entity.handle, given, entity.version, entity.read);
-}
-/** A tool that only reads. It logs nothing. */
-function readTool(tool) {
-	return {
-		...tool,
-		activity: tool.activity,
-		mutates: false,
-		run: tool.run
-	};
-}
-/** A tool that changes state: one transaction, exactly one Event. */
-function writeTool(tool) {
-	return {
-		...tool,
-		activity: tool.activity,
-		mutates: true,
-		run: tool.run
-	};
-}
-/**
-* A tool that changes creation state (the Seed card, Character drafts, the creation conversation):
-* one transaction, and no Event, since the Event log starts with the story.
-*/
-function creationTool(tool) {
-	return {
-		...tool,
-		mutates: "creation",
-		run: tool.run
-	};
-}
 // src/lib/play/hp-state.ts
 function hpState(hp, max) {
 	if (hp <= 0) return "down";
 	if (hp * 4 <= max) return "near death";
 	if (hp * 2 <= max) return "bloodied";
 	return "unhurt";
-}
-// src/lib/server/knowledge/holders.ts
-/**
-* Every Character in the Campaign with its readable handle, `char:` plus its name's slug. Two
-* Characters with the same slug are told apart by creation order (`char:wren-2`).
-*/
-function characterHolders(db) {
-	const taken = /* @__PURE__ */ new Set();
-	return db.select({
-		id: character.id,
-		name: character.name,
-		player: character.controllingPlayer
-	}).from(character).orderBy(asc(character.createdAt), asc(character.id)).all().map((c) => {
-		const base = `char:${slug$1(c.name) || "character"}`;
-		let handle = base;
-		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
-		taken.add(handle);
-		return {
-			...c,
-			handle
-		};
-	});
-}
-/**
-* The Characters present in the Scene. There is no Scene yet (#328 adds it and presence from
-* whereabouts), so until then every Character in the Party is present.
-*/
-function charactersInScene(db) {
-	return characterHolders(db);
 }
 // src/lib/server/play/combatants.ts
 var ok = (s) => s.status === "ok" ? s.value : null;
@@ -2987,6 +3709,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { mustAct as $, logActivity as A, callResultEvent as B, DeclarationNotFoundError as C, normalizeName as Ct, DraftNotFoundError as D, SESSION_LIVE_MESSAGE as Dt, returnStrandedDrafts as E, parseClock as Et, CallClosedError as F, attackSequence as G, createPendingCall as H, CallRefusedError as I, saveSequence as J, damageSequence as K, DC_BY_TIER as L, nextEventId as M, setAwaitingNarration as N, createDmChannels as O, ABILITY_NAMES as P, combatant as Q, TIERS as R, sessionsView as S, isNearName as St, DmBusyError as T, formatClock as Tt, openCall as U, cancelPendingCall as V, saveKey as W, applyDamage as X, sequenceText as Y, applyHealing as Z, createArc as _, advanceClock as _t, CampaignArchivedError as a, PLUGIN_NAME as at, history as b, present as bt, CampaignNotFoundError as c, expectVersion as ct, BeginRefusedError as d, CharacterNotFoundError as dt, saveBonus as et, SeedLockedError as f, CharacterValidationError as ft, CurrentArcError as g, SpotlightRefusedError as gt, refuseLockedSeed as h, ClockBackwardsError as ht, sessions as i, hpState as it, logEvent as j, currentStamp as k, NotACampaignFolderError as l, readTool as lt, creationStage as m, loadWizardRules as mt, library as n, characterHolders as nt, CampaignExistsError as o, ToolError as ot, StartOverRefusedError as p, playSheets as pt, rollAll as q, live as r, charactersInScene as rt, CampaignMissingError as s, creationTool as st, campaignRoot as t, setConditions as tt, SessionLiveError as u, writeTool as ut, addConversationLine as v, characterRefs as vt, DeclarationRefusedError as w, slug$1 as wt, indexNarration as x, scenePlace as xt, closeSession as y, currentMinute as yt, callInput as z };
+export { mustAct as $, logActivity as A, callResultEvent as B, DeclarationNotFoundError as C, renderLinks as Ct, DraftNotFoundError as D, formatClock as Dt, returnStrandedDrafts as E, charactersInScene as Et, CallClosedError as F, attackSequence as G, createPendingCall as H, CallRefusedError as I, saveSequence as J, damageSequence as K, DC_BY_TIER as L, nextEventId as M, setAwaitingNarration as N, createDmChannels as O, parseClock as Ot, ABILITY_NAMES as P, combatant as Q, TIERS as R, sessionsView as S, writeTool as St, DmBusyError as T, characterHolders as Tt, openCall as U, cancelPendingCall as V, saveKey as W, applyDamage as X, sequenceText as Y, applyHealing as Z, createArc as _, PLUGIN_NAME as _t, CampaignArchivedError as a, playSheets as at, history as b, expectVersion as bt, CampaignNotFoundError as c, SpotlightRefusedError as ct, BeginRefusedError as d, currentMinute as dt, saveBonus as et, SeedLockedError as f, present as ft, CurrentArcError as g, fieldNames as gt, refuseLockedSeed as h, createWorld as ht, sessions as i, CharacterValidationError as it, logEvent as j, currentStamp as k, SESSION_LIVE_MESSAGE as kt, NotACampaignFolderError as l, advanceClock as lt, creationStage as m, lintWorld as mt, library as n, hpState as nt, CampaignExistsError as o, loadWizardRules as ot, StartOverRefusedError as p, scenePlace as pt, rollAll as q, live as r, CharacterNotFoundError as rt, CampaignMissingError as s, ClockBackwardsError as st, campaignRoot as t, setConditions as tt, SessionLiveError as u, characterRefs as ut, addConversationLine as v, ToolError as vt, DeclarationRefusedError as w, resolveLinks as wt, indexNarration as x, readTool as xt, closeSession as y, creationTool as yt, callInput as z };
 
 //# sourceMappingURL=campaign.js.map

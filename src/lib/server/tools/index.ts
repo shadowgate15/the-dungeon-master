@@ -3,6 +3,7 @@ import { arcTools } from './arc-tools'
 import type { GameTool } from './contract'
 import { creationTools } from './creation-tools'
 import { knowledgeTools } from './knowledge-tools'
+import { lintTools } from './lint-tools'
 import { narrationTools } from './narration-tools'
 import { rulesTools } from './rules-tools'
 import { sceneTools } from './scene-tools'
@@ -21,5 +22,6 @@ export const gameTools: GameTool[] = [
   ...sessionTools,
   ...rulesTools,
   ...actionTools,
-  ...arcTools
+  ...arcTools,
+  ...lintTools
 ]

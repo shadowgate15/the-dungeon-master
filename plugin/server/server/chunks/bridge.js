@@ -1,5 +1,5 @@
-import { B as NPC_STATUSES, F as entityAlias, I as fact, K as race, L as pageRevision, N as belief, P as entity, R as worldLink, T as event, U as background, W as classTable, at as eq, bt as DUNGEON_MASTER_PORT, ct as inArray, dt as like, ft as ne, g as character, h as campaign, it as and, lt as isNotNull, mt as sql, n as createRulesRepository, nt as asc, o as userStateDir, pt as or, rt as desc, tt as SOLO_PLAYER, ut as isNull, v as characterDraft, xt as DUNGEON_MASTER_VERSION, yt as DUNGEON_MASTER_HOME, z as ENTITY_TYPES } from "./seed.js";
-import { $ as mustAct, A as logActivity, B as callResultEvent, Ct as normalizeName, Dt as SESSION_LIVE_MESSAGE, E as returnStrandedDrafts, Et as parseClock, G as attackSequence, H as createPendingCall, J as saveSequence, K as damageSequence, L as DC_BY_TIER, M as nextEventId, N as setAwaitingNarration, O as createDmChannels, P as ABILITY_NAMES, Q as combatant, R as TIERS, S as sessionsView, St as isNearName, Tt as formatClock, U as openCall, V as cancelPendingCall, W as saveKey, X as applyDamage, Y as sequenceText, Z as applyHealing, _ as createArc, _t as advanceClock, at as PLUGIN_NAME, b as history, bt as present, c as CampaignNotFoundError, ct as expectVersion, et as saveBonus, f as SeedLockedError, g as CurrentArcError, h as refuseLockedSeed, ht as ClockBackwardsError, i as sessions, it as hpState, j as logEvent, k as currentStamp, l as NotACampaignFolderError, lt as readTool, m as creationStage, mt as loadWizardRules, n as library, nt as characterHolders, ot as ToolError, q as rollAll, r as live, rt as charactersInScene, st as creationTool, tt as setConditions, ut as writeTool, v as addConversationLine, vt as characterRefs, wt as slug$1, x as indexNarration, xt as scenePlace, y as closeSession, yt as currentMinute, z as callInput } from "./campaign.js";
+import { I as fact, K as race, N as belief, P as entity, T as event, U as background, W as classTable, at as eq, bt as DUNGEON_MASTER_PORT, ct as inArray, ft as ne, g as character, h as campaign, it as and, mt as sql, n as createRulesRepository, nt as asc, o as userStateDir, pt as or, tt as SOLO_PLAYER, ut as isNull, v as characterDraft, xt as DUNGEON_MASTER_VERSION, yt as DUNGEON_MASTER_HOME, z as ENTITY_TYPES } from "./seed.js";
+import { $ as mustAct, A as logActivity, B as callResultEvent, Ct as renderLinks, Dt as formatClock, E as returnStrandedDrafts, Et as charactersInScene, G as attackSequence, H as createPendingCall, J as saveSequence, K as damageSequence, L as DC_BY_TIER, M as nextEventId, N as setAwaitingNarration, O as createDmChannels, Ot as parseClock, P as ABILITY_NAMES, Q as combatant, R as TIERS, S as sessionsView, St as writeTool, Tt as characterHolders, U as openCall, V as cancelPendingCall, W as saveKey, X as applyDamage, Y as sequenceText, Z as applyHealing, _ as createArc, _t as PLUGIN_NAME, b as history, bt as expectVersion, c as CampaignNotFoundError, dt as currentMinute, et as saveBonus, f as SeedLockedError, ft as present, g as CurrentArcError, gt as fieldNames, h as refuseLockedSeed, ht as createWorld, i as sessions, j as logEvent, k as currentStamp, kt as SESSION_LIVE_MESSAGE, l as NotACampaignFolderError, lt as advanceClock, m as creationStage, mt as lintWorld, n as library, nt as hpState, ot as loadWizardRules, pt as scenePlace, q as rollAll, r as live, st as ClockBackwardsError, tt as setConditions, ut as characterRefs, v as addConversationLine, vt as ToolError, wt as resolveLinks, x as indexNarration, xt as readTool, y as closeSession, yt as creationTool, z as callInput } from "./campaign.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { d as reconcile, j as rollTotals, l as changedDraftFields, u as emptyDraft, w as arrangementProblem, y as lengthIssue } from "./summary.js";
@@ -979,571 +979,6 @@ var creationTools = [
 		}
 	})
 ];
-// src/lib/server/world/fields.ts
-/** A Place's handle, as a field value that must name an existing Place. */
-var placeHandle = string().regex(/^place:[a-z0-9-]+$/, "Expected a place handle (place:…)");
-var prose = string().trim();
-/**
-* Each Entity type's typed fields. `name` is common to every type and kept outside `fields`. A
-* row field is the single owner of its value: Facts and Pages should not restate it.
-*/
-var FIELD_SCHEMAS = {
-	npc: strictObject({
-		description: prose.optional(),
-		role: prose.optional(),
-		status: _enum(NPC_STATUSES).default("alive"),
-		whereabouts: placeHandle.optional(),
-		stat_block: string().regex(/^monster:[a-z0-9-]+$/, "Expected a monster handle (monster:…)").optional()
-	}),
-	place: strictObject({
-		description: prose.optional(),
-		exits: array(strictObject({
-			name: prose.min(1),
-			to: placeHandle.optional()
-		})).default([])
-	}),
-	faction: strictObject({ description: prose.optional() }),
-	topic: strictObject({})
-};
-/** The handles a type's fields point at, which must name existing Places. */
-function placeRefs(fields) {
-	const refs = [];
-	if (typeof fields.whereabouts === "string") refs.push(fields.whereabouts);
-	if (Array.isArray(fields.exits)) {
-		for (const exit of fields.exits) if (exit.to) refs.push(exit.to);
-	}
-	return refs;
-}
-/** Parses a type's fields, or returns the problem in words. */
-function parseFields(type, fields) {
-	const parsed = FIELD_SCHEMAS[type].safeParse(fields ?? {});
-	if (parsed.success) return {
-		ok: true,
-		fields: parsed.data
-	};
-	return {
-		ok: false,
-		message: prettifyError(parsed.error)
-	};
-}
-/** The field names a type has, besides `name`. */
-function fieldNames(type) {
-	return Object.keys(FIELD_SCHEMAS[type].shape);
-}
-// src/lib/server/world/links.ts
-/** `[[Name]]`, `[[alias]]` or `[[npc:handle]]`; text after a `|` is a label and ignored. */
-var LINK = /\[\[([^[\]]+?)\]\]/g;
-var HANDLE = new RegExp(`^(${ENTITY_TYPES.join("|")}):[a-z0-9-]+$`);
-var target = (inner) => inner.split("|")[0].trim();
-/** The Entity a merged handle now lives in. */
-function follow(handle, known) {
-	let found = known.get(handle);
-	for (let hops = 0; found?.mergedInto && hops < 10; hops++) found = known.get(found.mergedInto);
-	return found;
-}
-function byName(name, known) {
-	const wanted = normalizeName(name);
-	return known.filter((k) => !k.retired && [k.name, ...k.aliases].some((n) => normalizeName(n) === wanted));
-}
-/**
-* Rewrites `[[Name]]` links to `[[handle]]` so renames never break them. A link that names no
-* Entity, or several, stays as written and is reported with near-matches. Nothing is stubbed.
-*/
-function resolveLinks(text, all) {
-	const known = new Map(all.map((k) => [k.handle, k]));
-	const links = /* @__PURE__ */ new Set();
-	const unresolved = [];
-	return {
-		text: text.replace(LINK, (whole, inner) => {
-			const name = target(inner);
-			if (HANDLE.test(name) && known.has(name)) {
-				links.add(follow(name, known)?.handle ?? name);
-				return `[[${name}]]`;
-			}
-			const found = byName(name, all);
-			if (found.length === 1) {
-				links.add(found[0].handle);
-				return `[[${found[0].handle}]]`;
-			}
-			const near = found.length ? found : all.filter((k) => !k.retired && [k.name, ...k.aliases].some((n) => isNearName(n, name)));
-			if (!unresolved.some((u) => u.link === name)) unresolved.push({
-				link: name,
-				near: near.map((k) => ({
-					handle: k.handle,
-					name: k.name
-				}))
-			});
-			return whole;
-		}),
-		links: [...links],
-		unresolved
-	};
-}
-/**
-* Shows stored `[[handle]]` links by the Entity's current name (following merges), or by handle
-* when that name would not lead back to it.
-*/
-function renderLinks(text, all) {
-	const known = new Map(all.map((k) => [k.handle, k]));
-	return text.replace(LINK, (whole, inner) => {
-		const handle = target(inner);
-		if (!HANDLE.test(handle)) return whole;
-		const found = follow(handle, known);
-		if (!found) return whole;
-		const named = byName(found.name, all);
-		return named.length === 1 && named[0].handle === found.handle ? `[[${found.name}]]` : `[[${found.handle}]]`;
-	});
-}
-// src/lib/server/world/world.ts
-/**
-* Whether a Fact's claim restates a field's value: it mentions the value's words, or links to the
-* Entity a handle value names.
-*/
-function restates(rendered, stored, value, all) {
-	const mentions = (v) => {
-		if (typeof v === "string") {
-			const linked = all.find((k) => k.handle === v);
-			if (linked && stored.includes(`[[${v}]]`)) return true;
-			const word = (linked?.name ?? v).trim().toLowerCase();
-			return word !== "" && rendered.toLowerCase().includes(word);
-		}
-		if (Array.isArray(v)) return v.some(mentions);
-		if (v && typeof v === "object") return Object.values(v).some(mentions);
-		return false;
-	};
-	return mentions(value);
-}
-/** The World layer over one Campaign database: the DM-only truth (ADR 0007). */
-function createWorld({ db, stamp }) {
-	const read = (handle) => `open ${handle}`;
-	function find(handle) {
-		const found = db.select().from(entity).where(eq(entity.handle, handle)).get();
-		if (!found) throw ToolError.unknownHandle(handle);
-		return found;
-	}
-	/** An Entity a write may change: it exists, isn't retired, and the DM saw its version. */
-	function writable(handle, version) {
-		const found = find(handle);
-		expectVersion({
-			handle,
-			version: found.version,
-			read: read(handle)
-		}, version);
-		if (found.retiredAt !== null) {
-			const where = found.mergedInto ? `; it was merged into ${found.mergedInto}` : "";
-			throw new ToolError("retired", `${handle} is retired (${found.retiredReason})${where}`, found.mergedInto ? `Use ${found.mergedInto} instead` : `Leave ${handle} as it is`);
-		}
-		return found;
-	}
-	function bump(handle) {
-		const { version } = db.update(entity).set({ version: sql`${entity.version} + 1` }).where(eq(entity.handle, handle)).returning({ version: entity.version }).get();
-		return version;
-	}
-	function known() {
-		const aliases = db.select().from(entityAlias).all();
-		return db.select().from(entity).all().map((e) => ({
-			handle: e.handle,
-			name: e.name,
-			aliases: aliases.filter((a) => a.handle === e.handle).map((a) => a.alias),
-			retired: e.retiredAt !== null,
-			mergedInto: e.mergedInto
-		}));
-	}
-	const aliasesOf = (handle) => db.select().from(entityAlias).where(eq(entityAlias.handle, handle)).all().map((a) => a.alias);
-	function checkFields(tool, type, fields) {
-		const parsed = parseFields(type, fields);
-		if (!parsed.ok) throw ToolError.invalidInput(tool, parsed.message);
-		for (const ref of placeRefs(parsed.fields)) {
-			const place = db.select().from(entity).where(eq(entity.handle, ref)).get();
-			if (!place || place.retiredAt !== null) throw ToolError.invalidInput(tool, `${ref} is not an established Place`);
-		}
-		return parsed.fields;
-	}
-	function freeHandle(type, name) {
-		const base = `${type}:${slug$1(name)}`;
-		const taken = new Set(db.select({ handle: entity.handle }).from(entity).where(or(eq(entity.handle, base), like(entity.handle, `${base}-%`))).all().map((e) => e.handle));
-		let handle = base;
-		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
-		return handle;
-	}
-	function page(handle) {
-		return db.select({ text: pageRevision.text }).from(pageRevision).where(eq(pageRevision.handle, handle)).orderBy(desc(pageRevision.id)).get()?.text ?? "";
-	}
-	/** Stores a new Page revision with its links resolved, and re-indexes the Page's links. */
-	function writePage(handle, text) {
-		const resolved = resolveLinks(text, known());
-		db.insert(pageRevision).values({
-			handle,
-			text: resolved.text,
-			sessionId: stamp.sessionId,
-			eventId: stamp.eventId,
-			createdAt: Date.now()
-		}).run();
-		db.delete(worldLink).where(and(eq(worldLink.fromHandle, handle), isNull(worldLink.factId))).run();
-		for (const to of resolved.links) db.insert(worldLink).values({
-			fromHandle: handle,
-			factId: null,
-			toHandle: to
-		}).run();
-		return resolved.unresolved;
-	}
-	const isCurrent = (f) => f.supersededBy === null && f.retiredAt === null;
-	function insertFact(subject, input) {
-		const resolved = resolveLinks(input.claim, known());
-		const validFrom = input.valid_from === void 0 ? stamp.minute : input.valid_from;
-		const row = db.insert(fact).values({
-			subject,
-			claim: resolved.text,
-			validFrom,
-			sessionId: stamp.sessionId,
-			eventId: stamp.eventId,
-			recordedMinute: stamp.minute
-		}).returning().get();
-		for (const to of resolved.links) db.insert(worldLink).values({
-			fromHandle: subject,
-			factId: row.id,
-			toHandle: to
-		}).run();
-		return {
-			row,
-			unresolved: resolved.unresolved
-		};
-	}
-	function factView(f, all) {
-		return {
-			id: f.id,
-			claim: renderLinks(f.claim, all),
-			valid_from: f.validFrom,
-			valid_to: f.supersededBy === null ? null : f.validTo,
-			state: f.retiredAt !== null ? "retired" : f.supersededBy !== null ? "superseded" : "current",
-			...f.supersededBy !== null && { superseded_by: f.supersededBy },
-			...f.retiredAt !== null && { retired_reason: f.retiredReason }
-		};
-	}
-	function findFact(id) {
-		const found = db.select().from(fact).where(eq(fact.id, id)).get();
-		if (!found) throw new ToolError("unknown_fact", `No Fact has the id ${id}`, "Check the id against a recent open");
-		return found;
-	}
-	/** A Fact that a supersession or retirement may still change. */
-	function currentFact(id) {
-		const found = findFact(id);
-		if (!isCurrent(found)) {
-			const state = found.retiredAt !== null ? "retired" : `superseded by Fact ${found.supersededBy}`;
-			throw new ToolError("not_current", `Fact ${id} is already ${state}`, `Open ${found.subject} with history to see its Facts`);
-		}
-		return found;
-	}
-	/**
-	* Closes `old` at the start of `by`. A Fact never begins before the one it supersedes; one that
-	* held since before the Campaign may only be superseded by another such Fact or a later one.
-	*/
-	function close(tool, old, by) {
-		if (old.id === by.id) throw ToolError.invalidInput(tool, "A Fact cannot supersede itself");
-		if (old.validFrom !== null && (by.validFrom === null || by.validFrom < old.validFrom)) throw ToolError.invalidInput(tool, `Fact ${old.id} holds from minute ${old.validFrom}; what supersedes it cannot begin earlier`);
-		db.update(fact).set({
-			supersededBy: by.id,
-			validTo: by.validFrom
-		}).where(eq(fact.id, old.id)).run();
-	}
-	/** Retires current Facts with one reason, returning them as the DM saw them. */
-	function retireFacts(facts, reason) {
-		const all = known();
-		for (const f of facts) db.update(fact).set({
-			retiredAt: stamp.minute,
-			retiredReason: reason
-		}).where(eq(fact.id, f.id)).run();
-		return facts.map((f) => ({
-			id: f.id,
-			claim: renderLinks(f.claim, all)
-		}));
-	}
-	/** Entities whose Page or current Facts link to `handle`. */
-	function linkersOf(handle) {
-		const rows = db.select().from(worldLink).where(eq(worldLink.toHandle, handle)).all();
-		return [...new Set(rows.map((l) => l.fromHandle))].filter((h) => h !== handle);
-	}
-	/** Rebuilds an Entity's full-text rows: name and aliases, Page, current Facts. */
-	function reindex(handle) {
-		db.run(sql`DELETE FROM world_search WHERE handle = ${handle}`);
-		const found = find(handle);
-		if (found.retiredAt !== null) return;
-		const all = known();
-		const rows = [
-			["name", [found.name, ...aliasesOf(handle)].join(" · ")],
-			["page", renderLinks(page(handle), all)],
-			...db.select().from(fact).where(eq(fact.subject, handle)).all().filter(isCurrent).map((f) => [`fact:${f.id}`, renderLinks(f.claim, all)])
-		];
-		for (const [source, text] of rows) if (text.trim()) db.run(sql`INSERT INTO world_search (handle, source, text) VALUES (${handle}, ${source}, ${text})`);
-	}
-	return {
-		/** Every Entity as link resolution sees it, retired and merged ones included. */
-		known,
-		/** Entities whose name or aliases are close to any of `names`, retired ones aside. */
-		nearMatches(names) {
-			return known().filter((k) => !k.retired).filter((k) => [k.name, ...k.aliases].some((n) => names.some((m) => isNearName(n, m)))).map((k) => ({
-				handle: k.handle,
-				name: k.name
-			}));
-		},
-		establish(input) {
-			for (const handle of input.distinct_from) find(handle);
-			const matches = this.nearMatches([input.name, ...input.aliases]).filter((m) => !input.distinct_from.includes(m.handle));
-			if (matches.length) throw new ToolError("near_duplicate", `"${input.name}" is close to ${matches.map((m) => `${m.handle} (${m.name})`).join(", ")}`, `Open the match if it is the same Entity; if not, call establish again with distinct_from: ${JSON.stringify(matches.map((m) => m.handle))}`, { matches });
-			const fields = checkFields("establish", input.type, input.fields);
-			const handle = freeHandle(input.type, input.name);
-			db.insert(entity).values({
-				handle,
-				type: input.type,
-				name: input.name,
-				fields,
-				createdAt: Date.now()
-			}).run();
-			for (const alias of new Set(input.aliases)) db.insert(entityAlias).values({
-				handle,
-				alias
-			}).run();
-			const unresolved = input.page ? writePage(handle, input.page) : [];
-			const facts = input.facts.map((f) => {
-				const made = insertFact(handle, f);
-				unresolved.push(...made.unresolved);
-				return made.row.id;
-			});
-			reindex(handle);
-			return {
-				handle,
-				version: 1,
-				facts,
-				unresolved
-			};
-		},
-		open(handle, history) {
-			const found = find(handle);
-			const all = known();
-			const facts = db.select().from(fact).where(eq(fact.subject, handle)).orderBy(asc(fact.id)).all().filter((f) => history || isCurrent(f));
-			const currentFactIds = new Set(db.select().from(fact).all().filter(isCurrent).map((f) => f.id));
-			const live = (l) => l.factId === null || currentFactIds.has(l.factId);
-			const via = (l) => l.factId === null ? "page" : l.factId;
-			const nameOf = (h) => all.find((k) => k.handle === h)?.name ?? h;
-			const links = db.select().from(worldLink).where(eq(worldLink.fromHandle, handle)).all().filter(live).map((l) => ({
-				handle: l.toHandle,
-				name: nameOf(l.toHandle),
-				via: via(l)
-			}));
-			const backlinks = db.select().from(worldLink).where(eq(worldLink.toHandle, handle)).all().filter((l) => live(l) && l.fromHandle !== handle).map((l) => ({
-				handle: l.fromHandle,
-				name: nameOf(l.fromHandle),
-				via: via(l)
-			}));
-			const revisions = history ? db.select().from(pageRevision).where(eq(pageRevision.handle, handle)).orderBy(asc(pageRevision.id)).all().map((r) => ({
-				revision: r.id,
-				text: renderLinks(r.text, all),
-				session: r.sessionId,
-				event: r.eventId
-			})) : void 0;
-			return {
-				handle,
-				type: found.type,
-				name: found.name,
-				aliases: aliasesOf(handle),
-				version: found.version,
-				retired: found.retiredAt === null ? null : {
-					reason: found.retiredReason,
-					merged_into: found.mergedInto
-				},
-				fields: found.fields,
-				page: renderLinks(page(handle), all),
-				facts: facts.map((f) => factView(f, all)),
-				links,
-				backlinks,
-				...revisions && { revisions }
-			};
-		},
-		editPage(handle, version, change) {
-			writable(handle, version);
-			const all = known();
-			const current = renderLinks(page(handle), all);
-			let text;
-			if ("text" in change) {
-				if (current.trim()) throw new ToolError("page_not_empty", `${handle} already has a Page; full text only goes into an empty one`, `Call edit_page with patches of old/new text from open ${handle}`);
-				text = change.text;
-			} else text = change.patches.reduce((t, p) => {
-				const count = t.split(p.old).length - 1;
-				if (count !== 1) throw new ToolError("patch_mismatch", `"${p.old}" appears ${count} times in the Page of ${handle}; it must appear exactly once`, `Open ${handle} and quote a longer, unique stretch of its Page`);
-				return t.replace(p.old, () => p.new);
-			}, current);
-			const unresolved = writePage(handle, text);
-			const next = bump(handle);
-			reindex(handle);
-			return {
-				handle,
-				version: next,
-				unresolved
-			};
-		},
-		setField(handle, version, field, value) {
-			const found = writable(handle, version);
-			let old;
-			if (field === "name") {
-				const parsed = string().trim().min(1).safeParse(value);
-				if (!parsed.success) throw ToolError.invalidInput("set_field", "A name must be text");
-				old = found.name;
-				db.update(entity).set({ name: parsed.data }).where(eq(entity.handle, handle)).run();
-				value = parsed.data;
-			} else {
-				if (!fieldNames(found.type).includes(field)) throw ToolError.invalidInput("set_field", `A ${found.type} has no field ${field}; its fields are name, ${fieldNames(found.type).join(", ")}`);
-				old = found.fields[field] ?? null;
-				const next = { ...found.fields };
-				if (value === null) delete next[field];
-				else next[field] = value;
-				const fields = checkFields("set_field", found.type, next);
-				value = fields[field] ?? null;
-				db.update(entity).set({ fields }).where(eq(entity.handle, handle)).run();
-			}
-			const next = bump(handle);
-			reindex(handle);
-			if (field === "name") for (const from of linkersOf(handle)) reindex(from);
-			const all = known();
-			const warnings = db.select().from(fact).where(eq(fact.subject, handle)).all().filter(isCurrent).filter((f) => restates(renderLinks(f.claim, all), f.claim, value, all)).map((f) => `Fact ${f.id} ("${renderLinks(f.claim, all)}") restates ${field}; the field owns it now, so supersede or retire the Fact`);
-			return {
-				handle,
-				field,
-				old,
-				new: value,
-				version: next,
-				warnings
-			};
-		},
-		addFact(input) {
-			writable(input.subject, input.version);
-			const olds = [...new Set(input.supersedes)].map(currentFact);
-			const made = insertFact(input.subject, input);
-			for (const old of olds) close("add_fact", old, made.row);
-			const version = bump(input.subject);
-			const others = [...new Set(olds.map((o) => o.subject))].filter((h) => h !== input.subject);
-			for (const other of others) bump(other);
-			for (const h of [input.subject, ...others]) reindex(h);
-			return {
-				fact: made.row.id,
-				subject: input.subject,
-				version,
-				valid_from: made.row.validFrom,
-				superseded: olds.map((o) => o.id),
-				unresolved: made.unresolved
-			};
-		},
-		supersede(oldId, byId) {
-			const old = currentFact(oldId);
-			const by = currentFact(byId);
-			close("supersede", old, by);
-			const version = bump(old.subject);
-			reindex(old.subject);
-			return {
-				old: old.id,
-				by: by.id,
-				valid_to: by.validFrom,
-				subject: old.subject,
-				version
-			};
-		},
-		retireFact(id, version, reason) {
-			const found = currentFact(id);
-			writable(found.subject, version);
-			const facts = retireFacts([found], reason);
-			const next = bump(found.subject);
-			reindex(found.subject);
-			return {
-				handle: found.subject,
-				version: next,
-				retired_facts: facts
-			};
-		},
-		retireEntity(handle, version, reason) {
-			writable(handle, version);
-			const facts = retireFacts(db.select().from(fact).where(eq(fact.subject, handle)).all().filter(isCurrent), reason);
-			db.update(entity).set({
-				retiredAt: stamp.minute,
-				retiredReason: reason
-			}).where(eq(entity.handle, handle)).run();
-			const next = bump(handle);
-			reindex(handle);
-			return {
-				handle,
-				version: next,
-				retired_facts: facts
-			};
-		},
-		merge(from, into, versions) {
-			if (from === into) throw ToolError.invalidInput("merge", "An Entity cannot merge into itself");
-			writable(from, versions.from);
-			const survivor = writable(into, versions.into);
-			const before = known();
-			const fromPage = renderLinks(page(from), before);
-			const intoPage = renderLinks(page(into), before);
-			const facts = db.update(fact).set({ subject: into }).where(eq(fact.subject, from)).returning({ id: fact.id }).all();
-			db.update(worldLink).set({ fromHandle: into }).where(and(eq(worldLink.fromHandle, from), isNotNull(worldLink.factId))).run();
-			const links = db.update(worldLink).set({ toHandle: into }).where(eq(worldLink.toHandle, from)).returning({ id: worldLink.id }).all();
-			const taken = new Set([survivor.name, ...aliasesOf(into)].map(normalizeName));
-			const aliases = [db.select().from(entity).where(eq(entity.handle, from)).get().name].concat(aliasesOf(from)).filter((a) => !taken.has(normalizeName(a)) && taken.add(normalizeName(a)));
-			db.delete(entityAlias).where(eq(entityAlias.handle, from)).run();
-			for (const alias of aliases) db.insert(entityAlias).values({
-				handle: into,
-				alias
-			}).run();
-			db.update(entity).set({
-				retiredAt: stamp.minute,
-				retiredReason: `Merged into ${into}`,
-				mergedInto: into
-			}).where(eq(entity.handle, from)).run();
-			const unresolved = fromPage.trim() ? writePage(into, intoPage.trim() ? `${intoPage}\n\n${fromPage}` : fromPage) : [];
-			db.delete(worldLink).where(and(eq(worldLink.fromHandle, from), isNull(worldLink.factId))).run();
-			bump(from);
-			const version = bump(into);
-			for (const h of /* @__PURE__ */ new Set([
-				from,
-				into,
-				...linkersOf(into)
-			])) reindex(h);
-			return {
-				from,
-				into,
-				version,
-				moved: {
-					facts: facts.map((f) => f.id),
-					aliases,
-					links: links.length
-				},
-				unresolved
-			};
-		},
-		search(query, type) {
-			const words = query.match(/[\p{L}\p{N}]+/gu) ?? [];
-			if (!words.length) return [];
-			const match = words.map((w) => `"${w}"*`).join(" OR ");
-			const rows = db.all(sql`
-        SELECT world_search.handle AS handle,
-          snippet(world_search, 2, '«', '»', '…', 12) AS snippet
-        FROM world_search JOIN ${entity} ON ${entity.handle} = world_search.handle
-        WHERE world_search MATCH ${match} AND ${entity.retiredAt} IS NULL
-          ${type ? sql`AND ${entity.type} = ${type}` : sql``}
-        ORDER BY bm25(world_search)
-        LIMIT 100`);
-			const seen = /* @__PURE__ */ new Map();
-			const all = db.select().from(entity).all();
-			for (const r of rows) {
-				if (seen.has(r.handle) || seen.size >= 10) continue;
-				const e = all.find((x) => x.handle === r.handle);
-				seen.set(r.handle, {
-					handle: r.handle,
-					type: e.type,
-					name: e.name,
-					snippet: r.snippet
-				});
-			}
-			return [...seen.values()];
-		}
-	};
-}
 // src/lib/server/knowledge/knowledge.ts
 var isCurrentBelief = (b) => b.replacedBy === null && b.retiredAt === null;
 var isCurrentFact = (f) => f.supersededBy === null && f.retiredAt === null;
@@ -1899,6 +1334,30 @@ var knowledgeTools = [writeTool({
 		history: boolean().default(false)
 	}),
 	run: (ctx, { holder, about, history }) => createKnowledge(ctx).beliefsOf(holder, about, history)
+})];
+// src/lib/server/tools/lint-tools.ts
+/**
+* Lint: the DM tidies its own World. Its only effect is one DM-only `lint_ran` event, which marks
+* when lint last ran; it changes no World or Knowledge state, and its findings never reach the
+* Player (no activity line).
+*/
+var lintTools = [writeTool({
+	name: "lint",
+	description: "Check the World for what code can detect: near-duplicate names, broken [[links]], Facts restating a typed field, Beliefs pointing at retired Facts and Pages linking to retired Entities. Also returns the Pages of Entities changed since the last lint, for you to check each Page against its fields. Changes nothing: fix each finding with the ordinary tools. Run it when ending a sitting.",
+	input: object({}),
+	run: (ctx) => {
+		const result = lintWorld(ctx);
+		return {
+			result,
+			skill: "lint-review",
+			event: {
+				kind: "lint_ran",
+				summary: `Lint found ${result.findings.length} finding(s)`,
+				data: { findings: result.findings.length },
+				dmOnly: true
+			}
+		};
+	}
 })];
 // src/lib/server/tools/narration-tools.ts
 /** The NPC a Narration is voiced by; refused unless the handle names a live NPC. */
@@ -2315,7 +1774,8 @@ var worldTools = [
 					summary: `Established ${result.handle} (${input.name})`,
 					data: {
 						handle: result.handle,
-						type: input.type
+						type: input.type,
+						...input.distinct_from.length && { distinct_from: input.distinct_from }
 					},
 					dmOnly
 				}
@@ -2409,14 +1869,16 @@ var worldTools = [
 			by: int()
 		}),
 		run: (ctx, { old, by }) => {
+			const result = createWorld(ctx).supersede(old, by);
 			return {
-				result: createWorld(ctx).supersede(old, by),
+				result,
 				event: {
 					kind: "fact_superseded",
 					summary: `Fact ${old} superseded by Fact ${by}`,
 					data: {
 						old,
-						by
+						by,
+						subject: result.subject
 					},
 					dmOnly
 				}
@@ -2504,7 +1966,8 @@ var gameTools = [
 	...sessionTools,
 	...rulesTools,
 	...actionTools,
-	...arcTools
+	...arcTools,
+	...lintTools
 ];
 // src/lib/server/dice.ts
 var MAX_COUNT = 100;
