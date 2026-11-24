@@ -1,18 +1,17 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
 import { _ as clsx, a as bind_props, c as ensure_array_like, g as attr, l as head, o as derived, r as attributes, t as attr_class, u as props_id, y as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/forms.js";
-import "../../../../../chunks/paths2.js";
+import "../../../../../chunks/paths.js";
 import { n as CreationStepper, r as Select, t as Panel } from "../../../../../chunks/Panel.js";
 import { t as Badge } from "../../../../../chunks/Badge.js";
 import { n as Alert, r as Link, t as Button } from "../../../../../chunks/Button.js";
 import { n as beforeNavigate, r as goto } from "../../../../../chunks/navigation.js";
 import { t as Dialog } from "../../../../../chunks/Dialog.js";
 import { s as ABILITY_KEYS } from "../../../../../chunks/schema.js";
-import { A as fixedEquipment, C as rollAbilityScores, E as categoryItems, M as resolveFeatures, O as equipmentGroups, S as pointsSpent, T as rollTotals, _ as POINT_BUY, b as methodPatch, c as resolverDraft, d as STEPS, f as computeSteps, g as ABILITY_LABELS, h as skillsStepGroups, i as LIMITS, j as ownedEquipment, l as spellPickFlags, m as groupLabel, n as cappedScore, o as emptyDraft, p as groupIssues, r as deriveStats, s as reconcile, t as tryDraftToCharacterInput, u as spellsView, v as STANDARD_ARRAY, w as rollTotal, x as pointCost, y as availableValues } from "../../../../../chunks/save.js";
+import { C as methodPatch, D as rollTotal, E as rollAbilityScores, M as fixedEquipment, N as ownedEquipment, O as rollTotals, P as resolveFeatures, S as availableValues, T as pointsSpent, _ as groupLabel, a as cappedScore, b as POINT_BUY, d as resolverDraft, f as spellPickFlags, g as groupIssues, h as computeSteps, i as tryDraftToCharacterInput, j as equipmentGroups, k as categoryItems, l as emptyDraft, m as STEPS, o as deriveStats, p as spellsView, r as draftToSummaryData, s as LIMITS, t as buildSummary, u as reconcile, v as skillsStepGroups, w as pointCost, x as STANDARD_ARRAY, y as ABILITY_LABELS } from "../../../../../chunks/summary.js";
 import { t as Field } from "../../../../../chunks/Field.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
 import { t as TextInput } from "../../../../../chunks/TextInput.js";
-import { r as draftToSummaryData, t as buildSummary } from "../../../../../chunks/summary.js";
 // src/lib/campaign/PartyList.svelte
 function PartyList($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {

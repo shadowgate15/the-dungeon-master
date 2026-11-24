@@ -1,7 +1,7 @@
-import { At as and, C as entityAlias, D as ENTITY_TYPES, Dt as SOLO_PLAYER, E as worldLink, Ft as like, Ht as DUNGEON_MASTER_HOME, It as or, Lt as sql, Nt as isNotNull, O as NPC_STATUSES, Ot as asc, Pt as isNull, S as entity, T as pageRevision, Ut as DUNGEON_MASTER_PORT, Wt as DUNGEON_MASTER_VERSION, i as userStateDir, jt as eq, kt as desc, n as canonicalFolder, u as campaign, w as fact, y as event } from "./paths.js";
-import { _ as nextEventId, c as CampaignNotFoundError, g as logEvent, h as logActivity, i as sessions, l as NotACampaignFolderError, m as currentStamp, n as library, r as live, v as setAwaitingNarration, w as SESSION_LIVE_MESSAGE } from "./campaign.js";
+import { At as and, C as entityAlias, D as ENTITY_TYPES, Dt as SOLO_PLAYER, E as worldLink, Ft as isNull, Gt as DUNGEON_MASTER_VERSION, It as like, Lt as or, O as NPC_STATUSES, Ot as asc, Pt as isNotNull, Rt as sql, S as entity, T as pageRevision, Ut as DUNGEON_MASTER_HOME, Wt as DUNGEON_MASTER_PORT, a as userStateDir, jt as eq, kt as desc, u as campaign, w as fact, y as event } from "./seed.js";
+import { D as slug, E as normalizeName, O as SESSION_LIVE_MESSAGE, S as setAwaitingNarration, T as isNearName, _ as createDmChannels, b as logEvent, c as CampaignNotFoundError, i as sessions, l as NotACampaignFolderError, n as library, r as live, v as currentStamp, x as nextEventId, y as logActivity } from "./campaign.js";
 import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
-import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed.js";
+import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -220,40 +220,6 @@ function parseFields(type, fields) {
 /** The field names a type has, besides `name`. */
 function fieldNames(type) {
 	return Object.keys(FIELD_SCHEMAS[type].shape);
-}
-// src/lib/server/world/names.ts
-/** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
-var plain = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-/** The slug part of a handle: `Mira Voss` → `mira-voss`. */
-function slug(name) {
-	return plain(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
-}
-/** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
-function normalizeName(name) {
-	return plain(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
-}
-function distance(a, b) {
-	let row = Array.from({ length: b.length + 1 }, (_, i) => i);
-	for (let i = 1; i <= a.length; i++) {
-		const next = [i];
-		for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-		row = next;
-	}
-	return row[b.length];
-}
-/**
-* Whether two names are close enough to be the same thing: equal once normalized, a typo apart,
-* or one's words all in the other ("Mira" and "Mira Voss").
-*/
-function isNearName(a, b) {
-	const x = normalizeName(a);
-	const y = normalizeName(b);
-	if (!x || !y) return false;
-	if (x === y) return true;
-	if (distance(x, y) <= Math.max(1, Math.floor(Math.max(x.length, y.length) / 6))) return true;
-	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
-	const words = new Set(long.split(" "));
-	return short.split(" ").every((w) => words.has(w));
 }
 // src/lib/server/world/links.ts
 /** `[[Name]]`, `[[alias]]` or `[[npc:handle]]`; text after a `|` is a label and ignored. */
@@ -1273,6 +1239,28 @@ function createPlay({ library, channels, publish }) {
 		openSession(campaignId) {
 			return library.record(campaignId).openSession();
 		},
+		/**
+		* The Stop hook asks whether the DM may end its turn. It may not while a closed Floor awaits
+		* Narration; on the second attempt (`again`) it may, and the Player's timeline shows an error.
+		*/
+		stopCheck(campaignId, again) {
+			const record = library.record(campaignId);
+			if (record.timeline().awaitingSince === null) return { block: false };
+			if (!again) return {
+				block: true,
+				reason: "A closed Floor awaits Narration. Answer it with narrate before ending your turn."
+			};
+			record.turnError("The DM ended its turn without a Narration.");
+			publish({
+				type: "timeline",
+				campaign: campaignId
+			});
+			return { block: false };
+		},
+		/** The DM's core block, for SessionStart and after compaction. */
+		coreBlock(campaignId) {
+			return library.record(campaignId).coreBlock();
+		},
 		/** The Player's timeline and whether the DM is working on a turn. */
 		timeline(campaignId) {
 			return library.record(campaignId).timeline();
@@ -1334,8 +1322,11 @@ var SESSION_LIVE = {
 *   attaches the bridge's session (`x-dm-session`). A second session is refused (409).
 * - `POST register` with `{folder}`: registers a Campaign folder (the launcher), answering
 *   `{id, name, attached}`.
+* - `POST stop-check` with `{campaign, again}`: whether the Stop hook refuses to end the DM's turn,
+*   as `{block, reason}`.
+* - `GET  core-block?campaign=<folder>`: the DM's core block, as `{text}`, for SessionStart.
 */
-function createBridgeApi({ library, host, channels, sessions, token }) {
+function createBridgeApi({ library, host, channels, sessions, play, token }) {
 	return async function handle(request) {
 		if (!authorized(request, token)) return json({ error: "bad token" }, 401);
 		const url = new URL(request.url);
@@ -1364,6 +1355,18 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 			if (!sessions.attach(entry.id, session)) return json(SESSION_LIVE, 409);
 			return eventStream(channels, campaign, () => sessions.detach(entry.id, session));
 		}
+		if (route === "stop-check" && request.method === "POST") {
+			const { campaign, again } = await request.json();
+			const entry = campaign && library.entryAt(campaign);
+			if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404);
+			return json(play.stopCheck(entry.id, again === true));
+		}
+		if (route === "core-block" && request.method === "GET") {
+			const campaign = url.searchParams.get("campaign");
+			const entry = campaign && library.entryAt(campaign);
+			if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404);
+			return json({ text: play.coreBlock(entry.id) });
+		}
 		if (route === "register" && request.method === "POST") {
 			const { folder } = await request.json();
 			if (!folder) return json({ error: "folder is required" }, 400);
@@ -1382,28 +1385,6 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 		return json({ error: "not found" }, 404);
 	};
 }
-// src/lib/server/bridge/channels.ts
-/** Channel events per Campaign folder, delivered to the bridges listening for it. */
-function createChannels() {
-	const listeners = /* @__PURE__ */ new Map();
-	const key = canonicalFolder;
-	return {
-		/** Starts listening for a Campaign's events; returns the unsubscribe. */
-		listen(folder, listener) {
-			const set = listeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
-			listeners.set(key(folder), set);
-			set.add(listener);
-			return () => set.delete(listener);
-		},
-		/** Whether any bridge is listening for the Campaign. */
-		listening(folder) {
-			return (listeners.get(key(folder))?.size ?? 0) > 0;
-		},
-		send(folder, event) {
-			for (const listener of listeners.get(key(folder)) ?? []) listener(event);
-		}
-	};
-}
 // src/lib/server/bridge/index.ts
 /** A fresh token each server start; only processes that can read the runtime file know it. */
 var token = randomBytes(24).toString("hex");
@@ -1414,7 +1395,7 @@ var host = createToolHost({
 	publish: live.publish
 });
 /** Channel events for the DM, per Campaign folder. */
-var channels = createChannels();
+var channels = createDmChannels(library);
 /** The play turn: Done wakes the DM, and a DM attaching opens a Session. */
 var play = createPlay({
 	library,
@@ -1427,6 +1408,7 @@ var bridgeApi = createBridgeApi({
 	host,
 	channels,
 	sessions,
+	play,
 	token
 });
 /** The known localhost port, unless overridden for tests. */

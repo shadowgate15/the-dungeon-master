@@ -1,6 +1,6 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
 import { _ as clsx, c as ensure_array_like, f as stringify, g as attr, l as head, n as attr_style, o as derived, r as attributes, t as attr_class, y as escape_html } from "../../../../../chunks/server2.js";
-import "../../../../../chunks/paths2.js";
+import "../../../../../chunks/paths.js";
 import { a as createQuery, i as timelineQueryKey, n as createSessionsQuery, r as floorQueryKey, t as DmBadge } from "../../../../../chunks/DmBadge.js";
 import { t as Badge } from "../../../../../chunks/Badge.js";
 import { n as Alert, r as Link, t as Button } from "../../../../../chunks/Button.js";
@@ -313,7 +313,17 @@ function Timeline($$renderer, $$props) {
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
 				} else if (entry.type === "declaration") $$renderer.push(`<!--[1--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm"><span class="block text-xs font-semibold text-muted">${escape_html(entry.character)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
-				else $$renderer.push(`<!--[-1--><li class="self-start text-xs text-muted">⚙ ${escape_html(entry.text)}</li>`);
+				else if (entry.type === "error") {
+					$$renderer.push(`<!--[2--><li class="self-stretch">`);
+					Alert($$renderer, {
+						variant: "danger",
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->${escape_html(entry.text)}`);
+						},
+						$$slots: { default: true }
+					});
+					$$renderer.push(`<!----></li>`);
+				} else $$renderer.push(`<!--[-1--><li class="self-start text-xs text-muted">⚙ ${escape_html(entry.text)}</li>`);
 				$$renderer.push(`<!--]-->`);
 			}
 		} else {
