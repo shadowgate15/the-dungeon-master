@@ -14,6 +14,7 @@ export const load: PageServerLoad = ({ params }) => {
     sheets: playSheets(library.party(entry.id)),
     floor: library.floor(entry.id).current(),
     timeline: play.timeline(entry.id),
+    scene: play.scene(entry.id),
     attached: sessions.list()
   }
 }

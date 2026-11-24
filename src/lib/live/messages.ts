@@ -5,7 +5,10 @@ export type LiveMessage =
   | { type: 'session'; campaign: string; attached: boolean }
   /** A Declaration was sent, edited or withdrawn on the Campaign's open Floor. */
   | { type: 'floor'; campaign: string }
-  /** The Campaign's timeline or awaiting Narration changed (a Floor closed, the DM called a tool). */
+  /**
+   * The DM called a tool or a Floor closed: the timeline and awaiting Narration changed, and with
+   * them possibly the Scene and the open Floor (`move`, `set_scene`, `advance_time`).
+   */
   | { type: 'timeline'; campaign: string }
 
 /** The query listing the ids of Campaigns with a DM at the table. */
@@ -17,6 +20,9 @@ export const floorQueryKey = (campaign: string) => ['floor', campaign] as const
 /** The query holding a Campaign's timeline. */
 export const timelineQueryKey = (campaign: string) => ['timeline', campaign] as const
 
+/** The query holding a Campaign's Scene, as the rail shows it. */
+export const sceneQueryKey = (campaign: string) => ['scene', campaign] as const
+
 /** The cached queries a message makes stale. */
 export function staleQueries(message: LiveMessage): QueryKey[] {
   switch (message.type) {
@@ -25,6 +31,10 @@ export function staleQueries(message: LiveMessage): QueryKey[] {
     case 'floor':
       return [floorQueryKey(message.campaign)]
     case 'timeline':
-      return [timelineQueryKey(message.campaign)]
+      return [
+        timelineQueryKey(message.campaign),
+        sceneQueryKey(message.campaign),
+        floorQueryKey(message.campaign)
+      ]
   }
 }
