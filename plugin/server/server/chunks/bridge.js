@@ -1,10 +1,13 @@
-import { At as and, C as entityAlias, D as ENTITY_TYPES, Dt as SOLO_PLAYER, E as worldLink, Ft as like, Ht as DUNGEON_MASTER_HOME, It as or, Lt as sql, Nt as isNotNull, O as NPC_STATUSES, Ot as asc, Pt as isNull, S as entity, T as pageRevision, Ut as DUNGEON_MASTER_PORT, Wt as DUNGEON_MASTER_VERSION, i as userStateDir, jt as eq, kt as desc, n as canonicalFolder, u as campaign, w as fact, y as event } from "./paths.js";
-import { _ as nextEventId, c as CampaignNotFoundError, g as logEvent, h as logActivity, i as sessions, l as NotACampaignFolderError, m as currentStamp, n as library, r as live, v as setAwaitingNarration, w as SESSION_LIVE_MESSAGE } from "./campaign.js";
-import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
-import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed.js";
+import { A as NPC_STATUSES, At as asc, Bt as sql, C as belief, D as pageRevision, E as fact, Ft as isNotNull, Gt as DUNGEON_MASTER_HOME, It as isNull, Kt as DUNGEON_MASTER_PORT, Lt as like, Mt as and, Nt as eq, O as worldLink, Pt as inArray, Rt as ne, T as entityAlias, b as event, d as character, i as userStateDir, jt as desc, k as ENTITY_TYPES, kt as SOLO_PLAYER, n as canonicalFolder, p as characterDraft, qt as DUNGEON_MASTER_VERSION, u as campaign, w as entity, zt as or } from "./paths.js";
+import { A as SESSION_LIVE_MESSAGE, C as nextEventId, D as loadWizardRules, S as logEvent, b as currentStamp, c as CampaignNotFoundError, d as addConversationLine, f as characterHolders, g as slug$1, h as normalizeName, i as sessions, l as NotACampaignFolderError, m as isNearName, n as library, p as charactersInScene, r as live, w as setAwaitingNarration, x as logActivity } from "./campaign.js";
+import { a as missingSeedFields, n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed.js";
+import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
+import { O as rollTotals, c as reconcile, g as lengthIssue, o as changedDraftFields, s as emptyDraft, x as arrangementProblem } from "./save.js";
+import { s as ABILITY_KEYS } from "./schema.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 // src/lib/server/runtime.ts
 function runtimeFilePath(home) {
 	return path.join(home, "runtime.json");
@@ -73,103 +76,308 @@ function writeTool(tool) {
 		run: tool.run
 	};
 }
-// src/lib/server/tools/narration-tools.ts
-/** The NPC a Narration is voiced by; refused unless the handle names a live NPC. */
-function speaker({ db }, handle) {
-	const found = db.select().from(entity).where(eq(entity.handle, handle)).get();
-	if (!found || found.type !== "npc" || found.retiredAt !== null) throw ToolError.unknownHandle(handle);
-	return found;
+/**
+* A tool that changes creation state (the Seed card, Character drafts, the creation conversation):
+* one transaction, and no Event, since the Event log starts with the story.
+*/
+function creationTool(tool) {
+	return {
+		...tool,
+		mutates: "creation",
+		run: tool.run
+	};
 }
-/** Telling the Players what happens. */
-var narrationTools = [writeTool({
-	name: "narrate",
-	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine.",
-	input: object({
-		text: string().trim().min(1),
-		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks")
-	}),
-	activity: null,
-	run: (ctx, { text, voice }) => {
-		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
-		setAwaitingNarration(ctx.db, null);
-		return {
-			result: { narrated: true },
-			event: {
-				kind: "narration",
-				summary: npc ? `${npc.name}: ${text}` : text,
-				data: {
-					text,
-					voice: npc?.handle ?? null,
-					voiceName: npc?.name ?? null
-				}
-			}
-		};
-	}
-})];
 // src/lib/server/tools/seed-tools.ts
 /** The Seed is one Entity per Campaign, so its handle is fixed. */
-var HANDLE$1 = "campaign";
-function current({ db }) {
+var SEED_HANDLE = "campaign";
+function currentSeed({ db }) {
 	const found = db.select().from(campaign).get();
-	if (!found) throw ToolError.unknownHandle(HANDLE$1);
+	if (!found) throw ToolError.unknownHandle(SEED_HANDLE);
 	return found;
 }
-function view(found) {
+function seedView(found) {
 	const seed = Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, found[f]]));
 	return {
-		handle: HANDLE$1,
+		handle: SEED_HANDLE,
 		version: found.version,
 		...seed
 	};
 }
-var fields = Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, string().optional()]));
-/** Reading and writing the Campaign Seed: the first versioned Entity the DM can touch. */
+/** Reading the Campaign Seed; `set_seed` is a creation tool. */
 var seedTools = [readTool({
 	name: "seed",
 	description: "Read the Campaign Seed (name, premise, tone, length and optional World details) and its version.",
 	input: object({}),
 	activity: "DM checks the Campaign Seed",
-	run: (ctx) => view(current(ctx))
-}), writeTool({
-	name: "set_seed",
-	description: "Set Campaign Seed fields. Pass the version from your last `seed` read; an empty string clears an optional field.",
-	input: object({
-		version: int(),
-		...fields
-	}),
-	activity: "DM updates the Campaign Seed",
-	run: (ctx, { version, ...changes }) => {
-		const found = current(ctx);
-		expectVersion({
-			handle: HANDLE$1,
-			version: found.version,
-			read: "seed"
-		}, version);
-		if (found.archivedAt !== null) throw new ToolError("archived", "An archived Campaign cannot be changed", "Stop here");
-		let seed;
-		try {
-			seed = parseCampaignSeed({
-				...campaignSeedCard(found),
-				...changes
-			});
-		} catch (e) {
-			if (e instanceof CampaignSeedError) throw ToolError.invalidInput("set_seed", e.message);
-			throw e;
-		}
-		return {
-			result: view(ctx.db.update(campaign).set({
-				...seed,
-				version: found.version + 1,
-				updatedAt: Date.now()
-			}).returning().get()),
-			event: {
-				kind: "seed_changed",
-				summary: `Seed changed: ${Object.keys(changes).join(", ")}`,
-				data: changes
-			}
-		};
-	}
+	run: (ctx) => seedView(currentSeed(ctx))
 })];
+// src/lib/server/tools/creation-tools.ts
+/** A Character draft's handle: drafts are Entities the DM writes into while the Player creates. */
+var draftHandle = (id) => `draft:${id}`;
+var campaignRow = currentSeed;
+/** How the conversation's muted lines name the Seed fields. */
+var SEED_FIELD_NAMES = {
+	name: "name",
+	premise: "premise",
+	tone: "tone",
+	length: "length",
+	worldName: "World name",
+	genreFlavor: "genre flavor",
+	scale: "scale",
+	magicLevel: "magic level",
+	techLevel: "tech level"
+};
+/** "a", "a and b", "a, b and c". */
+function listOf(items) {
+	return items.length <= 1 ? items[0] ?? "" : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+/** How the conversation's muted lines name the draft fields the DM may set. */
+var DRAFT_FIELD_NAMES = {
+	name: "name",
+	race: "race",
+	subrace: "subrace",
+	class: "class",
+	subclass: "subclass",
+	background: "background",
+	alignment: "alignment",
+	appearance: "appearance",
+	personality: "personality traits",
+	ideal: "ideal",
+	bond: "bond",
+	flaw: "flaw",
+	backstory: "backstory",
+	customBackgroundName: "custom background name",
+	customBackgroundFeature: "custom background feature",
+	baseScores: "ability scores"
+};
+var STRUCTURE = {
+	race: "races",
+	subrace: "subraces",
+	class: "classes",
+	subclass: "subclasses",
+	background: "backgrounds",
+	alignment: "alignments"
+};
+var TEXT_FIELDS = [
+	"name",
+	"appearance",
+	"personality",
+	"ideal",
+	"bond",
+	"flaw",
+	"backstory",
+	"customBackgroundName",
+	"customBackgroundFeature"
+];
+var slug = string().min(1).nullable();
+var score = int();
+/** The draft fields the DM may set. The Ability Score Method and the rolls are the Player's. */
+var draftFields = strictObject({
+	...Object.fromEntries(TEXT_FIELDS.map((f) => [f, string().optional()])),
+	...Object.fromEntries(Object.keys(STRUCTURE).map((f) => [f, slug.optional()])),
+	baseScores: strictObject(Object.fromEntries(ABILITY_KEYS.map((k) => [k, score]))).optional().describe("All six base scores: an arrangement of what the draft’s method gave"),
+	abilityMethod: unknown().optional().describe("Refused: the Player chooses the method"),
+	abilityRolls: unknown().optional().describe("Refused: only the wizard rolls")
+});
+function draftRow({ db }, handle) {
+	const id = handle.startsWith("draft:") ? handle.slice(6) : null;
+	const found = id && db.select().from(characterDraft).where(eq(characterDraft.id, id)).get();
+	if (!found) throw ToolError.unknownHandle(handle);
+	return {
+		...found,
+		draft: {
+			...emptyDraft(),
+			...found.data
+		}
+	};
+}
+var playerChoice = (message) => new ToolError("player_choice", message, "Ask the Player to make that choice in the Character wizard, then read the draft again");
+/** Refuses fields the wizard would not accept; the DM never gets a silent fix. */
+function checkDraftFields(draft, fields) {
+	const invalid = (message) => ToolError.invalidInput("set_draft_fields", message);
+	if (fields.abilityMethod !== void 0 || fields.abilityRolls !== void 0) throw playerChoice("The Player chooses the Ability Score Method and the wizard rolls the dice; you may only arrange the values they gave");
+	const rules = loadWizardRules();
+	for (const [field, collection] of Object.entries(STRUCTURE)) {
+		const value = fields[field];
+		if (!value) continue;
+		if (!rules[collection].some((e) => e.slug === value)) throw invalid(`Unknown ${field}: ${value}`);
+	}
+	for (const field of TEXT_FIELDS) {
+		const value = fields[field];
+		const issue = value === void 0 ? null : lengthIssue(field, value);
+		if (issue) throw invalid(issue);
+	}
+	if (fields.baseScores) {
+		if (!draft.abilityMethod) throw playerChoice("The Player has not chosen an Ability Score Method yet");
+		if (draft.abilityMethod === "rolling" && !draft.abilityRolls?.length) throw playerChoice("The Player has not rolled ability scores yet");
+		const problem = arrangementProblem(draft.abilityMethod, fields.baseScores, rollTotals(draft.abilityRolls ?? []));
+		if (problem) throw invalid(`Ability scores: ${problem}`);
+	}
+}
+var seedFields = Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, string().optional()]));
+/** Helping the Player create the Campaign: where creation stands, and the forms' fields. */
+var creationTools = [
+	readTool({
+		name: "creation_state",
+		description: "Where creation stands: seed_incomplete (offer to help with the Seed), party_empty (point the Player to the Character wizard), ready (wait for the Player to press Begin) or begun (play). Also lists the missing Seed fields and the Character drafts.",
+		input: object({}),
+		activity: null,
+		run: (ctx) => {
+			const found = campaignRow(ctx);
+			const missing = missingSeedFields(campaignSeedCard(found));
+			const characters = ctx.db.select({ id: character.id }).from(character).where(ne(character.status, "departed")).all().length;
+			const drafts = ctx.db.select().from(characterDraft).orderBy(asc(characterDraft.createdAt)).all().map((d) => ({
+				handle: draftHandle(d.id),
+				name: d.data.name,
+				step: d.step,
+				version: d.version
+			}));
+			return {
+				state: found.begunAt !== null ? "begun" : missing.length > 0 ? "seed_incomplete" : characters === 0 ? "party_empty" : "ready",
+				missing,
+				characters,
+				drafts
+			};
+		}
+	}),
+	creationTool({
+		name: "set_seed",
+		description: "Set Campaign Seed fields on the Player’s Seed card, which shows them marked \"✎ DM\". Pass the version from your last `seed` read; an empty string clears an optional field. Only set what the Player asked for or agreed to.",
+		input: object({
+			version: int(),
+			...seedFields
+		}),
+		run: (ctx, { version, ...changes }) => {
+			const found = currentSeed(ctx);
+			expectVersion({
+				handle: SEED_HANDLE,
+				version: found.version,
+				read: "seed"
+			}, version);
+			if (found.archivedAt !== null) throw new ToolError("archived", "An archived Campaign cannot be changed", "Stop here");
+			let seed;
+			try {
+				seed = parseCampaignSeed({
+					...campaignSeedCard(found),
+					...changes
+				});
+			} catch (e) {
+				if (e instanceof CampaignSeedError) throw ToolError.invalidInput("set_seed", e.message);
+				throw e;
+			}
+			const set = CAMPAIGN_SEED_FIELDS.filter((f) => seed[f] !== found[f]);
+			if (set.length === 0) return {
+				result: seedView(found),
+				changed: []
+			};
+			return {
+				result: seedView(ctx.db.update(campaign).set({
+					...seed,
+					version: found.version + 1,
+					dmSeedFields: [.../* @__PURE__ */ new Set([...found.dmSeedFields, ...set])],
+					updatedAt: ctx.now
+				}).returning().get()),
+				line: `DM set the Seed’s ${listOf(set.map((f) => SEED_FIELD_NAMES[f]))}`,
+				changed: [{
+					type: "seed",
+					campaign: ctx.campaignId
+				}]
+			};
+		}
+	}),
+	creationTool({
+		name: "reply",
+		description: "Answer the Player in the DM conversation pane (creation help and out-of-character talk). Out of fiction: it is not Narration and is never logged.",
+		input: object({ text: string().trim().min(1) }),
+		run: (ctx, { text }) => {
+			addConversationLine(ctx.db, {
+				author: "dm",
+				text
+			}, ctx.now);
+			return {
+				result: { replied: true },
+				changed: [{
+					type: "conversation",
+					campaign: ctx.campaignId
+				}]
+			};
+		}
+	}),
+	readTool({
+		name: "draft",
+		description: "Read a Character draft (handle from creation_state): its fields, version, wizard step, the fields you set (\"✎ DM\"), and the totals a rolled method gave.",
+		input: object({ draft: string() }),
+		activity: null,
+		run: (ctx, { draft: handle }) => {
+			const found = draftRow(ctx, handle);
+			return {
+				handle,
+				version: found.version,
+				step: found.step,
+				fields: found.draft,
+				dmFields: found.dmFields,
+				rolledTotals: found.draft.abilityRolls ? rollTotals(found.draft.abilityRolls) : null
+			};
+		}
+	}),
+	creationTool({
+		name: "set_draft_fields",
+		description: "Set fields of a Character draft in the Player’s open wizard, which shows them marked \"✎ DM\". Pass the version from your last `draft` read. Slugs as the rules data names them. baseScores only arranges what the Player’s chosen method gave (a permutation of the standard array or of the rolled totals, or a point-buy spend within budget); never set the method or the rolls.",
+		input: object({
+			draft: string(),
+			version: int(),
+			fields: draftFields
+		}),
+		run: (ctx, { draft: handle, version, fields }) => {
+			const found = draftRow(ctx, handle);
+			expectVersion({
+				handle,
+				version: found.version,
+				read: `draft ${handle}`
+			}, version);
+			checkDraftFields(found.draft, fields);
+			const settable = Object.fromEntries(Object.entries(fields).filter(([k]) => k !== "abilityMethod" && k !== "abilityRolls"));
+			const { draft: next, notices } = reconcile(loadWizardRules(), {
+				...found.draft,
+				...settable
+			});
+			for (const field of Object.keys(settable)) if (changedDraftFields({
+				...found.draft,
+				...settable
+			}, next).includes(field)) throw ToolError.invalidInput("set_draft_fields", `The ${field} ${String(settable[field])} does not fit the rest of the draft`);
+			const set = changedDraftFields(found.draft, next).filter((f) => f in settable);
+			if (set.length === 0) return {
+				result: {
+					handle,
+					version: found.version,
+					notices
+				},
+				changed: []
+			};
+			const saved = ctx.db.update(characterDraft).set({
+				data: next,
+				version: found.version + 1,
+				dmFields: [.../* @__PURE__ */ new Set([...found.dmFields, ...set])],
+				updatedAt: ctx.now
+			}).where(eq(characterDraft.id, found.id)).returning().get();
+			const who = next.name.trim() || "a new Character";
+			return {
+				result: {
+					handle,
+					version: saved.version,
+					set,
+					notices
+				},
+				line: `DM set ${who}’s ${listOf(set.map((f) => DRAFT_FIELD_NAMES[f]))}`,
+				changed: [{
+					type: "draft",
+					campaign: ctx.campaignId,
+					draft: found.id
+				}]
+			};
+		}
+	})
+];
 // src/lib/server/world/fields.ts
 /** A Place's handle, as a field value that must name an existing Place. */
 var placeHandle = string().regex(/^place:[a-z0-9-]+$/, "Expected a place handle (place:…)");
@@ -220,40 +428,6 @@ function parseFields(type, fields) {
 /** The field names a type has, besides `name`. */
 function fieldNames(type) {
 	return Object.keys(FIELD_SCHEMAS[type].shape);
-}
-// src/lib/server/world/names.ts
-/** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
-var plain = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-/** The slug part of a handle: `Mira Voss` → `mira-voss`. */
-function slug(name) {
-	return plain(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
-}
-/** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
-function normalizeName(name) {
-	return plain(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
-}
-function distance(a, b) {
-	let row = Array.from({ length: b.length + 1 }, (_, i) => i);
-	for (let i = 1; i <= a.length; i++) {
-		const next = [i];
-		for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-		row = next;
-	}
-	return row[b.length];
-}
-/**
-* Whether two names are close enough to be the same thing: equal once normalized, a typo apart,
-* or one's words all in the other ("Mira" and "Mira Voss").
-*/
-function isNearName(a, b) {
-	const x = normalizeName(a);
-	const y = normalizeName(b);
-	if (!x || !y) return false;
-	if (x === y) return true;
-	if (distance(x, y) <= Math.max(1, Math.floor(Math.max(x.length, y.length) / 6))) return true;
-	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
-	const words = new Set(long.split(" "));
-	return short.split(" ").every((w) => words.has(w));
 }
 // src/lib/server/world/links.ts
 /** `[[Name]]`, `[[alias]]` or `[[npc:handle]]`; text after a `|` is a label and ignored. */
@@ -385,7 +559,7 @@ function createWorld({ db, stamp }) {
 		return parsed.fields;
 	}
 	function freeHandle(type, name) {
-		const base = `${type}:${slug(name)}`;
+		const base = `${type}:${slug$1(name)}`;
 		const taken = new Set(db.select({ handle: entity.handle }).from(entity).where(or(eq(entity.handle, base), like(entity.handle, `${base}-%`))).all().map((e) => e.handle));
 		let handle = base;
 		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
@@ -499,6 +673,8 @@ function createWorld({ db, stamp }) {
 		for (const [source, text] of rows) if (text.trim()) db.run(sql`INSERT INTO world_search (handle, source, text) VALUES (${handle}, ${source}, ${text})`);
 	}
 	return {
+		/** Every Entity as link resolution sees it, retired and merged ones included. */
+		known,
 		/** Entities whose name or aliases are close to any of `names`, retired ones aside. */
 		nearMatches(names) {
 			return known().filter((k) => !k.retired).filter((k) => [k.name, ...k.aliases].some((n) => names.some((m) => isNearName(n, m)))).map((k) => ({
@@ -576,7 +752,6 @@ function createWorld({ db, stamp }) {
 				facts: facts.map((f) => factView(f, all)),
 				links,
 				backlinks,
-				beliefs: 0,
 				...revisions && { revisions }
 			};
 		},
@@ -765,6 +940,395 @@ function createWorld({ db, stamp }) {
 		}
 	};
 }
+// src/lib/server/knowledge/knowledge.ts
+var isCurrentBelief = (b) => b.replacedBy === null && b.retiredAt === null;
+var isCurrentFact = (f) => f.supersededBy === null && f.retiredAt === null;
+/** A field value in words: handles shown by name, lists joined, objects by their name. */
+function formatValue(value, all) {
+	if (value === null || value === void 0) return "none";
+	if (typeof value === "string") return all.find((k) => k.handle === value)?.name ?? value;
+	if (Array.isArray(value)) return value.map((v) => formatValue(v, all)).join(", ") || "none";
+	if (typeof value === "object") {
+		const named = value;
+		return typeof named.name === "string" ? named.name : JSON.stringify(value);
+	}
+	return String(value);
+}
+/** The Knowledge layer over one Campaign database: who believes what (ADR 0007). */
+function createKnowledge(ctx) {
+	const { db, stamp } = ctx;
+	const world = createWorld(ctx);
+	function findEntity(handle) {
+		const found = db.select().from(entity).where(eq(entity.handle, handle)).get();
+		if (!found) throw ToolError.unknownHandle(handle);
+		return found;
+	}
+	function liveEntity(handle, tool) {
+		const found = findEntity(handle);
+		if (found.retiredAt !== null) {
+			const instead = found.mergedInto ? `; use ${found.mergedInto}` : "";
+			throw ToolError.invalidInput(tool, `${handle} is retired${instead}`);
+		}
+		return found;
+	}
+	function findFact(id) {
+		const found = db.select().from(fact).where(eq(fact.id, id)).get();
+		if (!found) throw new ToolError("unknown_fact", `No Fact has the id ${id}`, "Check the id against open");
+		return found;
+	}
+	/** Every Fact connected to `id` through supersession, both ways. */
+	function chainOf(id) {
+		const all = db.select().from(fact).all();
+		const seen = /* @__PURE__ */ new Set([id]);
+		for (let grew = true; grew;) {
+			grew = false;
+			for (const f of all) {
+				if (!(seen.has(f.id) || f.supersededBy !== null && seen.has(f.supersededBy))) continue;
+				for (const n of [f.id, f.supersededBy]) if (n !== null && !seen.has(n)) {
+					seen.add(n);
+					grew = true;
+				}
+			}
+		}
+		return [...seen];
+	}
+	/** The Facts that now stand where `id` stood: the current ends of its supersession chain. */
+	function currentSuccessors(id) {
+		const chain = new Set(chainOf(id));
+		return db.select().from(fact).all().filter((f) => chain.has(f.id) && isCurrentFact(f) && f.id !== id);
+	}
+	function fieldValue(row, field) {
+		return field === "name" ? row.name : row.fields[field] ?? null;
+	}
+	function target(input, tool) {
+		const all = world.known();
+		if ("claim" in input) {
+			const about = liveEntity(input.about, tool);
+			const resolved = resolveLinks(input.claim, all);
+			return {
+				kind: "claim",
+				factId: null,
+				about: about.handle,
+				aboutName: about.name,
+				field: null,
+				value: null,
+				claim: resolved.text,
+				text: renderLinks(resolved.text, all),
+				chain: []
+			};
+		}
+		const { of } = input;
+		if (typeof of === "number") {
+			const found = findFact(of);
+			if (found.retiredAt !== null) throw ToolError.invalidInput(tool, `Fact ${of} is retired (${found.retiredReason})`);
+			const subject = findEntity(found.subject);
+			return {
+				kind: "fact",
+				factId: found.id,
+				about: subject.handle,
+				aboutName: subject.name,
+				field: null,
+				value: null,
+				claim: null,
+				text: renderLinks(found.claim, all),
+				chain: chainOf(found.id)
+			};
+		}
+		const dot = of.lastIndexOf(".");
+		const found = liveEntity(dot === -1 ? of : of.slice(0, dot), tool);
+		if (dot === -1) return {
+			kind: "entity",
+			factId: null,
+			about: found.handle,
+			aboutName: found.name,
+			field: null,
+			value: null,
+			claim: null,
+			text: found.name,
+			chain: []
+		};
+		const field = of.slice(dot + 1);
+		if (field !== "name" && !fieldNames(found.type).includes(field)) throw ToolError.invalidInput(tool, `A ${found.type} has no field ${field}; its fields are name, ${fieldNames(found.type).join(", ")}`);
+		const value = fieldValue(found, field);
+		return {
+			kind: "field",
+			factId: null,
+			about: found.handle,
+			aboutName: found.name,
+			field,
+			value,
+			claim: null,
+			text: `${found.name}'s ${field.replaceAll("_", " ")}: ${formatValue(value, all)}`,
+			chain: []
+		};
+	}
+	function holderFor(handle, characters, tool) {
+		if (handle.startsWith("char:")) {
+			const found = characters.find((c) => c.handle === handle);
+			if (!found) throw ToolError.unknownHandle(handle);
+			return {
+				handle,
+				character: found.id,
+				npc: null
+			};
+		}
+		const found = findEntity(handle);
+		if (found.type !== "npc") throw ToolError.invalidInput(tool, `${handle} is a ${found.type}; only Characters and NPCs hold Beliefs`);
+		return {
+			handle,
+			character: null,
+			npc: found.handle
+		};
+	}
+	const heldBy = (h) => h.character !== null ? eq(belief.holderCharacter, h.character) : eq(belief.holderNpc, h.npc);
+	function currentBeliefsOf(h) {
+		return db.select().from(belief).where(and(heldBy(h), isNull(belief.replacedBy), isNull(belief.retiredAt))).orderBy(asc(belief.id)).all();
+	}
+	/** Whether a held Belief already says what `t` says. */
+	function matches(b, t) {
+		if (b.kind !== t.kind || b.about !== t.about) return false;
+		switch (t.kind) {
+			case "fact": return b.factId === t.factId;
+			case "entity": return true;
+			case "field": return b.field === t.field && isDeepStrictEqual(b.value ?? null, t.value ?? null);
+			case "claim": return b.claim === t.claim;
+		}
+	}
+	/** Whether a held Belief is about the same thing as `t`, so a new one replaces it. */
+	function sameTarget(b, t) {
+		if (t.kind === "fact") return b.kind === "fact" && t.chain.includes(b.factId ?? -1);
+		if (t.kind === "field") return b.kind === "field" && b.about === t.about && b.field === t.field;
+		return false;
+	}
+	function holderHandleOf(b, characters) {
+		if (b.holderNpc !== null) return b.holderNpc;
+		return characters.find((c) => c.id === b.holderCharacter)?.handle ?? "char:unknown";
+	}
+	function view(b, characters, all) {
+		const truth = truthOf(b, all);
+		return {
+			id: b.id,
+			holder: holderHandleOf(b, characters),
+			kind: b.kind,
+			about: b.about,
+			...b.field !== null && { field: b.field },
+			claim: b.text,
+			source: b.source,
+			learned: {
+				session: b.sessionId,
+				minute: b.learnedMinute
+			},
+			outdated: truth !== null,
+			...truth !== null && { truth },
+			...b.replacedBy !== null && { replaced_by: b.replacedBy },
+			...b.retiredAt !== null && { retired_reason: b.retiredReason }
+		};
+	}
+	/** The current truth beside an outdated Belief, or null when the Belief still matches the World. */
+	function truthOf(b, all) {
+		if (b.kind === "fact" && b.factId !== null) {
+			const found = db.select().from(fact).where(eq(fact.id, b.factId)).get();
+			if (!found || isCurrentFact(found)) return null;
+			if (found.retiredAt !== null) return `Fact ${found.id} was retired: ${found.retiredReason}`;
+			const now = currentSuccessors(found.id);
+			return now.length ? now.map((f) => renderLinks(f.claim, all)).join("; ") : `Fact ${found.id} no longer holds`;
+		}
+		if (b.kind === "field" && b.about !== null && b.field !== null) {
+			const found = db.select().from(entity).where(eq(entity.handle, b.about)).get();
+			if (!found) return null;
+			const current = fieldValue(found, b.field);
+			if (isDeepStrictEqual(current ?? null, b.value ?? null)) return null;
+			return `${found.name}'s ${b.field.replaceAll("_", " ")}: ${formatValue(current, all)}`;
+		}
+		return null;
+	}
+	return {
+		/**
+		* Makes Holders learn something. Holders default to the Characters in the Scene. A Holder who
+		* already believes it is skipped; a new Belief replaces the Holder's older one on the same
+		* Fact chain or field, and any named in `replaces`.
+		*/
+		reveal(input, tool = "reveal") {
+			const t = target(input, tool);
+			const characters = characterHolders(db);
+			const handles = input.holders?.length ? [...new Set(input.holders)] : charactersInScene(db).map((c) => c.handle);
+			if (!handles.length) throw new ToolError("no_holders", "No Characters are in the Scene to learn this", "Name the holders explicitly");
+			const holders = handles.map((h) => holderFor(h, characters, tool));
+			const named = [...new Set(input.replaces ?? [])].map((id) => {
+				const found = db.select().from(belief).where(eq(belief.id, id)).get();
+				if (!found) throw new ToolError("unknown_belief", `No Belief has the id ${id}`, "Check the id against beliefs_of");
+				if (!isCurrentBelief(found)) throw ToolError.invalidInput(tool, `Belief ${id} is already replaced or retired`);
+				const owner = holderHandleOf(found, characters);
+				if (!handles.includes(owner)) throw ToolError.invalidInput(tool, `Belief ${id} is held by ${owner}, who is not among the holders`);
+				return {
+					...found,
+					owner
+				};
+			});
+			const beliefs = [];
+			const skipped = [];
+			for (const h of holders) {
+				const held = currentBeliefsOf(h);
+				const already = held.find((b) => matches(b, t));
+				if (already) {
+					skipped.push({
+						holder: h.handle,
+						belief: already.id
+					});
+					continue;
+				}
+				const row = db.insert(belief).values({
+					holderCharacter: h.character,
+					holderNpc: h.npc,
+					kind: t.kind,
+					factId: t.factId,
+					about: t.about,
+					field: t.field,
+					value: t.kind === "field" ? t.value ?? null : null,
+					claim: t.claim,
+					text: t.text,
+					aboutName: t.aboutName,
+					source: input.source ?? null,
+					sessionId: stamp.sessionId,
+					eventId: stamp.eventId,
+					learnedMinute: stamp.minute
+				}).returning().get();
+				const replaced = [...held.filter((b) => sameTarget(b, t)).map((b) => b.id), ...named.filter((b) => b.owner === h.handle).map((b) => b.id)];
+				const unique = [...new Set(replaced)];
+				if (unique.length) db.update(belief).set({ replacedBy: row.id }).where(inArray(belief.id, unique)).run();
+				beliefs.push({
+					id: row.id,
+					holder: h.handle,
+					claim: t.text,
+					replaced: unique
+				});
+			}
+			return {
+				beliefs,
+				skipped
+			};
+		},
+		/** A Holder's current Beliefs (every one with `history`), with outdatedness and the truth. */
+		beliefsOf(holder, about, history = false) {
+			const characters = characterHolders(db);
+			const h = holderFor(holder, characters, "beliefs_of");
+			if (about !== void 0) findEntity(about);
+			const all = world.known();
+			return {
+				holder,
+				beliefs: db.select().from(belief).where(heldBy(h)).orderBy(asc(belief.id)).all().filter((b) => history || isCurrentBelief(b)).filter((b) => about === void 0 || b.about === about).map((b) => view(b, characters, all))
+			};
+		},
+		/** How many current Beliefs are about an Entity. */
+		countAbout(handle) {
+			return db.select().from(belief).where(eq(belief.about, handle)).all().filter(isCurrentBelief).length;
+		},
+		/** Retires every current Belief about an Entity (or held by it), returning their ids. */
+		retireAbout(handle, reason) {
+			const rows = db.select().from(belief).where(or(eq(belief.about, handle), eq(belief.holderNpc, handle))).all().filter(isCurrentBelief);
+			if (rows.length) db.update(belief).set({
+				retiredAt: stamp.minute,
+				retiredReason: reason
+			}).where(inArray(belief.id, rows.map((b) => b.id))).run();
+			return rows.map((b) => b.id);
+		},
+		/** Moves Beliefs about, and held by, `from` onto `into`; returns how many moved. */
+		move(from, into) {
+			const about = db.update(belief).set({ about: into }).where(eq(belief.about, from)).returning({ id: belief.id }).all();
+			const held = db.update(belief).set({ holderNpc: into }).where(eq(belief.holderNpc, from)).returning({ id: belief.id }).all();
+			return new Set([...about, ...held].map((b) => b.id)).size;
+		}
+	};
+}
+// src/lib/server/tools/knowledge-tools.ts
+var handle$1 = string().min(1);
+/** What a Reveal teaches: `of` a Fact, Entity or field, or a lie or rumour's own claim. */
+var revealTargetFields = {
+	of: union([int(), handle$1]).optional().describe("A Fact id, an Entity handle (its existence), or handle.field (its value now)"),
+	claim: string().trim().min(1).optional().describe("A lie or rumour, never a Fact"),
+	about: handle$1.optional().describe("The Entity the claim is about")
+};
+var oneTarget = (i) => i.of !== void 0 ? i.claim === void 0 : i.claim !== void 0 && i.about !== void 0;
+/** The refinement a Reveal target needs: exactly one of `of`, or `claim` with `about`. */
+var revealTargetRule = [oneTarget, { message: "Pass either of, or claim with about" }];
+/** The parsed target as the Knowledge layer takes it. */
+var revealTarget = (i) => i.of !== void 0 ? { of: i.of } : {
+	claim: i.claim,
+	about: i.about
+};
+/** The Knowledge layer: who believes what (ADR 0007). */
+var knowledgeTools = [writeTool({
+	name: "reveal",
+	description: "Make Holders learn something: pass `of` (a Fact id, an Entity handle, or handle.field) or a lie or rumour as `claim` + `about`. Holders default to the Characters in the Scene; name Characters (char:…) or NPCs to narrow or widen. A new Belief on the same Fact chain or field replaces the Holder's older one; name `replaces` for lies (or to re-point a rumour made true at its Fact). No version: it writes Beliefs, not the Entity. Returns the Beliefs created and the Holders skipped because they already believed it.",
+	input: object({
+		...revealTargetFields,
+		holders: array(handle$1).optional(),
+		source: string().trim().min(1).optional().describe("Who or what they learned it from"),
+		replaces: array(int()).default([])
+	}).refine(...revealTargetRule),
+	run: (ctx, { holders, source, replaces, ...rest }) => {
+		const result = createKnowledge(ctx).reveal({
+			...revealTarget(rest),
+			holders,
+			source,
+			replaces
+		});
+		return {
+			result,
+			event: {
+				kind: "beliefs_revealed",
+				summary: `Revealed to ${result.beliefs.map((b) => b.holder).join(", ") || "nobody new"}`,
+				data: {
+					beliefs: result.beliefs.map((b) => b.id),
+					skipped: result.skipped
+				},
+				dmOnly: true
+			}
+		};
+	}
+}), readTool({
+	name: "beliefs_of",
+	description: "A Holder's Beliefs (a Character char:… or an NPC), optionally only those about one Entity: each claim, source and when it was learned, and `outdated` with the current truth beside it, so you voice a mistake on purpose. `history` adds replaced and retired Beliefs.",
+	input: object({
+		holder: handle$1,
+		about: handle$1.optional(),
+		history: boolean().default(false)
+	}),
+	run: (ctx, { holder, about, history }) => createKnowledge(ctx).beliefsOf(holder, about, history)
+})];
+// src/lib/server/tools/narration-tools.ts
+/** The NPC a Narration is voiced by; refused unless the handle names a live NPC. */
+function speaker({ db }, handle) {
+	const found = db.select().from(entity).where(eq(entity.handle, handle)).get();
+	if (!found || found.type !== "npc" || found.retiredAt !== null) throw ToolError.unknownHandle(handle);
+	return found;
+}
+/** Telling the Players what happens. */
+var narrationTools = [writeTool({
+	name: "narrate",
+	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine.",
+	input: object({
+		text: string().trim().min(1),
+		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks")
+	}),
+	activity: null,
+	run: (ctx, { text, voice }) => {
+		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
+		setAwaitingNarration(ctx.db, null);
+		return {
+			result: { narrated: true },
+			event: {
+				kind: "narration",
+				summary: npc ? `${npc.name}: ${text}` : text,
+				data: {
+					text,
+					voice: npc?.handle ?? null,
+					voiceName: npc?.name ?? null
+				}
+			}
+		};
+	}
+})];
 // src/lib/server/tools/world-tools.ts
 /** Every World-layer event is DM-only: the World layer never reaches the Player. */
 var dmOnly = true;
@@ -792,11 +1356,14 @@ var worldTools = [
 			handle,
 			history: boolean().default(false)
 		}),
-		run: (ctx, { handle, history }) => createWorld(ctx).open(handle, history)
+		run: (ctx, { handle, history }) => ({
+			...createWorld(ctx).open(handle, history),
+			beliefs: createKnowledge(ctx).countAbout(handle)
+		})
 	}),
 	writeTool({
 		name: "establish",
-		description: "Establish a new NPC, Place, Faction or Topic. Refuses a name close to an existing Entity (returning the matches) unless you list them in distinct_from. [[Name]] links in the Page and Facts resolve to handles; unresolved ones come back with near-matches.",
+		description: "Establish a new NPC, Place, Faction or Topic. Refuses a name close to an existing Entity (returning the matches) unless you list them in distinct_from. [[Name]] links in the Page and Facts resolve to handles; unresolved ones come back with near-matches. An NPC's knows seeds its Beliefs, secrets included: each item is `of` (a Fact id, handle or handle.field) or a `claim` + `about`, as in reveal.",
 		input: object({
 			type: _enum(ENTITY_TYPES),
 			name: string().trim().min(1),
@@ -804,10 +1371,25 @@ var worldTools = [
 			fields: record(string(), unknown()).default({}),
 			page: string().optional(),
 			facts: array(newFact).default([]),
-			distinct_from: array(handle).default([])
+			distinct_from: array(handle).default([]),
+			knows: array(object({
+				...revealTargetFields,
+				source: string().trim().min(1).optional()
+			}).refine(...revealTargetRule)).default([])
 		}),
-		run: (ctx, input) => {
-			const result = createWorld(ctx).establish(input);
+		run: (ctx, { knows, ...input }) => {
+			if (knows.length && input.type !== "npc") throw ToolError.invalidInput("establish", `Only an NPC knows things; a ${input.type} holds no Beliefs`);
+			const established = createWorld(ctx).establish(input);
+			const knowledge = createKnowledge(ctx);
+			const beliefs = knows.flatMap(({ source, ...item }) => knowledge.reveal({
+				...revealTarget(item),
+				source,
+				holders: [established.handle]
+			}, "establish").beliefs.map((b) => b.id));
+			const result = {
+				...established,
+				beliefs
+			};
 			return {
 				result,
 				event: {
@@ -925,7 +1507,7 @@ var worldTools = [
 	}),
 	writeTool({
 		name: "retire",
-		description: "Retire a Fact (pass its subject's version) or a whole Entity (its version), with a reason. Retiring an Entity retires its current Facts and returns them. Retired records stay on file but are no longer used.",
+		description: "Retire a Fact (pass its subject's version) or a whole Entity (its version), with a reason. Retiring an Entity retires its current Facts and every Belief pointing at it, and returns them. Retired records stay on file but are no longer used.",
 		input: object({
 			fact: int().optional(),
 			handle: handle.optional(),
@@ -935,16 +1517,22 @@ var worldTools = [
 		run: (ctx, { fact, handle, version, reason }) => {
 			const world = createWorld(ctx);
 			const result = fact !== void 0 ? world.retireFact(fact, version, reason) : world.retireEntity(handle, version, reason);
+			const retired_beliefs = fact !== void 0 ? [] : createKnowledge(ctx).retireAbout(handle, reason);
+			const what = fact !== void 0 ? `Fact ${fact}` : handle;
 			return {
-				result,
+				result: {
+					...result,
+					retired_beliefs
+				},
 				event: {
 					kind: "retired",
-					summary: `Retired ${fact !== void 0 ? `Fact ${fact}` : handle}: ${reason}`,
+					summary: `Retired ${what}: ${reason}`,
 					data: {
 						fact,
 						handle: result.handle,
 						reason,
-						facts: result.retired_facts.map((f) => f.id)
+						facts: result.retired_facts.map((f) => f.id),
+						beliefs: retired_beliefs
 					},
 					dmOnly
 				}
@@ -953,7 +1541,7 @@ var worldTools = [
 	}),
 	writeTool({
 		name: "merge",
-		description: "Merge a duplicate Entity into another: moves its Facts, aliases (and its name, as an alias) and incoming links, appends its Page to the survivor as a new revision, and retires it. Pass both versions.",
+		description: "Merge a duplicate Entity into another: moves its Facts, Beliefs, aliases (and its name, as an alias) and incoming links, appends its Page to the survivor as a new revision, and retires it. Pass both versions.",
 		input: object({
 			from: handle,
 			into: handle,
@@ -963,8 +1551,16 @@ var worldTools = [
 			})
 		}),
 		run: (ctx, { from, into, versions }) => {
+			const merged = createWorld(ctx).merge(from, into, versions);
+			const beliefs = createKnowledge(ctx).move(from, into);
 			return {
-				result: createWorld(ctx).merge(from, into, versions),
+				result: {
+					...merged,
+					moved: {
+						...merged.moved,
+						beliefs
+					}
+				},
 				event: {
 					kind: "entities_merged",
 					summary: `Merged ${from} into ${into}`,
@@ -982,7 +1578,9 @@ var worldTools = [
 /** Every game tool the server exposes to the DM. */
 var gameTools = [
 	...seedTools,
+	...creationTools,
 	...worldTools,
+	...knowledgeTools,
 	...narrationTools
 ];
 // src/lib/server/dice.ts
@@ -1105,7 +1703,7 @@ function withSkill(result, skill) {
 function activityLine(tool, input, result, dmOnly) {
 	const { activity } = tool;
 	if (activity === void 0) {
-		if (!tool.mutates) return "DM checks their notes";
+		if (tool.mutates === false) return "DM checks their notes";
 		return dmOnly ? null : "DM updates the game";
 	}
 	return typeof activity === "function" ? activity(input, result) : activity;
@@ -1126,7 +1724,7 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 			campaignId: entry.id
 		};
 	}
-	/** Runs one call; returns its result and whether the Player's timeline changed. */
+	/** Runs one call; returns its result and what the browser must refetch. */
 	function run(tool, folder, args) {
 		const { db, campaignId } = campaignDb(folder);
 		const parsed = tool.input.safeParse(args ?? {});
@@ -1138,7 +1736,11 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 			dice: dice(campaignId),
 			now: at
 		};
-		if (!tool.mutates) {
+		const timelineChanged = [{
+			type: "timeline",
+			campaign: campaignId
+		}];
+		if (tool.mutates === false) {
 			const result = tool.run({
 				...context,
 				db,
@@ -1151,10 +1753,34 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 			if (line) logActivity(db, line, { at });
 			return {
 				result,
-				campaignId,
-				changed: line !== null
+				changed: line === null ? [] : timelineChanged
 			};
 		}
+		if (tool.mutates === "creation") return db.transaction((tx) => {
+			const { result, line, changed } = tool.run({
+				...context,
+				db: tx,
+				stamp: {
+					...stamp(tx),
+					eventId: null
+				}
+			}, parsed.data);
+			if (!line) return {
+				result,
+				changed
+			};
+			addConversationLine(tx, {
+				author: "dm_write",
+				text: line
+			}, at);
+			return {
+				result,
+				changed: [...changed, {
+					type: "conversation",
+					campaign: campaignId
+				}]
+			};
+		});
 		return db.transaction((tx) => {
 			const current = stamp(tx);
 			const eventId = nextEventId(tx);
@@ -1181,8 +1807,7 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 			});
 			return {
 				result: withSkill(result, skill),
-				campaignId,
-				changed: true
+				changed: timelineChanged
 			};
 		});
 	}
@@ -1200,11 +1825,8 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 			try {
 				const tool = byName.get(name);
 				if (!tool) throw new ToolError("unknown_tool", `There is no tool named ${name}`, "Use a listed tool");
-				const { result, campaignId, changed } = run(tool, folder, args);
-				if (changed) publish({
-					type: "timeline",
-					campaign: campaignId
-				});
+				const { result, changed } = run(tool, folder, args);
+				for (const message of changed) publish(message);
 				return json$1(result);
 			} catch (e) {
 				if (e instanceof ToolError) return failure(e);
@@ -1227,6 +1849,8 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 	};
 }
 // src/lib/server/play/play.ts
+/** A creation conversation message needs a DM at the table to hear it. */
+var DmAwayError = class extends Error {};
 /**
 * A closed Floor as the DM hears it: one `floor` channel event, one body line per Declaration in
 * send order (`[d1 Wren · player] picks the lock`). An empty body hands the DM the initiative.
@@ -1269,6 +1893,30 @@ function createPlay({ library, channels, publish }) {
 			});
 			return outcome;
 		},
+		/**
+		* The Player writes in the DM pane: the message is kept for the pane and reaches the DM as one
+		* conversation event. It is out of fiction, so it never touches the Floor or the Event log.
+		*/
+		converse(campaignId, text, player = SOLO_PLAYER) {
+			const folder = folderOf(campaignId);
+			if (!channels.listening(folder)) throw new DmAwayError("The DM is away. Run dm in the Campaign folder to ask for help.");
+			const message = library.conversation(campaignId).add({
+				text,
+				player
+			});
+			channels.send(folder, {
+				content: text,
+				meta: {
+					kind: "conversation",
+					player
+				}
+			});
+			publish({
+				type: "conversation",
+				campaign: campaignId
+			});
+			return message;
+		},
 		/** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */
 		openSession(campaignId) {
 			return library.record(campaignId).openSession();
@@ -1296,7 +1944,8 @@ function authorized(request, token) {
 }
 var encoder = new TextEncoder();
 /**
-* A Campaign's channel events as Server-Sent Events, until the bridge hangs up. While the stream
+* A Campaign's channel events (`event: channel`) and permission verdicts (`event: permission`)
+* as Server-Sent Events, until the bridge hangs up. While the stream
 * is open, the bridge's session is attached to the Campaign.
 */
 function eventStream(channels, folder, detach) {
@@ -1306,9 +1955,11 @@ function eventStream(channels, folder, detach) {
 			const write = (text) => controller.enqueue(encoder.encode(text));
 			write(": open\n\n");
 			const unlisten = channels.listen(folder, (event) => write(`event: channel\ndata: ${JSON.stringify(event)}\n\n`));
+			const unlistenVerdicts = channels.listenVerdicts(folder, (verdict) => write(`event: permission\ndata: ${JSON.stringify(verdict)}\n\n`));
 			const keepAlive = setInterval(() => write(": ka\n\n"), 15e3);
 			stop = () => {
 				unlisten();
+				unlistenVerdicts();
 				clearInterval(keepAlive);
 				detach();
 			};
@@ -1334,8 +1985,10 @@ var SESSION_LIVE = {
 *   attaches the bridge's session (`x-dm-session`). A second session is refused (409).
 * - `POST register` with `{folder}`: registers a Campaign folder (the launcher), answering
 *   `{id, name, attached}`.
+* - `POST permission_request` with `{campaign, request_id, tool_name, description, input_preview}`:
+*   the session's permission prompt, shown to the Player; the verdict comes back on `events`.
 */
-function createBridgeApi({ library, host, channels, sessions, token }) {
+function createBridgeApi({ library, host, channels, sessions, permissions, token }) {
 	return async function handle(request) {
 		if (!authorized(request, token)) return json({ error: "bad token" }, 401);
 		const url = new URL(request.url);
@@ -1353,6 +2006,7 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 				}],
 				isError: true
 			});
+			if (entry) permissions.movedOn(entry.id);
 			return json(host.call(campaign, name, args));
 		}
 		if (route === "events" && request.method === "GET") {
@@ -1363,6 +2017,22 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 			const session = request.headers.get("x-dm-session") ?? crypto.randomUUID();
 			if (!sessions.attach(entry.id, session)) return json(SESSION_LIVE, 409);
 			return eventStream(channels, campaign, () => sessions.detach(entry.id, session));
+		}
+		if (route === "permission_request" && request.method === "POST") {
+			const body = await request.json();
+			const { campaign, request_id, tool_name } = body;
+			if (!campaign || !request_id || !tool_name) return json({ error: "campaign, request_id and tool_name are required" }, 400);
+			const entry = library.entryAt(campaign);
+			if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404);
+			const session = request.headers.get("x-dm-session") ?? "";
+			if (sessions.heldByOther(entry.id, session)) return json(SESSION_LIVE, 409);
+			permissions.request(entry.id, campaign, {
+				requestId: request_id,
+				toolName: tool_name,
+				description: body.description ?? "",
+				inputPreview: body.input_preview ?? ""
+			});
+			return json({ ok: true });
 		}
 		if (route === "register" && request.method === "POST") {
 			const { folder } = await request.json();
@@ -1386,6 +2056,7 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 /** Channel events per Campaign folder, delivered to the bridges listening for it. */
 function createChannels() {
 	const listeners = /* @__PURE__ */ new Map();
+	const verdictListeners = /* @__PURE__ */ new Map();
 	const key = canonicalFolder;
 	return {
 		/** Starts listening for a Campaign's events; returns the unsubscribe. */
@@ -1401,6 +2072,74 @@ function createChannels() {
 		},
 		send(folder, event) {
 			for (const listener of listeners.get(key(folder)) ?? []) listener(event);
+		},
+		/** Starts listening for the verdicts the Player gives the Campaign's session; returns the unsubscribe. */
+		listenVerdicts(folder, listener) {
+			const set = verdictListeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
+			verdictListeners.set(key(folder), set);
+			set.add(listener);
+			return () => set.delete(listener);
+		},
+		/** Relays a permission verdict to the Campaign's session. */
+		sendVerdict(folder, verdict) {
+			for (const listener of verdictListeners.get(key(folder)) ?? []) listener(verdict);
+		}
+	};
+}
+// src/lib/server/bridge/permissions.ts
+/**
+* The permission prompts the DM's session is waiting on, one per Campaign, held in memory: they
+* die with the session. The terminal's dialog stays open beside the browser's card and the first
+* answer wins, but Claude Code never tells a channel server the terminal answered. So the server
+* infers it, clearing the card when:
+* - the session moves on: its next tool call for the Campaign;
+* - a newer prompt arrives (only the newest shows);
+* - the session leaves.
+*/
+function createPermissions({ channels, sessions, publish }) {
+	const pending = /* @__PURE__ */ new Map();
+	function clear(campaign) {
+		if (pending.delete(campaign)) publish({
+			type: "permission",
+			campaign
+		});
+	}
+	sessions.onChange(({ campaign, attached }) => {
+		if (!attached) clear(campaign);
+	});
+	return {
+		/** The session raised a prompt: the Player's console shows it, replacing any older one. */
+		request(campaign, folder, request) {
+			pending.set(campaign, {
+				folder,
+				request
+			});
+			publish({
+				type: "permission",
+				campaign
+			});
+		},
+		/** The prompt the Campaign's session is waiting on, or null. */
+		pending(campaign) {
+			return pending.get(campaign)?.request ?? null;
+		},
+		/**
+		* The Player answers in the browser: the verdict goes to the session and the card clears.
+		* False when the prompt is no longer waiting (answered in the terminal, or replaced).
+		*/
+		answer(campaign, requestId, behavior) {
+			const held = pending.get(campaign);
+			if (!held || held.request.requestId !== requestId) return false;
+			channels.sendVerdict(held.folder, {
+				request_id: requestId,
+				behavior
+			});
+			clear(campaign);
+			return true;
+		},
+		/** The session moved on (it called a tool), so any prompt was answered in the terminal. */
+		movedOn(campaign) {
+			clear(campaign);
 		}
 	};
 }
@@ -1422,11 +2161,18 @@ var play = createPlay({
 	publish: live.publish
 });
 openSessionsOnAttach(sessions, play);
+/** The permission prompts the DM's sessions are waiting on, relayed to the Player. */
+var permissions = createPermissions({
+	channels,
+	sessions,
+	publish: live.publish
+});
 var bridgeApi = createBridgeApi({
 	library,
 	host,
 	channels,
 	sessions,
+	permissions,
 	token
 });
 /** The known localhost port, unless overridden for tests. */
@@ -1440,6 +2186,6 @@ function announceServer() {
 		version: DUNGEON_MASTER_VERSION || void 0
 	});
 }
-export { play as a, host as i, bridgeApi as n, port as o, channels as r, announceServer as t };
+export { permissions as a, DmAwayError as c, host as i, bridgeApi as n, play as o, channels as r, port as s, announceServer as t };
 
 //# sourceMappingURL=bridge.js.map

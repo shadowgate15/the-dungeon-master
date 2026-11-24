@@ -1217,6 +1217,25 @@ function availableValues(pool, scores, except) {
 	}
 	return left.sort((a, b) => b - a);
 }
+/**
+* Why an AI-proposed arrangement is not legal, or null when it is: a permutation of the standard
+* array (or of the rolled `pool` of totals), or a point buy spend within the budget. Pure code
+* decides legality; the model only ever sees totals.
+*/
+function arrangementProblem(method, scores, pool) {
+	const values = ABILITY_KEYS.map((k) => scores[k]);
+	if (values.some((v) => !Number.isInteger(v))) return "every ability needs a whole-number score";
+	if (method === "standard-array" || method === "rolling") {
+		const allowed = method === "standard-array" ? STANDARD_ARRAY : pool;
+		return sorted(values) === sorted(allowed) ? null : `use each of ${allowed.join(", ")} exactly once`;
+	}
+	if (method === "point-buy") {
+		if (values.some((v) => pointCost(v) === void 0)) return `base scores must be between ${POINT_BUY.min} and ${POINT_BUY.max}`;
+		const spent = pointsSpent(scores);
+		return spent > POINT_BUY.budget ? `${spent} points is over the ${POINT_BUY.budget} budget` : null;
+	}
+	return "no ability score method is chosen";
+}
 /** Checks the method, the six base scores and (for rolling) the rolled set. */
 function validateAbilityScores(method, scores, rolls) {
 	if (!method) return {
@@ -1278,6 +1297,11 @@ var LENGTH_FIELDS = [
 	"flaw",
 	"backstory"
 ];
+/** Why a text field is too long ("Backstory is over 2000 characters."), or null when it fits. */
+function lengthIssue(field, value) {
+	if (value.length <= LIMITS[field]) return null;
+	return `${field[0].toUpperCase()}${field.slice(1)} is over ${LIMITS[field]} characters.`;
+}
 function validateConcept({ draft, resolved }) {
 	const issues = [];
 	let attention = false;
@@ -1294,9 +1318,12 @@ function validateConcept({ draft, resolved }) {
 		attention = true;
 		issues.push(`The ${s.field} choice no longer fits; choose another.`);
 	}
-	for (const field of LENGTH_FIELDS) if (draft[field].length > LIMITS[field]) {
-		attention = true;
-		issues.push(`${field[0].toUpperCase()}${field.slice(1)} is over ${LIMITS[field]} characters.`);
+	for (const field of LENGTH_FIELDS) {
+		const issue = lengthIssue(field, draft[field]);
+		if (issue) {
+			attention = true;
+			issues.push(issue);
+		}
 	}
 	return {
 		state: attention ? "attention" : issues.length ? "incomplete" : "valid",
@@ -1687,6 +1714,14 @@ function reconcile(rules, input) {
 		notices
 	};
 }
+/** A value as JSON with object keys sorted, so equal drafts compare equal whatever the key order. */
+function canonical(value) {
+	return JSON.stringify(value, (_key, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v);
+}
+/** The draft fields whose values differ between two drafts. */
+function changedDraftFields(a, b) {
+	return [.../* @__PURE__ */ new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => canonical(a[k]) !== canonical(b[k]));
+}
 // src/lib/rules/derive-stats.ts
 /** floor((score - 10) / 2): 8 and 9 are -1, 1 is -5. */
 var abilityModifier = (score) => Math.floor((score - 10) / 2);
@@ -1966,6 +2001,6 @@ function tryDraftToCharacterInput(rules, draft) {
 		return null;
 	}
 }
-export { fixedEquipment as A, rollAbilityScores as C, equipmentGroupKeys as D, categoryItems as E, resolveFeatures as M, equipmentGroups as O, pointsSpent as S, rollTotals as T, POINT_BUY as _, WIZARD_RULES_KEYS as a, methodPatch as b, resolverDraft as c, STEPS as d, computeSteps as f, ABILITY_LABELS as g, skillsStepGroups as h, LIMITS as i, ownedEquipment as j, equipmentRows as k, spellPickFlags as l, groupLabel as m, cappedScore as n, emptyDraft as o, groupIssues as p, deriveStats as r, reconcile as s, tryDraftToCharacterInput as t, spellsView as u, STANDARD_ARRAY as v, rollTotal as w, pointCost as x, availableValues as y };
+export { equipmentGroupKeys as A, methodPatch as C, rollTotal as D, rollAbilityScores as E, resolveFeatures as F, equipmentRows as M, fixedEquipment as N, rollTotals as O, ownedEquipment as P, availableValues as S, pointsSpent as T, skillsStepGroups as _, WIZARD_RULES_KEYS as a, STANDARD_ARRAY as b, reconcile as c, spellsView as d, STEPS as f, lengthIssue as g, groupLabel as h, LIMITS as i, equipmentGroups as j, categoryItems as k, resolverDraft as l, groupIssues as m, cappedScore as n, changedDraftFields as o, computeSteps as p, deriveStats as r, emptyDraft as s, tryDraftToCharacterInput as t, spellPickFlags as u, ABILITY_LABELS as v, pointCost as w, arrangementProblem as x, POINT_BUY as y };
 
 //# sourceMappingURL=save.js.map

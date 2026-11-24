@@ -392,3 +392,4 @@ export const activityLine = sqliteTable('activity_line', {
 
 export * from './rules-schema'
 export * from './world-schema'
+export * from './knowledge-schema'

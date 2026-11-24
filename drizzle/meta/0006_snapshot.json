@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c351149b-2e36-4364-810b-5a2f559ba090",
+  "id": "9768addb-1967-4b57-89b2-2184b74f4e19",
   "prevId": "af868cd0-e9b1-47e9-9951-fab6c5412c8f",
   "tables": {
     "activity_line": {
@@ -153,21 +153,6 @@
         },
         "awaiting_narration_since": {
           "name": "awaiting_narration_since",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "dm_seed_fields": {
-          "name": "dm_seed_fields",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
-        },
-        "begun_at": {
-          "name": "begun_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -727,22 +712,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "dm_fields": {
-          "name": "dm_fields",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1070,51 +1039,6 @@
           "value": "source IS NULL OR source IN ('class', 'race', 'background')"
         }
       }
-    },
-    "conversation_message": {
-      "name": "conversation_message",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "author": {
-          "name": "author",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "player": {
-          "name": "player",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
     },
     "declaration": {
       "name": "declaration",
@@ -5854,6 +5778,187 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
+    },
+    "belief": {
+      "name": "belief",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "holder_character": {
+          "name": "holder_character",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "holder_npc": {
+          "name": "holder_npc",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fact_id": {
+          "name": "fact_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "about": {
+          "name": "about",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "field": {
+          "name": "field",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claim": {
+          "name": "claim",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "about_name": {
+          "name": "about_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "learned_minute": {
+          "name": "learned_minute",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "replaced_by": {
+          "name": "replaced_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "retired_at": {
+          "name": "retired_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "retired_reason": {
+          "name": "retired_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "belief_holder_character_idx": {
+          "name": "belief_holder_character_idx",
+          "columns": [
+            "holder_character"
+          ],
+          "isUnique": false
+        },
+        "belief_holder_npc_idx": {
+          "name": "belief_holder_npc_idx",
+          "columns": [
+            "holder_npc"
+          ],
+          "isUnique": false
+        },
+        "belief_about_idx": {
+          "name": "belief_about_idx",
+          "columns": [
+            "about"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "belief_holder_character_character_id_fk": {
+          "name": "belief_holder_character_character_id_fk",
+          "tableFrom": "belief",
+          "tableTo": "character",
+          "columnsFrom": [
+            "holder_character"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "belief_one_holder_check": {
+          "name": "belief_one_holder_check",
+          "value": "(\"belief\".\"holder_character\" IS NULL) <> (\"belief\".\"holder_npc\" IS NULL)"
+        },
+        "belief_kind_check": {
+          "name": "belief_kind_check",
+          "value": "kind IN ('fact', 'entity', 'field', 'claim')"
+        }
+      }
     }
   },
   "views": {},

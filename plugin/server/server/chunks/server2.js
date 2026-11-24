@@ -53,6 +53,10 @@ var noop = () => {};
 function is_promise(value) {
 	return typeof value?.then === "function";
 }
+/** @param {Function} fn */
+function run(fn) {
+	return fn();
+}
 /**
 * TODO replace with Promise.withResolvers once supported widely enough
 * @template [T=void]
@@ -1435,6 +1439,25 @@ function attributes(attrs, css_hash, classes, styles, flags = 0) {
 	return attr_str;
 }
 /**
+* @param {Record<string, unknown>[]} props
+* @returns {Record<string, unknown>}
+*/
+function spread_props(props) {
+	/** @type {Record<string, unknown>} */
+	const merged_props = {};
+	let key;
+	for (let i = 0; i < props.length; i++) {
+		const obj = props[i];
+		if (obj == null) continue;
+		for (key of Object.keys(obj)) {
+			const desc = Object.getOwnPropertyDescriptor(obj, key);
+			if (desc) Object.defineProperty(merged_props, key, desc);
+			else merged_props[key] = obj[key];
+		}
+	}
+	return merged_props;
+}
+/**
 * @param {unknown} value
 * @returns {string}
 */
@@ -1530,6 +1553,6 @@ function derived(fn) {
 		return updated_value;
 	};
 }
-export { clsx as _, bind_props as a, ensure_array_like as c, render as d, stringify as f, attr as g, ssr_context as h, await_block as i, head as l, setContext as m, attr_style as n, derived as o, getContext as p, attributes as r, element as s, attr_class as t, props_id as u, noop as v, escape_html as y };
+export { attr as _, bind_props as a, run as b, ensure_array_like as c, render as d, spread_props as f, ssr_context as g, setContext as h, await_block as i, head as l, getContext as m, attr_style as n, derived as o, stringify as p, attributes as r, element as s, attr_class as t, props_id as u, clsx as v, escape_html as x, noop as y };
 
 //# sourceMappingURL=server2.js.map

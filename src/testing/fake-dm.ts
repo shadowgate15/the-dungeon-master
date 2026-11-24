@@ -24,6 +24,22 @@ const ChannelNotification = z.object({
   params: z.object({ content: z.string(), meta: z.record(z.string(), z.string()) })
 })
 
+const VerdictNotification = z.object({
+  method: z.literal('notifications/claude/channel/permission'),
+  params: z.object({ request_id: z.string(), behavior: z.enum(['allow', 'deny']) })
+})
+
+/** A permission prompt as Claude Code raises it to a channel server. */
+export type PermissionRequest = {
+  request_id: string
+  tool_name: string
+  description: string
+  input_preview: string
+}
+
+/** The Player's answer to a permission prompt. */
+export type PermissionBehavior = 'allow' | 'deny'
+
 type Options = {
   /** The folder Claude Code would run in: the bridge's cwd. */
   folder: string
@@ -65,7 +81,7 @@ export async function startFakeDm({ folder, home, bridge = BRIDGE_BUNDLE }: Opti
 
   const client = new Client(
     { name: 'fake-dm', version: '0.0.0' },
-    { capabilities: { experimental: { 'claude/channel': {} } } }
+    { capabilities: { experimental: { 'claude/channel': {}, 'claude/channel/permission': {} } } }
   )
 
   const steps: Step[] = []
@@ -78,7 +94,18 @@ export async function startFakeDm({ folder, home, bridge = BRIDGE_BUNDLE }: Opti
     wake()
   }
 
+  // Verdicts by request id, and the waits for verdicts not yet arrived.
+  const verdicts = new Map<string, PermissionBehavior>()
+  const awaiting = new Map<string, (behavior: PermissionBehavior) => void>()
+
   client.fallbackNotificationHandler = async (notification) => {
+    const verdict = VerdictNotification.safeParse(notification)
+    if (verdict.success) {
+      const { request_id, behavior } = verdict.data.params
+      verdicts.set(request_id, behavior)
+      awaiting.get(request_id)?.(behavior)
+      return
+    }
     const parsed = ChannelNotification.safeParse(notification)
     if (!parsed.success) return
     const event = parsed.data.params
@@ -124,6 +151,30 @@ export async function startFakeDm({ folder, home, bridge = BRIDGE_BUNDLE }: Opti
         payload = { text: first.text }
       }
       return { isError: result.isError === true, payload }
+    },
+
+    /** Raises a permission prompt, as Claude Code does when a tool needs the Player's approval. */
+    async requestPermission(request: PermissionRequest) {
+      await client.notification({
+        method: 'notifications/claude/channel/permission_request',
+        params: request
+      })
+    },
+
+    /** Resolves with the verdict the bridge relays for the request. */
+    permissionVerdict(requestId: string, timeout = 5000): Promise<PermissionBehavior> {
+      const known = verdicts.get(requestId)
+      if (known) return Promise.resolve(known)
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`No verdict for permission request ${requestId}`)),
+          timeout
+        )
+        awaiting.set(requestId, (behavior) => {
+          clearTimeout(timer)
+          resolve(behavior)
+        })
+      })
     },
 
     /** Appends steps; each must match the next channel event in order. */

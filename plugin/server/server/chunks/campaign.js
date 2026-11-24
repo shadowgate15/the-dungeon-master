@@ -1,7 +1,7 @@
-import { A as abilityScoreMethod, At as and, Ct as ABILITY_METHODS, Dt as SOLO_PLAYER, G as classTable, Ht as DUNGEON_MASTER_HOME, J as equipment, Lt as sql, M as background, Mt as inArray, Ot as asc, Pt as isNull, Rt as Column, Tt as CUSTOM_BACKGROUND_FEATURE_MAX, Vt as DUNGEON_MASTER_CAMPAIGNS, _ as characterSpell, _t as subrace, a as seedRulesData, b as floor, c as openDatabase, d as character, f as characterChoice, g as characterSkill, gt as subclass, h as characterItem, i as userStateDir, j as alignment, jt as eq, kt as desc, l as activityLine, m as characterEquipment, mt as spell, n as canonicalFolder, o as loadRulesDataset, p as characterDraft, pt as skill, r as defaultCampaignRoot, s as migrateDatabase, st as race, t as campaignDatabasePath, u as campaign, v as declaration, wt as BACKSTORY_MAX, x as session, y as event, zt as is } from "./paths.js";
-import { D as equipmentGroupKeys, M as resolveFeatures, O as equipmentGroups, a as WIZARD_RULES_KEYS, c as resolverDraft, d as STEPS, o as emptyDraft, r as deriveStats, t as tryDraftToCharacterInput } from "./save.js";
+import { At as asc, Bt as sql, C as belief, Dt as CUSTOM_BACKGROUND_FEATURE_MAX, Et as BACKSTORY_MAX, Ft as isNotNull, Gt as DUNGEON_MASTER_HOME, Ht as is, It as isNull, M as abilityScoreMethod, Mt as and, N as alignment, Nt as eq, P as background, Pt as inArray, S as session, Tt as ABILITY_METHODS, Vt as Column, Wt as DUNGEON_MASTER_CAMPAIGNS, X as equipment, _ as characterSpell, a as seedRulesData, b as event, c as openDatabase, d as character, f as characterChoice, g as characterSkill, gt as spell, h as characterItem, ht as skill, i as userStateDir, jt as desc, kt as SOLO_PLAYER, l as activityLine, lt as race, m as characterEquipment, n as canonicalFolder, o as loadRulesDataset, p as characterDraft, q as classTable, r as defaultCampaignRoot, s as migrateDatabase, t as campaignDatabasePath, u as campaign, v as conversationMessage, vt as subclass, w as entity, x as floor, y as declaration, yt as subrace } from "./paths.js";
+import { A as equipmentGroupKeys, F as resolveFeatures, a as WIZARD_RULES_KEYS, f as STEPS, j as equipmentGroups, l as resolverDraft, o as changedDraftFields, r as deriveStats, s as emptyDraft, t as tryDraftToCharacterInput } from "./save.js";
 import { s as ABILITY_KEYS } from "./schema.js";
-import { o as parseCampaignSeed, r as campaignSeedCard } from "./seed.js";
+import { o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed.js";
 import fs from "node:fs";
 import path from "node:path";
 // src/lib/server/bridge/sessions.ts
@@ -652,11 +652,22 @@ function createParty(db, now = Date.now) {
 		if (!found) throw new DraftNotFoundError("Character draft not found");
 		return found;
 	}
+	/**
+	* The Player's write. A write that changes nothing (the open wizard echoing a DM write back)
+	* keeps the version; a field the Player changed loses its "✎ DM" mark.
+	*/
 	function write(id, { draft, step }) {
-		row(id);
+		const found = row(id);
+		const before = {
+			...emptyDraft(),
+			...found.data
+		};
+		const edited = new Set(changedDraftFields(before, draft));
 		db.update(characterDraft).set({
 			data: draft,
 			step,
+			version: edited.size > 0 ? found.version + 1 : found.version,
+			dmFields: found.dmFields.filter((f) => !edited.has(f)),
 			updatedAt: now()
 		}).where(eq(characterDraft.id, id)).run();
 	}
@@ -709,7 +720,9 @@ function createParty(db, now = Date.now) {
 					...emptyDraft(),
 					...found.data
 				},
-				step: found.step
+				step: found.step,
+				version: found.version,
+				dmFields: found.dmFields
 			};
 		},
 		/** Replaces the stored draft. Incomplete is fine: a draft is unsaved by definition. */
@@ -1015,6 +1028,129 @@ function createFloor(db, now = Date.now) {
 		}
 	};
 }
+// src/lib/server/world/names.ts
+/** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
+var plain$1 = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/** The slug part of a handle: `Mira Voss` → `mira-voss`. */
+function slug(name) {
+	return plain$1(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
+}
+/** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
+function normalizeName(name) {
+	return plain$1(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+}
+function distance(a, b) {
+	let row = Array.from({ length: b.length + 1 }, (_, i) => i);
+	for (let i = 1; i <= a.length; i++) {
+		const next = [i];
+		for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+		row = next;
+	}
+	return row[b.length];
+}
+/**
+* Whether two names are close enough to be the same thing: equal once normalized, a typo apart,
+* or one's words all in the other ("Mira" and "Mira Voss").
+*/
+function isNearName(a, b) {
+	const x = normalizeName(a);
+	const y = normalizeName(b);
+	if (!x || !y) return false;
+	if (x === y) return true;
+	if (distance(x, y) <= Math.max(1, Math.floor(Math.max(x.length, y.length) / 6))) return true;
+	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+	const words = new Set(long.split(" "));
+	return short.split(" ").every((w) => words.has(w));
+}
+// src/lib/server/knowledge/holders.ts
+/**
+* Every Character in the Campaign with its readable handle, `char:` plus its name's slug. Two
+* Characters with the same slug are told apart by creation order (`char:wren-2`).
+*/
+function characterHolders(db) {
+	const taken = /* @__PURE__ */ new Set();
+	return db.select({
+		id: character.id,
+		name: character.name,
+		player: character.controllingPlayer
+	}).from(character).orderBy(asc(character.createdAt), asc(character.id)).all().map((c) => {
+		const base = `char:${slug(c.name) || "character"}`;
+		let handle = base;
+		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
+		taken.add(handle);
+		return {
+			...c,
+			handle
+		};
+	});
+}
+/**
+* The Characters present in the Scene. There is no Scene yet (#328 adds it and presence from
+* whereabouts), so until then every Character in the Party is present.
+*/
+function charactersInScene(db) {
+	return characterHolders(db);
+}
+// src/lib/server/knowledge/journal.ts
+/** Shows `[[Name]]` links as plain names for the Player. */
+var plain = (text) => text.replace(/\[\[([^[\]|]+)(?:\|[^[\]]*)?\]\]/g, "$1");
+/**
+* The Player's Journal: their Characters' current Beliefs as each was learned, one entry per
+* thing believed with every Character who holds it. Built from the Knowledge layer only, never
+* from the World layer or an NPC's Beliefs, and with the truth stripped (ADR 0007).
+*/
+function journal(db, player) {
+	const characters = characterHolders(db).filter((c) => player === void 0 || c.player === player);
+	const types = new Map(db.select({
+		handle: entity.handle,
+		type: entity.type
+	}).from(entity).all().map((e) => [e.handle, e.type]));
+	const rows = db.select().from(belief).where(and(isNotNull(belief.holderCharacter), isNull(belief.replacedBy), isNull(belief.retiredAt))).orderBy(asc(belief.id)).all();
+	const entries = /* @__PURE__ */ new Map();
+	for (const b of rows) {
+		const holder = characters.find((c) => c.id === b.holderCharacter);
+		const type = b.about === null ? void 0 : types.get(b.about);
+		if (!holder || !type) continue;
+		const text = plain(b.text);
+		const source = b.source === null ? null : plain(b.source);
+		const key = JSON.stringify([
+			b.aboutName,
+			type,
+			text,
+			source
+		]);
+		const entry = entries.get(key) ?? {
+			id: `b${b.id}`,
+			about: {
+				name: b.aboutName ?? "",
+				type
+			},
+			text,
+			source,
+			holders: []
+		};
+		if (!entry.holders.some((h) => h.id === holder.id)) entry.holders.push({
+			id: holder.id,
+			name: holder.name
+		});
+		entries.set(key, entry);
+	}
+	return { entries: [...entries.values()] };
+}
+// src/lib/server/creation/conversation.ts
+/** Adds a line to the creation conversation. It is out of fiction: never an Event. */
+function addConversationLine(db, line, at) {
+	return db.insert(conversationMessage).values({
+		author: line.author,
+		player: line.player ?? null,
+		text: line.text,
+		createdAt: at
+	}).returning().get();
+}
+/** A Campaign's creation conversation, oldest first. */
+function conversationLines(db) {
+	return db.select().from(conversationMessage).orderBy(asc(conversationMessage.id)).all();
+}
 // src/lib/server/campaign/registry.ts
 /**
 * The list of Campaign folders the server knows, as `registry.json` in the user-level state
@@ -1169,13 +1305,23 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		seed(id) {
 			return campaignSeedCard(find(id).found);
 		},
-		/** Saves the whole Seed; an incomplete one is fine, an invalid one is refused. */
+		/** The Seed fields the DM set and the Player has not edited since: the card's "✎ DM" marks. */
+		dmSeedFields(id) {
+			return find(id).found.dmSeedFields;
+		},
+		/**
+		* Saves the whole Seed; an incomplete one is fine, an invalid one is refused. A field the
+		* Player changed loses its "✎ DM" mark.
+		*/
 		saveSeed(id, card) {
 			const { folder, found } = find(id);
 			if (found.archivedAt !== null) throw new CampaignArchivedError("An archived Campaign cannot be changed");
+			const seed = parseCampaignSeed(card);
+			const edited = new Set(CAMPAIGN_SEED_FIELDS.filter((f) => seed[f] !== found[f]));
 			const saved = update(id, {
-				...parseCampaignSeed(card),
-				version: found.version + 1
+				...seed,
+				version: found.version + 1,
+				dmSeedFields: found.dmSeedFields.filter((f) => !edited.has(f))
 			});
 			registry.put({
 				id,
@@ -1183,6 +1329,17 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 				name: saved.name
 			});
 			return saved;
+		},
+		/** The creation conversation in the DM pane. It is out of fiction and never logged. */
+		conversation(id) {
+			const db = database(find(id).folder);
+			return {
+				list: () => conversationLines(db),
+				add: (line) => addConversationLine(db, {
+					...line,
+					author: "player"
+				}, now())
+			};
 		},
 		/** The Campaign's Characters and Character drafts. */
 		party(id) {
@@ -1192,11 +1349,12 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		floor(id) {
 			return createFloor(database(find(id).folder), now);
 		},
-		/** The Campaign's record of play: the Player's timeline and its Sessions. */
+		/** The Campaign's record of play: the Player's timeline and Journal, and its Sessions. */
 		record(id) {
 			const db = database(find(id).folder);
 			return {
 				timeline: () => timeline(db),
+				journal: () => journal(db),
 				openSession: () => openSession(db, now())
 			};
 		},
@@ -1273,6 +1431,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { CharacterValidationError as C, CharacterNotFoundError as S, nextEventId as _, CampaignArchivedError as a, DraftNotFoundError as b, CampaignNotFoundError as c, DeclarationNotFoundError as d, DeclarationRefusedError as f, logEvent as g, logActivity as h, sessions as i, NotACampaignFolderError as l, currentStamp as m, library as n, CampaignExistsError as o, DmBusyError as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, setAwaitingNarration as v, SESSION_LIVE_MESSAGE as w, loadWizardRules as x, canAct as y };
+export { SESSION_LIVE_MESSAGE as A, nextEventId as C, loadWizardRules as D, DraftNotFoundError as E, CharacterNotFoundError as O, logEvent as S, canAct as T, DeclarationNotFoundError as _, CampaignArchivedError as a, currentStamp as b, CampaignNotFoundError as c, addConversationLine as d, characterHolders as f, slug as g, normalizeName as h, sessions as i, CharacterValidationError as k, NotACampaignFolderError as l, isNearName as m, library as n, CampaignExistsError as o, charactersInScene as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, DeclarationRefusedError as v, setAwaitingNarration as w, logActivity as x, DmBusyError as y };
 
 //# sourceMappingURL=campaign.js.map

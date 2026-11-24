@@ -1,11 +1,13 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
-import { _ as clsx, c as ensure_array_like, f as stringify, g as attr, l as head, n as attr_style, o as derived, r as attributes, t as attr_class, y as escape_html } from "../../../../../chunks/server2.js";
+import { _ as attr, c as ensure_array_like, l as head, n as attr_style, o as derived, p as stringify, r as attributes, t as attr_class, v as clsx, x as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/paths2.js";
-import { a as createQuery, i as timelineQueryKey, n as createSessionsQuery, r as floorQueryKey, t as DmBadge } from "../../../../../chunks/DmBadge.js";
-import { t as Badge } from "../../../../../chunks/Badge.js";
-import { n as Alert, r as Link, t as Button } from "../../../../../chunks/Button.js";
+import { n as Badge, r as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
+import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
+import { a as floorActions, i as createTimelineQuery, n as createFloorQuery, o as Journal, r as createJournalQuery, t as FloorChangeError } from "../../../../../chunks/floor-client.js";
+import { l as createQuery, o as permissionQueryKey } from "../../../../../chunks/messages.js";
 import { t as useQueryClient } from "../../../../../chunks/useQueryClient.js";
+import { t as Link } from "../../../../../chunks/Link.js";
 // src/lib/ui/Meter.svelte
 function Meter($$renderer, $$props) {
 	/** Accessible name of the meter. */
@@ -273,6 +275,45 @@ function FloorComposer($$renderer, $$props) {
 		$$renderer.subsume($$inner_renderer);
 	});
 }
+// src/lib/play/journal.ts
+/** The entries a Character holds: "What <Character> knows". */
+var knownBy = (journal, character) => journal.entries.filter((e) => e.holders.some((h) => h.id === character));
+// src/lib/play/PermissionCard.svelte
+function PermissionCard($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		/**
+		* The permission prompt the DM's session is waiting on, inline above the composer (never a modal
+		* or toast). The terminal's dialog stays open too; the first answer wins.
+		*/
+		let { request, onanswer } = $$props;
+		$$renderer.push(`<div role="group" aria-label="Permission request" class="flex shrink-0 flex-col gap-2 rounded-panel border-2 border-warning bg-warning-bg p-3 text-warning"><p class="text-sm font-semibold">Behind the screen: the DM asks permission</p> `);
+		if (request.description) $$renderer.push(`<!--[0--><p class="text-sm">${escape_html(request.description)}</p>`);
+		else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]--> <code class="rounded bg-black/10 px-2 py-1 text-xs break-all">${escape_html(request.toolName)}`);
+		if (request.inputPreview) $$renderer.push(`<!--[0-->: ${escape_html(request.inputPreview)}`);
+		else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]--></code> <div class="flex gap-2">`);
+		Button($$renderer, {
+			size: "sm",
+			onclick: () => onanswer("allow"),
+			children: ($$renderer) => {
+				$$renderer.push(`<!---->Allow`);
+			},
+			$$slots: { default: true }
+		});
+		$$renderer.push(`<!----> `);
+		Button($$renderer, {
+			size: "sm",
+			variant: "secondary",
+			onclick: () => onanswer("deny"),
+			children: ($$renderer) => {
+				$$renderer.push(`<!---->Deny`);
+			},
+			$$slots: { default: true }
+		});
+		$$renderer.push(`<!----></div></div>`);
+	});
+}
 // src/lib/play/Timeline.svelte
 function Timeline($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -328,70 +369,37 @@ function Timeline($$renderer, $$props) {
 		$$renderer.push(`<!--]-->`);
 	});
 }
-// src/lib/play/floor-client.ts
-/** A Floor change the server refused, with its message for the Player. */
-var FloorChangeError = class extends Error {};
-/** The Campaign's open Floor, starting from the server-rendered one; live updates keep it fresh. */
-function createFloorQuery(campaign, initial) {
+// src/lib/play/permission-client.ts
+var url = (campaign) => `/api/campaigns/${encodeURIComponent(campaign)}/permission`;
+/** The permission prompt the Campaign's session is waiting on, starting from the server-rendered one. */
+function createPermissionQuery(campaign, initial) {
 	return createQuery(() => ({
-		queryKey: floorQueryKey(campaign()),
+		queryKey: permissionQueryKey(campaign()),
 		queryFn: async () => {
-			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/floor`);
-			if (!res.ok) throw new FloorChangeError("The Floor could not be loaded");
-			return await res.json();
+			const res = await fetch(url(campaign()));
+			if (!res.ok) return null;
+			return (await res.json()).request;
 		},
 		initialData: initial()
 	}));
 }
-/** The Campaign's timeline and awaiting Narration, starting from the server-rendered one. */
-function createTimelineQuery(campaign, initial) {
-	return createQuery(() => ({
-		queryKey: timelineQueryKey(campaign()),
-		queryFn: async () => {
-			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/timeline`);
-			if (!res.ok) throw new FloorChangeError("The timeline could not be loaded");
-			return await res.json();
-		},
-		initialData: initial()
-	}));
-}
-/** Send, edit, withdraw and Done on the Campaign's open Floor; each refreshes the Floor and timeline. */
-function floorActions(campaign) {
+/**
+* Answers the prompt. When the terminal answered first the server refuses it, and the card clears
+* either way.
+*/
+function permissionActions(campaign) {
 	const queryClient = useQueryClient();
-	const base = () => `/api/campaigns/${encodeURIComponent(campaign())}/floor/declarations`;
-	async function call(url, init) {
-		const res = await fetch(url, {
-			...init,
-			headers: init.body ? { "content-type": "application/json" } : void 0
+	return { async answer(requestId, behavior) {
+		await fetch(url(campaign()), {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				request_id: requestId,
+				behavior
+			})
 		});
-		await Promise.all([queryClient.invalidateQueries({ queryKey: floorQueryKey(campaign()) }), queryClient.invalidateQueries({ queryKey: timelineQueryKey(campaign()) })]);
-		if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The Floor could not be changed");
-		return res;
-	}
-	return {
-		async send(character, text) {
-			return await (await call(base(), {
-				method: "POST",
-				body: JSON.stringify({
-					character,
-					text
-				})
-			})).json();
-		},
-		async edit(id, text) {
-			await call(`${base()}/${encodeURIComponent(id)}`, {
-				method: "PATCH",
-				body: JSON.stringify({ text })
-			});
-		},
-		async withdraw(id) {
-			await call(`${base()}/${encodeURIComponent(id)}`, { method: "DELETE" });
-		},
-		/** Done: closes the Floor (once every Player has pressed it) and wakes the DM. */
-		async done() {
-			await call(`/api/campaigns/${encodeURIComponent(campaign())}/floor/done`, { method: "POST" });
-		}
-	};
+		await queryClient.invalidateQueries({ queryKey: permissionQueryKey(campaign()) });
+	} };
 }
 // src/routes/campaigns/[id]/play/+page.svelte
 function _page($$renderer, $$props) {
@@ -400,7 +408,10 @@ function _page($$renderer, $$props) {
 		const sessions = createSessionsQuery(() => data.attached);
 		const floor = createFloorQuery(() => data.campaign.id, () => data.floor);
 		const timeline = createTimelineQuery(() => data.campaign.id, () => data.timeline);
+		const journal = createJournalQuery(() => data.campaign.id, () => data.journal);
 		const actions = floorActions(() => data.campaign.id);
+		const permission = createPermissionQuery(() => data.campaign.id, () => data.permission);
+		const answers = permissionActions(() => data.campaign.id);
 		/** Done, sending the composer's text first for Send & Done. */
 		function done(text) {
 			attempt(async () => {
@@ -441,6 +452,15 @@ function _page($$renderer, $$props) {
 			size: "sm",
 			attached: sessions.data.includes(data.campaign.id)
 		});
+		$$renderer.push(`<!----> `);
+		Link($$renderer, {
+			href: resolve("/campaigns/[id]/journal", { id: data.campaign.id }),
+			class: "ml-auto text-sm",
+			children: ($$renderer) => {
+				$$renderer.push(`<!---->Journal`);
+			},
+			$$slots: { default: true }
+		});
 		$$renderer.push(`<!----></header> <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]" aria-label="Play console">`);
 		CharacterSheet($$renderer, {
 			sheets: data.sheets,
@@ -461,6 +481,15 @@ function _page($$renderer, $$props) {
 					$$renderer.push(`<!---->${escape_html(problem)}`);
 				},
 				$$slots: { default: true }
+			});
+		} else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]--> `);
+		if (permission.data) {
+			$$renderer.push("<!--[0-->");
+			const request = permission.data;
+			PermissionCard($$renderer, {
+				request,
+				onanswer: (behavior) => answers.answer(request.requestId, behavior)
 			});
 		} else $$renderer.push("<!--[-1-->");
 		$$renderer.push(`<!--]--> `);
@@ -485,7 +514,12 @@ function _page($$renderer, $$props) {
 				onwithdraw: (id) => attempt(() => actions.withdraw(id))
 			});
 		}
-		$$renderer.push(`<!--]--></section> <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm"><section class="rounded-panel border border-border bg-surface p-3"><h2 class="mb-1 text-xs font-semibold text-muted uppercase">Clock and Scene</h2> <p class="text-muted">The Scene is set once play begins.</p></section> <section class="rounded-panel border border-border bg-surface p-3"><h2 class="mb-1 text-xs font-semibold text-muted uppercase">What ${escape_html(acting()?.name ?? "the Party")} knows</h2> <p class="text-muted">Nothing yet.</p></section></aside></main></div>`);
+		$$renderer.push(`<!--]--></section> <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm"><section class="rounded-panel border border-border bg-surface p-3"><h2 class="mb-1 text-xs font-semibold text-muted uppercase">Clock and Scene</h2> <p class="text-muted">The Scene is set once play begins.</p></section> <section aria-labelledby="knows-heading" class="rounded-panel border border-border bg-surface p-3"><h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">What ${escape_html(acting()?.name ?? "the Party")} knows</h2> `);
+		Journal($$renderer, {
+			entries: acting() ? knownBy(journal.data, acting().id) : journal.data.entries,
+			holders: !acting()
+		});
+		$$renderer.push(`<!----></section></aside></main></div>`);
 	});
 }
 export { _page as default };

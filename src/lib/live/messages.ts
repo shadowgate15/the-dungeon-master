@@ -6,6 +6,7 @@ export type LiveMessage =
   /** A Declaration was sent, edited or withdrawn on the Campaign's open Floor. */
   | { type: 'floor'; campaign: string }
   /** The Campaign's timeline or awaiting Narration changed (a Floor closed, the DM called a tool). */
+  /** Also any DM write, so the Journal (fed by DM-only Reveals) refreshes with it. */
   | { type: 'timeline'; campaign: string }
   /** The Campaign Seed or its "✎ DM" markers changed. */
   | { type: 'seed'; campaign: string }
@@ -13,6 +14,8 @@ export type LiveMessage =
   | { type: 'draft'; campaign: string; draft: string }
   /** A message was added to the creation conversation. */
   | { type: 'conversation'; campaign: string }
+  /** A permission prompt from the DM's session appeared or cleared. */
+  | { type: 'permission'; campaign: string }
 
 /** The query listing the ids of Campaigns with a DM at the table. */
 export const SESSIONS_QUERY_KEY = ['sessions'] as const
@@ -33,6 +36,12 @@ export const draftQueryKey = (campaign: string, draft: string) =>
 /** The query holding a Campaign's creation conversation. */
 export const conversationQueryKey = (campaign: string) => ['conversation', campaign] as const
 
+/** The query holding the Player's Journal: what their Characters believe. */
+export const journalQueryKey = (campaign: string) => ['journal', campaign] as const
+
+/** The query holding the permission prompt a Campaign's session is waiting on. */
+export const permissionQueryKey = (campaign: string) => ['permission', campaign] as const
+
 /** The cached queries a message makes stale. */
 export function staleQueries(message: LiveMessage): QueryKey[] {
   switch (message.type) {
@@ -41,7 +50,9 @@ export function staleQueries(message: LiveMessage): QueryKey[] {
     case 'floor':
       return [floorQueryKey(message.campaign)]
     case 'timeline':
-      return [timelineQueryKey(message.campaign)]
+      return [timelineQueryKey(message.campaign), journalQueryKey(message.campaign)]
+    case 'permission':
+      return [permissionQueryKey(message.campaign)]
     case 'seed':
       return [seedQueryKey(message.campaign)]
     case 'draft':

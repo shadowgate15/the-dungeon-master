@@ -1,5 +1,5 @@
 import { ft as resolve } from "../../chunks/internal.js";
-import { c as ensure_array_like, g as attr, l as head, o as derived, t as attr_class, y as escape_html } from "../../chunks/server2.js";
+import { _ as attr, c as ensure_array_like, l as head, o as derived, t as attr_class, x as escape_html } from "../../chunks/server2.js";
 import { t as onDestroy } from "../../chunks/index-server.js";
 import { _ as resolveQueryValue, a as notifyManager, c as functionalUpdate, f as matchMutation, h as partialMatchKey, i as createRetryer, l as hashKey, m as noop$1, o as focusManager, p as matchQuery, r as Removable, t as Query, u as hashQueryKeyByOptions, y as skipToken } from "../../chunks/query.js";
 import { a as Subscribable, i as onlineManager, r as setQueryClientContext } from "../../chunks/context.js";

@@ -1,4 +1,5 @@
 import type { PlaySheet } from './sheet'
+import type { JournalEntry } from './journal'
 import type { PendingDeclaration } from './floor'
 import type { TimelineEntry } from './timeline'
 
@@ -90,4 +91,32 @@ export const timelineEntries: TimelineEntry[] = [
   { type: 'activity', id: 'a1', text: 'DM checks their notes' },
   { type: 'narration', id: 'e2', text: 'The lock clicks open.', voice: null },
   { type: 'narration', id: 'e3', text: '"You are late," she says.', voice: 'Mira Voss' }
+]
+
+/** A Journal: one entry two Characters share, one rumour with its source, one field. */
+export const journalEntries: JournalEntry[] = [
+  {
+    id: 'b1',
+    about: { name: 'Mira Voss', type: 'npc' },
+    text: 'Mira owes the harbourmaster money',
+    source: null,
+    holders: [
+      { id: 'wren', name: 'Wren' },
+      { id: 'kael', name: 'Kael' }
+    ]
+  },
+  {
+    id: 'b3',
+    about: { name: 'Mira Voss', type: 'npc' },
+    text: 'Mira sailed for the Isles',
+    source: 'a dockhand',
+    holders: [{ id: 'wren', name: 'Wren' }]
+  },
+  {
+    id: 'b4',
+    about: { name: 'Saltgate', type: 'place' },
+    text: 'Saltgate',
+    source: null,
+    holders: [{ id: 'kael', name: 'Kael' }]
+  }
 ]

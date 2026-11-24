@@ -1,8 +1,8 @@
 import { i as json } from "../../../../../chunks/exports.js";
 import { d as record, l as number, p as string, u as object } from "../../../../../chunks/schemas.js";
 import { tmpdir } from "node:os";
-import { execFile, execFileSync, spawn } from "node:child_process";
 import { promisify } from "node:util";
+import { execFile, execFileSync, spawn } from "node:child_process";
 // src/lib/server/issue-report/generate-title.ts
 var MAX_TITLE_LENGTH = 72;
 var TIMEOUT_MS = 3e4;

@@ -1,10 +1,10 @@
-import * as server from '../entries/pages/credits/_page.server.ts.js';
+import * as server from '../entries/pages/campaigns/_id_/play/_page.server.ts.js';
 
 export const index = 7;
 let component_cache;
-export const component = async () => component_cache ??= (await import('../entries/pages/credits/_page.svelte.js')).default;
+export const component = async () => component_cache ??= (await import('../entries/pages/campaigns/_id_/play/_page.svelte.js')).default;
 export { server };
-export const server_id = "src/routes/credits/+page.server.ts";
-export const imports = ["_app/immutable/nodes/7.CtjK5xjp.js","_app/immutable/chunks/BH4ECt33.js"];
+export const server_id = "src/routes/campaigns/[id]/play/+page.server.ts";
+export const imports = ["_app/immutable/nodes/7.CuqnmL_i.js","_app/immutable/chunks/DB8eBxmA.js","_app/immutable/chunks/D-b0PK6e.js","_app/immutable/chunks/9lSbqI6C.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/D601daQ_.js","_app/immutable/chunks/Bw-u2Pio.js","_app/immutable/chunks/BwbZxXsc.js","_app/immutable/chunks/BsK3fwXA.js","_app/immutable/chunks/V5Uy-R04.js","_app/immutable/chunks/DFoFozM1.js"];
 export const stylesheets = [];
 export const fonts = [];
