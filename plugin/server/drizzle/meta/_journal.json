@@ -43,6 +43,13 @@
       "when": 1795478078445,
       "tag": "0005_session_turn",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795478939471,
+      "tag": "0006_beliefs",
+      "breakpoints": true
     }
   ]
 }

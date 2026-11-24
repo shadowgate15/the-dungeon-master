@@ -15,20 +15,6 @@ var STATUS_CLASSES_BORDERLESS = {
 	danger: "bg-danger-bg text-danger border-transparent"
 };
 var NEUTRAL_CLASSES = "bg-raised text-text border-border";
-// src/lib/ui/Link.svelte
-function Link($$renderer, $$props) {
-	let { class: className, children, $$slots, $$events, ...rest } = $$props;
-	$$renderer.push(`<a${attributes({
-		class: clsx([
-			"rounded-sm text-accent underline underline-offset-2 hover:no-underline",
-			"focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-			className
-		]),
-		...rest
-	})}>`);
-	children?.($$renderer);
-	$$renderer.push(`<!----></a>`);
-}
 // src/lib/ui/Alert.svelte
 function Alert($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -86,6 +72,6 @@ function Button($$renderer, $$props) {
 	}
 	$$renderer.push(`<!--]-->`);
 }
-export { STATUS_CLASSES as a, NEUTRAL_CLASSES as i, Alert as n, STATUS_CLASSES_BORDERLESS as o, Link as r, Button as t };
+export { STATUS_CLASSES_BORDERLESS as a, STATUS_CLASSES as i, Alert as n, NEUTRAL_CLASSES as r, Button as t };
 
 //# sourceMappingURL=Button.js.map
