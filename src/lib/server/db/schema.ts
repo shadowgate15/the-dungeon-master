@@ -65,7 +65,11 @@ export const campaign = sqliteTable(
     updatedAt: integer('updated_at').notNull(),
     archivedAt: integer('archived_at'),
     /** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
-    awaitingNarrationSince: integer('awaiting_narration_since')
+    awaitingNarrationSince: integer('awaiting_narration_since'),
+    /** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
+    clockMinute: integer('clock_minute').notNull().default(0),
+    /** The Scene: the handle of the Place the spotlight is on, or null before it is first set. */
+    scene: text('scene')
   },
   () => [
     check('campaign_tone_check', oneOf('tone', TONES)),
@@ -365,6 +369,22 @@ export const activityLine = sqliteTable('activity_line', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   sessionId: text('session_id'),
   afterEvent: integer('after_event').notNull(),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull()
+})
+
+/**
+ * A Declaration sent back to its Player's composer as unsent text: its Character left the Scene
+ * when the spotlight cut away before the Floor closed. The console loads it, then clears it.
+ */
+export const returnedDraft = sqliteTable('returned_draft', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id')
+    .notNull()
+    .references(() => character.id, { onDelete: 'cascade' }),
+  player: text('player').notNull(),
   text: text('text').notNull(),
   createdAt: integer('created_at').notNull()
 })

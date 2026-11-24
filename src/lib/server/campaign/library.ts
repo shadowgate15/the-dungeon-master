@@ -6,6 +6,7 @@ import { campaign } from '../db/schema'
 import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
 import { openSession, timeline } from '../play/log'
+import { playerScene, spotlightRequest } from '../play/scene'
 import { seedRulesData } from '../rules/seed'
 import { campaignSeedCard, parseCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
 import { campaignDatabasePath, canonicalFolder } from './paths'
@@ -185,7 +186,12 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
     /** The Campaign's record of play: the Player's timeline and its Sessions. */
     record(id: string) {
       const db = database(find(id).folder)
-      return { timeline: () => timeline(db), openSession: () => openSession(db, now()) }
+      return {
+        timeline: () => timeline(db),
+        openSession: () => openSession(db, now()),
+        scene: () => playerScene(db),
+        spotlight: (character: string, player: string) => spotlightRequest(db, character, player)
+      }
     },
 
     /**

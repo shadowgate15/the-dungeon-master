@@ -3,6 +3,7 @@ import type { Timeline, TimelineEntry } from '#lib/play/timeline.ts'
 import type { Queryable } from '../db/connect'
 import type { Stamp } from '../tools/contract'
 import { activityLine, campaign, event, session } from '../db/schema'
+import { currentMinute } from './scene'
 
 export type { Stamp }
 
@@ -17,12 +18,11 @@ export type NewEvent = {
 }
 
 /**
- * The Campaign's current stamp: the open Session (null offline) and the in-fiction minute (0 until
- * the clock exists).
+ * The Campaign's current stamp: the open Session (null offline) and the Campaign clock's minute.
  */
 export function currentStamp(db: Queryable): Stamp {
   const open = db.select({ id: session.id }).from(session).where(isNull(session.closedAt)).get()
-  return { sessionId: open?.id ?? null, minute: 0 }
+  return { sessionId: open?.id ?? null, minute: currentMinute(db) }
 }
 
 /** The id the next Event will get. The log is append-only, so ids are never reused. */
