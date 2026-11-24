@@ -14,7 +14,8 @@ function CallCard($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/**
 		* The open Call at the foot of the timeline: one button group per Character for a Check (the
-		* skill or save and the reason, never the DC; advantage marked), or a question with its choices
+		* skill or save and the reason, never the DC; advantage marked), or for a roll sequence such as
+		* an attack (its next roll: to hit, then damage; never the AC), or a question with its choices
 		* as buttons (free text without). Clicking rolls on the server; nothing is rolled here.
 		*/
 		let { call, onroll, onanswer, disabled = false } = $$props;
@@ -27,22 +28,25 @@ function CallCard($$renderer, $$props) {
 		for (let $$index_1 = 0, $$length = each_array.length; $$index_1 < $$length; $$index_1++) {
 			let part = each_array[$$index_1];
 			$$renderer.push(`<div role="group"${attr("aria-label", part.character ?? part.player)} class="flex flex-wrap items-center gap-2">`);
-			if (call.kind === "check") {
+			if (call.kind === "check" || call.kind === "roll_sequence") {
 				$$renderer.push(`<!--[0--><span class="font-medium">${escape_html(part.character)}</span> <span>${escape_html(part.label)}</span> `);
 				if (part.mode !== "normal") $$renderer.push(`<!--[0--><span class="text-xs font-semibold text-accent uppercase">${escape_html(part.mode === "advantage" ? "Advantage" : "Disadvantage")}</span>`);
 				else $$renderer.push("<!--[-1-->");
-				$$renderer.push(`<!--]--> <span class="text-muted">${escape_html(part.reason)}</span> `);
+				$$renderer.push(`<!--]--> `);
+				if (part.reason) $$renderer.push(`<!--[0--><span class="text-muted">${escape_html(part.reason)}</span>`);
+				else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--> `);
 				if (part.answered) $$renderer.push(`<!--[0--><span class="ml-auto text-xs text-muted">Rolled</span>`);
 				else {
 					$$renderer.push("<!--[-1-->");
 					Button($$renderer, {
 						size: "sm",
 						class: "ml-auto",
-						"aria-label": `Roll ${stringify(part.label)} for ${stringify(part.character)}`,
+						"aria-label": `Roll ${stringify(part.next ?? part.label)} for ${stringify(part.character)}`,
 						disabled,
 						onclick: () => onroll(part.id),
 						children: ($$renderer) => {
-							$$renderer.push(`<!---->🎲 Roll`);
+							$$renderer.push(`<!---->🎲 Roll${escape_html(part.next ? ` ${part.next}` : "")}`);
 						},
 						$$slots: { default: true }
 					});
@@ -443,7 +447,17 @@ function Timeline($$renderer, $$props) {
 					});
 					$$renderer.push(`<!----></li>`);
 				} else if (entry.type === "roll") {
-					$$renderer.push(`<!--[3--><li class="flex flex-wrap items-baseline gap-x-2 self-end text-sm"><span class="font-medium">${escape_html(entry.character)}</span> <span class="text-muted">${escape_html(entry.what)}</span> <span class="font-mono text-xs text-muted">🎲 ${escape_html(entry.dice.join(" | "))} ${escape_html(signed(entry.modifier))}</span> <span class="font-mono font-semibold">= ${escape_html(entry.total)}</span> <span${attr_class(clsx(entry.outcome === "success" ? "text-accent" : "text-danger"))}>${escape_html(entry.outcome)}</span> `);
+					$$renderer.push(`<!--[3--><li class="flex flex-wrap items-baseline gap-x-2 self-end text-sm"><span class="font-medium">${escape_html(entry.character)}</span> <span class="text-muted">${escape_html(entry.what)}</span> <span class="font-mono text-xs text-muted">🎲 ${escape_html(entry.dice.join(" | "))} ${escape_html(signed(entry.modifier))}</span> <span class="font-mono font-semibold">= ${escape_html(entry.total)}</span> `);
+					if (entry.outcome) $$renderer.push(`<!--[0--><span${attr_class(clsx([
+						"success",
+						"hit",
+						"critical hit"
+					].includes(entry.outcome) ? "text-accent" : "text-danger"))}>${escape_html(entry.outcome)}</span>`);
+					else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--> `);
+					if (entry.target) $$renderer.push(`<!--[0--><span class="text-muted">${escape_html(entry.target.name)} is ${escape_html(entry.target.state)}</span>`);
+					else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--> `);
 					if (entry.mode !== "normal") $$renderer.push(`<!--[0--><span class="text-xs text-muted italic">(${escape_html(entry.mode)}: ${escape_html(entry.reason)})</span>`);
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--></li>`);
