@@ -10,6 +10,8 @@ export type LiveMessage =
    * them possibly the Scene and the open Floor (`move`, `set_scene`, `advance_time`).
    */
   | { type: 'timeline'; campaign: string }
+  /** A permission prompt from the DM's session appeared or cleared. */
+  | { type: 'permission'; campaign: string }
 
 /** The query listing the ids of Campaigns with a DM at the table. */
 export const SESSIONS_QUERY_KEY = ['sessions'] as const
@@ -22,6 +24,9 @@ export const timelineQueryKey = (campaign: string) => ['timeline', campaign] as 
 
 /** The query holding a Campaign's Scene, as the rail shows it. */
 export const sceneQueryKey = (campaign: string) => ['scene', campaign] as const
+
+/** The query holding the permission prompt a Campaign's session is waiting on. */
+export const permissionQueryKey = (campaign: string) => ['permission', campaign] as const
 
 /** The cached queries a message makes stale. */
 export function staleQueries(message: LiveMessage): QueryKey[] {
@@ -36,5 +41,7 @@ export function staleQueries(message: LiveMessage): QueryKey[] {
         sceneQueryKey(message.campaign),
         floorQueryKey(message.campaign)
       ]
+    case 'permission':
+      return [permissionQueryKey(message.campaign)]
   }
 }

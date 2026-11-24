@@ -1296,7 +1296,8 @@ function authorized(request, token) {
 }
 var encoder = new TextEncoder();
 /**
-* A Campaign's channel events as Server-Sent Events, until the bridge hangs up. While the stream
+* A Campaign's channel events (`event: channel`) and permission verdicts (`event: permission`)
+* as Server-Sent Events, until the bridge hangs up. While the stream
 * is open, the bridge's session is attached to the Campaign.
 */
 function eventStream(channels, folder, detach) {
@@ -1306,9 +1307,11 @@ function eventStream(channels, folder, detach) {
 			const write = (text) => controller.enqueue(encoder.encode(text));
 			write(": open\n\n");
 			const unlisten = channels.listen(folder, (event) => write(`event: channel\ndata: ${JSON.stringify(event)}\n\n`));
+			const unlistenVerdicts = channels.listenVerdicts(folder, (verdict) => write(`event: permission\ndata: ${JSON.stringify(verdict)}\n\n`));
 			const keepAlive = setInterval(() => write(": ka\n\n"), 15e3);
 			stop = () => {
 				unlisten();
+				unlistenVerdicts();
 				clearInterval(keepAlive);
 				detach();
 			};
@@ -1334,8 +1337,10 @@ var SESSION_LIVE = {
 *   attaches the bridge's session (`x-dm-session`). A second session is refused (409).
 * - `POST register` with `{folder}`: registers a Campaign folder (the launcher), answering
 *   `{id, name, attached}`.
+* - `POST permission_request` with `{campaign, request_id, tool_name, description, input_preview}`:
+*   the session's permission prompt, shown to the Player; the verdict comes back on `events`.
 */
-function createBridgeApi({ library, host, channels, sessions, token }) {
+function createBridgeApi({ library, host, channels, sessions, permissions, token }) {
 	return async function handle(request) {
 		if (!authorized(request, token)) return json({ error: "bad token" }, 401);
 		const url = new URL(request.url);
@@ -1353,6 +1358,7 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 				}],
 				isError: true
 			});
+			if (entry) permissions.movedOn(entry.id);
 			return json(host.call(campaign, name, args));
 		}
 		if (route === "events" && request.method === "GET") {
@@ -1363,6 +1369,22 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 			const session = request.headers.get("x-dm-session") ?? crypto.randomUUID();
 			if (!sessions.attach(entry.id, session)) return json(SESSION_LIVE, 409);
 			return eventStream(channels, campaign, () => sessions.detach(entry.id, session));
+		}
+		if (route === "permission_request" && request.method === "POST") {
+			const body = await request.json();
+			const { campaign, request_id, tool_name } = body;
+			if (!campaign || !request_id || !tool_name) return json({ error: "campaign, request_id and tool_name are required" }, 400);
+			const entry = library.entryAt(campaign);
+			if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404);
+			const session = request.headers.get("x-dm-session") ?? "";
+			if (sessions.heldByOther(entry.id, session)) return json(SESSION_LIVE, 409);
+			permissions.request(entry.id, campaign, {
+				requestId: request_id,
+				toolName: tool_name,
+				description: body.description ?? "",
+				inputPreview: body.input_preview ?? ""
+			});
+			return json({ ok: true });
 		}
 		if (route === "register" && request.method === "POST") {
 			const { folder } = await request.json();
@@ -1386,6 +1408,7 @@ function createBridgeApi({ library, host, channels, sessions, token }) {
 /** Channel events per Campaign folder, delivered to the bridges listening for it. */
 function createChannels() {
 	const listeners = /* @__PURE__ */ new Map();
+	const verdictListeners = /* @__PURE__ */ new Map();
 	const key = canonicalFolder;
 	return {
 		/** Starts listening for a Campaign's events; returns the unsubscribe. */
@@ -1401,6 +1424,74 @@ function createChannels() {
 		},
 		send(folder, event) {
 			for (const listener of listeners.get(key(folder)) ?? []) listener(event);
+		},
+		/** Starts listening for the verdicts the Player gives the Campaign's session; returns the unsubscribe. */
+		listenVerdicts(folder, listener) {
+			const set = verdictListeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
+			verdictListeners.set(key(folder), set);
+			set.add(listener);
+			return () => set.delete(listener);
+		},
+		/** Relays a permission verdict to the Campaign's session. */
+		sendVerdict(folder, verdict) {
+			for (const listener of verdictListeners.get(key(folder)) ?? []) listener(verdict);
+		}
+	};
+}
+// src/lib/server/bridge/permissions.ts
+/**
+* The permission prompts the DM's session is waiting on, one per Campaign, held in memory: they
+* die with the session. The terminal's dialog stays open beside the browser's card and the first
+* answer wins, but Claude Code never tells a channel server the terminal answered. So the server
+* infers it, clearing the card when:
+* - the session moves on: its next tool call for the Campaign;
+* - a newer prompt arrives (only the newest shows);
+* - the session leaves.
+*/
+function createPermissions({ channels, sessions, publish }) {
+	const pending = /* @__PURE__ */ new Map();
+	function clear(campaign) {
+		if (pending.delete(campaign)) publish({
+			type: "permission",
+			campaign
+		});
+	}
+	sessions.onChange(({ campaign, attached }) => {
+		if (!attached) clear(campaign);
+	});
+	return {
+		/** The session raised a prompt: the Player's console shows it, replacing any older one. */
+		request(campaign, folder, request) {
+			pending.set(campaign, {
+				folder,
+				request
+			});
+			publish({
+				type: "permission",
+				campaign
+			});
+		},
+		/** The prompt the Campaign's session is waiting on, or null. */
+		pending(campaign) {
+			return pending.get(campaign)?.request ?? null;
+		},
+		/**
+		* The Player answers in the browser: the verdict goes to the session and the card clears.
+		* False when the prompt is no longer waiting (answered in the terminal, or replaced).
+		*/
+		answer(campaign, requestId, behavior) {
+			const held = pending.get(campaign);
+			if (!held || held.request.requestId !== requestId) return false;
+			channels.sendVerdict(held.folder, {
+				request_id: requestId,
+				behavior
+			});
+			clear(campaign);
+			return true;
+		},
+		/** The session moved on (it called a tool), so any prompt was answered in the terminal. */
+		movedOn(campaign) {
+			clear(campaign);
 		}
 	};
 }
@@ -1422,11 +1513,18 @@ var play = createPlay({
 	publish: live.publish
 });
 openSessionsOnAttach(sessions, play);
+/** The permission prompts the DM's sessions are waiting on, relayed to the Player. */
+var permissions = createPermissions({
+	channels,
+	sessions,
+	publish: live.publish
+});
 var bridgeApi = createBridgeApi({
 	library,
 	host,
 	channels,
 	sessions,
+	permissions,
 	token
 });
 /** The known localhost port, unless overridden for tests. */
@@ -1440,6 +1538,6 @@ function announceServer() {
 		version: DUNGEON_MASTER_VERSION || void 0
 	});
 }
-export { play as a, host as i, bridgeApi as n, port as o, channels as r, announceServer as t };
+export { permissions as a, host as i, bridgeApi as n, play as o, channels as r, port as s, announceServer as t };
 
 //# sourceMappingURL=bridge.js.map
