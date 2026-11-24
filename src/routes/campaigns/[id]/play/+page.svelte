@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths'
   import DmBadge from '#lib/campaign/DmBadge.svelte'
   import { createSessionsQuery } from '#lib/live/client.ts'
+  import CallCard from '#lib/play/CallCard.svelte'
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
   import Journal from '#lib/play/Journal.svelte'
@@ -10,6 +11,7 @@
   import Timeline from '#lib/play/Timeline.svelte'
   import { createPermissionQuery, permissionActions } from '#lib/play/permission-client.ts'
   import {
+    callActions,
     createFloorQuery,
     createJournalQuery,
     createTimelineQuery,
@@ -35,6 +37,15 @@
     () => data.journal
   )
   const actions = floorActions(() => data.campaign.id)
+  const calls = callActions(() => data.campaign.id)
+  let rolling = $state(false)
+
+  /** Rolls or answers one part of the open Call, one click at a time. */
+  function answerCall(change: () => Promise<unknown>) {
+    rolling = true
+    attempt(change).finally(() => (rolling = false))
+  }
+
   const permission = createPermissionQuery(
     () => data.campaign.id,
     () => data.permission
@@ -93,6 +104,15 @@
 
     <section aria-label="Story" class="flex min-h-0 flex-col gap-2">
       <Timeline entries={timeline.data.entries} awaitingSince={timeline.data.awaitingSince} />
+      {#if timeline.data.call && !archived}
+        {@const open = timeline.data.call}
+        <CallCard
+          call={open}
+          disabled={rolling}
+          onroll={(part) => answerCall(() => calls.roll(open.id, part))}
+          onanswer={(part, answer) => answerCall(() => calls.answer(open.id, part, answer))}
+        />
+      {/if}
       {#if problem}<Alert variant="danger">{problem}</Alert>{/if}
       {#if permission.data}
         {@const request = permission.data}

@@ -92,3 +92,31 @@ export function floorActions(campaign: () => string) {
     }
   }
 }
+
+/** Rolling and answering the open Call; each refreshes the timeline, which holds the Call. */
+export function callActions(campaign: () => string) {
+  const queryClient = useQueryClient()
+
+  async function post(call: string, part: string, body: Record<string, unknown>) {
+    const res = await fetch(
+      `/api/campaigns/${encodeURIComponent(campaign())}/calls/${encodeURIComponent(call)}/parts/${encodeURIComponent(part)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      }
+    )
+    await queryClient.invalidateQueries({ queryKey: timelineQueryKey(campaign()) })
+    if (!res.ok) {
+      const failure = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new FloorChangeError(failure.error ?? 'The Call could not be answered')
+    }
+  }
+
+  return {
+    /** Rolls one Check of the Call; the server rolls the dice. */
+    roll: (call: string, part: string) => post(call, part, { roll: true }),
+    /** Answers a question Call. */
+    answer: (call: string, part: string, answer: string) => post(call, part, { answer })
+  }
+}

@@ -7,6 +7,7 @@ import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
 import { journal } from '../knowledge/journal'
 import { coreBlock } from '../play/core-block'
+import { createCalls, type Calls } from '../play/calls'
 import { logChange } from '../play/notices'
 import { logEvent, openSession, timeline } from '../play/log'
 import { seedRulesData } from '../rules/seed'
@@ -188,6 +189,11 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
     /** The Campaign's open Floor and the Declarations on it. */
     floor(id: string): Floor {
       return createFloor(database(find(id).folder), now)
+    },
+
+    /** The Campaign's Calls, as the Players roll and answer them. */
+    calls(id: string): Calls {
+      return createCalls(database(find(id).folder), now)
     },
 
     /** The Campaign's record of play: the Player's timeline and Journal, and its Sessions. */

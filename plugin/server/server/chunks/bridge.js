@@ -1,5 +1,5 @@
-import { At as desc, C as entity, D as worldLink, E as pageRevision, Ft as isNotNull, Gt as DUNGEON_MASTER_PORT, It as isNull, Kt as DUNGEON_MASTER_VERSION, Lt as like, Mt as eq, O as ENTITY_TYPES, Ot as SOLO_PLAYER, Pt as inArray, Rt as or, S as belief, T as fact, Wt as DUNGEON_MASTER_HOME, a as userStateDir, jt as and, k as NPC_STATUSES, kt as asc, u as campaign, w as entityAlias, y as event, zt as sql } from "./seed.js";
-import { A as SESSION_LIVE_MESSAGE, C as nextEventId, D as isNearName, O as normalizeName, S as logEvent, b as currentStamp, c as CampaignNotFoundError, d as characterHolders, f as charactersInScene, i as sessions, k as slug, l as NotACampaignFolderError, n as library, r as live, w as setAwaitingNarration, x as logActivity, y as createDmChannels } from "./campaign.js";
+import { A as pageRevision, Bt as isNull, C as event, D as entity, E as belief, Ft as and, Ht as or, It as eq, Jt as DUNGEON_MASTER_HOME, M as ENTITY_TYPES, Mt as SOLO_PLAYER, N as NPC_STATUSES, Nt as asc, O as entityAlias, Pt as desc, Rt as inArray, Ut as sql, Vt as like, Xt as DUNGEON_MASTER_VERSION, Yt as DUNGEON_MASTER_PORT, a as userStateDir, j as worldLink, k as fact, m as campaign, zt as isNotNull } from "./seed.js";
+import { A as expectVersion, B as SESSION_LIVE_MESSAGE, D as openCall, E as callResultEvent, L as isNearName, M as writeTool, O as PLUGIN_NAME, R as normalizeName, S as setAwaitingNarration, T as callInput, _ as createDmChannels, b as logEvent, c as CampaignNotFoundError, d as characterHolders, f as charactersInScene, i as sessions, j as readTool, k as ToolError, l as NotACampaignFolderError, n as library, r as live, v as currentStamp, x as nextEventId, y as logActivity, z as slug } from "./campaign.js";
 import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -16,63 +16,6 @@ function writeRuntimeFile(home, runtime) {
 	const tmp = `${file}.${process.pid}.tmp`;
 	fs.writeFileSync(tmp, JSON.stringify(runtime) + "\n", { mode: 384 });
 	fs.renameSync(tmp, file);
-}
-// src/lib/server/tools/contract.ts
-/**
-* The shared contract every game tool follows: short snake_case names, per-Entity versions on
-* every read and write, one transaction and one Event per mutating call, and errors shaped
-* `{code, message, next}`.
-*/
-/** The plugin's name, which namespaces the skills a tool points to. */
-var PLUGIN_NAME = "the-dungeon-master";
-/**
-* A refusal the DM can act on: what went wrong and the call to make next. `details` adds
-* structured data to the payload (such as the matches a near-duplicate refusal found).
-*/
-var ToolError = class ToolError extends Error {
-	code;
-	next;
-	details;
-	constructor(code, message, next, details) {
-		super(message);
-		this.code = code;
-		this.next = next;
-		this.details = details;
-	}
-	/** The handle names no Entity. */
-	static unknownHandle(handle) {
-		return new ToolError("unknown_handle", `No Entity has the handle ${handle}`, "Check the handle against a recent read and call again");
-	}
-	/** The write passed an old version: someone changed the Entity since the DM read it. */
-	static staleVersion(handle, given, current, read) {
-		return new ToolError("stale_version", `${handle} is at version ${current}, not ${given}: it changed since you read it`, read);
-	}
-	/** The input breaks a rule the forms enforce too. */
-	static invalidInput(tool, message) {
-		return new ToolError("invalid_input", message, `Fix the arguments and call ${tool} again`);
-	}
-};
-/** Refuses a write whose version is not the Entity's current one. */
-function expectVersion(entity, given) {
-	if (entity.version !== given) throw ToolError.staleVersion(entity.handle, given, entity.version, entity.read);
-}
-/** A tool that only reads. It logs nothing. */
-function readTool(tool) {
-	return {
-		...tool,
-		activity: tool.activity,
-		mutates: false,
-		run: tool.run
-	};
-}
-/** A tool that changes state: one transaction, exactly one Event. */
-function writeTool(tool) {
-	return {
-		...tool,
-		activity: tool.activity,
-		mutates: true,
-		run: tool.run
-	};
 }
 // src/lib/server/world/fields.ts
 /** A Place's handle, as a field value that must name an existing Place. */
@@ -323,7 +266,10 @@ function createWorld({ db, stamp }) {
 	/** A Fact that a supersession or retirement may still change. */
 	function currentFact(id) {
 		const found = findFact(id);
-		if (!isCurrent(found)) throw new ToolError("not_current", `Fact ${id} is already ${found.retiredAt !== null ? "retired" : `superseded by Fact ${found.supersededBy}`}`, `Open ${found.subject} with history to see its Facts`);
+		if (!isCurrent(found)) {
+			const state = found.retiredAt !== null ? "retired" : `superseded by Fact ${found.supersededBy}`;
+			throw new ToolError("not_current", `Fact ${id} is already ${state}`, `Open ${found.subject} with history to see its Facts`);
+		}
 		return found;
 	}
 	/**
@@ -1005,21 +951,31 @@ var narrationTools = [writeTool({
 	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine.",
 	input: object({
 		text: string().trim().min(1),
-		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks")
+		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks"),
+		call: callInput.optional().describe("Ask the Players: inline {kind: \"check\", character, skill | save, tier, adv?, reason} (or a list of them, one roll per Character) or {kind: \"question\", text, choices?}. A Call ends your turn; its call_result wakes you.")
 	}),
 	activity: null,
-	run: (ctx, { text, voice }) => {
+	run: (ctx, { text, voice, call }) => {
 		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
 		setAwaitingNarration(ctx.db, null);
+		const callId = call === void 0 ? null : openCall(ctx.db, call, {
+			at: ctx.now,
+			openedBy: ctx.stamp.eventId
+		});
 		return {
-			result: { narrated: true },
+			result: callId ? {
+				narrated: true,
+				call: callId,
+				next: "End your turn: the Players answer the Call"
+			} : { narrated: true },
 			event: {
 				kind: "narration",
 				summary: npc ? `${npc.name}: ${text}` : text,
 				data: {
 					text,
 					voice: npc?.handle ?? null,
-					voiceName: npc?.name ?? null
+					voiceName: npc?.name ?? null,
+					call: callId
 				}
 			}
 		};
@@ -1587,6 +1543,7 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 /**
 * A closed Floor as the DM hears it: one `floor` channel event, one body line per Declaration in
 * send order (`[d1 Wren · player] picks the lock`). An empty body hands the DM the initiative.
+* `withdrawn_call` names the open Call the Declarations withdrew.
 */
 function floorEvent(closed) {
 	return {
@@ -1594,7 +1551,8 @@ function floorEvent(closed) {
 		meta: {
 			kind: "floor",
 			floor_id: closed.floor,
-			players: closed.players.join(",")
+			players: closed.players.join(","),
+			...closed.withdrawnCall ? { withdrawn_call: closed.withdrawnCall } : {}
 		}
 	};
 }
@@ -1602,11 +1560,19 @@ function floorEvent(closed) {
 * The play turn across the server: the Players' Done wakes the DM over its channel, Sessions open
 * as the DM attaches, and the Player's timeline is read from the Event log.
 */
-function createPlay({ library, channels, publish }) {
+function createPlay({ library, channels, publish, dice = (id) => campaignDice.for(id) }) {
 	function folderOf(campaignId) {
 		const entry = library.get(campaignId);
 		if (!entry) throw new CampaignNotFoundError("Campaign not found");
 		return entry.path;
+	}
+	function answered(campaignId, result) {
+		if (result) channels.send(folderOf(campaignId), callResultEvent(result));
+		publish({
+			type: "timeline",
+			campaign: campaignId
+		});
+		return { complete: result !== null };
 	}
 	return {
 		/**
@@ -1625,6 +1591,17 @@ function createPlay({ library, channels, publish }) {
 				campaign: campaignId
 			});
 			return outcome;
+		},
+		/**
+		* The Player clicks one roll of the open Call; code rolls it. The roll that completes the Call
+		* wakes the DM with one call_result event and sets awaiting Narration.
+		*/
+		roll(campaignId, callId, partId, player = SOLO_PLAYER) {
+			return answered(campaignId, library.calls(campaignId).roll(callId, partId, dice(campaignId), player));
+		},
+		/** The Player answers a question Call; the last answer wakes the DM like a roll does. */
+		answer(campaignId, callId, partId, text, player = SOLO_PLAYER) {
+			return answered(campaignId, library.calls(campaignId).answer(callId, partId, text, player));
 		},
 		/** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */
 		openSession(campaignId) {

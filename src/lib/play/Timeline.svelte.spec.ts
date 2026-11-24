@@ -1,7 +1,7 @@
 import { page } from 'vitest/browser'
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-svelte'
-import { timelineEntries } from './play-fixtures'
+import { rollEntries, timelineEntries } from './play-fixtures'
 import Timeline from './Timeline.svelte'
 
 describe('Timeline', () => {
@@ -57,5 +57,27 @@ describe('Timeline', () => {
     render(Timeline, { entries: timelineEntries, awaitingSince: null })
 
     await expect.element(page.getByRole('progressbar')).not.toBeInTheDocument()
+  })
+
+  it('shows each roll as one line: who, what, the dice, the total and the outcome', async () => {
+    render(Timeline, { entries: rollEntries, awaitingSince: null })
+
+    const items = page.getByRole('list', { name: 'Timeline' }).getByRole('listitem')
+    await expect
+      .element(items.nth(0))
+      .toHaveTextContent(/Wren\s*Sleight of Hand check\s*🎲 14 \+ 5\s*= 19\s*success/)
+    await expect
+      .element(items.nth(1))
+      .toHaveTextContent(
+        /Bram\s*Perception check\s*🎲 4 \| 17 − 1\s*= 16\s*failure\s*\(advantage: Bram knows these streets\)/
+      )
+    await expect.element(items.nth(2)).toHaveTextContent(/Which door\?\s*Left/)
+  })
+
+  it('hides rolls with the Rolls filter', async () => {
+    render(Timeline, { entries: rollEntries, awaitingSince: null })
+
+    await page.getByRole('checkbox', { name: 'Rolls' }).click()
+    await expect.poll(() => page.getByRole('listitem').elements().length).toBe(1)
   })
 })

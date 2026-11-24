@@ -10,7 +10,7 @@ return {
 	app_path: "_app",
 	assets: new Set(["robots.txt"]),
 	mime_types: {".txt":"text/plain"},
-	client: {start:"_app/immutable/entry/start.DHP3e-iK.js",app:"_app/immutable/entry/app.DXmYjMn1.js",imports:["_app/immutable/entry/start.DHP3e-iK.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/kFbcn9Ny.js","_app/immutable/chunks/pd6cx8RH.js","_app/immutable/chunks/BH4ECt33.js","_app/immutable/chunks/BeSO2yj4.js","_app/immutable/chunks/9lSbqI6C.js","_app/immutable/entry/app.DXmYjMn1.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
+	client: {start:"_app/immutable/entry/start.DHP3e-iK.js",app:"_app/immutable/entry/app.Cw66fNvE.js",imports:["_app/immutable/entry/start.DHP3e-iK.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/kFbcn9Ny.js","_app/immutable/chunks/pd6cx8RH.js","_app/immutable/chunks/BH4ECt33.js","_app/immutable/chunks/BeSO2yj4.js","_app/immutable/chunks/9lSbqI6C.js","_app/immutable/entry/app.Cw66fNvE.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
 	
 	nodes: [
 		__memo(() => import('./nodes/0.js')),
@@ -41,6 +41,13 @@ return {
 			params: [{"name":"path","optional":false,"rest":true,"chained":true}],
 			page: null,
 			endpoint: __memo(() => import('./entries/endpoints/api/bridge/_...path_/_server.ts.js'))
+		},
+		{
+			id: "/api/campaigns/[id]/calls/[call]/parts/[part]",
+			pattern: /^\/api\/campaigns\/([^/]+?)\/calls\/([^/]+?)\/parts\/([^/]+?)\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false},{"name":"call","optional":false,"rest":false,"chained":false},{"name":"part","optional":false,"rest":false,"chained":false}],
+			page: null,
+			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/calls/_call_/parts/_part_/_server.ts.js'))
 		},
 		{
 			id: "/api/campaigns/[id]/characters/[character]",

@@ -1,6 +1,7 @@
 import type { PlaySheet } from './sheet'
 import type { JournalEntry } from './journal'
 import type { PendingDeclaration } from './floor'
+import type { OpenCall } from './call'
 import type { TimelineEntry } from './timeline'
 
 /** Sample sheets for stories and component tests. */
@@ -119,4 +120,80 @@ export const journalEntries: JournalEntry[] = [
     source: null,
     holders: [{ id: 'kael', name: 'Kael' }]
   }
+]
+
+/** An open Check Call for two Characters; Bram rolls with advantage. */
+export const checkCall: OpenCall = {
+  id: 'c1',
+  kind: 'check',
+  text: null,
+  choices: [],
+  parts: [
+    {
+      id: 'p1',
+      character: 'Wren',
+      player: 'player',
+      label: 'Sleight of Hand check',
+      reason: 'The lock is old and stiff',
+      mode: 'normal',
+      answered: false
+    },
+    {
+      id: 'p2',
+      character: 'Bram',
+      player: 'player',
+      label: 'Perception check',
+      reason: 'Bram knows these streets',
+      mode: 'advantage',
+      answered: false
+    }
+  ]
+}
+
+/** An open question Call with choices. */
+export const questionCall: OpenCall = {
+  id: 'c2',
+  kind: 'question',
+  text: 'Which door?',
+  choices: ['Left', 'Right'],
+  parts: [
+    {
+      id: 'p3',
+      character: null,
+      player: 'player',
+      label: null,
+      reason: null,
+      mode: 'normal',
+      answered: false
+    }
+  ]
+}
+
+/** Two rolls of a Call: a normal one and one on advantage. */
+export const rollEntries: TimelineEntry[] = [
+  {
+    type: 'roll',
+    id: 'e4',
+    character: 'Wren',
+    what: 'Sleight of Hand check',
+    dice: [14],
+    modifier: 5,
+    total: 19,
+    outcome: 'success',
+    mode: 'normal',
+    reason: null
+  },
+  {
+    type: 'roll',
+    id: 'e5',
+    character: 'Bram',
+    what: 'Perception check',
+    dice: [4, 17],
+    modifier: -1,
+    total: 16,
+    outcome: 'failure',
+    mode: 'advantage',
+    reason: 'Bram knows these streets'
+  },
+  { type: 'answer', id: 'e6', player: 'player', question: 'Which door?', text: 'Left' }
 ]

@@ -131,6 +131,25 @@ function floorActions(campaign) {
 		}
 	};
 }
-export { floorActions as a, createTimelineQuery as i, createFloorQuery as n, Journal as o, createJournalQuery as r, FloorChangeError as t };
+/** Rolling and answering the open Call; each refreshes the timeline, which holds the Call. */
+function callActions(campaign) {
+	const queryClient = useQueryClient();
+	async function post(call, part, body) {
+		const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/calls/${encodeURIComponent(call)}/parts/${encodeURIComponent(part)}`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(body)
+		});
+		await queryClient.invalidateQueries({ queryKey: timelineQueryKey(campaign()) });
+		if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The Call could not be answered");
+	}
+	return {
+		/** Rolls one Check of the Call; the server rolls the dice. */
+		roll: (call, part) => post(call, part, { roll: true }),
+		/** Answers a question Call. */
+		answer: (call, part, answer) => post(call, part, { answer })
+	};
+}
+export { createTimelineQuery as a, createJournalQuery as i, callActions as n, floorActions as o, createFloorQuery as r, Journal as s, FloorChangeError as t };
 
 //# sourceMappingURL=floor-client.js.map

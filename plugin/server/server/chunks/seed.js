@@ -4851,6 +4851,8 @@ var schema_exports = /* @__PURE__ */ __exportAll({
 	backgroundOptionAlignment: () => backgroundOptionAlignment,
 	backgroundProficiency: () => backgroundProficiency,
 	belief: () => belief,
+	call: () => call,
+	callPart: () => callPart,
 	campaign: () => campaign,
 	character: () => character,
 	characterChoice: () => characterChoice,
@@ -5165,6 +5167,61 @@ var activityLine = sqliteTable("activity_line", {
 	text: text("text").notNull(),
 	createdAt: integer("created_at").notNull()
 });
+/**
+* A Call: the DM's open request to the Players, a Check to roll or a question to answer. At most
+* one is open per Campaign; it is kept with the Scene until every part is answered or a closed
+* Floor with Declarations withdraws it. `pending` (an action tool's Call not yet attached by
+* `narrate`) and `cancelled` are for the action tools.
+*/
+var call = sqliteTable("call", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	campaignId: campaignOwner(),
+	kind: text("kind", { enum: ["check", "question"] }).notNull(),
+	state: text("state", { enum: [
+		"pending",
+		"open",
+		"answered",
+		"withdrawn",
+		"cancelled"
+	] }).notNull().default("open"),
+	/** A question's text; null for a Check. */
+	text: text("text"),
+	/** A question's choices; empty for free text (and for a Check). */
+	choices: text("choices", { mode: "json" }).$type().notNull().default([]),
+	/** The Event (a Narration) that opened it. */
+	openedBy: integer("opened_by"),
+	createdAt: integer("created_at").notNull(),
+	closedAt: integer("closed_at")
+});
+/**
+* One part of a Call, addressed to one Player: a Check for one Character (its skill or save, the
+* hidden DC from the tier), or a question's answer. It holds the result once answered.
+*/
+var callPart = sqliteTable("call_part", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	callId: text("call_id").notNull().references(() => call.id, { onDelete: "cascade" }),
+	position: integer("position").notNull(),
+	/** The Character rolling; null for a question, which goes to the Player. */
+	characterId: text("character_id").references(() => character.id, { onDelete: "cascade" }),
+	/** The Controlling Player the part is addressed to. */
+	player: text("player").notNull(),
+	/** Skill slug, for a skill Check. */
+	skill: text("skill"),
+	/** Ability key, for a saving throw. */
+	save: text("save", { enum: ABILITY_KEYS }),
+	tier: text("tier"),
+	/** The DM-only DC; never in a Player payload. */
+	dc: integer("dc"),
+	mode: text("mode", { enum: [
+		"normal",
+		"advantage",
+		"disadvantage"
+	] }).notNull().default("normal"),
+	reason: text("reason"),
+	result: text("result", { mode: "json" }).$type(),
+	answer: text("answer"),
+	answeredAt: integer("answered_at")
+}, (t) => [index("call_part_call_idx").on(t.callId)]);
 // src/lib/server/db/connect.ts
 /** The only place connections are opened, so foreign keys are always enforced. */
 function openDatabase(url) {
@@ -6735,6 +6792,6 @@ function seedRulesData(db, dataset = loadRulesDataset(), now = Date.now) {
 		}).run();
 	});
 }
-export { equipmentWeaponProperty as $, ability as A, desc as At, choiceOptionItem as B, Column as Bt, entity as C, weaponProperty as Ct, worldLink as D, CUSTOM_BACKGROUND_SLUG as Dt, pageRevision as E, CUSTOM_BACKGROUND_FEATURE_MAX as Et, backgroundOption as F, isNotNull as Ft, classStartingEquipment as G, DUNGEON_MASTER_PORT as Gt, classLevelFeature as H, DATABASE_URL as Ht, backgroundOptionAlignment as I, isNull as It, damageType as J, classTable as K, DUNGEON_MASTER_VERSION as Kt, backgroundProficiency as L, like as Lt, alignment as M, eq as Mt, background as N, gt as Nt, ENTITY_TYPES as O, SOLO_PLAYER as Ot, backgroundEquipment as P, inArray as Pt, equipmentContent as Q, choiceGroup as R, or as Rt, belief as S, traitProficiency as St, fact as T, BACKSTORY_MAX as Tt, classProficiency as U, DUNGEON_MASTER_CAMPAIGNS as Ut, classLevel as V, is as Vt, classSavingThrow as W, DUNGEON_MASTER_HOME as Wt, equipmentCategory as X, equipment as Y, equipmentCategoryItem as Z, characterSpell as _, subclass as _t, userStateDir as a, monsterConditionImmunity as at, floor as b, subraceTrait as bt, openDatabase as c, race as ct, character as d, raceTrait as dt, feature as et, characterChoice as f, ruleSection as ft, characterSkill as g, spellClass as gt, characterItem as h, spell as ht, defaultCampaignRoot as i, monster as it, abilityScoreMethod as j, and as jt, NPC_STATUSES as k, asc as kt, activityLine as l, raceAbilityBonus as lt, characterEquipment as m, skill as mt, campaignDatabasePath as n, magicItem as nt, loadRulesDataset as o, monsterProficiency as ot, characterDraft as p, rulesDataset as pt, condition as q, canonicalFolder as r, magicSchool as rt, migrateDatabase as s, proficiency as st, seedRulesData as t, language as tt, campaign as u, raceLanguage as ut, declaration as v, subrace as vt, entityAlias as w, ABILITY_METHODS as wt, session as x, trait as xt, event as y, subraceAbilityBonus as yt, choiceOption as z, sql as zt };
+export { equipment as $, pageRevision as A, CUSTOM_BACKGROUND_FEATURE_MAX as At, backgroundOptionAlignment as B, isNull as Bt, event as C, subraceAbilityBonus as Ct, entity as D, weaponProperty as Dt, belief as E, traitProficiency as Et, abilityScoreMethod as F, and as Ft, classLevel as G, is as Gt, choiceGroup as H, or as Ht, alignment as I, eq as It, classSavingThrow as J, DUNGEON_MASTER_HOME as Jt, classLevelFeature as K, DATABASE_URL as Kt, background as L, gt as Lt, ENTITY_TYPES as M, SOLO_PLAYER as Mt, NPC_STATUSES as N, asc as Nt, entityAlias as O, ABILITY_METHODS as Ot, ability as P, desc as Pt, damageType as Q, backgroundEquipment as R, inArray as Rt, declaration as S, subrace as St, session as T, trait as Tt, choiceOption as U, sql as Ut, backgroundProficiency as V, like as Vt, choiceOptionItem as W, Column as Wt, classTable as X, DUNGEON_MASTER_VERSION as Xt, classStartingEquipment as Y, DUNGEON_MASTER_PORT as Yt, condition as Z, characterDraft as _, rulesDataset as _t, userStateDir as a, language as at, characterSkill as b, spellClass as bt, abilities_default as c, monster as ct, activityLine as d, proficiency as dt, equipmentCategory as et, call as f, race as ft, characterChoice as g, ruleSection as gt, character as h, raceTrait as ht, defaultCampaignRoot as i, feature as it, worldLink as j, CUSTOM_BACKGROUND_SLUG as jt, fact as k, BACKSTORY_MAX as kt, migrateDatabase as l, monsterConditionImmunity as lt, campaign as m, raceLanguage as mt, campaignDatabasePath as n, equipmentContent as nt, loadRulesDataset as o, magicItem as ot, callPart as p, raceAbilityBonus as pt, classProficiency as q, DUNGEON_MASTER_CAMPAIGNS as qt, canonicalFolder as r, equipmentWeaponProperty as rt, skills_default as s, magicSchool as st, seedRulesData as t, equipmentCategoryItem as tt, openDatabase as u, monsterProficiency as ut, characterEquipment as v, skill as vt, floor as w, subraceTrait as wt, characterSpell as x, subclass as xt, characterItem as y, spell as yt, backgroundOption as z, isNotNull as zt };
 
 //# sourceMappingURL=seed.js.map
