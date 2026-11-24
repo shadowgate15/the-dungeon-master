@@ -675,6 +675,8 @@ var SESSIONS_QUERY_KEY = ["sessions"];
 var floorQueryKey = (campaign) => ["floor", campaign];
 /** The query holding a Campaign's timeline. */
 var timelineQueryKey = (campaign) => ["timeline", campaign];
+/** The query holding a Campaign's Scene, as the rail shows it. */
+var sceneQueryKey = (campaign) => ["scene", campaign];
 /** The query holding the permission prompt a Campaign's session is waiting on. */
 var permissionQueryKey = (campaign) => ["permission", campaign];
 // src/lib/live/client.ts
@@ -701,6 +703,6 @@ function DmBadge($$renderer, $$props) {
 		$$slots: { default: true }
 	});
 }
-export { timelineQueryKey as a, permissionQueryKey as i, createSessionsQuery as n, createQuery as o, floorQueryKey as r, DmBadge as t };
+export { sceneQueryKey as a, permissionQueryKey as i, createSessionsQuery as n, timelineQueryKey as o, floorQueryKey as r, createQuery as s, DmBadge as t };
 
 //# sourceMappingURL=DmBadge.js.map

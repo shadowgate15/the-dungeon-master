@@ -1,5 +1,5 @@
 import { t as error } from "../../../../../chunks/exports.js";
-import { i as sessions, n as library, x as loadWizardRules, y as canAct } from "../../../../../chunks/campaign.js";
+import { M as canAct, P as loadWizardRules, i as sessions, n as library } from "../../../../../chunks/campaign.js";
 import { a as permissions, o as play } from "../../../../../chunks/bridge.js";
 import { n as detailToSummaryData, t as buildSummary } from "../../../../../chunks/summary.js";
 import { s as ABILITY_KEYS } from "../../../../../chunks/schema.js";
@@ -80,6 +80,7 @@ var load = ({ params }) => {
 		sheets: playSheets(library.party(entry.id)),
 		floor: library.floor(entry.id).current(),
 		timeline: play.timeline(entry.id),
+		scene: play.scene(entry.id),
 		permission: permissions.pending(entry.id),
 		attached: sessions.list()
 	};

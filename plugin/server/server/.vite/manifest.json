@@ -492,7 +492,7 @@
       "node_modules/.pnpm/@tanstack+svelte-query-devtools@6.3.7_@tanstack+svelte-query@6.3.7_svelte@5.57.3_@types_8ea849ea8105e537a5386474a23c1746/node_modules/@tanstack/svelte-query-devtools/dist/index.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.Do7OJm1G.css"
+      "_app/immutable/assets/_layout.Cq5RBe2O.css"
     ],
     "assets": [
       "_app/immutable/assets/metamorphous-latin-ext-400-normal.D08n4oeX.woff2",
@@ -599,6 +599,15 @@
       "_bridge.js"
     ]
   },
+  "src/routes/api/campaigns/[id]/floor/returned/[returned]/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/floor/returned/_returned_/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/floor/returned/_returned_/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/floor/returned/[returned]/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_respond2.js"
+    ]
+  },
   "src/routes/api/campaigns/[id]/permission/+server.ts": {
     "file": "entries/endpoints/api/campaigns/_id_/permission/_server.ts.js",
     "name": "entries/endpoints/api/campaigns/_id_/permission/_server.ts",
@@ -608,6 +617,29 @@
       "_exports.js",
       "_bridge.js",
       "_campaign.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/scene/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/scene/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/scene/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/scene/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_bridge.js",
+      "_campaign.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/spotlight/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/spotlight/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/spotlight/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/spotlight/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_bridge.js",
+      "_campaign.js",
+      "_respond.js"
     ]
   },
   "src/routes/api/campaigns/[id]/timeline/+server.ts": {

@@ -1,4 +1,4 @@
-import { A as abilityScoreMethod, At as and, Ct as ABILITY_METHODS, Dt as SOLO_PLAYER, G as classTable, Ht as DUNGEON_MASTER_HOME, J as equipment, Lt as sql, M as background, Mt as inArray, Ot as asc, Pt as isNull, Rt as Column, Tt as CUSTOM_BACKGROUND_FEATURE_MAX, Vt as DUNGEON_MASTER_CAMPAIGNS, _ as characterSpell, _t as subrace, a as seedRulesData, b as floor, c as openDatabase, d as character, f as characterChoice, g as characterSkill, gt as subclass, h as characterItem, i as userStateDir, j as alignment, jt as eq, kt as desc, l as activityLine, m as characterEquipment, mt as spell, n as canonicalFolder, o as loadRulesDataset, p as characterDraft, pt as skill, r as defaultCampaignRoot, s as migrateDatabase, st as race, t as campaignDatabasePath, u as campaign, v as declaration, wt as BACKSTORY_MAX, x as session, y as event, zt as is } from "./paths.js";
+import { At as desc, Bt as is, C as entity, Et as CUSTOM_BACKGROUND_FEATURE_MAX, Ft as isNull, Ht as DUNGEON_MASTER_CAMPAIGNS, K as classTable, M as alignment, Mt as eq, N as background, Nt as inArray, Ot as SOLO_PLAYER, Rt as sql, S as session, Tt as BACKSTORY_MAX, Ut as DUNGEON_MASTER_HOME, Y as equipment, _ as characterSpell, _t as subclass, a as seedRulesData, b as floor, c as openDatabase, ct as race, d as character, f as characterChoice, g as characterSkill, h as characterItem, ht as spell, i as userStateDir, j as abilityScoreMethod, jt as and, kt as asc, l as activityLine, m as characterEquipment, mt as skill, n as canonicalFolder, o as loadRulesDataset, p as characterDraft, r as defaultCampaignRoot, s as migrateDatabase, t as campaignDatabasePath, u as campaign, v as declaration, vt as subrace, wt as ABILITY_METHODS, x as returnedDraft, y as event, zt as Column } from "./paths.js";
 import { D as equipmentGroupKeys, M as resolveFeatures, O as equipmentGroups, a as WIZARD_RULES_KEYS, c as resolverDraft, d as STEPS, o as emptyDraft, r as deriveStats, t as tryDraftToCharacterInput } from "./save.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { o as parseCampaignSeed, r as campaignSeedCard } from "./seed.js";
@@ -756,15 +756,192 @@ function createParty(db, now = Date.now) {
 function canAct(character) {
 	return character.status === "alive";
 }
+// src/lib/play/clock.ts
+/**
+* The Campaign clock counts in-fiction minutes from the Campaign's start, which is day 1 at 08:00.
+* Shown as "day 3, 14:20". Named calendars wait until the World needs them.
+*/
+var DAY = 1440;
+/** The time of day the Campaign starts, in minutes after midnight. */
+var START = 480;
+var pad = (n) => String(n).padStart(2, "0");
+/** The clock as day and time of day, e.g. `{ day: 3, time: '14:20' }`. */
+function clockParts(minute) {
+	const since = START + minute;
+	const ofDay = since % DAY;
+	return {
+		day: Math.floor(since / DAY) + 1,
+		time: `${pad(Math.floor(ofDay / 60))}:${pad(ofDay % 60)}`
+	};
+}
+/** The clock as the Players read it: "day 3, 14:20". */
+function formatClock(minute) {
+	const { day, time } = clockParts(minute);
+	return `day ${day}, ${time}`;
+}
+/** The minute a "day 3, 14:20" reading names, or null when it isn't one (or is before the start). */
+function parseClock(text) {
+	const match = /^\s*day\s+(\d+),?\s+(\d{1,2}):(\d{2})\s*$/i.exec(text);
+	if (!match) return null;
+	const [day, hours, minutes] = match.slice(1).map(Number);
+	if (day < 1 || hours > 23 || minutes > 59) return null;
+	const minute = (day - 1) * DAY + hours * 60 + minutes - START;
+	return minute < 0 ? null : minute;
+}
+// src/lib/server/world/names.ts
+/** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
+var plain = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/** The slug part of a handle: `Mira Voss` → `mira-voss`. */
+function slug(name) {
+	return plain(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
+}
+/** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
+function normalizeName(name) {
+	return plain(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+}
+function distance(a, b) {
+	let row = Array.from({ length: b.length + 1 }, (_, i) => i);
+	for (let i = 1; i <= a.length; i++) {
+		const next = [i];
+		for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+		row = next;
+	}
+	return row[b.length];
+}
+/**
+* Whether two names are close enough to be the same thing: equal once normalized, a typo apart,
+* or one's words all in the other ("Mira" and "Mira Voss").
+*/
+function isNearName(a, b) {
+	const x = normalizeName(a);
+	const y = normalizeName(b);
+	if (!x || !y) return false;
+	if (x === y) return true;
+	if (distance(x, y) <= Math.max(1, Math.floor(Math.max(x.length, y.length) / 6))) return true;
+	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+	const words = new Set(long.split(" "));
+	return short.split(" ").every((w) => words.has(w));
+}
+// src/lib/server/play/scene.ts
+/** A move of the clock that would take it backwards. */
+var ClockBackwardsError = class extends Error {};
+/** The Campaign clock: in-fiction minutes since the Campaign started. */
+function currentMinute(db) {
+	return db.select({ minute: campaign.clockMinute }).from(campaign).get()?.minute ?? 0;
+}
+/**
+* Moves the Campaign clock to `to`, inside the caller's transaction. The one way the clock moves:
+* `advance_time`, rests and the end of a Combat all go through here. Refuses to go backwards.
+*/
+function advanceClock(db, to) {
+	const from = currentMinute(db);
+	if (!Number.isInteger(to) || to < from) throw new ClockBackwardsError(`The clock is at ${formatClock(from)}; it cannot go back to ${formatClock(Math.max(0, Math.floor(to)))}`);
+	db.update(campaign).set({ clockMinute: to }).run();
+	return {
+		from,
+		to
+	};
+}
+/**
+* Every Character with its handle, in the order they joined the Party. A handle is `char:` and the
+* name's slug, numbered (`char:wren-2`) when two Characters share a name. Characters are not
+* Entities, but Facts, Beliefs and tools link to them by handle.
+*/
+function characterRefs(db) {
+	const rows = db.select().from(character).orderBy(sql`rowid`).all();
+	const taken = /* @__PURE__ */ new Set();
+	return rows.map((row) => {
+		const base = `char:${slug(row.name)}`;
+		let handle = base;
+		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
+		taken.add(handle);
+		return {
+			handle,
+			row
+		};
+	});
+}
+/** The Place the spotlight is on, or null before the DM first sets the Scene. */
+function scenePlace(db) {
+	const handle = db.select({ scene: campaign.scene }).from(campaign).get()?.scene ?? null;
+	if (handle === null) return null;
+	return db.select().from(entity).where(eq(entity.handle, handle)).get() ?? null;
+}
+/** Whether a Character is in the Scene. Before the Scene is first set, the whole Party is. */
+function inScene(place, row) {
+	return place === null || row.whereabouts === place.handle;
+}
+/** Live NPCs whose whereabouts is `place`. */
+function npcsAt(db, place) {
+	return db.select().from(entity).where(and(eq(entity.type, "npc"), isNull(entity.retiredAt))).orderBy(entity.name).all().filter((e) => e.fields.whereabouts === place && e.fields.status !== "dead");
+}
+/**
+* Who is in the Scene, worked out from whereabouts (never stored): the Characters there who are
+* still in play and the live NPCs at the Place. The rest of the Party is elsewhere.
+*/
+function present(db) {
+	const place = scenePlace(db);
+	const party = characterRefs(db).filter((c) => c.row.status === "alive");
+	return {
+		place,
+		characters: party.filter((c) => inScene(place, c.row)),
+		elsewhere: party.filter((c) => !inScene(place, c.row)),
+		npcs: place ? npcsAt(db, place.handle) : []
+	};
+}
+/** A spotlight request the server won't send: unknown Character, or one already in the Scene. */
+var SpotlightRefusedError = class extends Error {};
+/** The Scene as the Player's rail shows it, built from Player-safe fields only. */
+function playerScene(db) {
+	const { place, characters, elsewhere } = present(db);
+	const minute = currentMinute(db);
+	const placeName = (handle) => handle === null ? null : db.select({ name: entity.name }).from(entity).where(eq(entity.handle, handle)).get()?.name ?? null;
+	return {
+		clock: {
+			minute,
+			...clockParts(minute)
+		},
+		place: place && { name: place.name },
+		present: characters.map((c) => ({
+			id: c.row.id,
+			name: c.row.name
+		})),
+		elsewhere: elsewhere.map((c) => ({
+			id: c.row.id,
+			name: c.row.name,
+			whereabouts: placeName(c.row.whereabouts)
+		}))
+	};
+}
+/**
+* A Player's "Cut to <Name>" for a Character elsewhere, as the DM hears it: one `spotlight`
+* channel event carrying the Character and the Player. It doesn't await Narration; the DM cuts
+* with `set_scene` at a natural break.
+*/
+function spotlightRequest(db, characterId, player) {
+	const { elsewhere, characters } = present(db);
+	const target = elsewhere.find((c) => c.row.id === characterId);
+	if (!target) {
+		const here = characters.find((c) => c.row.id === characterId);
+		throw new SpotlightRefusedError(here ? `${here.row.name} is already in the Scene` : "Character not found");
+	}
+	return {
+		content: `Cut to ${target.row.name} (${target.handle}), at ${target.row.whereabouts ?? "no known Place"}`,
+		meta: {
+			kind: "spotlight",
+			character: target.handle,
+			player
+		}
+	};
+}
 // src/lib/server/play/log.ts
 /**
-* The Campaign's current stamp: the open Session (null offline) and the in-fiction minute (0 until
-* the clock exists).
+* The Campaign's current stamp: the open Session (null offline) and the Campaign clock's minute.
 */
 function currentStamp(db) {
 	return {
 		sessionId: db.select({ id: session.id }).from(session).where(isNull(session.closedAt)).get()?.id ?? null,
-		minute: 0
+		minute: currentMinute(db)
 	};
 }
 /** The id the next Event will get. The log is append-only, so ids are never reused. */
@@ -877,6 +1054,33 @@ var DeclarationRefusedError = class extends Error {};
 var DeclarationNotFoundError = class extends Error {};
 /** Done while the DM is still answering the last closed Floor. */
 var DmBusyError = class extends Error {};
+/**
+* The spotlight cut to `place`: every Declaration on the open Floor for a Character no longer in
+* the Scene goes back to its Player's composer as unsent text, and the Floor reopens (nobody has
+* pressed Done on the new Scene). Runs inside the cut's transaction; returns how many went back.
+*/
+function returnStrandedDrafts(db, place, at) {
+	const open = db.select().from(floor).where(eq(floor.state, "open")).get();
+	if (!open) return 0;
+	const stranded = db.select({
+		id: declaration.id,
+		characterId: declaration.characterId,
+		player: declaration.player,
+		text: declaration.text,
+		whereabouts: character.whereabouts
+	}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, open.id)).orderBy(asc(declaration.position)).all().filter((d) => d.whereabouts !== place);
+	for (const d of stranded) {
+		db.insert(returnedDraft).values({
+			characterId: d.characterId,
+			player: d.player,
+			text: d.text,
+			createdAt: at
+		}).run();
+		db.delete(declaration).where(eq(declaration.id, d.id)).run();
+	}
+	db.update(floor).set({ done: [] }).where(eq(floor.id, open.id)).run();
+	return stranded.length;
+}
 /** Declarations are a sentence or a short paragraph, not an essay. */
 var DECLARATION_MAX = 2e3;
 /**
@@ -893,9 +1097,10 @@ function createFloor(db, now = Date.now) {
 			createdAt: at
 		}).returning({ id: floor.id }).get().id;
 	}
-	/** The Players at the table: everyone with a Character who can act. */
+	/** The Players at the table: everyone with a Character in the Scene who can act. */
 	function playersAtTable() {
-		const actors = db.select().from(character).all().filter(canAct);
+		const place = scenePlace(db);
+		const actors = db.select().from(character).all().filter((c) => canAct(c) && inScene(place, c));
 		return [...new Set(actors.map((c) => c.controllingPlayer))];
 	}
 	function cleanText(text) {
@@ -908,21 +1113,40 @@ function createFloor(db, now = Date.now) {
 		const floorId = openFloorId();
 		if (!(floorId && db.select({ id: declaration.id }).from(declaration).where(and(eq(declaration.id, id), eq(declaration.floorId, floorId))).get())) throw new DeclarationNotFoundError("Declaration not found on the open Floor");
 	}
-	/** The open Floor (empty until something is sent). */
-	function current() {
-		const floorId = openFloorId();
-		if (!floorId) return { declarations: [] };
-		return { declarations: db.select({
-			id: declaration.id,
-			character: declaration.characterId,
+	/** `player`'s drafts a cut sent back to the composer, oldest first. */
+	function returned(player) {
+		return db.select({
+			id: returnedDraft.id,
+			character: returnedDraft.characterId,
 			characterName: character.name,
-			player: declaration.player,
-			text: declaration.text
-		}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all() };
+			text: returnedDraft.text
+		}).from(returnedDraft).innerJoin(character, eq(character.id, returnedDraft.characterId)).where(eq(returnedDraft.player, player)).orderBy(asc(returnedDraft.createdAt), asc(sql`${returnedDraft}.rowid`)).all();
+	}
+	/** The open Floor (empty until something is sent), with `player`'s returned drafts. */
+	function current(player = SOLO_PLAYER) {
+		const floorId = openFloorId();
+		if (!floorId) return {
+			declarations: [],
+			returned: returned(player)
+		};
+		return {
+			declarations: db.select({
+				id: declaration.id,
+				character: declaration.characterId,
+				characterName: character.name,
+				player: declaration.player,
+				text: declaration.text
+			}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all(),
+			returned: returned(player)
+		};
 	}
 	return {
-		/** The open Floor (empty until something is sent). */
+		/** The open Floor (empty until something is sent), with `player`'s returned drafts. */
 		current,
+		/** The composer has loaded a returned draft: it is no longer held for the Player. */
+		clearReturned(id) {
+			db.delete(returnedDraft).where(eq(returnedDraft.id, id)).run();
+		},
 		/**
 		* Puts a Declaration for one Character on the open Floor, opening it if none is. Refused for a
 		* Character who can't act or whom `player` doesn't control.
@@ -933,6 +1157,7 @@ function createFloor(db, now = Date.now) {
 				const actor = db.select().from(character).where(eq(character.id, characterId)).get();
 				if (!actor) throw new DeclarationRefusedError("Character not found");
 				if (!canAct(actor)) throw new DeclarationRefusedError(`${actor.name} can't act`);
+				if (!inScene(scenePlace(db), actor)) throw new DeclarationRefusedError(`${actor.name} is not in the Scene`);
 				if (actor.controllingPlayer !== player) throw new DeclarationRefusedError(`${actor.name} is not your Character`);
 				const at = now();
 				const floorId = openFloor(at);
@@ -1197,7 +1422,9 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 			const db = database(find(id).folder);
 			return {
 				timeline: () => timeline(db),
-				openSession: () => openSession(db, now())
+				openSession: () => openSession(db, now()),
+				scene: () => playerScene(db),
+				spotlight: (character, player) => spotlightRequest(db, character, player)
 			};
 		},
 		/**
@@ -1273,6 +1500,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { CharacterValidationError as C, CharacterNotFoundError as S, nextEventId as _, CampaignArchivedError as a, DraftNotFoundError as b, CampaignNotFoundError as c, DeclarationNotFoundError as d, DeclarationRefusedError as f, logEvent as g, logActivity as h, sessions as i, NotACampaignFolderError as l, currentStamp as m, library as n, CampaignExistsError as o, DmBusyError as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, setAwaitingNarration as v, SESSION_LIVE_MESSAGE as w, loadWizardRules as x, canAct as y };
+export { formatClock as A, characterRefs as C, isNearName as D, scenePlace as E, CharacterNotFoundError as F, CharacterValidationError as I, SESSION_LIVE_MESSAGE as L, canAct as M, DraftNotFoundError as N, normalizeName as O, loadWizardRules as P, advanceClock as S, present as T, logEvent as _, CampaignArchivedError as a, ClockBackwardsError as b, CampaignNotFoundError as c, DeclarationNotFoundError as d, DeclarationRefusedError as f, logActivity as g, currentStamp as h, sessions as i, parseClock as j, slug as k, NotACampaignFolderError as l, returnStrandedDrafts as m, library as n, CampaignExistsError as o, DmBusyError as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, nextEventId as v, currentMinute as w, SpotlightRefusedError as x, setAwaitingNarration as y };
 
 //# sourceMappingURL=campaign.js.map
