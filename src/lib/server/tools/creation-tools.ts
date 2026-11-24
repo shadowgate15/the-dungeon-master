@@ -20,6 +20,7 @@ import {
 import { lengthIssue } from '#lib/character/steps.ts'
 import { ABILITY_KEYS } from '#lib/rules/registry.ts'
 import { loadWizardRules } from '../character/wizard-rules'
+import { addConversationLine } from '../creation/conversation'
 import { campaign, character, characterDraft } from '../db/schema'
 import { ToolError, creationTool, expectVersion, readTool, type ToolContext } from './contract'
 import { SEED_HANDLE, currentSeed, seedView } from './seed-tools'
@@ -250,6 +251,20 @@ export const creationTools = [
         result: seedView(saved),
         line: `DM set the Seed’s ${listOf(set.map((f) => SEED_FIELD_NAMES[f]))}`,
         changed: [{ type: 'seed', campaign: ctx.campaignId }]
+      }
+    }
+  }),
+
+  creationTool({
+    name: 'reply',
+    description:
+      'Answer the Player in the DM conversation pane (creation help and out-of-character talk). Out of fiction: it is not Narration and is never logged.',
+    input: z.object({ text: z.string().trim().min(1) }),
+    run: (ctx, { text }) => {
+      addConversationLine(ctx.db, { author: 'dm', text }, ctx.now)
+      return {
+        result: { replied: true },
+        changed: [{ type: 'conversation', campaign: ctx.campaignId }]
       }
     }
   }),
