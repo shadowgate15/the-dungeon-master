@@ -1,5 +1,5 @@
-import { I as fact, K as race, N as belief, P as entity, St as DUNGEON_MASTER_VERSION, T as event, U as background, W as classTable, at as eq, bt as DUNGEON_MASTER_HOME, ct as inArray, g as character, h as campaign, ht as sql, it as and, mt as or, n as createRulesRepository, nt as asc, o as userStateDir, pt as ne, tt as SOLO_PLAYER, ut as isNull, v as characterDraft, xt as DUNGEON_MASTER_PORT, z as ENTITY_TYPES } from "./seed.js";
-import { $ as saveBonus, A as logEvent, At as expectVersion, B as cancelPendingCall, Ct as pastArcs, D as createDmChannels, Dt as PLUGIN_NAME, Et as reviseArc, Ft as SESSION_LIVE_MESSAGE, G as damageSequence, H as openCall, I as DC_BY_TIER, J as sequenceText, K as rollAll, L as TIERS, M as setAwaitingNarration, Mt as writeTool, N as ABILITY_NAMES, Nt as formatClock, O as currentStamp, Ot as ToolError, Pt as parseClock, Q as mustAct, R as callInput, St as currentArc, Tt as retireArc, U as saveKey, V as createPendingCall, W as attackSequence, X as applyHealing, Y as applyDamage, Z as combatant, _ as closeSession, _t as resolveLinks, at as loadWizardRules, b as sessionsView, bt as CurrentArcError, c as CampaignNotFoundError, ct as advanceClock, dt as present, et as setConditions, f as SeedLockedError, ft as scenePlace, g as addConversationLine, gt as renderLinks, h as refuseLockedSeed, ht as fieldNames, i as sessions, j as nextEventId, jt as readTool, k as logActivity, kt as creationTool, l as NotACampaignFolderError, lt as characterRefs, m as creationStage, mt as createWorld, n as library, ot as ClockBackwardsError, pt as lintWorld, q as saveSequence, r as live, tt as hpState, ut as currentMinute, v as history, vt as characterHolders, w as returnStrandedDrafts, wt as resolveBeat, xt as createArc, y as indexNarration, yt as charactersInScene, z as callResultEvent } from "./campaign.js";
+import { Ct as DUNGEON_MASTER_PORT, D as event, F as belief, G as background, I as entity, J as race, K as classTable, R as fact, St as DUNGEON_MASTER_HOME, V as ENTITY_TYPES, _t as sql, a as userStateDir, ft as isNull, g as character, gt as or, h as campaign, ht as ne, it as asc, l as createRulesRepository, ot as and, rt as SOLO_PLAYER, st as eq, ut as inArray, v as characterDraft, wt as DUNGEON_MASTER_VERSION } from "./seed.js";
+import { $ as applyDamage, A as combatState, At as currentArc, B as DC_BY_TIER, Bt as writeTool, Ct as fieldNames, D as createDmChannels, Dt as charactersInScene, Et as characterHolders, F as spendTurnResource, Ft as PLUGIN_NAME, G as createPendingCall, H as callInput, Ht as parseClock, I as startCombat, It as ToolError, J as attackSequence, K as openCall, L as ABILITY_NAMES, Lt as creationTool, M as nextTurn, Mt as resolveBeat, N as orderText, Nt as retireArc, Ot as CurrentArcError, P as refuseDuringCombat, Pt as reviseArc, Q as sequenceText, Rt as expectVersion, St as createWorld, Tt as resolveLinks, U as callResultEvent, Ut as SESSION_LIVE_MESSAGE, V as TIERS, Vt as formatClock, W as cancelPendingCall, X as rollAll, Y as damageSequence, Z as saveSequence, _ as closeSession, _t as loadWizardRules, at as currentStamp, b as sessionsView, bt as hpState, c as CampaignNotFoundError, ct as nextEventId, et as applyHealing, f as SeedLockedError, ft as advanceClock, g as addConversationLine, gt as scenePlace, h as refuseLockedSeed, ht as present, i as sessions, it as setConditions, j as endCombat, jt as pastArcs, k as addCombatants, kt as createArc, l as NotACampaignFolderError, lt as setAwaitingNarration, m as creationStage, mt as currentMinute, n as library, nt as mustAct, ot as logActivity, pt as characterRefs, q as saveKey, r as live, rt as saveBonus, st as logEvent, tt as combatant, ut as ClockBackwardsError, v as history, w as returnStrandedDrafts, wt as renderLinks, xt as lintWorld, y as indexNarration, zt as readTool } from "./campaign.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { d as reconcile, j as rollTotals, l as changedDraftFields, u as emptyDraft, w as arrangementProblem, y as lengthIssue } from "./summary.js";
@@ -132,6 +132,16 @@ function resolve(db, dice, now, rolls, { summary, pre = [], result = {} }) {
 		}
 	};
 }
+/** Adds an action-economy reminder to a tool's result. */
+function withReminder(reminder, out) {
+	return reminder ? {
+		...out,
+		result: {
+			...out.result,
+			reminder
+		}
+	} : out;
+}
 var abilityName = (ability) => ABILITY_NAMES.get(ability) ?? ability;
 /** Rolls an effect's damage once, for every target's save. */
 function preRollDamage(dice, by, what, expression, damageType) {
@@ -232,8 +242,8 @@ var actionTools = [
 		name: "attack",
 		description: "Make a weapon or natural attack. A Character attacker returns a pending Call: attach it with your closing narrate(text, call: id) and the Player rolls to hit, then damage (you hear one call_result). An NPC attacker rolls and applies at once, in the dice log. The target's AC stays hidden from the Player.",
 		input: object({
-			actor: string().min(1).describe("Who attacks: char:… or npc:…"),
-			target: string().min(1).describe("Who is attacked: char:… or npc:…"),
+			actor: string().min(1).describe("Who attacks: char:…, npc:… or creature:…"),
+			target: string().min(1).describe("Who is attacked: char:…, npc:… or creature:…"),
 			with: string().trim().min(1).describe("The weapon or stat block action, such as longsword"),
 			...adv
 		}),
@@ -244,11 +254,11 @@ var actionTools = [
 			const target = combatant(db, input.target);
 			const attack = findAttack(actor, input.with);
 			const sequence = attackSequence(attack.name, target, attack.bonus, attack.damage);
-			return resolve(db, dice, now, [{
+			return withReminder(spendTurnResource(db, actor.handle, actor.name, "action"), resolve(db, dice, now, [{
 				roller: actor,
 				sequence,
 				mode: modeOf(input)
-			}], { summary: `${actor.name}'s ${sequence.label} on ${target.name}` });
+			}], { summary: `${actor.name}'s ${sequence.label} on ${target.name}` }));
 		}
 	}),
 	writeTool({
@@ -275,10 +285,12 @@ var actionTools = [
 			if ((spell.attackType || spell.dcAbility) && !targets.length) throw new ToolError("no_targets", `${spell.name} needs a target`, "Name its targets and call again");
 			const slot = caster.kind === "character" && input.level > 0 ? spendSlot(db, caster, input.level) : null;
 			const damage = spellDamage(spell, input.level, powers.level);
+			const reminder = spendTurnResource(db, caster.handle, caster.name, /bonus action/i.test(String(spell.castingTime ?? "")) ? "bonusAction" : "action");
 			const result = {
 				cast: spell.name,
 				level: input.level,
-				slot
+				slot,
+				...reminder && { reminder }
 			};
 			const summary = `${caster.name} casts ${spell.name}${targets.length ? ` on ${targets.map((t) => t.name).join(", ")}` : ""}`;
 			if (spell.attackType) {
@@ -611,6 +623,130 @@ var actionTools = [
 					data: {
 						character: who.handle,
 						resource: feature.slug
+					}
+				}
+			};
+		}
+	})
+];
+// src/lib/server/tools/combat-tools.ts
+var entry = union([string().min(1).describe("char:… or npc:… handle (an NPC needs a stat_block), or monster:<slug> for one Creature"), strictObject({
+	monster: string().min(1).describe("monster:<slug>: the stat block to spawn Creatures from"),
+	count: int().min(1).max(20).optional()
+})]);
+/** What joining did, for the DM: Creatures spawned, code's rolls, the Party's pending Call. */
+function joinedResult(joined, order) {
+	return {
+		creatures: joined.creatures,
+		...joined.rolled.length && { rolled: joined.rolled.join("\n") },
+		order,
+		...joined.pendingCall && {
+			pending_call: joined.pendingCall,
+			attach: `Attach the initiative Call with your closing narrate(text, call: "${joined.pendingCall}"); its call_result gives the order`
+		}
+	};
+}
+/** The dice log of code's initiative rolls, or a DM-only note when only Characters joined. */
+function joinedEvent(kind, summary, joined) {
+	if (!joined.rolls.length) return {
+		kind,
+		summary,
+		data: { call: joined.pendingCall },
+		dmOnly: true
+	};
+	return {
+		kind: "rolls",
+		summary: `${summary}: ${joined.rolls.map((r) => `${r.characterName} initiative ${r.total}`).join("; ")}`,
+		data: {
+			rolls: joined.rolls,
+			call: joined.pendingCall
+		}
+	};
+}
+var combatTools = [
+	writeTool({
+		name: "start_combat",
+		description: "Start a Combat in the Scene. Code rolls NPC and Creature initiative now; the Characters get one batched initiative Call (pending_call) for your closing narrate to attach. Creatures are faceless foes spawned from SRD stat blocks for this Combat only (creature:goblin-2); they vanish at end_combat unless you establish a survivor as an NPC. Surprised combatants lose their first turn.",
+		input: strictObject({
+			combatants: array(entry).min(1),
+			surprised: array(string().min(1)).optional().describe("Handles of surprised combatants")
+		}),
+		activity: "DM starts a Combat",
+		run: ({ db, dice, now }, { combatants, surprised }) => {
+			const joined = startCombat(db, dice, combatants, {
+				surprised,
+				at: now
+			});
+			return {
+				result: joinedResult(joined, orderText(db)),
+				skill: "combat",
+				event: joinedEvent("combat_started", "Combat starts", joined)
+			};
+		}
+	}),
+	writeTool({
+		name: "add_combatant",
+		description: "Add a late arrival to the live Combat. An NPC or Creature rolls initiative now; a Character gets an initiative Call (pending_call) for your closing narrate to attach, and joins the order once rolled.",
+		input: strictObject({ combatants: array(entry).min(1) }),
+		activity: "DM adds to the Combat",
+		run: ({ db, dice, now }, { combatants }) => {
+			const joined = addCombatants(db, dice, combatants, now);
+			return {
+				result: joinedResult(joined, orderText(db)),
+				event: joinedEvent("combatant_added", "Joins the Combat", joined)
+			};
+		}
+	}),
+	writeTool({
+		name: "next_turn",
+		description: "Move to the next turn in initiative order, into the next round after the last. The new combatant's action, bonus action and reaction are fresh. Run NPC and Creature turns yourself; on a Character's turn the Player's composer is locked to them.",
+		input: strictObject({}),
+		activity: null,
+		run: ({ db }) => {
+			const { round, current } = nextTurn(db);
+			const state = combatState(db);
+			return {
+				result: {
+					round,
+					turn: current && {
+						handle: current.handle,
+						name: current.name
+					},
+					resources: "action, bonus action and reaction are fresh (a reminder, not a rule code enforces)",
+					order: state.order
+				},
+				event: {
+					kind: "turn",
+					summary: current ? `Round ${round}: ${current.name}'s turn` : `Round ${round}`,
+					data: {
+						round,
+						combatant: current?.handle ?? null
+					},
+					dmOnly: true
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "end_combat",
+		description: "End the live Combat. Its rounds go onto the clock, rounded up to a minute. Creatures vanish: establish any survivor you want to keep as an NPC first.",
+		input: strictObject({}),
+		activity: "DM ends the Combat",
+		run: ({ db, now }) => {
+			const ended = endCombat(db, now);
+			return {
+				result: {
+					rounds: ended.rounds,
+					minutes: ended.minutes,
+					clock: formatClock(ended.clock.to),
+					creatures_gone: ended.gone.map((c) => c.handle)
+				},
+				event: {
+					kind: "combat_ended",
+					summary: `Combat ends after ${ended.rounds} rounds (${ended.minutes} min)`,
+					data: {
+						rounds: ended.rounds,
+						minutes: ended.minutes
 					}
 				}
 			};
@@ -1722,10 +1858,11 @@ var sceneTools = [
 	}),
 	writeTool({
 		name: "set_scene",
-		description: "Move the spotlight to a Place. Refused unless a Character is there (move them first). Who is present follows from whereabouts. On a cut, Declarations for Characters no longer in the Scene go back to their Player as unsent text and the Floor reopens. Honour a spotlight request within a Floor or two, at a natural break.",
+		description: "Move the spotlight to a Place. Refused unless a Character is there (move them first), and while a Combat is live. Who is present follows from whereabouts. On a cut, Declarations for Characters no longer in the Scene go back to their Player as unsent text and the Floor reopens. Honour a spotlight request within a Floor or two, at a natural break.",
 		input: strictObject({ place: string().min(1).describe("Place handle") }),
 		activity: (_, result) => `DM sets the Scene: ${result.scene.name}`,
 		run: ({ db, now }, { place: handle }) => {
+			refuseDuringCombat(db, "moving the spotlight");
 			const place = placeAt(db, handle);
 			if (!characterRefs(db).filter((c) => c.row.status === "alive").some((c) => c.row.whereabouts === place.handle)) throw new ToolError("nobody_there", `No Character is at ${place.handle}`, `Call move with the Characters going to ${place.handle} first`);
 			const cut = scenePlace(db)?.handle !== place.handle;
@@ -2098,7 +2235,8 @@ var gameTools = [
 	...rulesTools,
 	...actionTools,
 	...arcTools,
-	...lintTools
+	...lintTools,
+	...combatTools
 ];
 // src/lib/server/dice.ts
 var MAX_COUNT = 100;

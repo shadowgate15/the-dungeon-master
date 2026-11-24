@@ -27,7 +27,7 @@ function CallCard($$renderer, $$props) {
 		for (let $$index_1 = 0, $$length = each_array.length; $$index_1 < $$length; $$index_1++) {
 			let part = each_array[$$index_1];
 			$$renderer.push(`<div role="group"${attr("aria-label", part.character ?? part.player)} class="flex flex-wrap items-center gap-2">`);
-			if (call.kind === "check" || call.kind === "roll_sequence") {
+			if (call.kind !== "question") {
 				$$renderer.push(`<!--[0--><span class="font-medium">${escape_html(part.character)}</span> <span>${escape_html(part.label)}</span> `);
 				if (part.mode !== "normal") $$renderer.push(`<!--[0--><span class="text-xs font-semibold text-accent uppercase">${escape_html(part.mode === "advantage" ? "Advantage" : "Disadvantage")}</span>`);
 				else $$renderer.push("<!--[-1-->");
@@ -233,7 +233,7 @@ function FloorComposer($$renderer, $$props) {
 		* the DM back replaces the send controls; drafting stays open. A pure view; the console wires the
 		* callbacks to the server.
 		*/
-		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false, elsewhere = [], oncut = () => {}, returned = [], onreturned = () => {}, away = null } = $$props;
+		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false, elsewhere = [], oncut = () => {}, returned = [], onreturned = () => {}, away = null, turn = null } = $$props;
 		/** The folder, quoted for a POSIX shell when it needs it. */
 		const quoted = (folder) => /^[\w@%+=:,./-]+$/.test(folder) ? folder : `'${folder.replaceAll("'", `'\\''`)}'`;
 		const relaunch = derived(() => away ? `cd ${quoted(away.folder)} && dm` : "");
@@ -246,6 +246,7 @@ function FloorComposer($$renderer, $$props) {
 		let draft = "";
 		let editing = null;
 		const blocked = derived(() => disabled || acting === null);
+		const prompt = derived(() => acting ? `What does ${acting} do?` : turn ? `It is ${turn}'s turn` : "No Character can act");
 		const label = (d) => `${d.characterName}: ${d.text}`;
 		function send() {
 			const text = draft.trim();
@@ -320,13 +321,16 @@ function FloorComposer($$renderer, $$props) {
 				$$renderer.push(`<!--]--></ul>`);
 			} else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--> `);
+			if (turn) $$renderer.push(`<!--[0--><p class="text-xs font-medium">${escape_html(turn)}'s turn</p>`);
+			else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> `);
 			Textarea($$renderer, {
 				size: "sm",
 				rows: 2,
 				onkeydown,
 				disabled: blocked(),
-				"aria-label": acting ? `What does ${acting} do?` : "No Character can act",
-				placeholder: acting ? `What does ${acting} do?` : "No Character can act",
+				"aria-label": prompt(),
+				placeholder: prompt(),
 				get value() {
 					return draft;
 				},
@@ -400,7 +404,7 @@ function SceneRail($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/**
 		* The rail's top panel: the clock (time large, day below), the Scene's Place and the Characters
-		* present. A pure view of the Player-safe `SceneView`.
+		* present, and in a Combat the initiative order. A pure view of the Player-safe `SceneView`.
 		*/
 		let { scene } = $$props;
 		$$renderer.push(`<section aria-label="Clock and Scene" class="rounded-panel border border-border bg-surface p-3"><p class="font-display text-3xl">${escape_html(scene.clock.time)}</p> <p class="text-muted">day ${escape_html(scene.clock.day)}</p> `);
@@ -413,8 +417,43 @@ function SceneRail($$renderer, $$props) {
 			}
 			$$renderer.push(`<!--]--></ul>`);
 		} else $$renderer.push(`<!--[-1--><p class="mt-2 text-muted">The Scene is set once play begins.</p>`);
-		$$renderer.push(`<!--]--></section>`);
+		$$renderer.push(`<!--]--></section> `);
+		if (scene.combat) {
+			$$renderer.push(`<!--[0--><section aria-label="Initiative" class="rounded-panel border border-border bg-surface p-3"><p class="font-medium">${escape_html(scene.combat.round ? `Round ${scene.combat.round}` : "Combat starts")}</p> `);
+			if (scene.combat.order.length) {
+				$$renderer.push(`<!--[0--><ol aria-label="Initiative order" class="mt-1 flex flex-col gap-1 text-sm"><!--[-->`);
+				const each_array_1 = ensure_array_like(scene.combat.order);
+				for (let $$index_1 = 0, $$length = each_array_1.length; $$index_1 < $$length; $$index_1++) {
+					let c = each_array_1[$$index_1];
+					$$renderer.push(`<li${attr("aria-current", c.current || void 0)}${attr_class(clsx(["flex items-center gap-2 rounded-control px-2 py-0.5", c.current ? "bg-raised font-medium" : "text-muted"]))}><span class="w-6 text-right tabular-nums">${escape_html(c.initiative)}</span> <span class="flex-1">${escape_html(c.name)}</span> `);
+					if (c.state) $$renderer.push(`<!--[0--><span class="text-xs">${escape_html(c.state)}</span>`);
+					else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--></li>`);
+				}
+				$$renderer.push(`<!--]--></ol>`);
+			} else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> `);
+			if (scene.combat.waiting.length) $$renderer.push(`<!--[0--><p class="mt-1 text-xs text-muted">Rolling initiative: ${escape_html(scene.combat.waiting.join(", "))}</p>`);
+			else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--></section>`);
+		} else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]-->`);
 	});
+}
+// src/lib/play/combat.ts
+/** Whose turn it is in the Combat, or null outside Combat or while it waits on initiative. */
+function turnOf(combat) {
+	return combat?.order.find((e) => e.current) ?? null;
+}
+/**
+* The acting Character. In a running Combat the composer is locked to the Character whose turn it
+* is (none on an NPC's or Creature's turn) and the Player's pick waits; otherwise it is the pick, or
+* the first Character in the Scene who can act.
+*/
+function actingCharacter(actors, picked, combat) {
+	const turn = turnOf(combat);
+	if (turn) return actors.find((a) => a.id === turn.characterId) ?? null;
+	return actors.find((a) => a.id === picked) ?? actors[0] ?? null;
 }
 // src/lib/play/journal.ts
 /** The entries a Character holds: "What <Character> knows". */
@@ -620,7 +659,8 @@ function _page($$renderer, $$props) {
 			};
 		}));
 		const actors = derived(() => sheets().filter((s) => s.canAct && inScene().has(s.id)));
-		const acting = derived(() => actors().find((s) => s.id === picked) ?? actors()[0] ?? null);
+		const acting = derived(() => actingCharacter(actors(), picked, scene.data.combat));
+		const turn = derived(() => turnOf(scene.data.combat));
 		const archived = derived(() => data.campaign.status === "archived");
 		const attached = derived(() => sessions.data.includes(data.campaign.id));
 		let ending = false;
@@ -736,6 +776,7 @@ function _page($$renderer, $$props) {
 			$$renderer.push("<!--[-1-->");
 			FloorComposer($$renderer, {
 				acting: acting()?.name ?? null,
+				turn: turn()?.name ?? null,
 				declarations: floor.data.declarations,
 				awaiting: timeline.data.awaitingSince !== null,
 				onsend: (text) => acting() && attempt(() => actions.send(acting().id, text)),
