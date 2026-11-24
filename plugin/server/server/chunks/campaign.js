@@ -1,8 +1,8 @@
-import { At as ABILITY_METHODS, Bt as inArray, C as declaration, Ct as subclass, D as session, E as returnedDraft, Ft as asc, Ht as isNull, It as desc, Jt as is, Kt as sql, L as abilityScoreMethod, Lt as and, Mt as CUSTOM_BACKGROUND_FEATURE_MAX, O as belief, Pt as SOLO_PLAYER, Q as classTable, R as alignment, Rt as eq, S as conversationMessage, T as floor, Vt as isNotNull, Xt as DUNGEON_MASTER_CAMPAIGNS, Zt as DUNGEON_MASTER_HOME, _ as characterDraft, a as userStateDir, b as characterSkill, bt as skill, c as abilities_default, d as activityLine, f as call, g as characterChoice, h as character, i as defaultCampaignRoot, jt as BACKSTORY_MAX, k as entity, l as migrateDatabase, m as campaign, mt as race, n as campaignDatabasePath, o as loadRulesDataset, p as callPart, qt as Column, r as canonicalFolder, s as skills_default, t as seedRulesData, tt as equipment, u as openDatabase, v as characterEquipment, w as event, wt as subrace, x as characterSpell, xt as spell, y as characterItem, z as background, zt as gt } from "./seed.js";
+import { A as beat, B as abilityScoreMethod, Bt as and, C as declaration, Ct as skill, D as session, Dt as subrace, E as returnedDraft, Et as subclass, F as pageRevision, Ft as CUSTOM_BACKGROUND_FEATURE_MAX, Gt as isNotNull, H as background, Ht as gt, I as worldLink, Jt as ne, Kt as isNull, Lt as SOLO_PLAYER, M as entity, N as entityAlias, Nt as ABILITY_METHODS, O as act, P as fact, Pt as BACKSTORY_MAX, Qt as is, Rt as asc, S as conversationMessage, T as floor, Ut as gte, V as alignment, Vt as eq, Wt as inArray, Xt as sql, Zt as Column, _ as characterDraft, _t as race, a as userStateDir, b as characterSkill, c as abilities_default, d as activityLine, en as DUNGEON_MASTER_CAMPAIGNS, f as call, g as characterChoice, h as character, i as defaultCampaignRoot, it as equipment, j as belief, k as arc, l as migrateDatabase, m as campaign, n as campaignDatabasePath, o as loadRulesDataset, p as callPart, r as canonicalFolder, s as skills_default, t as seedRulesData, tn as DUNGEON_MASTER_HOME, tt as classTable, u as openDatabase, v as characterEquipment, w as event, wt as spell, x as characterSpell, y as characterItem, zt as desc } from "./seed.js";
 import { L as resolveFeatures, N as equipmentGroupKeys, P as equipmentGroups, c as WIZARD_RULES_KEYS, f as resolverDraft, h as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, t as buildSummary, u as emptyDraft } from "./summary.js";
 import { c as literal, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
-import { o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
+import { a as missingSeedFields, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import fs from "node:fs";
 import path from "node:path";
 // src/lib/server/bridge/sessions.ts
@@ -1949,6 +1949,144 @@ function addConversationLine(db, line, at) {
 function conversationLines(db) {
 	return db.select().from(conversationMessage).orderBy(asc(conversationMessage.id)).all();
 }
+// src/lib/server/story/arc.ts
+/** There is already a current Arc; a Campaign has at most one. */
+var CurrentArcError = class extends Error {};
+function arcView(db, found) {
+	const acts = db.select().from(act).where(eq(act.arcId, found.id)).orderBy(asc(act.position)).all();
+	const beats = acts.length ? db.select().from(beat).where(inArray(beat.actId, acts.map((a) => a.id))).orderBy(asc(beat.position)).all() : [];
+	return {
+		title: found.title,
+		premise: found.premise,
+		stakes: found.stakes,
+		resolution: found.resolution,
+		state: found.state,
+		version: found.version,
+		acts: acts.map((a) => ({
+			name: a.name,
+			purpose: a.purpose,
+			beats: beats.filter((b) => b.actId === a.id).map((b) => ({
+				handle: b.handle,
+				title: b.title,
+				description: b.description,
+				state: b.state,
+				reason: b.reason
+			}))
+		}))
+	};
+}
+/** A Beat handle from its title, unique across every Arc the Campaign has had. */
+function beatHandle(db, title, taken) {
+	const base = `beat:${slug$1(title)}`;
+	for (let n = 1;; n++) {
+		const handle = n === 1 ? base : `${base}-${n}`;
+		if (taken.has(handle)) continue;
+		if (db.select({ handle: beat.handle }).from(beat).where(eq(beat.handle, handle)).get()) continue;
+		taken.add(handle);
+		return handle;
+	}
+}
+/** Creates the current Arc; refused (`CurrentArcError`) while one exists. */
+function createArc(db, input, at) {
+	if (db.select({ id: arc.id }).from(arc).where(eq(arc.state, "current")).get()) throw new CurrentArcError("A current Arc already exists");
+	const created = db.insert(arc).values({
+		title: input.title,
+		premise: input.premise,
+		stakes: input.stakes,
+		resolution: input.resolution,
+		createdAt: at
+	}).returning().get();
+	const taken = /* @__PURE__ */ new Set();
+	input.acts.forEach((a, position) => {
+		const { id } = db.insert(act).values({
+			arcId: created.id,
+			position,
+			name: a.name,
+			purpose: a.purpose
+		}).returning({ id: act.id }).get();
+		a.beats.forEach((b, i) => {
+			db.insert(beat).values({
+				handle: beatHandle(db, b.title, taken),
+				actId: id,
+				position: i,
+				title: b.title,
+				description: b.description
+			}).run();
+		});
+	});
+	return arcView(db, created);
+}
+/** Discards every Arc (Start over, before the story has a Narration). */
+function discardArcs(db) {
+	db.delete(arc).run();
+}
+// src/lib/server/creation/begin.ts
+/** Begin is not allowed yet (or any more): the message says why. */
+var BeginRefusedError = class extends Error {};
+/** Where the Campaign in this database stands, with the missing Seed fields and saved Characters. */
+function creationStage(db) {
+	const found = db.select().from(campaign).get();
+	if (!found) throw new Error("The Campaign database has no Campaign");
+	const missing = missingSeedFields(campaignSeedCard(found));
+	const characters = db.select({ id: character.id }).from(character).where(ne(character.status, "departed")).all().length;
+	return {
+		state: found.begunAt !== null ? "begun" : missing.length > 0 ? "seed_incomplete" : characters === 0 ? "party_empty" : "ready",
+		missing,
+		characters
+	};
+}
+/**
+* Begins the story: sets `begunAt`, which locks the Seed. Refused unless creation is ready (the
+* Seed complete and a Character saved). Nothing in the fiction changes, and nothing awaits Narration.
+*/
+function begin(db, at) {
+	const { state } = creationStage(db);
+	if (state !== "ready") throw new BeginRefusedError(state === "begun" ? "The story has already begun" : state === "seed_incomplete" ? "Complete the Seed before you Begin" : "Save a Character to the Party before you Begin");
+	db.update(campaign).set({
+		begunAt: at,
+		updatedAt: at
+	}).run();
+}
+/** The Seed is locked: the story has begun, and the World was built from it. */
+var SeedLockedError = class extends Error {};
+/**
+* The one guard every Seed write goes through (the Seed card, `set_seed`): after Begin the Seed is
+* read-only until Start over.
+*/
+function refuseLockedSeed(found) {
+	if (found.begunAt !== null) throw new SeedLockedError("The story has begun, so the Seed is locked. Start over to change it.");
+}
+/** Start over is not allowed: before Begin, or once the story has a Narration. */
+var StartOverRefusedError = class extends Error {};
+/**
+* Start over: discards the World (Entities, Pages, Facts, links), every Belief and the Arc, and
+* clears `begunAt` so the Seed unlocks. Allowed only after Begin and until the first Narration.
+* It needs no DM. The Scene and the clock go back to the start with the World they pointed into.
+*/
+function startOver(db, at) {
+	const found = db.select().from(campaign).get();
+	if (!found) throw new Error("The Campaign database has no Campaign");
+	if (found.begunAt === null) throw new StartOverRefusedError("The story has not begun, so there is nothing to start over");
+	if (db.select({ id: event.id }).from(event).where(and(eq(event.kind, "narration"), gte(event.createdAt, found.begunAt))).get()) throw new StartOverRefusedError("The story has a Narration now, so it can no longer start over");
+	db.delete(belief).run();
+	db.delete(worldLink).run();
+	db.delete(fact).run();
+	db.delete(pageRevision).run();
+	db.delete(entityAlias).run();
+	db.run(sql`DELETE FROM world_search`);
+	db.delete(entity).run();
+	discardArcs(db);
+	logChange(db, {
+		handle: "campaign",
+		version: db.update(campaign).set({
+			begunAt: null,
+			scene: null,
+			clockMinute: 0,
+			updatedAt: at
+		}).returning().get().version,
+		summary: "the Player chose Start over: the World and the Arc are gone and the Seed is unlocked"
+	}, { at });
+}
 // src/lib/server/campaign/registry.ts
 /**
 * The list of Campaign folders the server knows, as `registry.json` in the user-level state
@@ -2114,6 +2252,7 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		saveSeed(id, card) {
 			const { folder, found } = find(id);
 			if (found.archivedAt !== null) throw new CampaignArchivedError("An archived Campaign cannot be changed");
+			refuseLockedSeed(found);
 			const seed = parseCampaignSeed(card);
 			const edited = new Set(CAMPAIGN_SEED_FIELDS.filter((f) => seed[f] !== found[f]));
 			const saved = database(folder).transaction((tx) => {
@@ -2135,6 +2274,25 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 				name: saved.name
 			});
 			return saved;
+		},
+		/** Where creation stands: the Begin step reads it. */
+		creation(id) {
+			return creationStage(database(find(id).folder));
+		},
+		/** The Player pressed Begin: locks the Seed. Refused (`BeginRefusedError`) unless creation is ready. */
+		begin(id) {
+			const { folder, found } = find(id);
+			if (found.archivedAt !== null) throw new CampaignArchivedError("An archived Campaign cannot be changed");
+			begin(database(folder), now());
+		},
+		/**
+		* Start over: discards the World and the Arc and unlocks the Seed. Refused
+		* (`StartOverRefusedError`) before Begin and after the first Narration; it needs no DM.
+		*/
+		startOver(id) {
+			const { folder, found } = find(id);
+			if (found.archivedAt !== null) throw new CampaignArchivedError("An archived Campaign cannot be changed");
+			database(folder).transaction((tx) => startOver(tx, now()));
 		},
 		/** The creation conversation in the DM pane. It is out of fiction and never logged. */
 		conversation(id) {
@@ -2255,6 +2413,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { PLUGIN_NAME as A, ClockBackwardsError as B, nextEventId as C, callInput as D, CallRefusedError as E, writeTool as F, present as G, advanceClock as H, CharacterNotFoundError as I, normalizeName as J, scenePlace as K, CharacterValidationError as L, creationTool as M, expectVersion as N, callResultEvent as O, readTool as P, SESSION_LIVE_MESSAGE as Q, playSheets as R, logEvent as S, CallClosedError as T, characterRefs as U, SpotlightRefusedError as V, currentMinute as W, formatClock as X, slug$1 as Y, parseClock as Z, returnStrandedDrafts as _, CampaignArchivedError as a, currentStamp as b, CampaignNotFoundError as c, addConversationLine as d, characterHolders as f, DmBusyError as g, DeclarationRefusedError as h, sessions as i, ToolError as j, openCall as k, NotACampaignFolderError as l, DeclarationNotFoundError as m, library as n, CampaignExistsError as o, charactersInScene as p, isNearName as q, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, DraftNotFoundError as v, setAwaitingNarration as w, logActivity as x, createDmChannels as y, loadWizardRules as z };
+export { scenePlace as $, nextEventId as A, expectVersion as B, DmBusyError as C, currentStamp as D, createDmChannels as E, callResultEvent as F, playSheets as G, writeTool as H, openCall as I, SpotlightRefusedError as J, loadWizardRules as K, PLUGIN_NAME as L, CallClosedError as M, CallRefusedError as N, logActivity as O, callInput as P, present as Q, ToolError as R, DeclarationRefusedError as S, DraftNotFoundError as T, CharacterNotFoundError as U, readTool as V, CharacterValidationError as W, characterRefs as X, advanceClock as Y, currentMinute as Z, createArc as _, CampaignArchivedError as a, SESSION_LIVE_MESSAGE as at, charactersInScene as b, CampaignNotFoundError as c, BeginRefusedError as d, isNearName as et, SeedLockedError as f, CurrentArcError as g, refuseLockedSeed as h, sessions as i, parseClock as it, setAwaitingNarration as j, logEvent as k, NotACampaignFolderError as l, creationStage as m, library as n, slug$1 as nt, CampaignExistsError as o, StartOverRefusedError as p, ClockBackwardsError as q, live as r, formatClock as rt, CampaignMissingError as s, campaignRoot as t, normalizeName as tt, SessionLiveError as u, addConversationLine as v, returnStrandedDrafts as w, DeclarationNotFoundError as x, characterHolders as y, creationTool as z };
 
 //# sourceMappingURL=campaign.js.map

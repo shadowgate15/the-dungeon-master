@@ -1862,6 +1862,9 @@ var Index = class {
 function index(name) {
 	return new IndexBuilderOn(name, false);
 }
+function uniqueIndex(name) {
+	return new IndexBuilderOn(name, true);
+}
 // node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/primary-keys.js
 function primaryKey(...config) {
 	if (config[0].columns) return new PrimaryKeyBuilder(config[0].columns, config[0].name);
@@ -4838,18 +4841,72 @@ var belief = sqliteTable("belief", {
 	check("belief_one_holder_check", sql`(${t.holderCharacter} IS NULL) <> (${t.holderNpc} IS NULL)`),
 	check("belief_kind_check", sql.raw(`kind IN (${BELIEF_KINDS.map((k) => `'${k}'`).join(", ")})`))
 ]);
+// src/lib/server/db/arc-schema.ts
+var ARC_STATES = [
+	"current",
+	"concluded",
+	"retired"
+];
+var BEAT_STATES = [
+	"pending",
+	"reached",
+	"abandoned"
+];
+/**
+* The Arc: the DM's hidden plan for the story. At most one is current; it leaves current once
+* (concluded or retired) and stays on record. The whole Arc carries one `version`. Nothing here
+* ever reaches the Player.
+*/
+var arc = sqliteTable("arc", {
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+	title: text("title").notNull(),
+	premise: text("premise").notNull(),
+	stakes: text("stakes").notNull(),
+	resolution: text("resolution").notNull(),
+	state: text("state", { enum: ARC_STATES }).notNull().default("current"),
+	version: integer("version").notNull().default(1),
+	createdAt: integer("created_at").notNull(),
+	/** When it left current (concluded or retired). */
+	endedAt: integer("ended_at"),
+	endReason: text("end_reason")
+}, (t) => [check("arc_state", sql`${t.state} IN ('current', 'concluded', 'retired')`), uniqueIndex("arc_one_current").on(t.state).where(sql`${t.state} = 'current'`)]);
+/** One Act of an Arc, in order: a name and what it is for. */
+var act = sqliteTable("act", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	arcId: text("arc_id").notNull().references(() => arc.id, { onDelete: "cascade" }),
+	position: integer("position").notNull(),
+	name: text("name").notNull(),
+	purpose: text("purpose").notNull()
+});
+/** One Beat of an Act, in order, with a readable handle (`beat:the-vizier-is-the-patron`). */
+var beat = sqliteTable("beat", {
+	handle: text("handle").primaryKey(),
+	actId: integer("act_id").notNull().references(() => act.id, { onDelete: "cascade" }),
+	position: integer("position").notNull(),
+	title: text("title").notNull(),
+	description: text("description").notNull(),
+	state: text("state", { enum: BEAT_STATES }).notNull().default("pending"),
+	/** Why it was reached or abandoned. */
+	reason: text("reason"),
+	resolvedAt: integer("resolved_at")
+}, (t) => [check("beat_state", sql`${t.state} IN ('pending', 'reached', 'abandoned')`)]);
 // src/lib/server/db/schema.ts
 var schema_exports = /* @__PURE__ */ __exportAll({
+	ARC_STATES: () => ARC_STATES,
+	BEAT_STATES: () => BEAT_STATES,
 	BELIEF_KINDS: () => BELIEF_KINDS,
 	ability: () => ability,
 	abilityScoreMethod: () => abilityScoreMethod,
+	act: () => act,
 	activityLine: () => activityLine,
 	alignment: () => alignment,
+	arc: () => arc,
 	background: () => background,
 	backgroundEquipment: () => backgroundEquipment,
 	backgroundOption: () => backgroundOption,
 	backgroundOptionAlignment: () => backgroundOptionAlignment,
 	backgroundProficiency: () => backgroundProficiency,
+	beat: () => beat,
 	belief: () => belief,
 	call: () => call,
 	callPart: () => callPart,
@@ -6833,6 +6890,6 @@ function seedRulesData(db, dataset = loadRulesDataset(), now = Date.now) {
 		}).run();
 	});
 }
-export { condition as $, DUNGEON_MASTER_VERSION as $t, entityAlias as A, ABILITY_METHODS as At, backgroundEquipment as B, inArray as Bt, declaration as C, subclass as Ct, session as D, trait as Dt, returnedDraft as E, subraceTrait as Et, NPC_STATUSES as F, asc as Ft, choiceOption as G, or as Gt, backgroundOptionAlignment as H, isNull as Ht, ability as I, desc as It, classLevelFeature as J, is as Jt, choiceOptionItem as K, sql as Kt, abilityScoreMethod as L, and as Lt, pageRevision as M, CUSTOM_BACKGROUND_FEATURE_MAX as Mt, worldLink as N, CUSTOM_BACKGROUND_SLUG as Nt, belief as O, traitProficiency as Ot, ENTITY_TYPES as P, SOLO_PLAYER as Pt, classTable as Q, DUNGEON_MASTER_PORT as Qt, alignment as R, eq as Rt, conversationMessage as S, spellClass as St, floor as T, subraceAbilityBonus as Tt, backgroundProficiency as U, like as Ut, backgroundOption as V, isNotNull as Vt, choiceGroup as W, ne as Wt, classSavingThrow as X, DUNGEON_MASTER_CAMPAIGNS as Xt, classProficiency as Y, DATABASE_URL as Yt, classStartingEquipment as Z, DUNGEON_MASTER_HOME as Zt, characterDraft as _, raceTrait as _t, userStateDir as a, equipmentWeaponProperty as at, characterSkill as b, skill as bt, abilities_default as c, magicItem as ct, activityLine as d, monsterConditionImmunity as dt, damageType as et, call as f, monsterProficiency as ft, characterChoice as g, raceLanguage as gt, character as h, raceAbilityBonus as ht, defaultCampaignRoot as i, equipmentContent as it, fact as j, BACKSTORY_MAX as jt, entity as k, weaponProperty as kt, migrateDatabase as l, magicSchool as lt, campaign as m, race as mt, campaignDatabasePath as n, equipmentCategory as nt, loadRulesDataset as o, feature as ot, callPart as p, proficiency as pt, classLevel as q, Column as qt, canonicalFolder as r, equipmentCategoryItem as rt, skills_default as s, language as st, seedRulesData as t, equipment as tt, openDatabase as u, monster as ut, characterEquipment as v, ruleSection as vt, event as w, subrace as wt, characterSpell as x, spell as xt, characterItem as y, rulesDataset as yt, background as z, gt as zt };
+export { classSavingThrow as $, DATABASE_URL as $t, beat as A, trait as At, abilityScoreMethod as B, and as Bt, declaration as C, skill as Ct, session as D, subrace as Dt, returnedDraft as E, subclass as Et, pageRevision as F, CUSTOM_BACKGROUND_FEATURE_MAX as Ft, backgroundOptionAlignment as G, isNotNull as Gt, background as H, gt as Ht, worldLink as I, CUSTOM_BACKGROUND_SLUG as It, choiceOption as J, ne as Jt, backgroundProficiency as K, isNull as Kt, ENTITY_TYPES as L, SOLO_PLAYER as Lt, entity as M, weaponProperty as Mt, entityAlias as N, ABILITY_METHODS as Nt, act as O, subraceAbilityBonus as Ot, fact as P, BACKSTORY_MAX as Pt, classProficiency as Q, is as Qt, NPC_STATUSES as R, asc as Rt, conversationMessage as S, rulesDataset as St, floor as T, spellClass as Tt, backgroundEquipment as U, gte as Ut, alignment as V, eq as Vt, backgroundOption as W, inArray as Wt, classLevel as X, sql as Xt, choiceOptionItem as Y, or as Yt, classLevelFeature as Z, Column as Zt, characterDraft as _, race as _t, userStateDir as a, equipmentCategory as at, characterSkill as b, raceTrait as bt, abilities_default as c, equipmentWeaponProperty as ct, activityLine as d, magicItem as dt, DUNGEON_MASTER_CAMPAIGNS as en, classStartingEquipment as et, call as f, magicSchool as ft, characterChoice as g, proficiency as gt, character as h, monsterProficiency as ht, defaultCampaignRoot as i, equipment as it, belief as j, traitProficiency as jt, arc as k, subraceTrait as kt, migrateDatabase as l, feature as lt, campaign as m, monsterConditionImmunity as mt, campaignDatabasePath as n, DUNGEON_MASTER_PORT as nn, condition as nt, loadRulesDataset as o, equipmentCategoryItem as ot, callPart as p, monster as pt, choiceGroup as q, like as qt, canonicalFolder as r, DUNGEON_MASTER_VERSION as rn, damageType as rt, skills_default as s, equipmentContent as st, seedRulesData as t, DUNGEON_MASTER_HOME as tn, classTable as tt, openDatabase as u, language as ut, characterEquipment as v, raceAbilityBonus as vt, event as w, spell as wt, characterSpell as x, ruleSection as xt, characterItem as y, raceLanguage as yt, ability as z, desc as zt };
 
 //# sourceMappingURL=seed.js.map
