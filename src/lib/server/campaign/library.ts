@@ -7,7 +7,7 @@ import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
 import { journal } from '../knowledge/journal'
 import { coreBlock } from '../play/core-block'
-import { createCalls, type Calls } from '../play/calls'
+import { cancelPendingCall, createCalls, pendingCalls, type Calls } from '../play/calls'
 import { logChange } from '../play/notices'
 import { logEvent, openSession, timeline } from '../play/log'
 import { seedRulesData } from '../rules/seed'
@@ -205,6 +205,13 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
         openSession: () => openSession(db, now()),
         /** The DM's core block. */
         coreBlock: () => coreBlock({ party: createParty(db, now) }),
+        /** Pending Calls an action tool stored that no narrate has attached yet. */
+        pendingCalls: () => pendingCalls(db),
+        /** Drops the pending Calls a turn ended without attaching. */
+        dropPendingCalls: () =>
+          db.transaction((tx) =>
+            pendingCalls(tx).forEach((id) => cancelPendingCall(tx, id, now()))
+          ),
         /** Logs a turn that went wrong, as the Player sees it in the timeline. */
         turnError: (text: string) =>
           logEvent(

@@ -101,18 +101,29 @@ export function createPlay({
 
     /**
      * The Stop hook asks whether the DM may end its turn. It may not while a closed Floor awaits
-     * Narration; on the second attempt (`again`) it may, and the Player's timeline shows an error.
+     * Narration, or while an action tool's pending Call is unattached. On the second attempt
+     * (`again`) it may, and the Player's timeline shows an error.
      */
     stopCheck(campaignId: string, again: boolean): { block: boolean; reason?: string } {
       const record = library.record(campaignId)
-      if (record.timeline().awaitingSince === null) return { block: false }
+      const pending = record.pendingCalls()
+      const awaiting = record.timeline().awaitingSince !== null
+      if (!pending.length && !awaiting) return { block: false }
       if (!again) {
-        return {
-          block: true,
-          reason: 'A closed Floor awaits Narration. Answer it with narrate before ending your turn.'
-        }
+        const reasons = [
+          awaiting &&
+            'A closed Floor awaits Narration. Answer it with narrate before ending your turn.',
+          pending.length &&
+            `A pending Call is unattached (${pending.join(', ')}). Attach it with narrate(text, call: id), or drop it with cancel_call.`
+        ].filter(Boolean)
+        return { block: true, reason: reasons.join(' ') }
       }
-      record.turnError('The DM ended its turn without a Narration.')
+      record.dropPendingCalls()
+      record.turnError(
+        awaiting
+          ? 'The DM ended its turn without a Narration.'
+          : 'The DM ended its turn before asking for a roll.'
+      )
       publish({ type: 'timeline', campaign: campaignId })
       return { block: false }
     },
