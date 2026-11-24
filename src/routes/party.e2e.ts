@@ -1,4 +1,12 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+import {
+  draftSaved,
+  fillConcept,
+  newCharacter,
+  pickEquipment,
+  pickEveryGroup,
+  step
+} from '../testing/wizard-e2e'
 
 /** Creates a Campaign and opens its Party step. */
 async function openParty(page: Page, name: string) {
@@ -14,53 +22,6 @@ async function openParty(page: Page, name: string) {
     .getByRole('link', { name: /Party/ })
     .click()
   await expect(page.getByText('No Characters yet.')).toBeVisible()
-}
-
-/** Starts a new Character draft and waits for the wizard to hydrate. */
-async function newCharacter(page: Page) {
-  await page.getByRole('button', { name: 'New Character' }).click()
-  await expect(page).toHaveURL(/\/party\?draft=/)
-  await page.waitForLoadState('networkidle')
-}
-
-const draftSaved = (page: Page) => expect(page.getByText('Draft saved')).toBeVisible()
-const step = (page: Page, name: RegExp) =>
-  page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name })
-
-async function fillConcept(page: Page) {
-  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Brannoch')
-  await page.getByRole('combobox', { name: 'Race', exact: true }).selectOption('human')
-  await page.getByRole('combobox', { name: 'Class', exact: true }).selectOption('fighter')
-  await page.getByRole('combobox', { name: 'Background', exact: true }).selectOption('acolyte')
-}
-
-/** Ticks the first allowed options of each choice group until none asks for more. */
-async function pickEveryGroup(groups: Locator) {
-  for (const group of await groups.all()) {
-    const boxes = group.getByRole('checkbox')
-    for (let i = 0; i < (await boxes.count()); i++) {
-      if (!(await group.getByTestId('group-incomplete').isVisible())) break
-      const box = boxes.nth(i)
-      if ((await box.isEnabled()) && !(await box.isChecked())) await box.check()
-    }
-  }
-}
-
-/** Takes the first allowed option of each equipment group, and the first item for a wildcard. */
-async function pickEquipment(page: Page) {
-  for (const group of await page.locator('[data-testid^="equipment-group-"]').all()) {
-    const radios = group.getByRole('radio')
-    if ((await radios.count()) === 0) continue
-    for (let i = 0; i < (await radios.count()); i++) {
-      if (await radios.nth(i).isEnabled()) {
-        await radios.nth(i).check()
-        break
-      }
-    }
-    for (const select of await group.getByRole('combobox').all()) {
-      await select.selectOption({ index: 1 })
-    }
-  }
 }
 
 test('builds a Character in a Campaign, survives a reload mid-draft and saves it into the Party', async ({

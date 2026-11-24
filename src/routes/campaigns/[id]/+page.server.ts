@@ -17,6 +17,7 @@ export const load: PageServerLoad = ({ params }) => {
     },
     seed: entry.status === 'missing' ? null : library.seed(entry.id),
     dmFields: entry.status === 'missing' ? [] : library.dmSeedFields(entry.id),
+    begun: entry.status !== 'missing' && library.creation(entry.id).state === 'begun',
     conversation: entry.status === 'missing' ? [] : library.conversation(entry.id).list(),
     attached: sessions.list()
   }
