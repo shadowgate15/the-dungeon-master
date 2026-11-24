@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type { Queryable } from '../db/connect'
+import type { Dice } from '../dice'
 
 /**
  * The shared contract every game tool follows: short snake_case names, per-Entity versions on
@@ -76,9 +77,17 @@ export type Stamp = { sessionId: string | null; minute: number }
 
 /**
  * What a tool's `run` sees. Inside a mutating call, `db` is the call's transaction and
- * `stamp.eventId` is the id of the one Event the call will log (null for reads).
+ * `stamp.eventId` is the id of the one Event the call will log (null for reads). `dice` is the
+ * Campaign's own roller; `now` is the real time of the call.
  */
-export type ToolContext = { db: Queryable; stamp: Stamp & { eventId: number | null } }
+export type ToolContext = {
+  db: Queryable
+  stamp: Stamp & { eventId: number | null }
+  folder: string
+  campaignId: string
+  dice: Dice
+  now: number
+}
 
 /** The one Event a mutating call logs. Code stamps the Session and in-fiction time. */
 export type ToolEvent = {
@@ -91,14 +100,28 @@ export type ToolEvent = {
 /** A tool's output; `skill` names a plugin skill (unprefixed) the DM must load next. */
 type Output = { result: Record<string, unknown>; skill?: string }
 
-type Base<S extends z.ZodType> = { name: string; description: string; input: S }
+/**
+ * The Player-safe `⚙ DM …` line for one successful call (without the `⚙`), or null for none. It
+ * is built from the input and result here, so it must never echo hidden handles, enemy numbers
+ * or Arc events. Left out, a read shows a generic line and a write shows one unless it is DM-only.
+ */
+type Activity<I> = string | null | ((input: I, result: Record<string, unknown>) => string | null)
+
+type Base<S extends z.ZodType> = {
+  name: string
+  description: string
+  input: S
+  activity?: Activity<z.infer<S>>
+}
 
 export type GameTool =
-  | (Base<z.ZodType> & {
+  | (Omit<Base<z.ZodType>, 'activity'> & {
+      activity?: Activity<never>
       mutates: false
       run: (ctx: ToolContext, input: unknown) => Record<string, unknown>
     })
-  | (Base<z.ZodType> & {
+  | (Omit<Base<z.ZodType>, 'activity'> & {
+      activity?: Activity<never>
       mutates: true
       run: (ctx: ToolContext, input: unknown) => Output & { event: ToolEvent }
     })
@@ -107,7 +130,12 @@ export type GameTool =
 export function readTool<S extends z.ZodType>(
   tool: Base<S> & { run: (ctx: ToolContext, input: z.infer<S>) => Record<string, unknown> }
 ): GameTool {
-  return { ...tool, mutates: false, run: tool.run as (ctx: ToolContext, i: unknown) => never }
+  return {
+    ...tool,
+    activity: tool.activity as Activity<never>,
+    mutates: false,
+    run: tool.run as (ctx: ToolContext, i: unknown) => never
+  }
 }
 
 /** A tool that changes state: one transaction, exactly one Event. */
@@ -116,5 +144,10 @@ export function writeTool<S extends z.ZodType>(
     run: (ctx: ToolContext, input: z.infer<S>) => Output & { event: ToolEvent }
   }
 ): GameTool {
-  return { ...tool, mutates: true, run: tool.run as (ctx: ToolContext, i: unknown) => never }
+  return {
+    ...tool,
+    activity: tool.activity as Activity<never>,
+    mutates: true,
+    run: tool.run as (ctx: ToolContext, i: unknown) => never
+  }
 }

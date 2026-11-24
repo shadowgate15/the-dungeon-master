@@ -34,6 +34,7 @@ export const seedTools = [
     description:
       'Read the Campaign Seed (name, premise, tone, length and optional World details) and its version.',
     input: z.object({}),
+    activity: 'DM checks the Campaign Seed',
     run: (ctx) => view(current(ctx))
   }),
 
@@ -42,6 +43,7 @@ export const seedTools = [
     description:
       'Set Campaign Seed fields. Pass the version from your last `seed` read; an empty string clears an optional field.',
     input: z.object({ version: z.int(), ...fields }),
+    activity: 'DM updates the Campaign Seed',
     run: (ctx, { version, ...changes }) => {
       const found = current(ctx)
       expectVersion({ handle: HANDLE, version: found.version, read: 'seed' }, version)
