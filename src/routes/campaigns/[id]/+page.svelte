@@ -29,6 +29,7 @@
   })
   let saved = $state(false)
   const archived = $derived(data.campaign.status === 'archived')
+  const locked = $derived(data.begun)
   const attached = $derived(sessions.data.includes(data.campaign.id))
 
   // The stored Seed: a DM write ("✎ DM") refetches it and its fields land in the open card.
@@ -92,13 +93,19 @@
       current="Seed"
       hrefs={{
         Seed: resolve('/campaigns/[id]', { id: data.campaign.id }),
-        Party: resolve('/campaigns/[id]/party', { id: data.campaign.id })
+        Party: resolve('/campaigns/[id]/party', { id: data.campaign.id }),
+        Begin: resolve('/campaigns/[id]/begin', { id: data.campaign.id })
       }}
-      unavailable={['Begin']}
     />
 
     {#if archived}
       <Alert variant="warning">This Campaign is archived. Restore it to change it.</Alert>
+    {:else if locked}
+      <Alert variant="info">
+        The story has begun, so the Seed is locked.
+        <Link href={resolve('/campaigns/[id]/begin', { id: data.campaign.id })}>Start over</Link>
+        (until the first Narration) to change it.
+      </Alert>
     {/if}
 
     <Panel title="Seed">
@@ -116,11 +123,11 @@
         }}
         oninput={() => (saved = false)}
       >
-        <CampaignSeedCard bind:seed disabled={archived} {dmFields} />
+        <CampaignSeedCard bind:seed disabled={archived || locked} {dmFields} />
         {#if form && 'error' in form && form.error}
           <Alert variant="danger">{form.error}</Alert>
         {/if}
-        {#if !archived}
+        {#if !archived && !locked}
           <div class="flex items-center gap-3">
             <Button type="submit">Save Seed</Button>
             {#if saved}<span class="text-sm text-muted">Saved</span>{/if}

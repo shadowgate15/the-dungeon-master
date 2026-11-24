@@ -1,5 +1,5 @@
 import { i as json } from "../../../../../../../chunks/exports.js";
-import { b as DraftNotFoundError, c as CampaignNotFoundError, n as library, s as CampaignMissingError } from "../../../../../../../chunks/campaign.js";
+import { D as DraftNotFoundError, c as CampaignNotFoundError, n as library, s as CampaignMissingError } from "../../../../../../../chunks/campaign.js";
 import { n as readJson, t as changeParty } from "../../../../../../../chunks/respond.js";
 // src/routes/api/campaigns/[id]/drafts/[draft]/+server.ts
 /** The stored draft with its version and the fields the DM set: 200, or 404 `{ error }`. */

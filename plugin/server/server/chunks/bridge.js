@@ -1,6 +1,6 @@
-import { $ as asc, A as belief, F as worldLink, I as ENTITY_TYPES, L as NPC_STATUSES, M as entityAlias, N as fact, P as pageRevision, Q as SOLO_PLAYER, T as event, _t as DUNGEON_MASTER_VERSION, at as isNotNull, ct as ne, et as desc, g as character, gt as DUNGEON_MASTER_PORT, h as campaign, ht as DUNGEON_MASTER_HOME, it as inArray, j as entity, lt as or, n as createRulesRepository, nt as eq, o as userStateDir, ot as isNull, st as like, tt as and, ut as sql, v as characterDraft } from "./seed.js";
-import { $ as ToolError, A as DC_BY_TIER, B as rollAll, C as logActivity, D as ABILITY_NAMES, E as setAwaitingNarration, F as createPendingCall, G as combatant, H as sequenceText, I as openCall, J as setConditions, K as mustAct, L as saveKey, M as callInput, N as callResultEvent, P as cancelPendingCall, Q as PLUGIN_NAME, R as attackSequence, S as currentStamp, T as nextEventId, U as applyDamage, V as saveSequence, W as applyHealing, X as charactersInScene, Y as characterHolders, Z as hpState, _t as slug$1, bt as SESSION_LIVE_MESSAGE, c as CampaignNotFoundError, ct as ClockBackwardsError, d as addConversationLine, dt as characterRefs, et as creationTool, f as closeSession, ft as currentMinute, gt as normalizeName, h as sessionsView, ht as isNearName, i as sessions, j as TIERS, l as NotACampaignFolderError, m as indexNarration, mt as scenePlace, n as library, nt as readTool, p as history, pt as present, q as saveBonus, r as live, rt as writeTool, st as loadWizardRules, tt as expectVersion, ut as advanceClock, vt as formatClock, w as logEvent, x as createDmChannels, y as returnStrandedDrafts, yt as parseClock, z as damageSequence } from "./campaign.js";
-import { a as missingSeedFields, n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
+import { B as NPC_STATUSES, F as entityAlias, I as fact, K as race, L as pageRevision, N as belief, P as entity, R as worldLink, T as event, U as background, W as classTable, at as eq, bt as DUNGEON_MASTER_PORT, ct as inArray, dt as like, ft as ne, g as character, h as campaign, it as and, lt as isNotNull, mt as sql, n as createRulesRepository, nt as asc, o as userStateDir, pt as or, rt as desc, tt as SOLO_PLAYER, ut as isNull, v as characterDraft, xt as DUNGEON_MASTER_VERSION, yt as DUNGEON_MASTER_HOME, z as ENTITY_TYPES } from "./seed.js";
+import { $ as mustAct, A as logActivity, B as callResultEvent, Ct as normalizeName, Dt as SESSION_LIVE_MESSAGE, E as returnStrandedDrafts, Et as parseClock, G as attackSequence, H as createPendingCall, J as saveSequence, K as damageSequence, L as DC_BY_TIER, M as nextEventId, N as setAwaitingNarration, O as createDmChannels, P as ABILITY_NAMES, Q as combatant, R as TIERS, S as sessionsView, St as isNearName, Tt as formatClock, U as openCall, V as cancelPendingCall, W as saveKey, X as applyDamage, Y as sequenceText, Z as applyHealing, _ as createArc, _t as advanceClock, at as PLUGIN_NAME, b as history, bt as present, c as CampaignNotFoundError, ct as expectVersion, et as saveBonus, f as SeedLockedError, g as CurrentArcError, h as refuseLockedSeed, ht as ClockBackwardsError, i as sessions, it as hpState, j as logEvent, k as currentStamp, l as NotACampaignFolderError, lt as readTool, m as creationStage, mt as loadWizardRules, n as library, nt as characterHolders, ot as ToolError, q as rollAll, r as live, rt as charactersInScene, st as creationTool, tt as setConditions, ut as writeTool, v as addConversationLine, vt as characterRefs, wt as slug$1, x as indexNarration, xt as scenePlace, y as closeSession, yt as currentMinute, z as callInput } from "./campaign.js";
+import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { d as reconcile, j as rollTotals, l as changedDraftFields, u as emptyDraft, w as arrangementProblem, y as lengthIssue } from "./summary.js";
 import { s as ABILITY_KEYS } from "./schema.js";
@@ -617,6 +617,46 @@ var actionTools = [
 		}
 	})
 ];
+// src/lib/server/tools/arc-tools.ts
+var words = string().trim().min(1);
+/** The Arc: the DM's hidden plan. Every Arc event is DM-only and never reaches the Player. */
+var arcTools = [writeTool({
+	name: "create_arc",
+	description: "Create the current Arc (builder calls it at Begin and for each later Arc): a title, premise, stakes, the Acts in order (each a name, a purpose and its Beats in order, each a title and a description) and the intended resolution. Refused while a current Arc exists. Returns the Arc with its Beat handles and version. Never reaches the Player.",
+	input: object({
+		title: words,
+		premise: words,
+		stakes: words,
+		acts: array(object({
+			name: words,
+			purpose: words,
+			beats: array(object({
+				title: words,
+				description: words
+			})).min(1)
+		})).min(1),
+		resolution: words
+	}),
+	activity: null,
+	run: (ctx, input) => {
+		let created;
+		try {
+			created = createArc(ctx.db, input, ctx.now);
+		} catch (e) {
+			if (!(e instanceof CurrentArcError)) throw e;
+			throw new ToolError("current_arc", e.message, "Read the current Arc; conclude or retire it before creating another");
+		}
+		return {
+			result: created,
+			event: {
+				kind: "arc_created",
+				summary: `Arc created: ${created.title}`,
+				data: { title: created.title },
+				dmOnly: true
+			}
+		};
+	}
+})];
 // src/lib/server/tools/seed-tools.ts
 /** The Seed is one Entity per Campaign, so its handle is fixed. */
 var SEED_HANDLE = "campaign";
@@ -644,7 +684,6 @@ var seedTools = [readTool({
 // src/lib/server/tools/creation-tools.ts
 /** A Character draft's handle: drafts are Entities the DM writes into while the Player creates. */
 var draftHandle = (id) => `draft:${id}`;
-var campaignRow = currentSeed;
 /** How the conversation's muted lines name the Seed fields. */
 var SEED_FIELD_NAMES = {
 	name: "name",
@@ -753,21 +792,47 @@ var creationTools = [
 		input: object({}),
 		activity: null,
 		run: (ctx) => {
-			const found = campaignRow(ctx);
-			const missing = missingSeedFields(campaignSeedCard(found));
-			const characters = ctx.db.select({ id: character.id }).from(character).where(ne(character.status, "departed")).all().length;
-			const drafts = ctx.db.select().from(characterDraft).orderBy(asc(characterDraft.createdAt)).all().map((d) => ({
-				handle: draftHandle(d.id),
-				name: d.data.name,
-				step: d.step,
-				version: d.version
-			}));
+			const { state, missing, characters } = creationStage(ctx.db);
 			return {
-				state: found.begunAt !== null ? "begun" : missing.length > 0 ? "seed_incomplete" : characters === 0 ? "party_empty" : "ready",
+				state,
 				missing,
 				characters,
-				drafts
+				drafts: ctx.db.select().from(characterDraft).orderBy(asc(characterDraft.createdAt)).all().map((d) => ({
+					handle: draftHandle(d.id),
+					name: d.data.name,
+					step: d.step,
+					version: d.version
+				}))
 			};
+		}
+	}),
+	readTool({
+		name: "party",
+		description: "The Party as builder needs it: each Character’s handle (char:…), name, level, race, class, background, alignment, appearance, personality, ideal, bond, flaw and backstory. Build the World and the Arc from these.",
+		input: object({}),
+		activity: "DM reads the Party",
+		run: (ctx) => {
+			const handles = new Map(characterHolders(ctx.db).map((c) => [c.id, c.handle]));
+			return { characters: ctx.db.select({
+				id: character.id,
+				name: character.name,
+				level: character.level,
+				race: race.name,
+				class: classTable.name,
+				background: background.name,
+				customBackground: character.customBackgroundName,
+				alignment: character.alignment,
+				appearance: character.appearance,
+				personality: character.personality,
+				ideal: character.ideal,
+				bond: character.bond,
+				flaw: character.flaw,
+				backstory: character.backstory
+			}).from(character).innerJoin(race, eq(race.id, character.raceId)).innerJoin(classTable, eq(classTable.id, character.classId)).innerJoin(background, eq(background.id, character.backgroundId)).where(ne(character.status, "departed")).orderBy(asc(character.createdAt)).all().map(({ id, customBackground, ...c }) => ({
+				handle: handles.get(id),
+				...c,
+				background: customBackground ?? c.background
+			})) };
 		}
 	}),
 	creationTool({
@@ -785,6 +850,12 @@ var creationTools = [
 				read: "seed"
 			}, version);
 			if (found.archivedAt !== null) throw new ToolError("archived", "An archived Campaign cannot be changed", "Stop here");
+			try {
+				refuseLockedSeed(found);
+			} catch (e) {
+				if (!(e instanceof SeedLockedError)) throw e;
+				throw new ToolError("seed_locked", e.message, "Leave the Seed as it is; only the Player can Start over");
+			}
 			let seed;
 			try {
 				seed = parseCampaignSeed({
@@ -2432,7 +2503,8 @@ var gameTools = [
 	...sceneTools,
 	...sessionTools,
 	...rulesTools,
-	...actionTools
+	...actionTools,
+	...arcTools
 ];
 // src/lib/server/dice.ts
 var MAX_COUNT = 100;
@@ -2800,6 +2872,38 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 				campaign: campaignId
 			});
 			return message;
+		},
+		/**
+		* The Player presses Begin: the Seed locks and the DM gets one begin event, which it hands to
+		* `builder`. It needs a DM at the table, and it doesn't set awaiting Narration.
+		*/
+		begin(campaignId, player = SOLO_PLAYER) {
+			const folder = folderOf(campaignId);
+			if (!channels.listening(folder)) throw new DmAwayError("The DM is away. Run dm in the Campaign folder, then press Begin.");
+			library.begin(campaignId);
+			channels.send(folder, {
+				content: "The Player pressed Begin. Hand the Seed and the Party to builder to create the World and the first Arc, then open play.",
+				meta: {
+					kind: "begin",
+					player
+				}
+			});
+			publish({
+				type: "seed",
+				campaign: campaignId
+			});
+		},
+		/** The Player chooses Start over; it works with the DM away too. */
+		startOver(campaignId) {
+			library.startOver(campaignId);
+			publish({
+				type: "seed",
+				campaign: campaignId
+			});
+			publish({
+				type: "timeline",
+				campaign: campaignId
+			});
 		},
 		/**
 		* The Player presses End Session: the DM gets one `end_session` event and closes the sitting

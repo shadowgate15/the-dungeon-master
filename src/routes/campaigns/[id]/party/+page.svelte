@@ -65,8 +65,11 @@
   {:else}
     <CreationStepper
       current="Party"
-      hrefs={{ Seed: seedHref, Party: partyHref }}
-      unavailable={['Begin']}
+      hrefs={{
+        Seed: seedHref,
+        Party: partyHref,
+        Begin: resolve('/campaigns/[id]/begin', { id: data.campaign.id })
+      }}
     />
 
     {#if archived}

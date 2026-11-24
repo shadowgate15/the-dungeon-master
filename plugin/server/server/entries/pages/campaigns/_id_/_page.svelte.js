@@ -5,10 +5,11 @@ import "../../../../chunks/paths.js";
 import { a as SCALES, n as LENGTHS, o as TECH_LEVELS, r as MAGIC_LEVELS, s as TONES, t as GENRE_FLAVORS } from "../../../../chunks/enums.js";
 import { n as Alert, t as Button } from "../../../../chunks/Button.js";
 import { t as Field } from "../../../../chunks/Field.js";
-import { a as CreationStepper, i as Panel, o as Select, r as createSeedQuery, t as CreationPage } from "../../../../chunks/CreationPage.js";
+import { t as Select } from "../../../../chunks/Select.js";
 import { t as Textarea } from "../../../../chunks/Textarea.js";
 import { t as TextInput } from "../../../../chunks/TextInput.js";
 import { a as missingSeedFields, i as emptyCampaignSeed } from "../../../../chunks/seed2.js";
+import { a as CreationStepper, i as Panel, r as createSeedQuery, t as CreationPage } from "../../../../chunks/CreationPage.js";
 import { t as Link } from "../../../../chunks/Link.js";
 import { r as createSessionsQuery, t as DmBadge } from "../../../../chunks/DmBadge.js";
 import { t as useQueryClient } from "../../../../chunks/useQueryClient.js";
@@ -225,6 +226,7 @@ function _page($$renderer, $$props) {
 			...form && "seed" in form ? form.seed : {}
 		};
 		const archived = derived(() => data.campaign.status === "archived");
+		const locked = derived(() => data.begun);
 		const attached = derived(() => sessions.data.includes(data.campaign.id));
 		useQueryClient();
 		const stored = createSeedQuery(() => data.campaign.id, () => ({
@@ -293,9 +295,9 @@ function _page($$renderer, $$props) {
 							current: "Seed",
 							hrefs: {
 								Seed: resolve("/campaigns/[id]", { id: data.campaign.id }),
-								Party: resolve("/campaigns/[id]/party", { id: data.campaign.id })
-							},
-							unavailable: ["Begin"]
+								Party: resolve("/campaigns/[id]/party", { id: data.campaign.id }),
+								Begin: resolve("/campaigns/[id]/begin", { id: data.campaign.id })
+							}
 						});
 						$$renderer.push(`<!----> `);
 						if (archived()) {
@@ -307,6 +309,23 @@ function _page($$renderer, $$props) {
 								},
 								$$slots: { default: true }
 							});
+						} else if (locked()) {
+							$$renderer.push("<!--[1-->");
+							Alert($$renderer, {
+								variant: "info",
+								children: ($$renderer) => {
+									$$renderer.push(`<!---->The story has begun, so the Seed is locked. `);
+									Link($$renderer, {
+										href: resolve("/campaigns/[id]/begin", { id: data.campaign.id }),
+										children: ($$renderer) => {
+											$$renderer.push(`<!---->Start over`);
+										},
+										$$slots: { default: true }
+									});
+									$$renderer.push(`<!----> (until the first Narration) to change it.`);
+								},
+								$$slots: { default: true }
+							});
 						} else $$renderer.push("<!--[-1-->");
 						$$renderer.push(`<!--]--> `);
 						Panel($$renderer, {
@@ -314,7 +333,7 @@ function _page($$renderer, $$props) {
 							children: ($$renderer) => {
 								$$renderer.push(`<form method="POST" action="?/saveSeed" class="space-y-3">`);
 								CampaignSeedCard($$renderer, {
-									disabled: archived(),
+									disabled: archived() || locked(),
 									dmFields: dmFields(),
 									get seed() {
 										return seed;
@@ -336,7 +355,7 @@ function _page($$renderer, $$props) {
 									});
 								} else $$renderer.push("<!--[-1-->");
 								$$renderer.push(`<!--]--> `);
-								if (!archived()) {
+								if (!archived() && !locked()) {
 									$$renderer.push(`<!--[0--><div class="flex items-center gap-3">`);
 									Button($$renderer, {
 										type: "submit",

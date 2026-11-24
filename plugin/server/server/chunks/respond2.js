@@ -1,5 +1,5 @@
 import { i as json } from "./exports.js";
-import { _ as DeclarationRefusedError, c as CampaignNotFoundError, g as DeclarationNotFoundError, n as library, r as live, s as CampaignMissingError } from "./campaign.js";
+import { C as DeclarationNotFoundError, c as CampaignNotFoundError, n as library, r as live, s as CampaignMissingError, w as DeclarationRefusedError } from "./campaign.js";
 // src/lib/server/floor/respond.ts
 var UNREADABLE = "The Declaration could not be read. Try sending it again.";
 /**

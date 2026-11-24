@@ -1,6 +1,6 @@
 import { n as fail, t as error } from "../../../../chunks/exports.js";
 import { n as CampaignSeedError, t as CAMPAIGN_SEED_FIELDS } from "../../../../chunks/seed2.js";
-import { a as CampaignArchivedError, i as sessions, n as library, s as CampaignMissingError } from "../../../../chunks/campaign.js";
+import { a as CampaignArchivedError, f as SeedLockedError, i as sessions, n as library, s as CampaignMissingError } from "../../../../chunks/campaign.js";
 // src/routes/campaigns/[id]/+page.server.ts
 var load = ({ params }) => {
 	const entry = library.get(params.id);
@@ -14,6 +14,7 @@ var load = ({ params }) => {
 		},
 		seed: entry.status === "missing" ? null : library.seed(entry.id),
 		dmFields: entry.status === "missing" ? [] : library.dmSeedFields(entry.id),
+		begun: entry.status !== "missing" && library.creation(entry.id).state === "begun",
 		conversation: entry.status === "missing" ? [] : library.conversation(entry.id).list(),
 		attached: sessions.list()
 	};
@@ -24,7 +25,7 @@ var actions = { saveSeed: async ({ request, params }) => {
 	try {
 		library.saveSeed(params.id, card);
 	} catch (e) {
-		if (e instanceof CampaignSeedError || e instanceof CampaignArchivedError || e instanceof CampaignMissingError) return fail(400, {
+		if (e instanceof CampaignSeedError || e instanceof CampaignArchivedError || e instanceof SeedLockedError || e instanceof CampaignMissingError) return fail(400, {
 			seed: card,
 			error: e.message
 		});

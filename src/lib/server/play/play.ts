@@ -129,6 +129,31 @@ export function createPlay({
     },
 
     /**
+     * The Player presses Begin: the Seed locks and the DM gets one begin event, which it hands to
+     * `builder`. It needs a DM at the table, and it doesn't set awaiting Narration.
+     */
+    begin(campaignId: string, player: string = SOLO_PLAYER): void {
+      const folder = folderOf(campaignId)
+      if (!channels.listening(folder)) {
+        throw new DmAwayError('The DM is away. Run dm in the Campaign folder, then press Begin.')
+      }
+      library.begin(campaignId)
+      channels.send(folder, {
+        content:
+          'The Player pressed Begin. Hand the Seed and the Party to builder to create the World and the first Arc, then open play.',
+        meta: { kind: 'begin', player }
+      })
+      publish({ type: 'seed', campaign: campaignId })
+    },
+
+    /** The Player chooses Start over; it works with the DM away too. */
+    startOver(campaignId: string): void {
+      library.startOver(campaignId)
+      publish({ type: 'seed', campaign: campaignId })
+      publish({ type: 'timeline', campaign: campaignId })
+    },
+
+    /**
      * The Player presses End Session: the DM gets one `end_session` event and closes the sitting
      * (closing beat, summary, Arc review, lint) with the ending-a-sitting skill.
      */

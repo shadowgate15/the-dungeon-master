@@ -48,6 +48,48 @@ describe('the session-opening skill', () => {
   })
 })
 
+describe('the builder subagent', () => {
+  const builder = parse(path.join(plugin, 'agents/builder.md'))
+  const tools = builder.meta.tools.split(',').map((t) => t.trim())
+  const game = (name: string) => `${GAME_TOOL_PREFIX}${name}`
+
+  it('is named builder, so the dm agent can hand it Begin', () => {
+    expect(builder.meta.name).toBe('builder')
+    expect(builder.meta.description).not.toBe('')
+  })
+
+  it('writes the World, the pitch and the Arc through game tools only', () => {
+    const names = new Set(gameTools.map((t) => game(t.name)))
+    expect(tools.filter((t) => t !== 'Skill').every((t) => names.has(t))).toBe(true)
+    for (const name of ['seed', 'party', 'establish', 'reveal', 'create_arc']) {
+      expect(tools).toContain(game(name))
+    }
+  })
+
+  it('never talks to the Player or edits creation', () => {
+    for (const name of ['narrate', 'reply', 'set_seed', 'set_draft_fields']) {
+      expect(tools).not.toContain(game(name))
+    }
+  })
+
+  it('loads creation procedure skills the plugin ships', () => {
+    const skills = [...builder.body.matchAll(/the-dungeon-master:([a-z-]+)/g)].map((m) => m[1])
+    expect(skills.length).toBeGreaterThan(0)
+    for (const name of skills) {
+      const skill = parse(path.join(plugin, `skills/${name}/SKILL.md`))
+      expect(skill.meta.name).toBe(name)
+      expect(skill.meta.description).not.toBe('')
+    }
+  })
+})
+
+describe('the dm agent at Begin', () => {
+  it('hands a begin event to builder', () => {
+    const agent = parse(path.join(plugin, 'agents/dm.md'))
+    expect(agent.body).toMatch(/`begin` event[^\n]*`builder`/)
+  })
+})
+
 describe('the ending-a-sitting skill', () => {
   it('is where the agent sends the DM on End Session', () => {
     const skill = parse(path.join(plugin, 'skills/ending-a-sitting/SKILL.md'))
