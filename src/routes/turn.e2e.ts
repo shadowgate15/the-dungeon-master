@@ -176,3 +176,71 @@ test('a Check Call: Declaration, Done, the roll clicked in the browser, and Narr
   expect(JSON.stringify(await res.json())).not.toMatch(/"dc"|"tier"|"hard"/)
   await dm.close()
 })
+
+test('an attack: the DM attacks with Wren, the Player rolls to hit and damage, and the DM hears one result', async ({
+  page
+}) => {
+  const { id, folder } = await createCampaign(page, `Attack Test ${Date.now()}`)
+  await addFighter(page, id, 'Wren')
+  dm = await startFakeDm({ folder, home: E2E_HOME })
+  await openConsole(page, id)
+
+  dm.script(
+    {
+      on: 'floor',
+      run: async () => {
+        const goblin = await dm!.call('establish', {
+          type: 'npc',
+          name: 'Grik',
+          fields: { stat_block: 'monster:goblin' }
+        })
+        const attack = await dm!.call('attack', {
+          actor: 'char:wren',
+          target: goblin.payload.handle,
+          with: 'crossbow'
+        })
+        expect(attack.isError).toBe(false)
+        const opened = await dm!.call('narrate', {
+          text: 'Wren levels her crossbow at the goblin.',
+          call: attack.payload.pending_call
+        })
+        expect(opened.isError).toBe(false)
+      }
+    },
+    {
+      on: 'call_result',
+      run: async (event) => {
+        expect(event.content).toMatch(
+          /^\[Wren · player\] Crossbow, light attack on Grik \(npc:[^)]+\): d20 \d+ \+ 4 = \d+ vs AC 15 → (hit|critical hit|miss)/
+        )
+        await dm!.call('narrate', { text: 'The bolt flies.' })
+      }
+    }
+  )
+
+  await page.getByRole('textbox', { name: 'What does Wren do?' }).fill('I shoot the goblin.')
+  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Done' }).click()
+
+  const card = page.getByRole('region', { name: 'Call' })
+  await expect(card.getByText('Crossbow, light attack')).toBeVisible()
+  await expect(card).not.toContainText(/AC|15/)
+  await page.getByRole('button', { name: 'Roll to hit for Wren' }).click()
+
+  const timeline = page.getByRole('list', { name: 'Timeline' })
+  const narrated = timeline.getByText('The bolt flies.')
+  const damage = page.getByRole('button', { name: 'Roll damage for Wren' })
+  await expect(narrated.or(damage)).toBeVisible()
+  if (await damage.isVisible()) {
+    await damage.click()
+    await expect(timeline.getByText('Crossbow, light damage')).toBeVisible()
+  }
+  await expect(narrated).toBeVisible()
+  await expect(timeline.getByText(/Crossbow, light attack/)).toBeVisible()
+  await expect(card).toHaveCount(0)
+  await dm.settled()
+
+  const res = await page.request.get(`/api/campaigns/${id}/timeline`)
+  expect(JSON.stringify(await res.json())).not.toMatch(/\bAC\b|"hp"|\/7\b/)
+  await dm.close()
+})
