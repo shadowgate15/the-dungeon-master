@@ -5,6 +5,7 @@ import { knowledgeTools } from './knowledge-tools'
 import { narrationTools } from './narration-tools'
 import { sceneTools } from './scene-tools'
 import { seedTools } from './seed-tools'
+import { sessionTools } from './session-tools'
 import { worldTools } from './world-tools'
 
 /** Every game tool the server exposes to the DM. */
@@ -15,5 +16,6 @@ export const gameTools: GameTool[] = [
   ...knowledgeTools,
   ...narrationTools,
   ...sceneTools,
+  ...sessionTools,
   ...arcTools
 ]

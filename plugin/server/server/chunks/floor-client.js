@@ -1,5 +1,5 @@
 import { _ as attr, c as ensure_array_like, o as derived, x as escape_html } from "./server2.js";
-import { a as journalQueryKey, d as SvelteMap, i as floorQueryKey, l as timelineQueryKey, s as sceneQueryKey, u as createQuery } from "./messages.js";
+import { a as journalQueryKey, d as createQuery, f as SvelteMap, i as floorQueryKey, l as sessionHistoryQueryKey, s as sceneQueryKey, u as timelineQueryKey } from "./messages.js";
 import { t as useQueryClient } from "./useQueryClient.js";
 // src/lib/play/Journal.svelte
 function Journal($$renderer, $$props) {
@@ -105,6 +105,23 @@ function createJournalQuery(campaign, initial) {
 		initialData: initial()
 	}));
 }
+/** The Player's read-only Session history, starting from the server-rendered one. */
+function createSessionHistoryQuery(campaign, initial) {
+	return createQuery(() => ({
+		queryKey: sessionHistoryQueryKey(campaign()),
+		queryFn: async () => {
+			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/sessions`);
+			if (!res.ok) throw new Error("The Session history could not be loaded");
+			return await res.json();
+		},
+		initialData: initial()
+	}));
+}
+/** End Session: asks the DM to close the sitting. */
+async function endSession(campaign) {
+	const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign)}/end-session`, { method: "POST" });
+	if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The session could not be ended");
+}
 /** Send, edit, withdraw and Done on the Campaign's open Floor; each refreshes the Floor and timeline. */
 function floorActions(campaign) {
 	const queryClient = useQueryClient();
@@ -173,6 +190,6 @@ function callActions(campaign) {
 		answer: (call, part, answer) => post(call, part, { answer })
 	};
 }
-export { createSceneQuery as a, Journal as c, createJournalQuery as i, callActions as n, createTimelineQuery as o, createFloorQuery as r, floorActions as s, FloorChangeError as t };
+export { createSceneQuery as a, endSession as c, createJournalQuery as i, floorActions as l, callActions as n, createSessionHistoryQuery as o, createFloorQuery as r, createTimelineQuery as s, FloorChangeError as t, Journal as u };
 
 //# sourceMappingURL=floor-client.js.map

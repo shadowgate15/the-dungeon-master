@@ -3,6 +3,7 @@ import type { JournalEntry } from './journal'
 import type { PendingDeclaration } from './floor'
 import type { OpenCall } from './call'
 import type { TimelineEntry } from './timeline'
+import type { SessionSummary } from './sessions'
 
 /** Sample sheets for stories and component tests. */
 const base = {
@@ -196,4 +197,22 @@ export const rollEntries: TimelineEntry[] = [
     reason: 'Bram knows these streets'
   },
   { type: 'answer', id: 'e6', player: 'player', question: 'Which door?', text: 'Left' }
+]
+
+/** Two closed Sessions as the Player's Session history shows them, newest first. */
+export const sessionSummaries: SessionSummary[] = [
+  {
+    number: 2,
+    startedAt: Date.UTC(2026, 10, 21, 19, 0),
+    span: { from: 1_440 + 600, to: 1_440 + 780 },
+    summary: 'Wren followed Mira to the docks and learned she sails for the Isles at dawn.',
+    threads: ['Why is Mira leaving?', 'Who signed the ledger?']
+  },
+  {
+    number: 1,
+    startedAt: Date.UTC(2026, 10, 20, 19, 0),
+    span: { from: 0, to: 0 },
+    summary: 'Wren picked the lock of the harbour office and found the ledger.',
+    threads: []
+  }
 ]
