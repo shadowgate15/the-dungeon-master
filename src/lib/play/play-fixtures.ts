@@ -137,7 +137,8 @@ export const checkCall: OpenCall = {
       label: 'Sleight of Hand check',
       reason: 'The lock is old and stiff',
       mode: 'normal',
-      answered: false
+      answered: false,
+      next: null
     },
     {
       id: 'p2',
@@ -146,7 +147,8 @@ export const checkCall: OpenCall = {
       label: 'Perception check',
       reason: 'Bram knows these streets',
       mode: 'advantage',
-      answered: false
+      answered: false,
+      next: null
     }
   ]
 }
@@ -165,7 +167,8 @@ export const questionCall: OpenCall = {
       label: null,
       reason: null,
       mode: 'normal',
-      answered: false
+      answered: false,
+      next: null
     }
   ]
 }
@@ -182,7 +185,8 @@ export const rollEntries: TimelineEntry[] = [
     total: 19,
     outcome: 'success',
     mode: 'normal',
-    reason: null
+    reason: null,
+    target: null
   },
   {
     type: 'roll',
@@ -194,9 +198,73 @@ export const rollEntries: TimelineEntry[] = [
     total: 16,
     outcome: 'failure',
     mode: 'advantage',
-    reason: 'Bram knows these streets'
+    reason: 'Bram knows these streets',
+    target: null
   },
   { type: 'answer', id: 'e6', player: 'player', question: 'Which door?', text: 'Left' }
+]
+
+/** An attack Call mid-sequence: Wren has rolled to hit and rolls damage next. */
+export const attackCall: OpenCall = {
+  id: 'c3',
+  kind: 'roll_sequence',
+  text: null,
+  choices: [],
+  parts: [
+    {
+      id: 'p4',
+      character: 'Wren',
+      player: 'player',
+      label: 'Crossbow, light attack',
+      reason: null,
+      mode: 'normal',
+      answered: false,
+      next: 'damage'
+    }
+  ]
+}
+
+/** An attack's rolls: a hit, then damage that leaves the goblin bloodied; then a miss. */
+export const attackRollEntries: TimelineEntry[] = [
+  {
+    type: 'roll',
+    id: 'e7',
+    character: 'Wren',
+    what: 'Crossbow, light attack',
+    dice: [15],
+    modifier: 4,
+    total: 19,
+    outcome: 'hit',
+    mode: 'normal',
+    reason: null,
+    target: null
+  },
+  {
+    type: 'roll',
+    id: 'e8',
+    character: 'Wren',
+    what: 'Crossbow, light damage',
+    dice: [3],
+    modifier: 2,
+    total: 5,
+    outcome: null,
+    mode: 'normal',
+    reason: null,
+    target: { name: 'Grik', state: 'bloodied' }
+  },
+  {
+    type: 'roll',
+    id: 'e9-0',
+    character: 'Grik',
+    what: 'Scimitar attack',
+    dice: [2],
+    modifier: 4,
+    total: 6,
+    outcome: 'miss',
+    mode: 'normal',
+    reason: null,
+    target: null
+  }
 ]
 
 /** Two closed Sessions as the Player's Session history shows them, newest first. */

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5aef43ee-2a63-428b-b02b-281137404dfa",
+  "id": "22016f87-d4f3-4b7f-8789-0955f87f68d2",
   "prevId": "2c2ddcd0-41e2-4cae-ae07-0f682dc1da8e",
   "tables": {
     "activity_line": {
@@ -226,6 +226,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "sequence": {
+          "name": "sequence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "answer": {
           "name": "answer",
           "type": "text",
@@ -414,14 +421,6 @@
           "autoincrement": false,
           "default": 0
         },
-        "offline_noticed_through": {
-          "name": "offline_noticed_through",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
         "clock_minute": {
           "name": "clock_minute",
           "type": "integer",
@@ -560,13 +559,6 @@
         },
         "backstory": {
           "name": "backstory",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "notes": {
-          "name": "notes",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -1634,6 +1626,44 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "npc_combat": {
+      "name": "npc_combat",
+      "columns": {
+        "handle": {
+          "name": "handle",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hp": {
+          "name": "hp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "max_hp": {
+          "name": "max_hp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "conditions": {
+          "name": "conditions",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

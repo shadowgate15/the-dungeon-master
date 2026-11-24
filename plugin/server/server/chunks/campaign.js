@@ -1,4 +1,4 @@
-import { At as ABILITY_METHODS, Bt as inArray, C as declaration, Ct as subclass, D as session, E as returnedDraft, Ft as asc, Ht as isNull, It as desc, Jt as is, Kt as sql, L as abilityScoreMethod, Lt as and, Mt as CUSTOM_BACKGROUND_FEATURE_MAX, O as belief, Pt as SOLO_PLAYER, Q as classTable, R as alignment, Rt as eq, S as conversationMessage, T as floor, Vt as isNotNull, Xt as DUNGEON_MASTER_CAMPAIGNS, Zt as DUNGEON_MASTER_HOME, _ as characterDraft, a as userStateDir, b as characterSkill, bt as skill, c as abilities_default, d as activityLine, f as call, g as characterChoice, h as character, i as defaultCampaignRoot, jt as BACKSTORY_MAX, k as entity, l as migrateDatabase, m as campaign, mt as race, n as campaignDatabasePath, o as loadRulesDataset, p as callPart, qt as Column, r as canonicalFolder, s as skills_default, t as seedRulesData, tt as equipment, u as openDatabase, v as characterEquipment, w as event, wt as subrace, x as characterSpell, xt as spell, y as characterItem, z as background, zt as gt } from "./seed.js";
+import { $ as asc, A as belief, B as background, C as conversationMessage, D as npcCombat, E as floor, G as spell, H as equipment, J as ABILITY_METHODS, K as subclass, O as returnedDraft, Q as SOLO_PLAYER, R as abilityScoreMethod, S as characterSpell, T as event, U as race, V as classTable, W as skill, X as CUSTOM_BACKGROUND_FEATURE_MAX, Y as BACKSTORY_MAX, _ as characterChoice, a as defaultCampaignRoot, at as isNotNull, b as characterItem, c as skills_default, d as openDatabase, dt as Column, et as desc, f as activityLine, ft as is, g as character, h as campaign, ht as DUNGEON_MASTER_HOME, i as canonicalFolder, it as inArray, j as entity, k as session, l as abilities_default, m as callPart, mt as DUNGEON_MASTER_CAMPAIGNS, n as createRulesRepository, nt as eq, o as userStateDir, ot as isNull, p as call, q as subrace, r as campaignDatabasePath, rt as gt, s as loadRulesDataset, t as seedRulesData, tt as and, u as migrateDatabase, ut as sql, v as characterDraft, w as declaration, x as characterSkill, y as characterEquipment, z as alignment } from "./seed.js";
 import { L as resolveFeatures, N as equipmentGroupKeys, P as equipmentGroups, c as WIZARD_RULES_KEYS, f as resolverDraft, h as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, t as buildSummary, u as emptyDraft } from "./summary.js";
 import { c as literal, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
@@ -391,7 +391,7 @@ function loadWizardRules() {
 	return cached;
 }
 // src/lib/server/play/sheets.ts
-var signed = (n) => n >= 0 ? `+${n}` : `${n}`;
+var signed$1 = (n) => n >= 0 ? `+${n}` : `${n}`;
 function toPlaySheet(c) {
 	const rules = loadWizardRules();
 	const { stats, names, resolved } = buildSummary(rules, {
@@ -429,7 +429,7 @@ function toPlaySheet(c) {
 		attacks: (ok(stats.attacks) ?? []).map((a) => ({
 			name: a.name,
 			attackBonus: a.attackBonus,
-			damage: a.damage && `${a.damage.dice}${a.damage.modifier ? signed(a.damage.modifier) : ""} ${a.damage.type}`
+			damage: a.damage && `${a.damage.dice}${a.damage.modifier ? signed$1(a.damage.modifier) : ""} ${a.damage.type}`
 		})),
 		spellSlots: slots.flatMap((max, i) => max > 0 ? [{
 			level: i + 1,
@@ -1035,6 +1035,381 @@ function creationTool(tool) {
 		run: tool.run
 	};
 }
+// src/lib/play/hp-state.ts
+function hpState(hp, max) {
+	if (hp <= 0) return "down";
+	if (hp * 4 <= max) return "near death";
+	if (hp * 2 <= max) return "bloodied";
+	return "unhurt";
+}
+// src/lib/server/knowledge/holders.ts
+/**
+* Every Character in the Campaign with its readable handle, `char:` plus its name's slug. Two
+* Characters with the same slug are told apart by creation order (`char:wren-2`).
+*/
+function characterHolders(db) {
+	const taken = /* @__PURE__ */ new Set();
+	return db.select({
+		id: character.id,
+		name: character.name,
+		player: character.controllingPlayer
+	}).from(character).orderBy(asc(character.createdAt), asc(character.id)).all().map((c) => {
+		const base = `char:${slug$1(c.name) || "character"}`;
+		let handle = base;
+		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
+		taken.add(handle);
+		return {
+			...c,
+			handle
+		};
+	});
+}
+/**
+* The Characters present in the Scene. There is no Scene yet (#328 adds it and presence from
+* whereabouts), so until then every Character in the Party is present.
+*/
+function charactersInScene(db) {
+	return characterHolders(db);
+}
+// src/lib/server/play/combatants.ts
+var ok = (s) => s.status === "ok" ? s.value : null;
+/** A Character's derived stats, from its stored choices and what it carries now. */
+function characterStats(db, id) {
+	const detail = createCharacterService(db).get(id);
+	const { stats, resolved } = buildSummary(loadWizardRules(), {
+		...detailToSummaryData(detail),
+		equipment: detail.inventory
+	});
+	return {
+		detail,
+		stats,
+		features: resolved.features.map((f) => ({
+			slug: f.slug,
+			name: f.name
+		}))
+	};
+}
+function characterCombatant(db, ref) {
+	const key = ref.trim().toLowerCase();
+	const holder = characterHolders(db).find((c) => c.handle === key || c.id === ref || c.name.toLowerCase() === key);
+	if (!holder) return null;
+	const { detail, stats, features } = characterStats(db, holder.id);
+	return {
+		kind: "character",
+		handle: holder.handle,
+		name: holder.name,
+		id: holder.id,
+		player: holder.player,
+		detail,
+		stats,
+		features,
+		ac: ok(stats.unarmoredAc)?.value ?? 10,
+		hp: detail.currentHp,
+		maxHp: ok(stats.hitPoints) ?? detail.currentHp,
+		conditions: detail.conditions
+	};
+}
+/** The stat block's AC: its first listed armor class. */
+var monsterAc = (m) => m.armorClass[0]?.value ?? 10;
+function npcCombatant(db, handle) {
+	const npc = db.select().from(entity).where(eq(entity.handle, handle)).get();
+	if (!npc || npc.type !== "npc" || npc.retiredAt !== null) return null;
+	const block = npc.fields.stat_block;
+	if (typeof block !== "string") throw new ToolError("no_stat_block", `${npc.name} (${handle}) has no stat block`, `Give it one with set_field(${handle}, stat_block, monster:<slug>) — find the slug with lookup — and call again`);
+	const found = createRulesRepository(db).entry(block);
+	if (!found || found.kind !== "monster") throw ToolError.unknownHandle(block);
+	const monster = found.entry;
+	let state = db.select().from(npcCombat).where(eq(npcCombat.handle, handle)).get();
+	if (!state) state = db.insert(npcCombat).values({
+		handle,
+		hp: monster.hitPoints,
+		maxHp: monster.hitPoints,
+		conditions: []
+	}).returning().get();
+	return {
+		kind: "npc",
+		handle,
+		name: npc.name,
+		monster,
+		ac: monsterAc(monster),
+		hp: state.hp,
+		maxHp: state.maxHp,
+		conditions: state.conditions
+	};
+}
+/**
+* The combatant a tool names: a Character by handle (`char:wren`) or name, or an NPC by handle.
+* The one lookup every action tool and primitive goes through.
+*/
+function combatant(db, ref) {
+	const found = ref.startsWith("npc:") ? npcCombatant(db, ref) : characterCombatant(db, ref);
+	if (!found) throw ToolError.unknownHandle(ref);
+	return found;
+}
+/** A combatant's saving throw bonus: a Character's derived save, a stat block's proficiency or ability. */
+function saveBonus(who, ability) {
+	if (who.kind === "character") return ok(who.stats.savingThrows[ability])?.modifier ?? 0;
+	const proficient = who.monster.proficiencies.find((p) => p.proficiency === `saving-throw-${ability}`);
+	if (proficient) return proficient.value;
+	const score = who.monster.abilityScores[ability] ?? 10;
+	return Math.floor((score - 10) / 2);
+}
+/** A Character who acts must be able to. */
+function mustAct(who) {
+	if (who.kind === "character" && !canAct(who.detail)) throw new ToolError("character_cannot_act", `${who.name} can't act`, "Choose a Character who can act");
+}
+/** How a monster's resistances, immunities and vulnerabilities scale damage of one type. */
+function damageFactor(who, damageType) {
+	if (who.kind !== "npc" || !damageType) return 1;
+	const has = (list) => list.some((entry) => entry.toLowerCase().split(/[,;]\s*|\s+and\s+/).includes(damageType));
+	if (has(who.monster.damageImmunities)) return 0;
+	if (has(who.monster.damageResistances)) return .5;
+	if (has(who.monster.damageVulnerabilities)) return 2;
+	return 1;
+}
+/**
+* The one way HP goes down. Temporary HP absorbs damage first; HP never drops below 0. Monster
+* resistances apply. Concentration saves (#332) and Death at 0 HP (#332) hook in here.
+*/
+function applyDamage(db, who, amount, damageType) {
+	const dealt = Math.floor(amount * damageFactor(who, damageType));
+	if (who.kind === "character") {
+		const absorbed = Math.min(who.detail.tempHp, dealt);
+		const hp = Math.max(0, who.hp - (dealt - absorbed));
+		db.update(character).set({
+			currentHp: hp,
+			tempHp: who.detail.tempHp - absorbed
+		}).where(eq(character.id, who.id)).run();
+		return {
+			dealt,
+			hp,
+			max: who.maxHp
+		};
+	}
+	const hp = Math.max(0, who.hp - dealt);
+	db.update(npcCombat).set({ hp }).where(eq(npcCombat.handle, who.handle)).run();
+	return {
+		dealt,
+		hp,
+		max: who.maxHp
+	};
+}
+/** Restores HP, never above the maximum. */
+function applyHealing(db, who, amount) {
+	const hp = Math.min(who.maxHp, who.hp + amount);
+	if (who.kind === "character") db.update(character).set({ currentHp: hp }).where(eq(character.id, who.id)).run();
+	else db.update(npcCombat).set({ hp }).where(eq(npcCombat.handle, who.handle)).run();
+	return {
+		dealt: hp - who.hp,
+		hp,
+		max: who.maxHp
+	};
+}
+/** Replaces a combatant's conditions. */
+function setConditions(db, who, conditions) {
+	if (who.kind === "character") db.update(character).set({ conditions }).where(eq(character.id, who.id)).run();
+	else db.update(npcCombat).set({ conditions }).where(eq(npcCombat.handle, who.handle)).run();
+}
+// src/lib/server/play/sequences.ts
+/** A weapon or spell attack: to-hit, then damage on a hit. */
+function attackSequence(source, target, bonus, damage) {
+	const steps = [{
+		kind: "to_hit",
+		bonus,
+		ac: target.ac
+	}];
+	if (damage) steps.push({
+		kind: "damage",
+		...damage
+	});
+	return {
+		label: `${source} attack`,
+		source,
+		target: {
+			handle: target.handle,
+			name: target.name
+		},
+		steps,
+		rolls: [],
+		done: false
+	};
+}
+/** A saving throw: the effect applies in full on a failure, half or nothing on a success. */
+function saveSequence(abilityName, target, step) {
+	return {
+		label: `${abilityName} save`,
+		source: abilityName,
+		target: {
+			handle: target.handle,
+			name: target.name
+		},
+		steps: [{
+			kind: "save",
+			...step
+		}],
+		rolls: [],
+		done: false
+	};
+}
+/** A damage roll alone (a spell that always hits, a save-spell's damage), applied to the target. */
+function damageSequence(source, target, damage) {
+	return {
+		label: `${source} damage`,
+		source,
+		target: {
+			handle: target.handle,
+			name: target.name
+		},
+		steps: [{
+			kind: "damage",
+			...damage
+		}],
+		rolls: [],
+		done: false
+	};
+}
+/** What the next step rolls, as the Player's button reads it; null when the sequence is done. */
+function nextStep(sequence) {
+	if (sequence.done) return null;
+	const step = sequence.steps[sequence.rolls.length];
+	return step.kind === "to_hit" ? "to hit" : step.kind;
+}
+/** What one step rolls, as the Player reads it in the timeline: `Crossbow, light attack`. */
+function stepLabel$1(sequence, step) {
+	if (step.kind === "to_hit") return `${sequence.source} attack`;
+	if (step.kind === "damage") return `${sequence.source} damage`;
+	return `${sequence.source} save`;
+}
+/**
+* Rolls the sequence's next step in code against the hidden number and applies its effect: the
+* target takes the damage, or the save's effect lands. A miss ends the sequence.
+*/
+function rollStep(db, sequence, dice, { mode = "normal", reason = "" } = {}) {
+	const step = sequence.steps[sequence.rolls.length];
+	const target = combatant(db, sequence.target.handle);
+	const d20 = () => mode === "normal" ? dice.rollD20() : dice.rollD20({
+		mode,
+		reason: reason ?? ""
+	});
+	let roll;
+	let ends = false;
+	if (step.kind === "to_hit") {
+		const rolled = d20();
+		const total = rolled.kept + step.bonus;
+		const outcome = rolled.kept === 20 ? "critical hit" : rolled.kept !== 1 && total >= step.ac ? "hit" : "miss";
+		ends = outcome === "miss";
+		roll = {
+			dice: rolled.dice,
+			kept: rolled.kept,
+			modifier: step.bonus,
+			total,
+			outcome,
+			applied: null,
+			after: null
+		};
+	} else if (step.kind === "damage") {
+		const crit = sequence.rolls.at(-1)?.outcome === "critical hit";
+		const rolled = dice.rollExpression(step.dice, { crit });
+		const total = Math.max(0, rolled.total);
+		const change = applyDamage(db, target, total, step.damageType);
+		roll = {
+			dice: rolled.dice,
+			kept: null,
+			modifier: rolled.modifier,
+			total,
+			outcome: null,
+			applied: {
+				dealt: change.dealt,
+				damageType: step.damageType,
+				condition: null
+			},
+			after: {
+				hp: change.hp,
+				max: change.max
+			}
+		};
+	} else {
+		const rolled = d20();
+		const total = rolled.kept + step.bonus;
+		const success = total >= step.dc;
+		const dealt = step.damage === null ? 0 : success ? step.onSuccess === "half" ? Math.floor(step.damage / 2) : 0 : step.damage;
+		const change = dealt > 0 ? applyDamage(db, target, dealt, step.damageType) : null;
+		const condition = !success && step.condition ? step.condition : null;
+		if (condition && !target.conditions.includes(condition)) setConditions(db, target, [...target.conditions, condition]);
+		roll = {
+			dice: rolled.dice,
+			kept: rolled.kept,
+			modifier: step.bonus,
+			total,
+			outcome: success ? "success" : "failure",
+			applied: {
+				dealt: change?.dealt ?? 0,
+				damageType: step.damageType,
+				condition
+			},
+			after: {
+				hp: change?.hp ?? target.hp,
+				max: target.maxHp
+			}
+		};
+	}
+	const rolls = [...sequence.rolls, roll];
+	return {
+		sequence: {
+			...sequence,
+			rolls,
+			done: ends || rolls.length === sequence.steps.length
+		},
+		what: stepLabel$1(sequence, step),
+		roll,
+		targetState: target.kind !== "character" && roll.after && step.kind !== "to_hit" ? {
+			name: target.name,
+			state: hpState(roll.after.hp, roll.after.max)
+		} : null
+	};
+}
+/** Rolls every step at once, for an NPC or Creature acting inside the DM's tool call. */
+function rollAll(db, sequence, dice, options = {}) {
+	const steps = [];
+	let current = sequence;
+	while (!current.done) {
+		const rolled = rollStep(db, current, dice, options);
+		steps.push(rolled);
+		current = rolled.sequence;
+	}
+	return {
+		sequence: current,
+		steps
+	};
+}
+var signed = (n) => n >= 0 ? `+ ${n}` : `- ${-n}`;
+/** `d20 15 + 4 = 19`, or with two d20s `d20 3/15 (advantage) kept 15 + 4 = 19`. */
+function d20Text(roll, mode) {
+	return `d20 ${roll.dice.length > 1 ? `${roll.dice.join("/")} (${mode}) kept ${roll.kept}` : `${roll.kept}`} ${signed(roll.modifier)} = ${roll.total}`;
+}
+/** `5 + 2 = 7`: every die, the modifier and the total. */
+function damageText(roll) {
+	return `${roll.dice.join(" + ")}${roll.modifier ? ` ${signed(roll.modifier)}` : ""} = ${roll.total}`;
+}
+/**
+* The DM's view of a sequence, with the hidden numbers:
+* `Crossbow, light attack on Grik (npc:grik): d20 15 + 4 = 19 vs AC 15 → hit; damage 1d8+2: 5 + 2 = 7 piercing → Grik 0/7 HP (down)`.
+*/
+function sequenceText(sequence, mode = "normal") {
+	const { target } = sequence;
+	const parts = sequence.rolls.map((roll, i) => {
+		const step = sequence.steps[i];
+		const after = roll.after ? ` → ${target.name} ${roll.after.hp}/${roll.after.max} HP (${hpState(roll.after.hp, roll.after.max)})` : "";
+		if (step.kind === "to_hit") return `${d20Text(roll, mode)} vs AC ${step.ac} → ${roll.outcome}`;
+		if (step.kind === "damage") {
+			const doubled = roll.dice.length > Number(/^(\d*)d/.exec(step.dice)?.[1] || 1) ? " (doubled)" : "";
+			return `damage ${step.dice}${doubled}: ${damageText(roll)} ${step.damageType}${after}`;
+		}
+		const effect = [roll.applied?.dealt ? `takes ${roll.applied.dealt} ${step.damageType ?? ""}`.trim() : null, roll.applied?.condition ? `is ${roll.applied.condition}` : null].filter(Boolean);
+		return `${d20Text(roll, mode)} vs DC ${step.dc} → ${roll.outcome}${effect.length ? `; ${effect.join(", ")}` : ""}${roll.applied?.dealt ? after : ""}`;
+	});
+	return `${sequence.steps[0].kind === "save" ? sequence.label : `${sequence.label} on ${target.name}`} (${target.handle}): ${parts.join("; ")}`;
+}
 // src/lib/server/play/calls.ts
 /**
 * The DC for each difficulty tier, from the SRD's "Typical Difficulty Classes" table
@@ -1091,8 +1466,9 @@ function findCharacter(db, ref) {
 function openCallRow(db) {
 	return db.select().from(call).where(eq(call.state, "open")).get();
 }
-/** What a Check part rolls, as the Player reads it. */
+/** What a part rolls, as the Player reads it. */
 function labelOf(part) {
+	if (part.sequence) return part.sequence.label;
 	if (part.skill) return `${SKILL_NAMES.get(part.skill) ?? part.skill} check`;
 	if (part.save) return `${ABILITY_NAMES.get(part.save) ?? part.save} save`;
 	return null;
@@ -1102,8 +1478,8 @@ function labelOf(part) {
 * Returns its id.
 */
 function openCall(db, input, { at, openedBy }) {
-	if (typeof input === "string") throw new ToolError("unknown_call", `No pending Call has the id ${input}`, "Attach a pending Call id an action tool returned, or pass the Call inline");
 	if (openCallRow(db)) throw new ToolError("call_open", "A Call is already open, waiting on the Players", "Wait for its call_result, or narrate without a call");
+	if (typeof input === "string") return attachPending(db, input, openedBy);
 	const id = db.insert(call).values({
 		campaignId: db.select({ id: campaign.id }).from(campaign).get().id,
 		kind: Array.isArray(input) ? "check" : input.kind,
@@ -1133,6 +1509,50 @@ function openCall(db, input, { at, openedBy }) {
 	});
 	return id;
 }
+/** Opens a pending Call an action tool made: the Narration attaching it shows it to the Players. */
+function attachPending(db, id, openedBy) {
+	const attached = db.update(call).set({
+		state: "open",
+		openedBy
+	}).where(and(eq(call.id, id), eq(call.state, "pending"))).returning({ id: call.id }).get();
+	if (!attached) throw new ToolError("unknown_call", `No pending Call has the id ${id}`, "Attach a pending Call id an action tool returned, or pass the Call inline");
+	return attached.id;
+}
+/**
+* Stores an action tool's roll sequences as a pending Call, hidden from the Players until the
+* closing `narrate(..., call: id)` attaches it. Returns its id.
+*/
+function createPendingCall(db, parts, at) {
+	const id = db.insert(call).values({
+		campaignId: db.select({ id: campaign.id }).from(campaign).get().id,
+		kind: "roll_sequence",
+		state: "pending",
+		createdAt: at
+	}).returning({ id: call.id }).get().id;
+	parts.forEach((part, i) => {
+		db.insert(callPart).values({
+			callId: id,
+			position: i + 1,
+			characterId: part.characterId,
+			player: part.player,
+			sequence: part.sequence,
+			mode: part.mode ?? "normal",
+			reason: part.reason ?? null
+		}).run();
+	});
+	return id;
+}
+/** The pending Calls no Narration has attached yet. */
+function pendingCalls(db) {
+	return db.select({ id: call.id }).from(call).where(eq(call.state, "pending")).all().map((c) => c.id);
+}
+/** Drops a pending Call the DM won't attach; refused for any other Call. */
+function cancelPendingCall(db, id, at) {
+	if (!db.update(call).set({
+		state: "cancelled",
+		closedAt: at
+	}).where(and(eq(call.id, id), eq(call.state, "pending"))).returning({ id: call.id }).get()) throw new ToolError("unknown_call", `No pending Call has the id ${id}`, "Only a pending Call an action tool returned, not yet attached, can be cancelled");
+}
 /** The Players at the table: everyone with a Character who can act (solo play: one). */
 function playersAtTable(db) {
 	const players = new Set(db.select().from(character).all().filter(canAct).map((c) => c.controllingPlayer));
@@ -1158,7 +1578,8 @@ function openCallView(db) {
 			label: labelOf(part),
 			reason: part.reason,
 			mode: part.mode,
-			answered: part.answeredAt !== null
+			answered: part.answeredAt !== null,
+			next: part.sequence ? nextStep(part.sequence) : null
 		}))
 	};
 }
@@ -1175,6 +1596,7 @@ var CallClosedError = class extends Error {};
 var CallRefusedError = class extends Error {};
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
 function resultLine(p) {
+	if (p.sequence) return `[${p.characterName} · ${p.player}] ${sequenceText(p.sequence, p.mode)}`;
 	if (p.result === null) return `[${p.player}] ${p.answer}`;
 	const r = p.result;
 	const dice = r.dice.length > 1 ? `${r.dice.join("/")} (${p.mode}) kept ${r.kept}` : `${r.kept}`;
@@ -1213,10 +1635,10 @@ function createCalls(db, now = Date.now) {
 			const part = db.select().from(call).where(and(eq(call.id, callId), eq(call.state, "open"))).get() && db.select().from(callPart).where(and(eq(callPart.id, partId), eq(callPart.callId, callId), isNull(callPart.answeredAt))).get();
 			if (!part) throw new CallClosedError("That Call is no longer open");
 			if (part.player !== player) throw new CallRefusedError("That roll is not yours");
-			const { values, event } = resolve(part);
+			const { values, event, finished = true } = resolve(part);
 			db.update(callPart).set({
 				...values,
-				answeredAt: at
+				answeredAt: finished ? at : null
 			}).where(eq(callPart.id, partId)).run();
 			logEvent(db, {
 				tool: "call",
@@ -1254,6 +1676,36 @@ function createCalls(db, now = Date.now) {
 			return result;
 		});
 	}
+	/** One click of a roll sequence: code rolls the next step against the hidden number. */
+	function rollSequenceStep(part, dice, player) {
+		const rolled = rollStep(db, part.sequence, dice, {
+			mode: part.mode,
+			reason: part.reason
+		});
+		const name = db.select({ name: character.name }).from(character).where(eq(character.id, part.characterId)).get()?.name ?? "";
+		const mode = rolled.roll.kept === null ? "normal" : part.mode;
+		return {
+			values: { sequence: rolled.sequence },
+			finished: rolled.sequence.done,
+			event: {
+				kind: "roll",
+				summary: `${name} ${rolled.what}: ${rolled.roll.total}${rolled.roll.outcome ? ` (${rolled.roll.outcome})` : ""}`,
+				data: {
+					part: part.id,
+					characterName: name,
+					player,
+					what: rolled.what,
+					mode,
+					reason: mode === "normal" ? null : part.reason,
+					dice: rolled.roll.dice,
+					modifier: rolled.roll.modifier,
+					total: rolled.roll.total,
+					outcome: rolled.roll.outcome,
+					target: rolled.targetState
+				}
+			}
+		};
+	}
 	return {
 		/** The open Call, Player-safe. */
 		open: () => openCallView(db),
@@ -1264,6 +1716,7 @@ function createCalls(db, now = Date.now) {
 		roll(callId, partId, dice, player = SOLO_PLAYER) {
 			return answer(callId, partId, player, (part) => {
 				if (!part.characterId) throw new CallRefusedError("That part is a question: answer it");
+				if (part.sequence) return rollSequenceStep(part, dice, player);
 				const modifier = modifierFor(part.characterId, part);
 				const d20 = part.mode === "normal" ? dice.rollD20() : dice.rollD20({
 					mode: part.mode,
@@ -1414,8 +1867,32 @@ var SHOWN = /* @__PURE__ */ new Set([
 	"narration",
 	"turn_error",
 	"roll",
+	"rolls",
 	"answer"
 ]);
+/** One roll in the dice log: a Player's click on a Call, or one of an NPC's rolls. */
+function rollEntry(id, data) {
+	const mode = data.mode === "advantage" || data.mode === "disadvantage" ? data.mode : "normal";
+	return {
+		type: "roll",
+		id,
+		character: String(data.characterName),
+		what: String(data.what),
+		dice: data.dice.map(Number),
+		modifier: Number(data.modifier),
+		total: Number(data.total),
+		outcome: "outcome" in data ? data.outcome : data.success ? "success" : "failure",
+		mode,
+		reason: mode === "normal" ? null : String(data.reason ?? ""),
+		target: data.target ?? null
+	};
+}
+/** One logged Event as timeline entries: none, one, or one per roll of an NPC's `rolls`. */
+function entriesFor(e) {
+	if (e.kind === "rolls" && !e.dmOnly) return (e.data?.rolls ?? []).map((r, i) => rollEntry(`e${e.id}-${i}`, r));
+	const entry = entryFor(e);
+	return entry ? [entry] : [];
+}
 /** One logged Event as a timeline entry, or null for one the timeline does not show. */
 function entryFor(e) {
 	if (e.dmOnly || !SHOWN.has(e.kind)) return null;
@@ -1433,21 +1910,7 @@ function entryFor(e) {
 		id,
 		text: String(data.text)
 	};
-	if (e.kind === "roll") {
-		const mode = data.mode === "advantage" || data.mode === "disadvantage" ? data.mode : "normal";
-		return {
-			type: "roll",
-			id,
-			character: String(data.characterName),
-			what: String(data.what),
-			dice: data.dice.map(Number),
-			modifier: Number(data.modifier),
-			total: Number(data.total),
-			outcome: data.success ? "success" : "failure",
-			mode,
-			reason: mode === "normal" ? null : String(data.reason ?? "")
-		};
-	}
+	if (e.kind === "roll") return rollEntry(id, data);
 	if (e.kind === "answer") return {
 		type: "answer",
 		id,
@@ -1484,8 +1947,7 @@ function timeline(db) {
 	};
 	for (const e of db.select().from(event).orderBy(asc(event.id)).all()) {
 		flushUntil(e.id);
-		const entry = entryFor(e);
-		if (entry) entries.push(entry);
+		entries.push(...entriesFor(e));
 	}
 	flushUntil(Infinity);
 	return {
@@ -1978,35 +2440,6 @@ function createFloor(db, now = Date.now) {
 		}
 	};
 }
-// src/lib/server/knowledge/holders.ts
-/**
-* Every Character in the Campaign with its readable handle, `char:` plus its name's slug. Two
-* Characters with the same slug are told apart by creation order (`char:wren-2`).
-*/
-function characterHolders(db) {
-	const taken = /* @__PURE__ */ new Set();
-	return db.select({
-		id: character.id,
-		name: character.name,
-		player: character.controllingPlayer
-	}).from(character).orderBy(asc(character.createdAt), asc(character.id)).all().map((c) => {
-		const base = `char:${slug$1(c.name) || "character"}`;
-		let handle = base;
-		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
-		taken.add(handle);
-		return {
-			...c,
-			handle
-		};
-	});
-}
-/**
-* The Characters present in the Scene. There is no Scene yet (#328 adds it and presence from
-* whereabouts), so until then every Character in the Party is present.
-*/
-function charactersInScene(db) {
-	return characterHolders(db);
-}
 // src/lib/server/knowledge/journal.ts
 /** Shows `[[Name]]` links as plain names for the Player. */
 var plain = (text) => text.replace(/\[\[([^[\]|]+)(?:\|[^[\]]*)?\]\]/g, "$1");
@@ -2414,6 +2847,10 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 					});
 					return notice ? `${core}\n\n${notice}` : core;
 				}),
+				/** Pending Calls an action tool stored that no narrate has attached yet. */
+				pendingCalls: () => pendingCalls(db),
+				/** Drops the pending Calls a turn ended without attaching. */
+				dropPendingCalls: () => db.transaction((tx) => pendingCalls(tx).forEach((id) => cancelPendingCall(tx, id, now()))),
 				/** Logs a turn that went wrong, as the Player sees it in the timeline. */
 				turnError: (text) => logEvent(db, {
 					tool: "stop",
@@ -2498,6 +2935,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { normalizeName as $, CallClosedError as A, writeTool as B, DraftNotFoundError as C, logEvent as D, logActivity as E, PLUGIN_NAME as F, ClockBackwardsError as G, CharacterValidationError as H, ToolError as I, characterRefs as J, SpotlightRefusedError as K, creationTool as L, callInput as M, callResultEvent as N, nextEventId as O, openCall as P, isNearName as Q, expectVersion as R, DmOnlyEditError as S, currentStamp as T, playSheets as U, CharacterNotFoundError as V, loadWizardRules as W, present as X, currentMinute as Y, scenePlace as Z, charactersInScene as _, CampaignArchivedError as a, DmBusyError as b, CampaignNotFoundError as c, addConversationLine as d, slug$1 as et, closeSession as f, characterHolders as g, sessionsView as h, sessions as i, CallRefusedError as j, setAwaitingNarration as k, NotACampaignFolderError as l, indexNarration as m, library as n, parseClock as nt, CampaignExistsError as o, history as p, advanceClock as q, live as r, SESSION_LIVE_MESSAGE as rt, CampaignMissingError as s, campaignRoot as t, formatClock as tt, SessionLiveError as u, DeclarationNotFoundError as v, createDmChannels as w, returnStrandedDrafts as x, DeclarationRefusedError as y, readTool as z };
+export { PLUGIN_NAME as $, CallRefusedError as A, damageSequence as B, currentStamp as C, setAwaitingNarration as D, nextEventId as E, cancelPendingCall as F, applyHealing as G, saveSequence as H, createPendingCall as I, saveBonus as J, combatant as K, openCall as L, TIERS as M, callInput as N, ABILITY_NAMES as O, callResultEvent as P, hpState as Q, saveKey as R, createDmChannels as S, logEvent as T, sequenceText as U, rollAll as V, applyDamage as W, characterHolders as X, setConditions as Y, charactersInScene as Z, DeclarationRefusedError as _, normalizeName as _t, CampaignArchivedError as a, CharacterNotFoundError as at, DmOnlyEditError as b, parseClock as bt, CampaignNotFoundError as c, loadWizardRules as ct, addConversationLine as d, advanceClock as dt, ToolError as et, closeSession as f, characterRefs as ft, DeclarationNotFoundError as g, isNearName as gt, sessionsView as h, scenePlace as ht, sessions as i, writeTool as it, DC_BY_TIER as j, CallClosedError as k, NotACampaignFolderError as l, ClockBackwardsError as lt, indexNarration as m, present as mt, library as n, expectVersion as nt, CampaignExistsError as o, CharacterValidationError as ot, history as p, currentMinute as pt, mustAct as q, live as r, readTool as rt, CampaignMissingError as s, playSheets as st, campaignRoot as t, creationTool as tt, SessionLiveError as u, SpotlightRefusedError as ut, DmBusyError as v, slug$1 as vt, logActivity as w, DraftNotFoundError as x, SESSION_LIVE_MESSAGE as xt, returnStrandedDrafts as y, formatClock as yt, attackSequence as z };
 
 //# sourceMappingURL=campaign.js.map
