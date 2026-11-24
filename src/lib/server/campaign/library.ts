@@ -205,7 +205,7 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
         journal: () => journal(db),
         openSession: () => openSession(db, now()),
         /** The DM's core block. */
-        coreBlock: () => coreBlock({ party: createParty(db, now) }),
+        coreBlock: () => coreBlock({ party: createParty(db, now), db }),
         /** Logs a turn that went wrong, as the Player sees it in the timeline. */
         turnError: (text: string) =>
           logEvent(
