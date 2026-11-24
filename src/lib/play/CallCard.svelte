@@ -4,7 +4,8 @@
 
   /**
    * The open Call at the foot of the timeline: one button group per Character for a Check (the
-   * skill or save and the reason, never the DC; advantage marked), or a question with its choices
+   * skill or save and the reason, never the DC; advantage marked), or for a roll sequence such as
+   * an attack (its next roll: to hit, then damage; never the AC), or a question with its choices
    * as buttons (free text without). Clicking rolls on the server; nothing is rolled here.
    */
   let {
@@ -35,7 +36,7 @@
       aria-label={part.character ?? part.player}
       class="flex flex-wrap items-center gap-2"
     >
-      {#if call.kind === 'check'}
+      {#if call.kind === 'check' || call.kind === 'roll_sequence'}
         <span class="font-medium">{part.character}</span>
         <span>{part.label}</span>
         {#if part.mode !== 'normal'}
@@ -43,16 +44,18 @@
             >{part.mode === 'advantage' ? 'Advantage' : 'Disadvantage'}</span
           >
         {/if}
-        <span class="text-muted">{part.reason}</span>
+        {#if part.reason}
+          <span class="text-muted">{part.reason}</span>
+        {/if}
         {#if part.answered}
           <span class="ml-auto text-xs text-muted">Rolled</span>
         {:else}
           <Button
             size="sm"
             class="ml-auto"
-            aria-label="Roll {part.label} for {part.character}"
+            aria-label="Roll {part.next ?? part.label} for {part.character}"
             {disabled}
-            onclick={() => onroll(part.id)}>🎲 Roll</Button
+            onclick={() => onroll(part.id)}>🎲 Roll{part.next ? ` ${part.next}` : ''}</Button
           >
         {/if}
       {:else if part.answered}

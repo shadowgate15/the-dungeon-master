@@ -202,3 +202,66 @@ export const rollEntries: TimelineEntry[] = [
   },
   { type: 'answer', id: 'e6', player: 'player', question: 'Which door?', text: 'Left' }
 ]
+
+/** An attack Call mid-sequence: Wren has rolled to hit and rolls damage next. */
+export const attackCall: OpenCall = {
+  id: 'c3',
+  kind: 'roll_sequence',
+  text: null,
+  choices: [],
+  parts: [
+    {
+      id: 'p4',
+      character: 'Wren',
+      player: 'player',
+      label: 'Crossbow, light attack',
+      reason: null,
+      mode: 'normal',
+      answered: false,
+      next: 'damage'
+    }
+  ]
+}
+
+/** An attack's rolls: a hit, then damage that leaves the goblin bloodied; then a miss. */
+export const attackRollEntries: TimelineEntry[] = [
+  {
+    type: 'roll',
+    id: 'e7',
+    character: 'Wren',
+    what: 'Crossbow, light attack',
+    dice: [15],
+    modifier: 4,
+    total: 19,
+    outcome: 'hit',
+    mode: 'normal',
+    reason: null,
+    target: null
+  },
+  {
+    type: 'roll',
+    id: 'e8',
+    character: 'Wren',
+    what: 'Crossbow, light damage',
+    dice: [3],
+    modifier: 2,
+    total: 5,
+    outcome: null,
+    mode: 'normal',
+    reason: null,
+    target: { name: 'Grik', state: 'bloodied' }
+  },
+  {
+    type: 'roll',
+    id: 'e9-0',
+    character: 'Grik',
+    what: 'Scimitar attack',
+    dice: [2],
+    modifier: 4,
+    total: 6,
+    outcome: 'miss',
+    mode: 'normal',
+    reason: null,
+    target: null
+  }
+]
