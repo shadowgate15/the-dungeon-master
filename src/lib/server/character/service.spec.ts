@@ -146,10 +146,10 @@ describe('Character service', () => {
         whereabouts: null
       })
       const inventory = characters.get(created.id)!.inventory
-      expect(inventory).toContainEqual({ item: 'crossbow-bolt', quantity: 20 })
-      expect(inventory).toContainEqual({ item: 'chain-mail', quantity: 1 })
+      expect(inventory).toContainEqual({ item: 'crossbow-bolt', quantity: 20, equipped: false })
+      expect(inventory).toContainEqual({ item: 'chain-mail', quantity: 1, equipped: false })
       // The Acolyte's fixed package is given, not chosen.
-      expect(inventory).toContainEqual({ item: 'clothes-common', quantity: 1 })
+      expect(inventory).toContainEqual({ item: 'clothes-common', quantity: 1, equipped: false })
     })
 
     it('does not store derived stats', () => {

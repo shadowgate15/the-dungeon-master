@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { canAct } from '#lib/character/acting.ts'
 import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
 import type { AbilityKey, DerivedStats } from '#lib/rules/derive-stats.ts'
+import { characterAc } from '../character/armor'
 import { createCharacterService, type CharacterDetail } from '../character/service'
 import { loadWizardRules } from '../character/wizard-rules'
 import type { Database, Queryable } from '../db/connect'
@@ -56,12 +57,13 @@ const ok = <T>(s: { status: 'ok'; value: T } | { status: 'pending' }): T | null 
 function characterStats(db: Queryable, id: string) {
   // Reads only: the service's reads run as well inside a tool's transaction.
   const detail = createCharacterService(db as Database).get(id)!
-  const { stats, resolved } = buildSummary(loadWizardRules(), {
+  const rules = loadWizardRules()
+  const { stats, resolved } = buildSummary(rules, {
     ...detailToSummaryData(detail),
     equipment: detail.inventory
   })
   const features = resolved.features.map((f) => ({ slug: f.slug, name: f.name }))
-  return { detail, stats, features }
+  return { detail, stats, features, ac: characterAc(rules, detail, stats)?.value ?? 10 }
 }
 
 function characterCombatant(db: Queryable, ref: string): Combatant | null {
@@ -70,7 +72,7 @@ function characterCombatant(db: Queryable, ref: string): Combatant | null {
     (c) => c.handle === key || c.id === ref || c.name.toLowerCase() === key
   )
   if (!holder) return null
-  const { detail, stats, features } = characterStats(db, holder.id)
+  const { detail, stats, features, ac } = characterStats(db, holder.id)
   return {
     kind: 'character',
     handle: holder.handle,
@@ -80,8 +82,7 @@ function characterCombatant(db: Queryable, ref: string): Combatant | null {
     detail,
     stats,
     features,
-    // Armor isn't equipped yet (#333): AC is unarmored until it is.
-    ac: ok(stats.unarmoredAc)?.value ?? 10,
+    ac,
     hp: detail.currentHp,
     maxHp: ok(stats.hitPoints) ?? detail.currentHp,
     conditions: detail.conditions

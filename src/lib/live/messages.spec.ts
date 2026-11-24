@@ -5,6 +5,7 @@ import {
   sceneQueryKey,
   sessionHistoryQueryKey,
   staleQueries,
+  sheetsQueryKey,
   timelineQueryKey
 } from './messages'
 
@@ -25,7 +26,12 @@ describe('staleQueries', () => {
       sceneQueryKey('c1'),
       floorQueryKey('c1'),
       journalQueryKey('c1'),
-      sessionHistoryQueryKey('c1')
+      sessionHistoryQueryKey('c1'),
+      sheetsQueryKey('c1')
     ])
+  })
+
+  it('refreshes the sheets whenever the DM changes the game, so rests and items show live', () => {
+    expect(staleQueries({ type: 'timeline', campaign: 'c1' })).toContainEqual(sheetsQueryKey('c1'))
   })
 })

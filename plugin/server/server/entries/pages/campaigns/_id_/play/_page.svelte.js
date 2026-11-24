@@ -3,9 +3,10 @@ import { _ as attr, c as ensure_array_like, l as head, n as attr_style, o as der
 import "../../../../../chunks/paths.js";
 import { n as Badge, r as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
 import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
+import { t as Checkbox } from "../../../../../chunks/Checkbox.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
-import { a as createSceneQuery, c as endSession, i as createJournalQuery, l as floorActions, n as callActions, r as createFloorQuery, s as createTimelineQuery, t as FloorChangeError, u as Journal } from "../../../../../chunks/floor-client.js";
-import { d as createQuery, o as permissionQueryKey } from "../../../../../chunks/messages.js";
+import { a as createSceneQuery, c as createTimelineQuery, d as levelUp, f as Journal, i as createJournalQuery, l as endSession, n as callActions, r as createFloorQuery, s as createSheetsQuery, t as FloorChangeError, u as floorActions } from "../../../../../chunks/floor-client.js";
+import { f as createQuery, o as permissionQueryKey } from "../../../../../chunks/messages.js";
 import { t as useQueryClient } from "../../../../../chunks/useQueryClient.js";
 import { t as Link } from "../../../../../chunks/Link.js";
 // src/lib/play/CallCard.svelte
@@ -15,17 +16,18 @@ function CallCard($$renderer, $$props) {
 		* The open Call at the foot of the timeline: one button group per Character for a Check (the
 		* skill or save and the reason, never the DC; advantage marked), or for a roll sequence such as
 		* an attack (its next roll: to hit, then damage; never the AC), or a question with its choices
-		* as buttons (free text without). Clicking rolls on the server; nothing is rolled here.
+		* as buttons (free text without), or a short rest's Hit Dice (how many to spend, as buttons up
+		* to what is left). Clicking rolls on the server; nothing is rolled here.
 		*/
 		let { call, onroll, onanswer, disabled = false } = $$props;
 		let drafts = {};
 		$$renderer.push(`<section aria-label="Call" class="flex shrink-0 flex-col gap-2 rounded-panel border-2 border-primary bg-raised p-3 text-sm">`);
-		if (call.kind === "question") $$renderer.push(`<!--[0--><p class="font-medium">${escape_html(call.text)}</p>`);
+		if (call.kind === "question" || call.kind === "hit_dice") $$renderer.push(`<!--[0--><p class="font-medium">${escape_html(call.text)}</p>`);
 		else $$renderer.push("<!--[-1-->");
 		$$renderer.push(`<!--]--> <!--[-->`);
 		const each_array = ensure_array_like(call.parts);
-		for (let $$index_1 = 0, $$length = each_array.length; $$index_1 < $$length; $$index_1++) {
-			let part = each_array[$$index_1];
+		for (let $$index_2 = 0, $$length = each_array.length; $$index_2 < $$length; $$index_2++) {
+			let part = each_array[$$index_2];
 			$$renderer.push(`<div role="group"${attr("aria-label", part.character ?? part.player)} class="flex flex-wrap items-center gap-2">`);
 			if (call.kind !== "question") {
 				$$renderer.push(`<!--[0--><span class="font-medium">${escape_html(part.character)}</span> <span>${escape_html(part.label)}</span> `);
@@ -52,11 +54,31 @@ function CallCard($$renderer, $$props) {
 				}
 				$$renderer.push(`<!--]-->`);
 			} else if (part.answered) $$renderer.push(`<!--[1--><span class="text-xs text-muted">Answered</span>`);
-			else if (call.choices.length) {
-				$$renderer.push(`<!--[2--><!--[-->`);
-				const each_array_1 = ensure_array_like(call.choices);
+			else if (part.hitDice) {
+				$$renderer.push("<!--[2-->");
+				const { die, available } = part.hitDice;
+				$$renderer.push(`<span class="font-medium">${escape_html(part.character)}</span> <span class="text-muted">${escape_html(available)} d${escape_html(die)} left</span> <span class="ml-auto flex gap-1"><!--[-->`);
+				const each_array_1 = ensure_array_like(Array.from({ length: available + 1 }, (_, n) => n));
 				for (let $$index = 0, $$length = each_array_1.length; $$index < $$length; $$index++) {
-					let choice = each_array_1[$$index];
+					let n = each_array_1[$$index];
+					Button($$renderer, {
+						size: "sm",
+						variant: "secondary",
+						"aria-label": n === 0 ? "Spend none" : `Spend ${n}`,
+						disabled,
+						onclick: () => onanswer(part.id, String(n)),
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->${escape_html(n === 0 ? "None" : n)}`);
+						},
+						$$slots: { default: true }
+					});
+				}
+				$$renderer.push(`<!--]--></span>`);
+			} else if (call.choices.length) {
+				$$renderer.push(`<!--[3--><!--[-->`);
+				const each_array_2 = ensure_array_like(call.choices);
+				for (let $$index_1 = 0, $$length = each_array_2.length; $$index_1 < $$length; $$index_1++) {
+					let choice = each_array_2[$$index_1];
 					Button($$renderer, {
 						size: "sm",
 						variant: "secondary",
@@ -104,17 +126,114 @@ function Meter($$renderer, $$props) {
 		...rest
 	})}><div${attr_class(clsx(["h-full", warn ? "bg-warning" : "bg-primary"]))}${attr_style("", { width: `${stringify(percent())}%` })}></div></div>`);
 }
+// src/lib/play/LevelUp.svelte
+function LevelUp($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		/**
+		* The level the DM awarded, taken by the Player: a "Level up" button that opens the new spells to
+		* pick (exactly the offer's counts), then sends them. HP, slots and features follow on the server.
+		*/
+		let { offer, disabled = false, onlevelup } = $$props;
+		let open = false;
+		let picked = {
+			cantrips: [],
+			spells: []
+		};
+		const kinds = [{
+			key: "cantrips",
+			label: "Cantrips"
+		}, {
+			key: "spells",
+			label: "Spells"
+		}];
+		const ready = derived(() => picked.cantrips.length === offer.cantrips.count && picked.spells.length === offer.spells.count);
+		function toggle(kind, slug, on) {
+			const rest = picked[kind].filter((s) => s !== slug);
+			picked[kind] = on ? [...rest, slug] : rest;
+		}
+		$$renderer.push(`<section aria-label="Level up" class="rounded-control border border-primary p-2">`);
+		if (!open) {
+			$$renderer.push("<!--[0-->");
+			Button($$renderer, {
+				size: "sm",
+				disabled,
+				onclick: () => open = true,
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->Level up to ${escape_html(offer.level)}`);
+				},
+				$$slots: { default: true }
+			});
+		} else {
+			$$renderer.push(`<!--[-1--><h3 class="text-xs font-semibold text-muted uppercase">Level ${escape_html(offer.level)}</h3> <!--[-->`);
+			const each_array = ensure_array_like(kinds);
+			for (let $$index_1 = 0, $$length = each_array.length; $$index_1 < $$length; $$index_1++) {
+				let { key, label } = each_array[$$index_1];
+				if (offer[key].count > 0) {
+					$$renderer.push(`<!--[0--><fieldset class="mt-2"><legend class="text-xs">${escape_html(label)}: pick ${escape_html(offer[key].count)} (${escape_html(picked[key].length)} picked)</legend> <ul class="max-h-48 overflow-y-auto"><!--[-->`);
+					const each_array_1 = ensure_array_like(offer[key].options);
+					for (let $$index = 0, $$length = each_array_1.length; $$index < $$length; $$index++) {
+						let o = each_array_1[$$index];
+						const on = picked[key].includes(o.slug);
+						$$renderer.push(`<li><label class="flex items-center gap-2">`);
+						Checkbox($$renderer, {
+							checked: on,
+							disabled: !on && picked[key].length >= offer[key].count,
+							onchange: (e) => toggle(key, o.slug, e.currentTarget.checked)
+						});
+						$$renderer.push(`<!---->${escape_html(o.name)}</label></li>`);
+					}
+					$$renderer.push(`<!--]--></ul></fieldset>`);
+				} else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]-->`);
+			}
+			$$renderer.push(`<!--]--> <div class="mt-2 flex gap-2">`);
+			Button($$renderer, {
+				size: "sm",
+				disabled: !ready() || disabled,
+				onclick: () => onlevelup({
+					cantrips: [...picked.cantrips].sort(),
+					spells: [...picked.spells].sort()
+				}),
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->Take level ${escape_html(offer.level)}`);
+				},
+				$$slots: { default: true }
+			});
+			$$renderer.push(`<!----> `);
+			Button($$renderer, {
+				size: "sm",
+				variant: "ghost",
+				onclick: () => open = false,
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->Cancel`);
+				},
+				$$slots: { default: true }
+			});
+			$$renderer.push(`<!----></div>`);
+		}
+		$$renderer.push(`<!--]--></section>`);
+	});
+}
 // src/lib/play/CharacterSheet.svelte
 function CharacterSheet($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/**
 		* The console's left column: one tab per Character, and the selected tab's full sheet. The
 		* selected tab is the acting Character; only Characters who can act are selectable. A pure view
-		* of the server's `PlaySheet`s.
+		* of the server's `PlaySheet`s. A level the DM awarded shows a Level up control when `onlevelup`
+		* is given.
 		*/
-		let { sheets, acting, onselect = () => {} } = $$props;
+		let { sheets, acting, onselect = () => {}, onlevelup } = $$props;
 		const shown = derived(() => sheets.find((s) => s.id === acting) ?? sheets[0]);
 		const signed = (n) => n >= 0 ? `+${n}` : `${n}`;
+		const DENOMINATIONS = [
+			"pp",
+			"gp",
+			"ep",
+			"sp",
+			"cp"
+		];
+		const coinText = (coin) => DENOMINATIONS.filter((d) => coin[d] > 0).map((d) => `${coin[d]} ${d}`).join(", ") || "None";
 		const title = (slug) => slug.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
 		$$renderer.push(`<aside aria-label="Character sheet" class="flex min-h-0 flex-col overflow-y-auto rounded-panel border border-border bg-surface"><div role="tablist" aria-label="Acting Character" class="flex border-b border-border"><!--[-->`);
 		const each_array = ensure_array_like(sheets);
@@ -131,7 +250,16 @@ function CharacterSheet($$renderer, $$props) {
 		}
 		$$renderer.push(`<!--]--></div> `);
 		if (shown()) {
-			$$renderer.push(`<!--[0--><div role="tabpanel"${attr("id", `sheet-${stringify(shown().id)}`)}${attr("aria-labelledby", `sheet-tab-${stringify(shown().id)}`)}${attr("aria-label", shown().name)} class="flex flex-col gap-3 p-3 text-sm"><div><h2 class="font-display text-xl">${escape_html(shown().name)}</h2> <p class="text-muted">${escape_html(shown().headline)}</p></div> <div class="grid grid-cols-[1fr_auto] items-end gap-3"><div role="group" aria-label="HP"><div class="flex justify-between text-xs"><span>HP</span> <span>${escape_html(shown().hp.current)} / ${escape_html(shown().hp.max ?? "—")}`);
+			$$renderer.push(`<!--[0--><div role="tabpanel"${attr("id", `sheet-${stringify(shown().id)}`)}${attr("aria-labelledby", `sheet-tab-${stringify(shown().id)}`)}${attr("aria-label", shown().name)} class="flex flex-col gap-3 p-3 text-sm"><div><h2 class="font-display text-xl">${escape_html(shown().name)}</h2> <p class="text-muted">${escape_html(shown().headline)}</p></div> `);
+			if (shown().levelUp && onlevelup) {
+				$$renderer.push(`<!--[0--><!---->`);
+				LevelUp($$renderer, {
+					offer: shown().levelUp,
+					onlevelup: (picks) => onlevelup(shown().id, picks)
+				});
+				$$renderer.push(`<!---->`);
+			} else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> <div class="grid grid-cols-[1fr_auto] items-end gap-3"><div role="group" aria-label="HP"><div class="flex justify-between text-xs"><span>HP</span> <span>${escape_html(shown().hp.current)} / ${escape_html(shown().hp.max ?? "—")}`);
 			if (shown().hp.temp) $$renderer.push(`<!--[0--><span class="text-muted">+${escape_html(shown().hp.temp)} temp</span>`);
 			else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--></span></div> `);
@@ -145,6 +273,9 @@ function CharacterSheet($$renderer, $$props) {
 				});
 			} else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--></div> <div role="group" aria-label="AC"${attr("title", shown().ac ? `AC (${shown().ac.note})` : "AC pending")} class="rounded-control border border-border bg-raised px-2 py-1 text-center"><div class="text-[10px] text-muted">AC</div> <div class="text-lg font-semibold">${escape_html(shown().ac?.value ?? "—")}</div></div></div> `);
+			if (shown().hitDice) $$renderer.push(`<!--[0--><p role="group" aria-label="Hit Dice" class="flex justify-between"><span>Hit Dice</span><span>${escape_html(shown().hitDice.total - shown().hitDice.spent)} / ${escape_html(shown().hitDice.total)} d${escape_html(shown().hitDice.die)}</span></p>`);
+			else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> `);
 			if (shown().conditions.length || shown().concentration) {
 				$$renderer.push(`<!--[0--><div class="flex flex-wrap gap-1"><!--[-->`);
 				const each_array_1 = ensure_array_like(shown().conditions);
@@ -214,10 +345,10 @@ function CharacterSheet($$renderer, $$props) {
 				$$renderer.push("<!--[-->");
 				for (let $$index_6 = 0, $$length = each_array_6.length; $$index_6 < $$length; $$index_6++) {
 					let i = each_array_6[$$index_6];
-					$$renderer.push(`<li>${escape_html(i.name)}${escape_html(i.quantity > 1 ? ` × ${i.quantity}` : "")}</li>`);
+					$$renderer.push(`<li>${escape_html(i.name)}${escape_html(i.quantity > 1 ? ` × ${i.quantity}` : "")}${escape_html(i.equipped ? " (equipped)" : "")}</li>`);
 				}
 			} else $$renderer.push(`<!--[!--><li class="text-muted">Nothing carried</li>`);
-			$$renderer.push(`<!--]--></ul></section></div>`);
+			$$renderer.push(`<!--]--></ul> <p role="group" aria-label="Coin" class="mt-1 flex justify-between"><span class="text-muted">Coin</span><span>${escape_html(coinText(shown().coin))}</span></p></section></div>`);
 		} else $$renderer.push(`<!--[-1--><p class="p-3 text-sm text-muted">No Characters in the Party yet.</p>`);
 		$$renderer.push(`<!--]--></aside>`);
 	});
@@ -631,6 +762,7 @@ function _page($$renderer, $$props) {
 		const floor = createFloorQuery(() => data.campaign.id, () => data.floor);
 		const timeline = createTimelineQuery(() => data.campaign.id, () => data.timeline);
 		const scene = createSceneQuery(() => data.campaign.id, () => data.scene);
+		const party = createSheetsQuery(() => data.campaign.id, () => data.sheets);
 		const journal = createJournalQuery(() => data.campaign.id, () => data.journal);
 		const actions = floorActions(() => data.campaign.id);
 		const calls = callActions(() => data.campaign.id);
@@ -651,7 +783,7 @@ function _page($$renderer, $$props) {
 		}
 		let picked = null;
 		const inScene = derived(() => new Set(scene.data.present.map((c) => c.id)));
-		const sheets = derived(() => data.sheets.map((s) => {
+		const sheets = derived(() => party.data.map((s) => {
 			const away = scene.data.elsewhere.find((c) => c.id === s.id);
 			return {
 				...s,
@@ -723,7 +855,8 @@ function _page($$renderer, $$props) {
 		CharacterSheet($$renderer, {
 			sheets: sheets(),
 			acting: acting()?.id ?? null,
-			onselect: (id) => picked = id
+			onselect: (id) => picked = id,
+			onlevelup: archived() ? void 0 : (id, picks) => attempt(() => levelUp(data.campaign.id, id, picks))
 		});
 		$$renderer.push(`<!----> <section aria-label="Story" class="flex min-h-0 flex-col gap-2">`);
 		Timeline($$renderer, {

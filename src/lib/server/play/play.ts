@@ -114,7 +114,10 @@ export function createPlay({
       return answered(campaignId, result)
     },
 
-    /** The Player answers a question Call; the last answer wakes the DM like a roll does. */
+    /**
+     * The Player answers a question Call, or says how many Hit Dice to spend (code rolls them);
+     * the last answer wakes the DM like a roll does.
+     */
     answer(
       campaignId: string,
       callId: string,
@@ -123,7 +126,9 @@ export function createPlay({
       player: string = SOLO_PLAYER
     ) {
       atTable(campaignId)
-      const result = library.calls(campaignId).answer(callId, partId, text, player)
+      const result = library
+        .calls(campaignId)
+        .answer(callId, partId, text, player, dice(campaignId))
       return answered(campaignId, result)
     },
 

@@ -1,5 +1,5 @@
 import { $ as ABILITY_METHODS, A as returnedDraft, B as worldLink, C as combat, D as event, E as declaration, F as belief, G as background, H as NPC_STATUSES, I as entity, J as race, K as classTable, L as entityAlias, M as act, N as arc, O as floor, P as beat, Q as subrace, R as fact, S as characterSpell, St as DUNGEON_MASTER_HOME, T as conversationMessage, U as abilityScoreMethod, V as ENTITY_TYPES, W as alignment, X as spell, Y as skill, Z as subclass, _ as characterChoice, _t as sql, a as userStateDir, at as desc, b as characterItem, c as abilities_default, ct as gt, d as openDatabase, dt as isNotNull, et as BACKSTORY_MAX, f as activityLine, ft as isNull, g as character, gt as or, h as campaign, ht as ne, i as defaultCampaignRoot, it as asc, j as session, k as npcCombat, l as createRulesRepository, lt as gte, m as callPart, mt as lt, n as campaignDatabasePath, o as loadRulesDataset, ot as and, p as call, pt as like, q as equipment, r as canonicalFolder, rt as SOLO_PLAYER, s as skills_default, st as eq, t as seedRulesData, tt as CUSTOM_BACKGROUND_FEATURE_MAX, u as migrateDatabase, ut as inArray, v as characterDraft, vt as Column, w as combatant$1, x as characterSkill, xt as DUNGEON_MASTER_CAMPAIGNS, y as characterEquipment, yt as is, z as pageRevision } from "./seed.js";
-import { L as resolveFeatures, N as equipmentGroupKeys, P as equipmentGroups, c as WIZARD_RULES_KEYS, f as resolverDraft, h as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, t as buildSummary, u as emptyDraft } from "./summary.js";
+import { F as equipmentGroups, P as equipmentGroupKeys, R as resolveFeatures, c as WIZARD_RULES_KEYS, f as resolverDraft, g as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, p as classSpellOptions, t as buildSummary, u as emptyDraft } from "./summary.js";
 import { _ as prettifyError, c as literal, f as strictObject, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { a as missingSeedFields, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
@@ -192,6 +192,52 @@ function detailToDraft(rules, c) {
 		if (pick) draft.equipment[group.key] = pick;
 	}
 	return draft;
+}
+// src/lib/character/level-up.ts
+/** The Wizard adds two spells to the spellbook each level (SRD p.114). */
+var WIZARD_SPELLS_PER_LEVEL = 2;
+function casting(rules, classSlug, level) {
+	return rules.classLevels.find((l) => l.class === classSlug && l.level === level)?.spellcasting;
+}
+/** The highest spell level the class has slots for at a level; 0 when none. */
+function highestSlotLevel(rules, classSlug, level) {
+	return (casting(rules, classSlug, level)?.slots ?? []).reduce((top, n, i) => n > 0 ? i + 1 : top, 0);
+}
+/**
+* The offer for reaching `level`: new cantrips by the class table's Cantrips Known, new spells by
+* its Spells Known (two for the Wizard's spellbook), from the class list up to the highest slot
+* level, leaving out the spells the Character already has. Prepared casters pick nothing.
+*/
+function levelUpOffer(rules, classSlug, level, known) {
+	const before = casting(rules, classSlug, level - 1);
+	const after = casting(rules, classSlug, level);
+	const cantrips = Math.max(0, (after?.cantripsKnown ?? 0) - (before?.cantripsKnown ?? 0));
+	const spells = classSlug === "wizard" ? level === 1 ? 6 : WIZARD_SPELLS_PER_LEVEL : Math.max(0, (after?.spellsKnown ?? 0) - (before?.spellsKnown ?? 0));
+	const top = highestSlotLevel(rules, classSlug, level);
+	const have = new Set(known);
+	const options = (levels) => levels.flatMap((l) => classSpellOptions(rules, classSlug, l)).filter((o) => !have.has(o.slug)).sort((a, b) => a.name.localeCompare(b.name));
+	return {
+		level,
+		cantrips: {
+			count: cantrips,
+			options: cantrips > 0 ? options([0]) : []
+		},
+		spells: {
+			count: spells,
+			options: spells > 0 ? options(Array.from({ length: top }, (_, i) => i + 1)) : []
+		}
+	};
+}
+/** Why the picks do not fit the offer, or null when they do. */
+function levelUpIssue(offer, picks) {
+	for (const kind of ["cantrips", "spells"]) {
+		const chosen = picks[kind] ?? [];
+		const { count, options } = offer[kind];
+		if (chosen.length !== count || new Set(chosen).size !== chosen.length) return `Pick ${count} ${count === 1 ? kind.slice(0, -1) : kind}`;
+		const wrong = chosen.find((s) => !options.some((o) => o.slug === s));
+		if (wrong) return `${wrong} is not one of the ${kind} to pick from`;
+	}
+	return null;
 }
 // src/lib/play/clock.ts
 /**
@@ -1750,7 +1796,8 @@ function createCharacterService(db, now = Date.now, rules = loadRulesDataset()) 
 			}).from(characterEquipment).innerJoin(equipment, eq(equipment.id, characterEquipment.itemId)).where(eq(characterEquipment.characterId, id)).orderBy(asc(characterEquipment.choiceKey), asc(equipment.slug)).all();
 			const inventory = db.select({
 				item: equipment.slug,
-				quantity: characterItem.quantity
+				quantity: characterItem.quantity,
+				equipped: characterItem.equipped
 			}).from(characterItem).innerJoin(equipment, eq(equipment.id, characterItem.itemId)).where(eq(characterItem.characterId, id)).orderBy(asc(equipment.slug)).all();
 			const choices = db.select({
 				choiceKey: characterChoice.choiceKey,
@@ -2117,12 +2164,55 @@ function timeline(db) {
 		call: openCallView(db)
 	};
 }
+// src/lib/rules/armor-class.ts
+/**
+* A Character's AC from what it wears (SRD "Armor and Shields"): equipped body armor's base plus
+* the Dexterity modifier (all of it for light armor, at most 2 for medium, none for heavy), or the
+* unarmored AC without armor; +2 with an equipped shield; +1 from the Defense fighting style while
+* armored. Pure.
+*/
+function armorClass(equipment, input) {
+	const worn = input.equipped.flatMap((slug) => equipment.find((e) => e.slug === slug) ?? []);
+	const armor = worn.find((e) => e.armorCategory && e.armorCategory !== "Shield" && e.armorClassBase !== null);
+	const shield = worn.find((e) => e.armorCategory === "Shield");
+	let value = input.unarmored;
+	if (armor) {
+		const dex = !armor.armorClassDexBonus ? 0 : armor.armorClassMaxBonus === null ? input.dexModifier : Math.min(input.dexModifier, armor.armorClassMaxBonus);
+		value = armor.armorClassBase + dex + (input.defense ? 1 : 0);
+	}
+	if (shield) value += shield.armorClassBase ?? 2;
+	const note = [armor ? armor.name : "unarmored", ...shield ? [shield.name] : []].join(", ");
+	return {
+		value,
+		note
+	};
+}
+/** Whether an item can be equipped: armor, a shield or a weapon. */
+var equippable = (item) => item.armorCategory !== null || item.weaponCategory !== null;
+/** Whether an item is body armor (one suit at a time), as opposed to a shield or a weapon. */
+var isBodyArmor = (item) => item.armorCategory !== null && item.armorCategory !== "Shield";
+// src/lib/server/character/armor.ts
+/**
+* A Character's AC from its equipped armor and shield (see `armorClass`), or null while its
+* unarmored AC can't be derived yet.
+*/
+function characterAc(rules, detail, stats) {
+	if (stats.unarmoredAc.status !== "ok") return null;
+	const dex = stats.abilities.dex;
+	return armorClass(rules.equipment, {
+		equipped: detail.inventory.filter((i) => i.equipped).map((i) => i.item),
+		dexModifier: dex.status === "ok" ? dex.value.modifier : 0,
+		unarmored: stats.unarmoredAc.value.value,
+		defense: detail.choices.some((c) => c.optionSlug.endsWith("fighting-style-defense"))
+	});
+}
 // src/lib/server/play/combatants.ts
 var ok = (s) => s.status === "ok" ? s.value : null;
 /** A Character's derived stats, from its stored choices and what it carries now. */
 function characterStats(db, id) {
 	const detail = createCharacterService(db).get(id);
-	const { stats, resolved } = buildSummary(loadWizardRules(), {
+	const rules = loadWizardRules();
+	const { stats, resolved } = buildSummary(rules, {
 		...detailToSummaryData(detail),
 		equipment: detail.inventory
 	});
@@ -2132,14 +2222,15 @@ function characterStats(db, id) {
 		features: resolved.features.map((f) => ({
 			slug: f.slug,
 			name: f.name
-		}))
+		})),
+		ac: characterAc(rules, detail, stats)?.value ?? 10
 	};
 }
 function characterCombatant(db, ref) {
 	const key = ref.trim().toLowerCase();
 	const holder = characterHolders(db).find((c) => c.handle === key || c.id === ref || c.name.toLowerCase() === key);
 	if (!holder) return null;
-	const { detail, stats, features } = characterStats(db, holder.id);
+	const { detail, stats, features, ac } = characterStats(db, holder.id);
 	return {
 		kind: "character",
 		handle: holder.handle,
@@ -2149,7 +2240,7 @@ function characterCombatant(db, ref) {
 		detail,
 		stats,
 		features,
-		ac: ok(stats.unarmoredAc)?.value ?? 10,
+		ac,
 		hp: detail.currentHp,
 		maxHp: ok(stats.hitPoints) ?? detail.currentHp,
 		conditions: detail.conditions
@@ -2541,6 +2632,7 @@ function openCallRow(db) {
 /** What a part rolls, as the Player reads it. */
 function labelOf(part, kind) {
 	if (kind === "initiative") return "Initiative";
+	if (part.hitDice) return "Hit Dice";
 	if (part.sequence) return part.sequence.label;
 	if (part.skill) return `${SKILL_NAMES.get(part.skill) ?? part.skill} check`;
 	if (part.save) return `${ABILITY_NAMES.get(part.save) ?? part.save} save`;
@@ -2615,6 +2707,36 @@ function createPendingCall(db, parts, at, kind = "roll_sequence") {
 	});
 	return id;
 }
+/**
+* Stores a short rest's Hit Dice Call as pending, for the closing `narrate(..., call: id)` to
+* attach: one part per Character, each answered with how many Hit Dice to spend. Returns its id.
+*/
+function createHitDiceCall(db, parts, at) {
+	const id = db.insert(call).values({
+		campaignId: db.select({ id: campaign.id }).from(campaign).get().id,
+		kind: "hit_dice",
+		state: "pending",
+		text: "How many Hit Dice do you spend?",
+		createdAt: at
+	}).returning({ id: call.id }).get().id;
+	parts.forEach((part, i) => {
+		db.insert(callPart).values({
+			callId: id,
+			position: i + 1,
+			characterId: part.characterId,
+			player: part.player,
+			hitDice: {
+				die: part.die,
+				available: part.available,
+				conModifier: part.conModifier,
+				rolls: null,
+				healed: null,
+				after: null
+			}
+		}).run();
+	});
+	return id;
+}
 /** The pending Calls no Narration has attached yet. */
 function pendingCalls(db) {
 	return db.select({ id: call.id }).from(call).where(eq(call.state, "pending")).all().map((c) => c.id);
@@ -2652,7 +2774,11 @@ function openCallView(db) {
 			reason: part.reason,
 			mode: part.mode,
 			answered: part.answeredAt !== null,
-			next: part.sequence ? nextStep(part.sequence) : null
+			next: part.sequence ? nextStep(part.sequence) : null,
+			hitDice: part.hitDice && {
+				die: part.hitDice.die,
+				available: part.hitDice.available
+			}
 		}))
 	};
 }
@@ -2669,6 +2795,7 @@ var CallClosedError = class extends Error {};
 var CallRefusedError = class extends Error {};
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
 function resultLine(p) {
+	if (p.hitDice) return `[${p.characterName} · ${p.player}] Hit Dice: ${hitDiceText(p.hitDice)}`;
 	if (p.sequence) return `[${p.characterName} · ${p.player}] ${sequenceText(p.sequence, p.mode)}`;
 	if (p.result === null) return `[${p.player}] ${p.answer}`;
 	const r = p.result;
@@ -2676,6 +2803,14 @@ function resultLine(p) {
 	const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`;
 	if (p.kind === "initiative") return `[${p.characterName} · ${p.player}] Initiative: d20 ${dice} ${modifier} = ${r.total}`;
 	return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? "success" : "failure"}`;
+}
+/** What a Character's Hit Dice came to: the dice, the Con modifier per die, the HP regained. */
+function hitDiceText(spend) {
+	const rolls = spend.rolls ?? [];
+	if (!rolls.length) return "spent none";
+	const con = spend.conModifier * rolls.length;
+	const modifier = con ? ` ${con > 0 ? "+" : "-"} ${Math.abs(con)}` : "";
+	return `spent ${rolls.length} d${spend.die}: ${rolls.join(" + ")}${modifier} = ${spend.healed} HP → ${spend.after.hp}/${spend.after.max} HP`;
 }
 /** The `call_result` channel event: one body line per part, in order. */
 function callResultEvent(result) {
@@ -2784,6 +2919,66 @@ function createCalls(db, now = Date.now) {
 			}
 		};
 	}
+	/**
+	* A short rest's Hit Dice: the Player says how many; code rolls each, adds the Con modifier
+	* (never below 0 a die), and heals the Character up to its maximum.
+	*/
+	function spendHitDice(part, spend, text, dice) {
+		const count = /^\d+$/.test(text) ? Number(text) : NaN;
+		if (!(count >= 0 && count <= spend.available)) throw new CallRefusedError(`Spend 0 to ${spend.available} Hit Dice`);
+		if (count > 0 && !dice) throw new Error("Spending Hit Dice needs the Campaign dice");
+		const row = db.select().from(character).where(eq(character.id, part.characterId)).get();
+		const max = maxHp(part.characterId) ?? row.currentHp;
+		const rolls = Array.from({ length: count }, () => dice.rollExpression(`1d${spend.die}`).total);
+		const rolled = rolls.reduce((sum, r) => sum + Math.max(0, r + spend.conModifier), 0);
+		const hp = Math.min(max, row.currentHp + rolled);
+		db.update(character).set({
+			currentHp: hp,
+			hitDiceSpent: row.hitDiceSpent + count
+		}).where(eq(character.id, row.id)).run();
+		const done = {
+			...spend,
+			rolls,
+			healed: hp - row.currentHp,
+			after: {
+				hp,
+				max
+			}
+		};
+		return {
+			values: {
+				hitDice: done,
+				answer: String(count)
+			},
+			event: {
+				kind: "roll",
+				summary: `${row.name} Hit Dice: ${hitDiceText(done)}`,
+				data: {
+					part: part.id,
+					characterName: row.name,
+					player: part.player,
+					what: `Hit Dice (${count}d${spend.die})`,
+					mode: "normal",
+					reason: null,
+					dice: rolls,
+					modifier: spend.conModifier * count,
+					total: done.healed,
+					outcome: null,
+					target: null
+				}
+			}
+		};
+	}
+	/** A Character's derived HP maximum. */
+	function maxHp(characterId) {
+		const detail = createCharacterService(db, now).get(characterId);
+		if (!detail) return null;
+		const { stats } = buildSummary(loadWizardRules(), {
+			...detailToSummaryData(detail),
+			equipment: detail.inventory
+		});
+		return stats.hitPoints.status === "ok" ? stats.hitPoints.value : null;
+	}
 	return {
 		/** The open Call, Player-safe. */
 		open: () => openCallView(db),
@@ -2794,6 +2989,7 @@ function createCalls(db, now = Date.now) {
 		roll(callId, partId, dice, player = SOLO_PLAYER) {
 			return answer(callId, partId, player, (part, kind) => {
 				if (!part.characterId) throw new CallRefusedError("That part is a question: answer it");
+				if (part.hitDice) throw new CallRefusedError("Say how many Hit Dice to spend");
 				if (part.sequence) return rollSequenceStep(part, dice, player);
 				const modifier = modifierFor(part.characterId, part, kind);
 				const d20 = part.mode === "normal" ? dice.rollD20() : dice.rollD20({
@@ -2849,10 +3045,14 @@ function createCalls(db, now = Date.now) {
 				};
 			});
 		},
-		/** Answers a question part; with choices, the answer must be one of them. */
-		answer(callId, partId, text, player = SOLO_PLAYER) {
+		/**
+		* Answers a question part (with choices, the answer must be one of them), or a Hit Dice part
+		* with how many to spend, which code then rolls with `dice`.
+		*/
+		answer(callId, partId, text, player = SOLO_PLAYER, dice) {
 			const clean = text.trim();
 			return answer(callId, partId, player, (part) => {
+				if (part.hitDice) return spendHitDice(part, part.hitDice, clean, dice);
 				if (part.characterId) throw new CallRefusedError("That part is a Check: roll it");
 				const { choices, text: question } = db.select().from(call).where(eq(call.id, callId)).get();
 				if (!clean) throw new CallRefusedError("Give an answer");
@@ -3205,7 +3405,7 @@ function currentTurn(db) {
 }
 // src/lib/server/play/sheets.ts
 var signed = (n) => n >= 0 ? `+${n}` : `${n}`;
-function toPlaySheet(c) {
+function toPlaySheet(c, levelUp) {
 	const rules = loadWizardRules();
 	const { stats, names, resolved } = buildSummary(rules, {
 		...detailToSummaryData(c),
@@ -3225,10 +3425,12 @@ function toPlaySheet(c) {
 			max: ok(stats.hitPoints),
 			temp: c.tempHp
 		},
-		ac: stats.unarmoredAc.status === "ok" ? {
-			value: stats.unarmoredAc.value.value,
-			note: "unarmored"
-		} : null,
+		hitDice: resolved.hitDie === null ? null : {
+			die: resolved.hitDie,
+			total: c.level,
+			spent: c.hitDiceSpent
+		},
+		ac: characterAc(rules, c, stats),
 		conditions: c.conditions,
 		concentration: c.concentration,
 		abilities: ABILITY_KEYS.flatMap((key) => {
@@ -3256,13 +3458,16 @@ function toPlaySheet(c) {
 		})),
 		inventory: c.inventory.map((i) => ({
 			name: itemName.get(i.item) ?? i.item,
-			quantity: i.quantity
-		}))
+			quantity: i.quantity,
+			equipped: i.equipped ?? false
+		})),
+		coin: c.coin,
+		levelUp
 	};
 }
 /** The play sheet of every saved Character in the Party, oldest first. */
 function playSheets(party) {
-	return party.list().flatMap((m) => m.kind === "character" ? [toPlaySheet(party.character(m.id).character)] : []);
+	return party.list().flatMap((m) => m.kind === "character" ? [toPlaySheet(party.character(m.id).character, party.levelUpOffer(m.id))] : []);
 }
 // src/lib/server/play/core-block.ts
 /** A Character's handle, from its name. */
@@ -3551,6 +3756,23 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 			offline: !attended()
 		});
 	}
+	function detail(id) {
+		const found = characters.get(id);
+		if (!found) throw new CharacterNotFoundError("Character not found");
+		return found;
+	}
+	function maxHp(c) {
+		const { stats } = buildSummary(rules, {
+			...detailToSummaryData(c),
+			equipment: c.inventory
+		});
+		return stats.hitPoints.status === "ok" ? stats.hitPoints.value : c.currentHp;
+	}
+	/** The level-up the DM awarded and the Character has not taken, or null. */
+	function offerFor(c) {
+		if (c.levelsAwarded <= 0 || c.level >= 20) return null;
+		return levelUpOffer(rules, c.classSlug, c.level + 1, c.spells.map((s) => s.spell));
+	}
 	/** The draft as the service's input; refused while any step is not valid. */
 	function input(draft) {
 		const mapped = tryDraftToCharacterInput(rules, draft);
@@ -3645,6 +3867,44 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 				const updated = characters.update(id, input(draft));
 				db.update(character).set({ version: sql`${character.version} + 1` }).where(eq(character.id, id)).run();
 				noteChange(id, `the Player edited ${updated.name}`);
+				return updated;
+			});
+		},
+		/** The level-up waiting for the Player: what one more level asks them to pick, or null. */
+		levelUpOffer(id) {
+			return offerFor(detail(id));
+		},
+		/**
+		* Takes one level the DM awarded (`award_level`): the level rises, HP rises with the new
+		* maximum, and the picked cantrips and spells are learned. Play state is kept. Refused without
+		* an awarded level, or when the picks do not fit the offer.
+		*/
+		levelUp(id, picks) {
+			return db.transaction(() => {
+				const before = detail(id);
+				const offer = offerFor(before);
+				if (!offer) throw new CharacterValidationError("No level to take: the DM awards levels");
+				const issue = levelUpIssue(offer, picks);
+				if (issue) throw new CharacterValidationError(issue);
+				db.update(character).set({
+					level: offer.level,
+					levelsAwarded: before.levelsAwarded - 1,
+					version: sql`${character.version} + 1`,
+					updatedAt: now()
+				}).where(eq(character.id, id)).run();
+				const learned = [...picks.cantrips ?? [], ...picks.spells ?? []];
+				if (learned.length > 0) {
+					const ids = db.select({ id: spell.id }).from(spell).where(inArray(spell.slug, learned)).all();
+					db.insert(characterSpell).values(ids.map((s) => ({
+						characterId: id,
+						spellId: s.id,
+						source: "class"
+					}))).run();
+				}
+				const after = detail(id);
+				const gained = Math.max(0, maxHp(after) - maxHp(before));
+				const updated = db.update(character).set({ currentHp: before.currentHp > 0 ? before.currentHp + gained : 0 }).where(eq(character.id, id)).returning().get();
+				noteChange(id, `the Player levelled ${updated.name} up to level ${offer.level}`);
 				return updated;
 			});
 		},
@@ -4457,6 +4717,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { applyDamage as $, combatState as A, currentArc as At, DC_BY_TIER as B, writeTool as Bt, DmBusyError as C, fieldNames as Ct, createDmChannels as D, charactersInScene as Dt, DraftNotFoundError as E, characterHolders as Et, spendTurnResource as F, PLUGIN_NAME as Ft, createPendingCall as G, callInput as H, parseClock as Ht, startCombat as I, ToolError as It, attackSequence as J, openCall as K, ABILITY_NAMES as L, creationTool as Lt, nextTurn as M, resolveBeat as Mt, orderText as N, retireArc as Nt, playSheets as O, CurrentArcError as Ot, refuseDuringCombat as P, reviseArc as Pt, sequenceText as Q, CallClosedError as R, expectVersion as Rt, DeclarationRefusedError as S, createWorld as St, DmOnlyEditError as T, resolveLinks as Tt, callResultEvent as U, SESSION_LIVE_MESSAGE as Ut, TIERS as V, formatClock as Vt, cancelPendingCall as W, rollAll as X, damageSequence as Y, saveSequence as Z, closeSession as _, loadWizardRules as _t, CampaignArchivedError as a, currentStamp as at, sessionsView as b, hpState as bt, CampaignNotFoundError as c, nextEventId as ct, BeginRefusedError as d, SpotlightRefusedError as dt, applyHealing as et, SeedLockedError as f, advanceClock as ft, addConversationLine as g, scenePlace as gt, refuseLockedSeed as h, present as ht, sessions as i, setConditions as it, endCombat as j, pastArcs as jt, addCombatants as k, createArc as kt, NotACampaignFolderError as l, setAwaitingNarration as lt, creationStage as m, currentMinute as mt, library as n, mustAct as nt, CampaignExistsError as o, logActivity as ot, StartOverRefusedError as p, characterRefs as pt, saveKey as q, live as r, saveBonus as rt, CampaignMissingError as s, logEvent as st, campaignRoot as t, combatant as tt, SessionLiveError as u, ClockBackwardsError as ut, history as v, CharacterNotFoundError as vt, returnStrandedDrafts as w, renderLinks as wt, DeclarationNotFoundError as x, lintWorld as xt, indexNarration as y, CharacterValidationError as yt, CallRefusedError as z, readTool as zt };
+export { sequenceText as $, combatState as A, charactersInScene as At, DC_BY_TIER as B, creationTool as Bt, DmBusyError as C, hpState as Ct, createDmChannels as D, renderLinks as Dt, DraftNotFoundError as E, fieldNames as Et, spendTurnResource as F, resolveBeat as Ft, createHitDiceCall as G, parseClock as Gt, callInput as H, readTool as Ht, startCombat as I, retireArc as It, saveKey as J, createPendingCall as K, SESSION_LIVE_MESSAGE as Kt, ABILITY_NAMES as L, reviseArc as Lt, nextTurn as M, createArc as Mt, orderText as N, currentArc as Nt, playSheets as O, resolveLinks as Ot, refuseDuringCombat as P, pastArcs as Pt, saveSequence as Q, CallClosedError as R, PLUGIN_NAME as Rt, DeclarationRefusedError as S, CharacterValidationError as St, DmOnlyEditError as T, createWorld as Tt, callResultEvent as U, writeTool as Ut, TIERS as V, expectVersion as Vt, cancelPendingCall as W, formatClock as Wt, damageSequence as X, attackSequence as Y, rollAll as Z, closeSession as _, currentMinute as _t, CampaignArchivedError as a, setConditions as at, sessionsView as b, loadWizardRules as bt, CampaignNotFoundError as c, currentStamp as ct, BeginRefusedError as d, nextEventId as dt, applyDamage as et, SeedLockedError as f, setAwaitingNarration as ft, addConversationLine as g, characterRefs as gt, refuseLockedSeed as h, advanceClock as ht, sessions as i, saveBonus as it, endCombat as j, CurrentArcError as jt, addCombatants as k, characterHolders as kt, NotACampaignFolderError as l, logActivity as lt, creationStage as m, SpotlightRefusedError as mt, library as n, combatant as nt, CampaignExistsError as o, equippable as ot, StartOverRefusedError as p, ClockBackwardsError as pt, openCall as q, live as r, mustAct as rt, CampaignMissingError as s, isBodyArmor as st, campaignRoot as t, applyHealing as tt, SessionLiveError as u, logEvent as ut, history as v, present as vt, returnStrandedDrafts as w, lintWorld as wt, DeclarationNotFoundError as x, CharacterNotFoundError as xt, indexNarration as y, scenePlace as yt, CallRefusedError as z, ToolError as zt };
 
 //# sourceMappingURL=campaign.js.map

@@ -1,7 +1,7 @@
 import { page } from 'vitest/browser'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-svelte'
-import { attackCall, checkCall, questionCall } from './play-fixtures'
+import { attackCall, checkCall, hitDiceCall, questionCall } from './play-fixtures'
 import CallCard from './CallCard.svelte'
 
 describe('CallCard', () => {
@@ -87,5 +87,19 @@ describe('CallCard', () => {
     await page.getByRole('button', { name: 'Roll Initiative for Bram' }).click()
 
     expect(onroll).toHaveBeenCalledWith('p2')
+  })
+
+  it('asks how many Hit Dice to spend, one button per count up to what is left', async () => {
+    const onanswer = vi.fn()
+    render(CallCard, { call: hitDiceCall, onroll: () => {}, onanswer })
+
+    const wren = page.getByRole('group', { name: 'Wren' })
+    await expect.element(page.getByText('How many Hit Dice do you spend?')).toBeVisible()
+    await expect.element(wren.getByText('2 d10 left')).toBeVisible()
+    await expect.element(wren.getByRole('button', { name: 'Spend 3' })).not.toBeInTheDocument()
+    await wren.getByRole('button', { name: 'Spend 2' }).click()
+    expect(onanswer).toHaveBeenCalledWith('part-5', '2')
+    await wren.getByRole('button', { name: 'Spend none' }).click()
+    expect(onanswer).toHaveBeenLastCalledWith('part-5', '0')
   })
 })

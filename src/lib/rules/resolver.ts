@@ -39,6 +39,8 @@ export interface ResolverDraft {
    * The subclass chooser is not a pick: it is `subclass` above.
    */
   picks: Record<string, string[]>
+  /** The Character's level: class and subclass features up to it apply. Defaults to 1. */
+  level?: number
 }
 
 /** Where a grant or group comes from, matching `character_skill.source` / `character_spell.source`. */
@@ -466,8 +468,11 @@ export function resolveFeatures(rules: ResolverRules, draft: ResolverDraft): Res
     cls.proficiencies.forEach((p) => addProficiency(p, 'class', 'fixed', null))
     dataGroups('class', cls.slug, cls.choiceGroups, 'class')
     overlayGroups('class', cls.slug, 'class')
-    const levelOne = rules.classLevels.find((l) => l.class === cls.slug && l.level === 1)
-    for (const slug of levelOne?.features ?? []) {
+    const classFeatures = rules.classLevels
+      .filter((l) => l.class === cls.slug && l.level <= (draft.level ?? 1))
+      .sort((a, b) => a.level - b.level)
+      .flatMap((l) => l.features)
+    for (const slug of classFeatures) {
       const f = features.get(slug)
       if (!f) continue
       active.add(slug)
@@ -477,17 +482,18 @@ export function resolveFeatures(rules: ResolverRules, draft: ResolverDraft): Res
   if (activeSubclass) {
     applyOverlayGrants('subclass', activeSubclass.slug, 'class', 'subclass')
     overlayGroups('subclass', activeSubclass.slug, 'class')
-    const levelOne = rules.subclassLevels.find(
-      (l) => l.subclass === activeSubclass.slug && l.level === 1
-    )
-    for (const slug of levelOne?.features ?? []) {
+    const subclassFeatures = rules.subclassLevels
+      .filter((l) => l.subclass === activeSubclass.slug && l.level <= (draft.level ?? 1))
+      .sort((a, b) => a.level - b.level)
+      .flatMap((l) => l.features)
+    for (const slug of subclassFeatures) {
       const f = features.get(slug)
       if (!f) continue
       active.add(slug)
       featureList.push({ slug, name: f.name, source: 'subclass' })
     }
     for (const s of activeSubclass.spells) {
-      if (s.minClassLevel <= 1) addSpell(s.spell, 'subclass')
+      if (s.minClassLevel <= (draft.level ?? 1)) addSpell(s.spell, 'subclass')
     }
   }
   if (background) {

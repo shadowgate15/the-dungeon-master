@@ -13,8 +13,25 @@ const base = {
   concentration: null,
   spellSlots: [],
   features: [],
-  inventory: []
+  inventory: [],
+  hitDice: null,
+  coin: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
+  levelUp: null
 } satisfies Partial<PlaySheet>
+
+/** A level the DM awarded with two spells to pick, as a Wizard's spellbook asks. */
+export const levelUpOffer: NonNullable<PlaySheet['levelUp']> = {
+  level: 2,
+  cantrips: { count: 0, options: [] },
+  spells: {
+    count: 2,
+    options: [
+      { slug: 'magic-missile', name: 'Magic Missile' },
+      { slug: 'shield', name: 'Shield' },
+      { slug: 'sleep', name: 'Sleep' }
+    ]
+  }
+}
 
 export const sheets: PlaySheet[] = [
   {
@@ -23,8 +40,10 @@ export const sheets: PlaySheet[] = [
     name: 'Wren',
     headline: 'Lightfoot Halfling Ranger 1',
     hp: { current: 9, max: 12, temp: 0 },
-    ac: { value: 14, note: 'unarmored' },
+    ac: { value: 14, note: 'Leather Armor' },
     conditions: ['poisoned'],
+    hitDice: { die: 10, total: 1, spent: 0 },
+    coin: { cp: 0, sp: 4, ep: 0, gp: 12, pp: 0 },
     concentration: 'bless',
     abilities: [
       { key: 'str', score: 10, modifier: 0 },
@@ -41,8 +60,9 @@ export const sheets: PlaySheet[] = [
       { slug: 'favored-enemy', name: 'Favored Enemy', spent: 0 }
     ],
     inventory: [
-      { name: 'Rope, hempen (50 feet)', quantity: 1 },
-      { name: 'Arrow', quantity: 20 }
+      { name: 'Leather Armor', quantity: 1, equipped: true },
+      { name: 'Rope, hempen (50 feet)', quantity: 1, equipped: false },
+      { name: 'Arrow', quantity: 20, equipped: false }
     ]
   },
   {
@@ -138,7 +158,8 @@ export const checkCall: OpenCall = {
       reason: 'The lock is old and stiff',
       mode: 'normal',
       answered: false,
-      next: null
+      next: null,
+      hitDice: null
     },
     {
       id: 'p2',
@@ -148,7 +169,8 @@ export const checkCall: OpenCall = {
       reason: 'Bram knows these streets',
       mode: 'advantage',
       answered: false,
-      next: null
+      next: null,
+      hitDice: null
     }
   ]
 }
@@ -168,7 +190,8 @@ export const questionCall: OpenCall = {
       reason: null,
       mode: 'normal',
       answered: false,
-      next: null
+      next: null,
+      hitDice: null
     }
   ]
 }
@@ -205,6 +228,27 @@ export const rollEntries: TimelineEntry[] = [
 ]
 
 /** An attack Call mid-sequence: Wren has rolled to hit and rolls damage next. */
+/** A short rest's Call: Wren has two of three d10 Hit Dice left to spend. */
+export const hitDiceCall: OpenCall = {
+  id: 'call-3',
+  kind: 'hit_dice',
+  text: 'How many Hit Dice do you spend?',
+  choices: [],
+  parts: [
+    {
+      id: 'part-5',
+      character: 'Wren',
+      player: 'player',
+      label: 'Hit Dice',
+      reason: null,
+      mode: 'normal',
+      answered: false,
+      next: null,
+      hitDice: { die: 10, available: 2 }
+    }
+  ]
+}
+
 export const attackCall: OpenCall = {
   id: 'c3',
   kind: 'roll_sequence',
@@ -219,7 +263,8 @@ export const attackCall: OpenCall = {
       reason: null,
       mode: 'normal',
       answered: false,
-      next: 'damage'
+      next: 'damage',
+      hitDice: null
     }
   ]
 }

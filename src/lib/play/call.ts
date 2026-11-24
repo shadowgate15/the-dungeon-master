@@ -20,16 +20,19 @@ export type CallPart = {
    * a Check or question. The AC or DC it is rolled against is never here.
    */
   next: 'to hit' | 'damage' | 'save' | null
+  /** A short rest's Hit Dice part: the die and how many the Character can spend; null otherwise. */
+  hitDice: { die: number; available: number } | null
 }
 
 /**
  * The open Call, Player-safe: a Check (one part per Character), a question (its text and
- * choices, free text when there are none), an action's roll sequences (one per Character), or
- * Combat initiative (one roll per Character).
+ * choices, free text when there are none), an action's roll sequences (one per Character),
+ * Combat initiative (one roll per Character), or a short rest's Hit Dice (one part per hurt
+ * Character, answered with how many to spend).
  */
 export type OpenCall = {
   id: string
-  kind: 'check' | 'question' | 'roll_sequence' | 'initiative'
+  kind: 'check' | 'question' | 'roll_sequence' | 'initiative' | 'hit_dice'
   text: string | null
   choices: string[]
   parts: CallPart[]
