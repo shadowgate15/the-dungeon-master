@@ -9,6 +9,9 @@ export const BRIDGE_BUNDLE = path.join(root, 'plugin/bin/dm-bridge.mjs')
 /** Where the committed launcher bundle lives: `dm` runs it through the terminal shim. */
 export const LAUNCHER_BUNDLE = path.join(root, 'plugin/bin/dm.mjs')
 
+/** Where the committed hooks bundle lives: `hooks/hooks.json` runs it for each plugin hook. */
+export const HOOKS_BUNDLE = path.join(root, 'plugin/hooks/dm-hooks.mjs')
+
 /** One self-contained ESM file for plain Node, so the plugin root needs no `package.json`. */
 async function bundle(entry: string, outfile: string) {
   await build({
@@ -36,7 +39,13 @@ export async function buildLauncher(outfile = LAUNCHER_BUNDLE) {
   await bundle('src/launcher/main.ts', outfile)
 }
 
+/** Bundles the plugin hooks (PreToolUse, Stop, SessionStart). */
+export async function buildHooks(outfile = HOOKS_BUNDLE) {
+  await bundle('src/hooks/main.ts', outfile)
+}
+
 if (import.meta.main) {
   await buildBridge()
   await buildLauncher()
+  await buildHooks()
 }

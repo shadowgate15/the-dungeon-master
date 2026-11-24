@@ -22,7 +22,7 @@ export const channels = createDmChannels(library)
 export const play = createPlay({ library, channels, publish: live.publish })
 openSessionsOnAttach(sessions, play)
 
-export const bridgeApi = createBridgeApi({ library, host, channels, sessions, token })
+export const bridgeApi = createBridgeApi({ library, host, channels, sessions, play, token })
 
 /** The known localhost port, unless overridden for tests. */
 export const port = Number(DUNGEON_MASTER_PORT || 4777)

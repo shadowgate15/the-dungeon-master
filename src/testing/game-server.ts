@@ -24,7 +24,7 @@ export async function startTestGameServer({ home }: { home: string }) {
   const play = createPlay({ library, channels, publish: live.publish })
   openSessionsOnAttach(sessions, play)
   const token = 'test-token'
-  const api = createBridgeApi({ library, host, channels, sessions, token })
+  const api = createBridgeApi({ library, host, channels, sessions, play, token })
   const seen: string[] = []
 
   const server = http.createServer(async (req, res) => {

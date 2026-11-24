@@ -95,7 +95,7 @@ export function setAwaitingNarration(db: Queryable, since: number | null) {
 }
 
 /** Event kinds the Player's timeline shows. */
-const SHOWN = new Set(['declaration', 'narration'])
+const SHOWN = new Set(['declaration', 'narration', 'turn_error'])
 
 /** One logged Event as a timeline entry, or null for one the timeline does not show. */
 function entryFor(e: typeof event.$inferSelect): TimelineEntry | null {
@@ -111,6 +111,7 @@ function entryFor(e: typeof event.$inferSelect): TimelineEntry | null {
       text: String(data.text)
     }
   }
+  if (e.kind === 'turn_error') return { type: 'error', id, text: String(data.text) }
   return {
     type: 'narration',
     id,

@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { NotACampaignFolderError, type CampaignLibrary } from '../campaign/library'
 import type { ToolHost } from '../tools/host'
+import type { Play } from '../play/play'
 import type { Channels } from './channels'
 import { SESSION_LIVE_MESSAGE, type Sessions } from './sessions'
 
@@ -15,6 +16,7 @@ type Options = {
   host: ToolHost
   channels: Channels
   sessions: Sessions
+  play: Play
   token: string
 }
 
@@ -71,8 +73,11 @@ const SESSION_LIVE = {
  *   attaches the bridge's session (`x-dm-session`). A second session is refused (409).
  * - `POST register` with `{folder}`: registers a Campaign folder (the launcher), answering
  *   `{id, name, attached}`.
+ * - `POST stop-check` with `{campaign, again}`: whether the Stop hook refuses to end the DM's turn,
+ *   as `{block, reason}`.
+ * - `GET  core-block?campaign=<folder>`: the DM's core block, as `{text}`, for SessionStart.
  */
-export function createBridgeApi({ library, host, channels, sessions, token }: Options) {
+export function createBridgeApi({ library, host, channels, sessions, play, token }: Options) {
   return async function handle(request: Request): Promise<Response> {
     if (!authorized(request, token)) return json({ error: 'bad token' }, 401)
     const url = new URL(request.url)
@@ -110,6 +115,20 @@ export function createBridgeApi({ library, host, channels, sessions, token }: Op
       const session = request.headers.get(SESSION_HEADER) ?? crypto.randomUUID()
       if (!sessions.attach(entry.id, session)) return json(SESSION_LIVE, 409)
       return eventStream(channels, campaign, () => sessions.detach(entry.id, session))
+    }
+
+    if (route === 'stop-check' && request.method === 'POST') {
+      const { campaign, again } = (await request.json()) as { campaign?: string; again?: boolean }
+      const entry = campaign && library.entryAt(campaign)
+      if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404)
+      return json(play.stopCheck(entry.id, again === true))
+    }
+
+    if (route === 'core-block' && request.method === 'GET') {
+      const campaign = url.searchParams.get('campaign')
+      const entry = campaign && library.entryAt(campaign)
+      if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404)
+      return json({ text: play.coreBlock(entry.id) })
     }
 
     if (route === 'register' && request.method === 'POST') {
