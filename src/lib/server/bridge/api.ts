@@ -3,6 +3,7 @@ import { NotACampaignFolderError, type CampaignLibrary } from '../campaign/libra
 import type { ToolHost } from '../tools/host'
 import type { Play } from '../play/play'
 import type { Channels } from './channels'
+import type { Permissions } from './permissions'
 import { SESSION_LIVE_MESSAGE, type Sessions } from './sessions'
 
 /** Where the bridge API lives on the game server. */
@@ -17,6 +18,7 @@ type Options = {
   channels: Channels
   sessions: Sessions
   play: Play
+  permissions: Permissions
   token: string
 }
 
@@ -32,7 +34,8 @@ function authorized(request: Request, token: string): boolean {
 const encoder = new TextEncoder()
 
 /**
- * A Campaign's channel events as Server-Sent Events, until the bridge hangs up. While the stream
+ * A Campaign's channel events (`event: channel`) and permission verdicts (`event: permission`)
+ * as Server-Sent Events, until the bridge hangs up. While the stream
  * is open, the bridge's session is attached to the Campaign.
  */
 function eventStream(channels: Channels, folder: string, detach: () => void): Response {
@@ -44,9 +47,13 @@ function eventStream(channels: Channels, folder: string, detach: () => void): Re
       const unlisten = channels.listen(folder, (event) =>
         write(`event: channel\ndata: ${JSON.stringify(event)}\n\n`)
       )
+      const unlistenVerdicts = channels.listenVerdicts(folder, (verdict) =>
+        write(`event: permission\ndata: ${JSON.stringify(verdict)}\n\n`)
+      )
       const keepAlive = setInterval(() => write(': ka\n\n'), 15_000)
       stop = () => {
         unlisten()
+        unlistenVerdicts()
         clearInterval(keepAlive)
         detach()
       }
@@ -76,8 +83,18 @@ const SESSION_LIVE = {
  * - `POST stop-check` with `{campaign, again}`: whether the Stop hook refuses to end the DM's turn,
  *   as `{block, reason}`.
  * - `GET  core-block?campaign=<folder>`: the DM's core block, as `{text}`, for SessionStart.
+ * - `POST permission_request` with `{campaign, request_id, tool_name, description, input_preview}`:
+ *   the session's permission prompt, shown to the Player; the verdict comes back on `events`.
  */
-export function createBridgeApi({ library, host, channels, sessions, play, token }: Options) {
+export function createBridgeApi({
+  library,
+  host,
+  channels,
+  sessions,
+  permissions,
+  play,
+  token
+}: Options) {
   return async function handle(request: Request): Promise<Response> {
     if (!authorized(request, token)) return json({ error: 'bad token' }, 401)
     const url = new URL(request.url)
@@ -104,6 +121,8 @@ export function createBridgeApi({ library, host, channels, sessions, play, token
           isError: true
         })
       }
+      // A tool call means the session moved on: any permission prompt was answered.
+      if (entry) permissions.movedOn(entry.id)
       return json(host.call(campaign, name, args))
     }
 
@@ -129,6 +148,25 @@ export function createBridgeApi({ library, host, channels, sessions, play, token
       const entry = campaign && library.entryAt(campaign)
       if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404)
       return json({ text: play.coreBlock(entry.id) })
+    }
+
+    if (route === 'permission_request' && request.method === 'POST') {
+      const body = (await request.json()) as Partial<Record<string, string>>
+      const { campaign, request_id, tool_name } = body
+      if (!campaign || !request_id || !tool_name) {
+        return json({ error: 'campaign, request_id and tool_name are required' }, 400)
+      }
+      const entry = library.entryAt(campaign)
+      if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404)
+      const session = request.headers.get(SESSION_HEADER) ?? ''
+      if (sessions.heldByOther(entry.id, session)) return json(SESSION_LIVE, 409)
+      permissions.request(entry.id, campaign, {
+        requestId: request_id,
+        toolName: tool_name,
+        description: body.description ?? '',
+        inputPreview: body.input_preview ?? ''
+      })
+      return json({ ok: true })
     }
 
     if (route === 'register' && request.method === 'POST') {

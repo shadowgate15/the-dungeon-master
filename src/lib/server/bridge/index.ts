@@ -8,6 +8,7 @@ import { createToolHost } from '../tools/host'
 import { createDmChannels } from '../play/notices'
 import { createPlay, openSessionsOnAttach } from '../play/play'
 import { createBridgeApi } from './api'
+import { createPermissions } from './permissions'
 
 /** A fresh token each server start; only processes that can read the runtime file know it. */
 const token = randomBytes(24).toString('hex')
@@ -22,7 +23,18 @@ export const channels = createDmChannels(library)
 export const play = createPlay({ library, channels, publish: live.publish })
 openSessionsOnAttach(sessions, play)
 
-export const bridgeApi = createBridgeApi({ library, host, channels, sessions, play, token })
+/** The permission prompts the DM's sessions are waiting on, relayed to the Player. */
+export const permissions = createPermissions({ channels, sessions, publish: live.publish })
+
+export const bridgeApi = createBridgeApi({
+  library,
+  host,
+  channels,
+  sessions,
+  permissions,
+  play,
+  token
+})
 
 /** The known localhost port, unless overridden for tests. */
 export const port = Number(DUNGEON_MASTER_PORT || 4777)

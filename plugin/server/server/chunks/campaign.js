@@ -344,6 +344,7 @@ function coreBlock(source) {
 /** Channel events per Campaign folder, delivered to the bridges listening for it. */
 function createChannels({ annotate } = {}) {
 	const listeners = /* @__PURE__ */ new Map();
+	const verdictListeners = /* @__PURE__ */ new Map();
 	const key = canonicalFolder;
 	return {
 		/** Starts listening for a Campaign's events; returns the unsubscribe. */
@@ -362,6 +363,17 @@ function createChannels({ annotate } = {}) {
 			if (!set?.size) return;
 			const delivered = annotate ? annotate(folder, event) : event;
 			for (const listener of set) listener(delivered);
+		},
+		/** Starts listening for the verdicts the Player gives the Campaign's session; returns the unsubscribe. */
+		listenVerdicts(folder, listener) {
+			const set = verdictListeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
+			verdictListeners.set(key(folder), set);
+			set.add(listener);
+			return () => set.delete(listener);
+		},
+		/** Relays a permission verdict to the Campaign's session. */
+		sendVerdict(folder, verdict) {
+			for (const listener of verdictListeners.get(key(folder)) ?? []) listener(verdict);
 		}
 	};
 }

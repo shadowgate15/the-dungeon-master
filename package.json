@@ -22,6 +22,7 @@
     "build-storybook": "storybook build",
     "rules:normalize": "node src/lib/rules/build/run.ts",
     "implement-spec": "node scripts/implement-spec/main.ts",
+    "fake-dm": "node scripts/fake-dm/main.ts",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

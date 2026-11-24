@@ -1,8 +1,8 @@
 import { t as error } from "../../../../../chunks/exports.js";
 import { C as playSheets, i as sessions, n as library } from "../../../../../chunks/campaign.js";
-import { a as play } from "../../../../../chunks/bridge.js";
+import { a as permissions, o as play } from "../../../../../chunks/bridge.js";
 // src/routes/campaigns/[id]/play/+page.server.ts
-/** The play console: the Party's sheets, the open Floor and the timeline, begun or not. */
+/** The play console: the Party's sheets, the open Floor, the timeline and any permission prompt, begun or not. */
 var load = ({ params }) => {
 	const entry = library.get(params.id);
 	if (!entry) error(404, "Campaign not found");
@@ -17,6 +17,7 @@ var load = ({ params }) => {
 		sheets: playSheets(library.party(entry.id)),
 		floor: library.floor(entry.id).current(),
 		timeline: play.timeline(entry.id),
+		permission: permissions.pending(entry.id),
 		attached: sessions.list()
 	};
 };

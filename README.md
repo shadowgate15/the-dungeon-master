@@ -87,6 +87,9 @@ pnpm test         # unit + e2e tests
 pnpm storybook    # component workbench
 pnpm build:bridge # rebuild the committed bridge and launcher bundles in plugin/bin
 pnpm build:plugin # rebuild everything the plugin ships, including the server in plugin/server
+pnpm fake-dm <folder> <script> # drive a Campaign's play screen with a scripted DM, no Claude
 ```
+
+`pnpm fake-dm` attaches the e2e fake DM (`src/testing/fake-dm.ts`) to the running server (`pnpm dev`, or `--home <dir>` for another state directory) as the Campaign in `<folder>`, the way a real session would. The script's default export is `async (dm) => {…}`, which gets the fake DM's `call`, `script` and `settled`, or a list of `{on, run}` steps answered in order. See `scripts/fake-dm/examples/`. Use it for UI work and PR evidence.
 
 The plugin in `plugin/` is installed as committed: it has no `package.json`, so Claude Code runs no dependency install. `pnpm build:plugin` writes the adapter-node server build, its migrations and a vendored better-sqlite3 (with its prebuilt binaries) into `plugin/server/`. Rebuild and commit it whenever the server changes.
