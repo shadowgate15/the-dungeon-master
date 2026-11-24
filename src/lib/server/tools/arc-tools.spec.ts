@@ -2,7 +2,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { LiveMessage } from '#lib/live/messages.ts'
 import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
+import { addCharacter, fighterDraft } from '../character/test-characters'
 import { gameTools } from '.'
 import { createToolHost, type ToolHost } from './host'
 
@@ -10,13 +12,15 @@ let library: CampaignLibrary
 let host: ToolHost
 let folder: string
 let campaignId: string
+let pushed: LiveMessage[]
 
 beforeEach(() => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-arc-'))
   library = createCampaignLibrary({ home: path.join(tmp, 'home') })
   folder = path.join(tmp, 'campaigns', 'ember-road')
   campaignId = library.create({ name: 'Ember Road', folder }).id
-  host = createToolHost({ library, tools: gameTools, publish: () => {} })
+  pushed = []
+  host = createToolHost({ library, tools: gameTools, publish: (m) => pushed.push(m) })
 })
 
 afterEach(() => library.close())
@@ -290,5 +294,33 @@ describe('revise_arc', () => {
     call('revise_arc', { version: 1, ops: [{ op: 'edit_arc', title: 'Once' }] })
     const stale = call('revise_arc', { version: 1, ops: [{ op: 'edit_arc', title: 'Twice' }] })
     expect(stale.payload.code).toBe('stale_version')
+  })
+})
+
+describe('what the Player sees', () => {
+  it('holds no Arc event, Arc tool result or Arc text, after every Arc tool', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    call('create_arc', relicArc)
+    library.floor(campaignId).send({ character: wren, text: 'I ride for the ford.' })
+    library.floor(campaignId).done()
+    call('arc', { history: true })
+    call('resolve_beat', {
+      beat: 'beat:the-vizier-is-the-patron',
+      version: 1,
+      to: 'reached',
+      reason: 'The vizier slipped.'
+    })
+    call('revise_arc', {
+      version: 2,
+      ops: [{ op: 'add_beat', act: 2, title: 'A Hidden Turn', description: 'Hidden.' }]
+    })
+    call('narrate', { text: 'The road out of Ashford is quiet.' })
+    call('retire_arc', { version: 3, reason: 'The relic was destroyed.' })
+
+    const record = library.record(campaignId)
+    const payloads = JSON.stringify([record.timeline(), record.journal(), pushed])
+
+    expect(payloads).toContain('The road out of Ashford is quiet.')
+    expect(payloads).not.toMatch(/Ember Relic|vizier|Hidden|beat:|arc|relic/i)
   })
 })
