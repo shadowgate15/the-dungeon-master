@@ -411,7 +411,8 @@ export const call = sqliteTable('call', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   campaignId: campaignOwner(),
-  kind: text('kind', { enum: ['check', 'question'] }).notNull(),
+  /** `roll_sequence`: an action tool's Call, each part a chain of rolls code resolves click by click. */
+  kind: text('kind', { enum: ['check', 'question', 'roll_sequence'] }).notNull(),
   state: text('state', { enum: ['pending', 'open', 'answered', 'withdrawn', 'cancelled'] })
     .notNull()
     .default('open'),
@@ -432,6 +433,55 @@ export type CheckResult = {
   modifier: number
   total: number
   success: boolean
+}
+
+/** One step of a roll sequence, with the hidden numbers it is rolled against. */
+export type SequenceStep =
+  /** A d20 attack roll against the target's AC: a miss ends the sequence, a 20 is a critical hit. */
+  | { kind: 'to_hit'; bonus: number; ac: number }
+  /** A damage roll applied to the target; dice doubled after a critical hit. */
+  | { kind: 'damage'; dice: string; damageType: string }
+  /**
+   * A saving throw against a DC. On a failure the effect applies in full (damage already rolled by
+   * code, a condition); on a success, half the damage or nothing.
+   */
+  | {
+      kind: 'save'
+      ability: string
+      bonus: number
+      dc: number
+      damage: number | null
+      damageType: string | null
+      condition: string | null
+      onSuccess: 'half' | 'none'
+    }
+
+/** One rolled step of a sequence: the dice, the total and what came of it. */
+export type SequenceRoll = {
+  dice: number[]
+  kept: number | null
+  modifier: number
+  total: number
+  /** `hit`, `miss`, `critical hit`, `success` or `failure`; null for damage. */
+  outcome: string | null
+  /** For damage, and a save's effect: what the target took and where it was left. */
+  applied: { dealt: number; damageType: string | null; condition: string | null } | null
+  /** The target's HP after the step, for the DM: `{hp, max}`. */
+  after: { hp: number; max: number } | null
+}
+
+/**
+ * A roll sequence: what is rolled (the label the Player reads), by whom against whom, the steps
+ * in order and the rolls so far. Finished when every step is rolled or a miss ends it early.
+ */
+export type Sequence = {
+  label: string
+  /** The thing rolled, as the Player reads it per step: `Crossbow, light` → "… attack", "… damage". */
+  source: string
+  target: { handle: string; name: string }
+  steps: SequenceStep[]
+  rolls: SequenceRoll[]
+  done: boolean
 }
 
 /**
@@ -464,11 +514,27 @@ export const callPart = sqliteTable(
       .default('normal'),
     reason: text('reason'),
     result: text('result', { mode: 'json' }).$type<CheckResult>(),
+    /** A roll sequence's steps (with the hidden AC or DC) and its rolls so far. */
+    sequence: text('sequence', { mode: 'json' }).$type<Sequence>(),
     answer: text('answer'),
     answeredAt: integer('answered_at')
   },
   (t) => [index('call_part_call_idx').on(t.callId)]
 )
+
+/**
+ * An NPC's own combat state, once its stat block is first used: current HP (starting at the stat
+ * block's average), the stat block's max and conditions. Never shown to the Player as numbers.
+ */
+export const npcCombat = sqliteTable('npc_combat', {
+  handle: text('handle').primaryKey(),
+  hp: integer('hp').notNull(),
+  maxHp: integer('max_hp').notNull(),
+  conditions: text('conditions', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .$defaultFn(() => [])
+})
 
 /**
  * A Declaration sent back to its Player's composer as unsent text: its Character left the Scene

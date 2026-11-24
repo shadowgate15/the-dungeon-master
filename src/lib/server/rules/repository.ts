@@ -1,6 +1,6 @@
 import { asc, eq, sql } from 'drizzle-orm'
 import type { ChoiceGroup } from '../../rules/schema'
-import type { Database } from '../db/connect'
+import type { Queryable } from '../db/connect'
 import * as t from '../db/rules-schema'
 
 /**
@@ -29,7 +29,7 @@ function group<K, V>(rows: V[], key: (row: V) => K): Map<K, V[]> {
 const slugs = <R extends { id: number; slug: string }>(rows: R[]) =>
   new Map(rows.map((r) => [r.id, r.slug]))
 
-export function createRulesRepository(db: Database) {
+export function createRulesRepository(db: Queryable) {
   const abilitySlugs = () => slugs(db.select().from(t.ability).all())
   const choiceGroups = (ownerType: OwnerType) => {
     const groups = db

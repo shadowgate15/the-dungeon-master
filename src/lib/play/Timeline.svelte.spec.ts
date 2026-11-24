@@ -1,7 +1,7 @@
 import { page } from 'vitest/browser'
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-svelte'
-import { rollEntries, timelineEntries } from './play-fixtures'
+import { attackRollEntries, rollEntries, timelineEntries } from './play-fixtures'
 import Timeline from './Timeline.svelte'
 
 describe('Timeline', () => {
@@ -97,5 +97,20 @@ describe('Timeline', () => {
 
     await page.getByRole('checkbox', { name: 'Rolls' }).click()
     await expect.poll(() => page.getByRole('listitem').elements().length).toBe(1)
+  })
+
+  it("shows an attack's hit or miss, and the target's state after damage, never its HP", async () => {
+    render(Timeline, { entries: attackRollEntries, awaitingSince: null })
+
+    const items = page.getByRole('list', { name: 'Timeline' }).getByRole('listitem')
+    await expect
+      .element(items.nth(0))
+      .toHaveTextContent(/Crossbow, light attack\s*🎲 15 \+ 4\s*= 19\s*hit/)
+    await expect
+      .element(items.nth(1))
+      .toHaveTextContent(/Crossbow, light damage\s*🎲 3 \+ 2\s*= 5\s*Grik is bloodied/)
+    await expect
+      .element(items.nth(2))
+      .toHaveTextContent(/Grik\s*Scimitar attack\s*🎲 2 \+ 4\s*= 6\s*miss/)
   })
 })
