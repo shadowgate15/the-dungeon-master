@@ -6,14 +6,18 @@ import type { ChannelEvent, Channels } from '../bridge/channels'
 import type { Sessions } from '../bridge/sessions'
 import { CampaignNotFoundError, type CampaignLibrary } from '../campaign/library'
 import { campaignDice, type Dice } from '../dice'
-import type { DoneOutcome } from '../floor/floor'
+import type { DoneOutcome, Floor } from '../floor/floor'
 import { callResultEvent, type CallResult } from './calls'
 
 export { DmBusyError } from '../floor/floor'
 export { SpotlightRefusedError } from './scene'
 
-/** A creation conversation message needs a DM at the table to hear it. */
+/** Play input (and a creation conversation message) needs a DM at the table to hear it. */
 export class DmAwayError extends Error {}
+
+/** What every refused play input says while no session is attached. */
+export const DM_AWAY_MESSAGE =
+  'The DM is away. Run dm in the Campaign folder to start a sitting; your drafts wait here.'
 
 type Options = {
   library: CampaignLibrary
@@ -59,6 +63,16 @@ export function createPlay({
     return entry.path
   }
 
+  /**
+   * The Campaign's folder, refusing play input while no DM is at the table. Open Calls and waiting
+   * Floors stay as they are for the next opening.
+   */
+  function atTable(campaignId: string): string {
+    const folder = folderOf(campaignId)
+    if (!channels.listening(folder)) throw new DmAwayError(DM_AWAY_MESSAGE)
+    return folder
+  }
+
   function answered(campaignId: string, result: CallResult | null): { complete: boolean } {
     if (result) channels.send(folderOf(campaignId), callResultEvent(result))
     publish({ type: 'timeline', campaign: campaignId })
@@ -66,11 +80,23 @@ export function createPlay({
   }
 
   return {
+    /** Whether a DM is at the table for the Campaign. */
+    attended(campaignId: string): boolean {
+      return channels.listening(folderOf(campaignId))
+    },
+
+    /** The open Floor, to send, edit or withdraw Declarations; refused while the DM is away. */
+    floor(campaignId: string): Floor {
+      atTable(campaignId)
+      return library.floor(campaignId)
+    },
+
     /**
      * The Player presses Done. When it closes the Floor, the DM gets exactly one floor event and
      * the Campaign awaits Narration.
      */
     done(campaignId: string, player: string = SOLO_PLAYER): DoneOutcome {
+      atTable(campaignId)
       const outcome = library.floor(campaignId).done(player)
       if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome))
       publish({ type: 'floor', campaign: campaignId })
@@ -83,6 +109,7 @@ export function createPlay({
      * wakes the DM with one call_result event and sets awaiting Narration.
      */
     roll(campaignId: string, callId: string, partId: string, player: string = SOLO_PLAYER) {
+      atTable(campaignId)
       const result = library.calls(campaignId).roll(callId, partId, dice(campaignId), player)
       return answered(campaignId, result)
     },
@@ -95,6 +122,7 @@ export function createPlay({
       text: string,
       player: string = SOLO_PLAYER
     ) {
+      atTable(campaignId)
       const result = library.calls(campaignId).answer(callId, partId, text, player)
       return answered(campaignId, result)
     },
@@ -104,8 +132,9 @@ export function createPlay({
      * Refused (`SpotlightRefusedError`) for a Character who is already in the Scene.
      */
     spotlight(campaignId: string, character: string, player: string = SOLO_PLAYER): void {
+      const folder = atTable(campaignId)
       const request = library.record(campaignId).spotlight(character, player)
-      channels.send(folderOf(campaignId), request)
+      channels.send(folder, request)
     },
 
     /** The Scene as the Player's rail shows it. */
@@ -133,7 +162,7 @@ export function createPlay({
      * (closing beat, summary, Arc review, lint) with the ending-a-sitting skill.
      */
     endSession(campaignId: string) {
-      channels.send(folderOf(campaignId), {
+      channels.send(atTable(campaignId), {
         content: 'The Player pressed End Session. Close the sitting.',
         meta: { kind: 'end_session' }
       })
