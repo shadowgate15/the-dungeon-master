@@ -1,4 +1,4 @@
-import { _ as clsx, a as bind_props, r as attributes, y as escape_html } from "./server2.js";
+import { a as bind_props, r as attributes, v as clsx, x as escape_html } from "./server2.js";
 import "./index-server.js";
 import { t as Button } from "./Button.js";
 // src/lib/ui/Dialog.svelte

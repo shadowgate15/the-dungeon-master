@@ -8,7 +8,7 @@ import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library
 import { addCharacter, fighterDraft } from '../character/test-characters'
 import { gameTools } from '../tools'
 import { createToolHost, type ToolHost } from '../tools/host'
-import { createPlay, DmBusyError, type Play } from './play'
+import { createPlay, DmAwayError, DmBusyError, type Play } from './play'
 
 let library: CampaignLibrary
 let host: ToolHost
@@ -257,5 +257,54 @@ describe('spotlight requests', () => {
     const wren = addFighter('Wren')
     expect(() => play.spotlight(campaignId, wren)).toThrow(/already in the Scene/)
     expect(heard).toEqual([])
+  })
+})
+
+describe('the creation conversation', () => {
+  it('hands a pane message to the DM as one conversation event, outside the Floor', () => {
+    play.converse(campaignId, 'Can you help with the premise?')
+
+    expect(heard).toEqual([
+      {
+        content: 'Can you help with the premise?',
+        meta: { kind: 'conversation', player: 'player' }
+      }
+    ])
+    expect(library.conversation(campaignId).list()).toEqual([
+      expect.objectContaining({
+        author: 'player',
+        player: 'player',
+        text: 'Can you help with the premise?'
+      })
+    ])
+    expect(pushed).toContainEqual({ type: 'conversation', campaign: campaignId })
+    expect(library.record(campaignId).timeline().awaitingSince).toBeNull()
+  })
+
+  it('shows the DM’s reply in the pane', () => {
+    play.converse(campaignId, 'Can you help with the premise?')
+    expect(call('reply', { text: 'Gladly. What draws you to the hills?' }).isError).toBe(false)
+    expect(
+      library
+        .conversation(campaignId)
+        .list()
+        .map((m) => [m.author, m.text])
+    ).toEqual([
+      ['player', 'Can you help with the premise?'],
+      ['dm', 'Gladly. What draws you to the hills?']
+    ])
+  })
+
+  it('lands nothing in the Event log or the timeline', () => {
+    play.converse(campaignId, 'Hello?')
+    call('reply', { text: 'Hello.' })
+    expect(host.events(folder)).toEqual([])
+    expect(library.record(campaignId).timeline().entries).toEqual([])
+  })
+
+  it('refuses a message while no DM is at the table', () => {
+    const away = createPlay({ library, channels: createChannels(), publish: () => {} })
+    expect(() => away.converse(campaignId, 'Hello?')).toThrow(DmAwayError)
+    expect(library.conversation(campaignId).list()).toEqual([])
   })
 })

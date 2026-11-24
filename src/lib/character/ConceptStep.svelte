@@ -23,6 +23,8 @@
     { key: 'backstory', label: 'Backstory', rows: 5 }
   ] as const
 
+  const dm = (field: string) => wizard.dmFields.includes(field)
+
   const choose = { value: '', label: 'Choose…' }
   const opts = (list: readonly { slug: string; name: string }[], first = choose) => [
     first,
@@ -31,12 +33,13 @@
 </script>
 
 {#snippet select(
+  field: string,
   label: string,
   options: { value: string; label: string }[],
   value: string,
   set: (v: string) => void
 )}
-  <Field {label}>
+  <Field {label} dm={dm(field)}>
     {#snippet children(id, describedby)}
       <Select {id} aria-describedby={describedby} bind:value={() => value, set}>
         {#each options as option (option.value)}
@@ -49,7 +52,7 @@
 
 <div class="space-y-4">
   <div>
-    <Field label="Name">
+    <Field label="Name" dm={dm('name')}>
       {#snippet children(id, describedby)}
         <TextInput
           {id}
@@ -67,34 +70,43 @@
   </div>
 
   <div class="grid gap-3 sm:grid-cols-2">
-    {@render select('Race', opts(rules.races), draft.race ?? '', (v) =>
+    {@render select('race', 'Race', opts(rules.races), draft.race ?? '', (v) =>
       wizard.update({ race: v || null })
     )}
 
     {#if subraces.length > 0}
-      {@render select('Subrace', opts(subraces), draft.subrace ?? '', (v) =>
+      {@render select('subrace', 'Subrace', opts(subraces), draft.subrace ?? '', (v) =>
         wizard.update({ subrace: v || null })
       )}
     {/if}
 
-    {@render select('Class', opts(rules.classes), draft.class ?? '', (v) =>
+    {@render select('class', 'Class', opts(rules.classes), draft.class ?? '', (v) =>
       wizard.update({ class: v || null })
     )}
 
     {#if subclassGroup}
-      {@render select('Subclass', opts(subclassGroup.options), draft.subclass ?? '', (v) =>
-        wizard.update({ subclass: v || null })
+      {@render select(
+        'subclass',
+        'Subclass',
+        opts(subclassGroup.options),
+        draft.subclass ?? '',
+        (v) => wizard.update({ subclass: v || null })
       )}
       {#if single}
         <p class="text-sm text-muted">The SRD offers only one, so it is selected for you.</p>
       {/if}
     {/if}
 
-    {@render select('Background', opts(rules.backgrounds), draft.background ?? '', (v) =>
-      wizard.update({ background: v || null })
+    {@render select(
+      'background',
+      'Background',
+      opts(rules.backgrounds),
+      draft.background ?? '',
+      (v) => wizard.update({ background: v || null })
     )}
 
     {@render select(
+      'alignment',
       'Alignment',
       opts(rules.alignments, { value: '', label: 'Unspecified' }),
       draft.alignment ?? '',
@@ -105,7 +117,7 @@
   <h3 class="font-display text-lg">Details <span class="text-sm text-muted">(optional)</span></h3>
   {#each text as field (field.key)}
     <div>
-      <Field label={field.label}>
+      <Field label={field.label} dm={dm(field.key)}>
         {#snippet children(id, describedby)}
           <Textarea
             {id}

@@ -1,8 +1,8 @@
-import { At as BACKSTORY_MAX, Bt as isNotNull, C as event, Ct as subrace, D as belief, E as session, Ft as desc, Gt as Column, I as abilityScoreMethod, It as and, Jt as DUNGEON_MASTER_CAMPAIGNS, Kt as is, L as alignment, Lt as eq, Nt as SOLO_PLAYER, O as entity, Pt as asc, R as background, Rt as gt, S as declaration, St as subclass, T as returnedDraft, Vt as isNull, Wt as sql, Yt as DUNGEON_MASTER_HOME, Z as classTable, _ as characterDraft, a as userStateDir, b as characterSkill, bt as spell, c as abilities_default, d as activityLine, et as equipment, f as call, g as characterChoice, h as character, i as defaultCampaignRoot, jt as CUSTOM_BACKGROUND_FEATURE_MAX, kt as ABILITY_METHODS, l as migrateDatabase, m as campaign, n as campaignDatabasePath, o as loadRulesDataset, p as callPart, pt as race, r as canonicalFolder, s as skills_default, t as seedRulesData, u as openDatabase, v as characterEquipment, w as floor, x as characterSpell, y as characterItem, yt as skill, zt as inArray } from "./seed.js";
-import { A as equipmentGroupKeys, P as resolveFeatures, c as WIZARD_RULES_KEYS, d as resolverDraft, i as tryDraftToCharacterInput, j as equipmentGroups, l as emptyDraft, m as STEPS, n as detailToSummaryData, o as deriveStats, t as buildSummary } from "./summary.js";
+import { At as ABILITY_METHODS, Bt as inArray, C as declaration, Ct as subclass, D as session, E as returnedDraft, Ft as asc, Ht as isNull, It as desc, Jt as is, Kt as sql, L as abilityScoreMethod, Lt as and, Mt as CUSTOM_BACKGROUND_FEATURE_MAX, O as belief, Pt as SOLO_PLAYER, Q as classTable, R as alignment, Rt as eq, S as conversationMessage, T as floor, Vt as isNotNull, Xt as DUNGEON_MASTER_CAMPAIGNS, Zt as DUNGEON_MASTER_HOME, _ as characterDraft, a as userStateDir, b as characterSkill, bt as skill, c as abilities_default, d as activityLine, f as call, g as characterChoice, h as character, i as defaultCampaignRoot, jt as BACKSTORY_MAX, k as entity, l as migrateDatabase, m as campaign, mt as race, n as campaignDatabasePath, o as loadRulesDataset, p as callPart, qt as Column, r as canonicalFolder, s as skills_default, t as seedRulesData, tt as equipment, u as openDatabase, v as characterEquipment, w as event, wt as subrace, x as characterSpell, xt as spell, y as characterItem, z as background, zt as gt } from "./seed.js";
+import { L as resolveFeatures, N as equipmentGroupKeys, P as equipmentGroups, c as WIZARD_RULES_KEYS, f as resolverDraft, h as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, t as buildSummary, u as emptyDraft } from "./summary.js";
 import { c as literal, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
-import { o as parseCampaignSeed, r as campaignSeedCard } from "./seed2.js";
+import { o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import fs from "node:fs";
 import path from "node:path";
 // src/lib/server/bridge/sessions.ts
@@ -1022,6 +1022,17 @@ function writeTool(tool) {
 		run: tool.run
 	};
 }
+/**
+* A tool that changes creation state (the Seed card, Character drafts, the creation conversation):
+* one transaction, and no Event, since the Event log starts with the story.
+*/
+function creationTool(tool) {
+	return {
+		...tool,
+		mutates: "creation",
+		run: tool.run
+	};
+}
 // src/lib/server/play/calls.ts
 /**
 * The DC for each difficulty tier, from the SRD's "Typical Difficulty Classes" table
@@ -1531,11 +1542,22 @@ function createParty(db, now = Date.now) {
 		if (!found) throw new DraftNotFoundError("Character draft not found");
 		return found;
 	}
+	/**
+	* The Player's write. A write that changes nothing (the open wizard echoing a DM write back)
+	* keeps the version; a field the Player changed loses its "✎ DM" mark.
+	*/
 	function write(id, { draft, step }) {
-		row(id);
+		const found = row(id);
+		const before = {
+			...emptyDraft(),
+			...found.data
+		};
+		const edited = new Set(changedDraftFields(before, draft));
 		db.update(characterDraft).set({
 			data: draft,
 			step,
+			version: edited.size > 0 ? found.version + 1 : found.version,
+			dmFields: found.dmFields.filter((f) => !edited.has(f)),
 			updatedAt: now()
 		}).where(eq(characterDraft.id, id)).run();
 	}
@@ -1597,7 +1619,9 @@ function createParty(db, now = Date.now) {
 					...emptyDraft(),
 					...found.data
 				},
-				step: found.step
+				step: found.step,
+				version: found.version,
+				dmFields: found.dmFields
 			};
 		},
 		/** Replaces the stored draft. Incomplete is fine: a draft is unsaved by definition. */
@@ -1911,6 +1935,20 @@ function journal(db, player) {
 	}
 	return { entries: [...entries.values()] };
 }
+// src/lib/server/creation/conversation.ts
+/** Adds a line to the creation conversation. It is out of fiction: never an Event. */
+function addConversationLine(db, line, at) {
+	return db.insert(conversationMessage).values({
+		author: line.author,
+		player: line.player ?? null,
+		text: line.text,
+		createdAt: at
+	}).returning().get();
+}
+/** A Campaign's creation conversation, oldest first. */
+function conversationLines(db) {
+	return db.select().from(conversationMessage).orderBy(asc(conversationMessage.id)).all();
+}
 // src/lib/server/campaign/registry.ts
 /**
 * The list of Campaign folders the server knows, as `registry.json` in the user-level state
@@ -2065,14 +2103,24 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		seed(id) {
 			return campaignSeedCard(find(id).found);
 		},
-		/** Saves the whole Seed; an incomplete one is fine, an invalid one is refused. */
+		/** The Seed fields the DM set and the Player has not edited since: the card's "✎ DM" marks. */
+		dmSeedFields(id) {
+			return find(id).found.dmSeedFields;
+		},
+		/**
+		* Saves the whole Seed; an incomplete one is fine, an invalid one is refused. A field the
+		* Player changed loses its "✎ DM" mark.
+		*/
 		saveSeed(id, card) {
 			const { folder, found } = find(id);
 			if (found.archivedAt !== null) throw new CampaignArchivedError("An archived Campaign cannot be changed");
+			const seed = parseCampaignSeed(card);
+			const edited = new Set(CAMPAIGN_SEED_FIELDS.filter((f) => seed[f] !== found[f]));
 			const saved = database(folder).transaction((tx) => {
 				const row = update(id, {
-					...parseCampaignSeed(card),
-					version: found.version + 1
+					...seed,
+					version: found.version + 1,
+					dmSeedFields: found.dmSeedFields.filter((f) => !edited.has(f))
 				});
 				logChange(tx, {
 					handle: "campaign",
@@ -2087,6 +2135,17 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 				name: saved.name
 			});
 			return saved;
+		},
+		/** The creation conversation in the DM pane. It is out of fiction and never logged. */
+		conversation(id) {
+			const db = database(find(id).folder);
+			return {
+				list: () => conversationLines(db),
+				add: (line) => addConversationLine(db, {
+					...line,
+					author: "player"
+				}, now())
+			};
 		},
 		/** The Campaign's Characters and Character drafts. */
 		party(id) {
@@ -2196,6 +2255,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { ToolError as A, advanceClock as B, setAwaitingNarration as C, callResultEvent as D, callInput as E, CharacterValidationError as F, isNearName as G, currentMinute as H, playSheets as I, formatClock as J, normalizeName as K, loadWizardRules as L, readTool as M, writeTool as N, openCall as O, CharacterNotFoundError as P, ClockBackwardsError as R, nextEventId as S, CallRefusedError as T, present as U, characterRefs as V, scenePlace as W, SESSION_LIVE_MESSAGE as X, parseClock as Y, DraftNotFoundError as _, CampaignArchivedError as a, logActivity as b, CampaignNotFoundError as c, characterHolders as d, charactersInScene as f, returnStrandedDrafts as g, DmBusyError as h, sessions as i, expectVersion as j, PLUGIN_NAME as k, NotACampaignFolderError as l, DeclarationRefusedError as m, library as n, CampaignExistsError as o, DeclarationNotFoundError as p, slug$1 as q, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, createDmChannels as v, CallClosedError as w, logEvent as x, currentStamp as y, SpotlightRefusedError as z };
+export { PLUGIN_NAME as A, ClockBackwardsError as B, nextEventId as C, callInput as D, CallRefusedError as E, writeTool as F, present as G, advanceClock as H, CharacterNotFoundError as I, normalizeName as J, scenePlace as K, CharacterValidationError as L, creationTool as M, expectVersion as N, callResultEvent as O, readTool as P, SESSION_LIVE_MESSAGE as Q, playSheets as R, logEvent as S, CallClosedError as T, characterRefs as U, SpotlightRefusedError as V, currentMinute as W, formatClock as X, slug$1 as Y, parseClock as Z, returnStrandedDrafts as _, CampaignArchivedError as a, currentStamp as b, CampaignNotFoundError as c, addConversationLine as d, characterHolders as f, DmBusyError as g, DeclarationRefusedError as h, sessions as i, ToolError as j, openCall as k, NotACampaignFolderError as l, DeclarationNotFoundError as m, library as n, CampaignExistsError as o, charactersInScene as p, isNearName as q, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, DraftNotFoundError as v, setAwaitingNarration as w, logActivity as x, createDmChannels as y, loadWizardRules as z };
 
 //# sourceMappingURL=campaign.js.map

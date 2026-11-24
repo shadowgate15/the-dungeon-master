@@ -1,4 +1,4 @@
-import { _ as clsx, o as derived, r as attributes } from "./server2.js";
+import { o as derived, r as attributes, v as clsx } from "./server2.js";
 // src/lib/ui/status.ts
 /** Status colour classes shared by Alert, Toast and Badge. */
 var STATUS_CLASSES = {

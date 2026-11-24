@@ -10,7 +10,7 @@ return {
 	app_path: "_app",
 	assets: new Set(["robots.txt"]),
 	mime_types: {".txt":"text/plain"},
-	client: {start:"_app/immutable/entry/start.DHP3e-iK.js",app:"_app/immutable/entry/app.D_VZ0FeV.js",imports:["_app/immutable/entry/start.DHP3e-iK.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/kFbcn9Ny.js","_app/immutable/chunks/pd6cx8RH.js","_app/immutable/chunks/BH4ECt33.js","_app/immutable/chunks/BeSO2yj4.js","_app/immutable/chunks/9lSbqI6C.js","_app/immutable/entry/app.D_VZ0FeV.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
+	client: {start:"_app/immutable/entry/start.BXZEsHIX.js",app:"_app/immutable/entry/app.DKgV_UXA.js",imports:["_app/immutable/entry/start.BXZEsHIX.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/DyV-cUQX.js","_app/immutable/chunks/E1B1Uz5f.js","_app/immutable/chunks/DB8eBxmA.js","_app/immutable/chunks/BBi5l2B_.js","_app/immutable/chunks/9lSbqI6C.js","_app/immutable/entry/app.DKgV_UXA.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
 	
 	nodes: [
 		__memo(() => import('./nodes/0.js')),
@@ -55,6 +55,13 @@ return {
 			params: [{"name":"id","optional":false,"rest":false,"chained":false},{"name":"character","optional":false,"rest":false,"chained":false}],
 			page: null,
 			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/characters/_character_/_server.ts.js'))
+		},
+		{
+			id: "/api/campaigns/[id]/conversation",
+			pattern: /^\/api\/campaigns\/([^/]+?)\/conversation\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
+			page: null,
+			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/conversation/_server.ts.js'))
 		},
 		{
 			id: "/api/campaigns/[id]/drafts/[draft]",
@@ -125,6 +132,13 @@ return {
 			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
 			page: null,
 			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/scene/_server.ts.js'))
+		},
+		{
+			id: "/api/campaigns/[id]/seed",
+			pattern: /^\/api\/campaigns\/([^/]+?)\/seed\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
+			page: null,
+			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/seed/_server.ts.js'))
 		},
 		{
 			id: "/api/campaigns/[id]/spotlight",

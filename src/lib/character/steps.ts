@@ -63,6 +63,12 @@ const LENGTH_FIELDS = [
   'backstory'
 ] as const
 
+/** Why a text field is too long ("Backstory is over 2000 characters."), or null when it fits. */
+export function lengthIssue(field: keyof typeof LIMITS, value: string): string | null {
+  if (value.length <= LIMITS[field]) return null
+  return `${field[0].toUpperCase()}${field.slice(1)} is over ${LIMITS[field]} characters.`
+}
+
 export function validateConcept({ draft, resolved }: StepContext): StepValidation {
   const issues: string[] = []
   let attention = false
@@ -82,9 +88,10 @@ export function validateConcept({ draft, resolved }: StepContext): StepValidatio
     }
   }
   for (const field of LENGTH_FIELDS) {
-    if (draft[field].length > LIMITS[field]) {
+    const issue = lengthIssue(field, draft[field])
+    if (issue) {
       attention = true
-      issues.push(`${field[0].toUpperCase()}${field.slice(1)} is over ${LIMITS[field]} characters.`)
+      issues.push(issue)
     }
   }
   return { state: attention ? 'attention' : issues.length ? 'incomplete' : 'valid', issues }

@@ -676,10 +676,20 @@ var floorQueryKey = (campaign) => ["floor", campaign];
 var timelineQueryKey = (campaign) => ["timeline", campaign];
 /** The query holding a Campaign's Scene, as the rail shows it. */
 var sceneQueryKey = (campaign) => ["scene", campaign];
+/** The query holding a Campaign's Seed and its "✎ DM" markers. */
+var seedQueryKey = (campaign) => ["seed", campaign];
+/** The query holding one stored Character draft. */
+var draftQueryKey = (campaign, draft) => [
+	"draft",
+	campaign,
+	draft
+];
+/** The query holding a Campaign's creation conversation. */
+var conversationQueryKey = (campaign) => ["conversation", campaign];
 /** The query holding the Player's Journal: what their Characters believe. */
 var journalQueryKey = (campaign) => ["journal", campaign];
 /** The query holding the permission prompt a Campaign's session is waiting on. */
 var permissionQueryKey = (campaign) => ["permission", campaign];
-export { sceneQueryKey as a, SvelteMap as c, permissionQueryKey as i, floorQueryKey as n, timelineQueryKey as o, journalQueryKey as r, createQuery as s, SESSIONS_QUERY_KEY as t };
+export { journalQueryKey as a, seedQueryKey as c, SvelteMap as d, floorQueryKey as i, timelineQueryKey as l, conversationQueryKey as n, permissionQueryKey as o, draftQueryKey as r, sceneQueryKey as s, SESSIONS_QUERY_KEY as t, createQuery as u };
 
 //# sourceMappingURL=messages.js.map

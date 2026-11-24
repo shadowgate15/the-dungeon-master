@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit'
 import { resolve } from '$app/paths'
-import { library } from '#lib/server/campaign/index.ts'
+import { library, sessions } from '#lib/server/campaign/index.ts'
 import { DraftNotFoundError } from '#lib/server/character/party.ts'
 import { CharacterNotFoundError } from '#lib/server/character/service.ts'
 import { loadWizardRules } from '#lib/server/character/wizard-rules.ts'
@@ -15,7 +15,10 @@ export const load: PageServerLoad = ({ params, url }) => {
   const entry = library.get(params.id)
   if (!entry) error(404, 'Campaign not found')
   const campaign = { id: entry.id, name: entry.name, path: entry.path, status: entry.status }
-  if (entry.status === 'missing') return { campaign, members: [], open: null }
+  const attached = sessions.list()
+  if (entry.status === 'missing') {
+    return { campaign, members: [], open: null, attached, conversation: [] }
+  }
 
   const party = library.party(entry.id)
   const draftId = url.searchParams.get('draft')
@@ -23,8 +26,14 @@ export const load: PageServerLoad = ({ params, url }) => {
   let open = null
   try {
     if (draftId) {
-      const { id, draft, step } = party.draft(draftId)
-      open = { rules: loadWizardRules(), draft, step, target: { campaign: entry.id, draft: id } }
+      const { id, draft, step, version, dmFields } = party.draft(draftId)
+      open = {
+        rules: loadWizardRules(),
+        draft,
+        step,
+        target: { campaign: entry.id, draft: id },
+        stored: { version, dmFields }
+      }
     } else if (characterId) {
       const { character, draft } = party.character(characterId)
       open = {
@@ -40,7 +49,13 @@ export const load: PageServerLoad = ({ params, url }) => {
     }
     throw e
   }
-  return { campaign, members: party.list(), open }
+  return {
+    campaign,
+    members: party.list(),
+    open,
+    attached,
+    conversation: library.conversation(entry.id).list()
+  }
 }
 
 export const actions: Actions = {

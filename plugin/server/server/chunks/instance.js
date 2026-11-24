@@ -5,7 +5,7 @@ import { At as assets, B as get_status, C as has_prerendered_path, Ct as strip_r
 import { t as uneval$1 } from "./uneval.js";
 import { C as prerender_actions, D as prerender_template_nonce, E as prerender_nonce, J as set_headers_cookie, Q as capture_error, S as load_response_header_not_serialized, T as prerender_endpoint_not_prerenderable, _ as header_already_set, c as client_address_unsupported, d as cookies_set_after_response, f as csp_report_only_missing_report, p as endpoint_invalid_response, q as set_headers_after_response, u as cookies_serialize_before_route, v as load_fetch_cors, w as prerender_endpoint_methods, x as load_promise_not_serializable } from "./server-errors.js";
 import { a as join_or, i as set_env, n as explicit_public_env, r as rendered_env } from "./config.js";
-import { d as render, o as derived, y as escape_html$1 } from "./server2.js";
+import { d as render, o as derived, x as escape_html$1 } from "./server2.js";
 import { t as afterNavigate } from "./navigation.js";
 // node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/runtime/server/endpoint.js
 /**
@@ -212,7 +212,7 @@ function server_data_serializer(event, state) {
 	let promise_id = 1;
 	let max_nodes = -1;
 	const iterator = create_async_iterator();
-	const global = "__sveltekit_11f3els";
+	const global = "__sveltekit_h0m7cp";
 	/** @param {number} index */
 	function get_replacer(index) {
 		/** @param {any} thing */
@@ -1442,7 +1442,7 @@ async function render_response({ branch, fetched, page_config, status, error = n
 			"crossorigin"
 		]);
 	}
-	const global = "__sveltekit_11f3els";
+	const global = "__sveltekit_h0m7cp";
 	const { data, chunks } = data_serializer.get_data(csp);
 	if (page_config.ssr && page_config.csr) body += `\n\t\t\t${fetched.map((item) => serialize_data(item, resolve_opts.filterSerializedResponseHeaders, !!(state.prerendering || state.prerender_default === true))).join("\n			")}`;
 	if (page_config.csr && client) {
@@ -1466,7 +1466,7 @@ async function render_response({ branch, fetched, page_config, status, error = n
 			}
 		}
 		const blocks = [];
-		const properties = [`base: ${base_expression}`, `version: ${s("1795514269130")}`];
+		const properties = [`base: ${base_expression}`, `version: ${s("1795515506756")}`];
 		if (assets) properties.push(`assets: ${s(assets)}`);
 		if (client.uses_env_dynamic_public) properties.push(`env: ${load_env_eagerly ? "null" : uneval$1(rendered_env)}`);
 		if (chunks) {

@@ -1,5 +1,5 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
-import { l as head, y as escape_html } from "../../../../../chunks/server2.js";
+import { l as head, x as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/paths.js";
 import { c as Journal, i as createJournalQuery } from "../../../../../chunks/floor-client.js";
 import { t as Link } from "../../../../../chunks/Link.js";
