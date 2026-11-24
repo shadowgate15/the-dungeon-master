@@ -100,3 +100,14 @@ describe('the ending-a-sitting skill', () => {
     )
   })
 })
+
+describe('the arc-review skill', () => {
+  it('ships, and the dm prompt and ending a sitting point to it', () => {
+    const skill = parse(path.join(plugin, 'skills/arc-review/SKILL.md'))
+    expect(skill.meta.name).toBe('arc-review')
+    expect(skill.meta.description).not.toBe('')
+    for (const file of ['agents/dm.md', 'skills/ending-a-sitting/SKILL.md']) {
+      expect(parse(path.join(plugin, file)).body).toContain('the-dungeon-master:arc-review')
+    }
+  })
+})
