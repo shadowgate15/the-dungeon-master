@@ -1,8 +1,8 @@
-import { At as BACKSTORY_MAX, Bt as isNotNull, C as event, Ct as subrace, D as belief, E as session, Ft as desc, Gt as Column, I as abilityScoreMethod, It as and, Jt as DUNGEON_MASTER_CAMPAIGNS, Kt as is, L as alignment, Lt as eq, Nt as SOLO_PLAYER, O as entity, Pt as asc, R as background, Rt as gt, S as declaration, St as subclass, T as returnedDraft, Vt as isNull, Wt as sql, Yt as DUNGEON_MASTER_HOME, Z as classTable, _ as characterDraft, a as userStateDir, b as characterSkill, bt as spell, c as abilities_default, d as activityLine, et as equipment, f as call, g as characterChoice, h as character, i as defaultCampaignRoot, jt as CUSTOM_BACKGROUND_FEATURE_MAX, kt as ABILITY_METHODS, l as migrateDatabase, m as campaign, n as campaignDatabasePath, o as loadRulesDataset, p as callPart, pt as race, r as canonicalFolder, s as skills_default, t as seedRulesData, u as openDatabase, v as characterEquipment, w as floor, x as characterSpell, y as characterItem, yt as skill, zt as inArray } from "./seed.js";
-import { A as equipmentGroupKeys, P as resolveFeatures, c as WIZARD_RULES_KEYS, d as resolverDraft, i as tryDraftToCharacterInput, j as equipmentGroups, l as emptyDraft, m as STEPS, n as detailToSummaryData, o as deriveStats, t as buildSummary } from "./summary.js";
+import { At as ABILITY_METHODS, Bt as inArray, C as declaration, Ct as subclass, D as session, E as returnedDraft, Ft as asc, Ht as isNull, It as desc, Jt as is, Kt as sql, L as abilityScoreMethod, Lt as and, Mt as CUSTOM_BACKGROUND_FEATURE_MAX, O as belief, Pt as SOLO_PLAYER, Q as classTable, R as alignment, Rt as eq, S as conversationMessage, T as floor, Vt as isNotNull, Xt as DUNGEON_MASTER_CAMPAIGNS, Zt as DUNGEON_MASTER_HOME, _ as characterDraft, a as userStateDir, b as characterSkill, bt as skill, c as abilities_default, d as activityLine, f as call, g as characterChoice, h as character, i as defaultCampaignRoot, jt as BACKSTORY_MAX, k as entity, l as migrateDatabase, m as campaign, mt as race, n as campaignDatabasePath, o as loadRulesDataset, p as callPart, qt as Column, r as canonicalFolder, s as skills_default, t as seedRulesData, tt as equipment, u as openDatabase, v as characterEquipment, w as event, wt as subrace, x as characterSpell, xt as spell, y as characterItem, z as background, zt as gt } from "./seed.js";
+import { L as resolveFeatures, N as equipmentGroupKeys, P as equipmentGroups, c as WIZARD_RULES_KEYS, f as resolverDraft, h as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, t as buildSummary, u as emptyDraft } from "./summary.js";
 import { c as literal, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
-import { o as parseCampaignSeed, r as campaignSeedCard } from "./seed2.js";
+import { o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import fs from "node:fs";
 import path from "node:path";
 // src/lib/server/bridge/sessions.ts
@@ -190,6 +190,38 @@ function detailToDraft(rules, c) {
 	}
 	return draft;
 }
+// src/lib/play/clock.ts
+/**
+* The Campaign clock counts in-fiction minutes from the Campaign's start, which is day 1 at 08:00.
+* Shown as "day 3, 14:20". Named calendars wait until the World needs them.
+*/
+var DAY = 1440;
+/** The time of day the Campaign starts, in minutes after midnight. */
+var START = 480;
+var pad = (n) => String(n).padStart(2, "0");
+/** The clock as day and time of day, e.g. `{ day: 3, time: '14:20' }`. */
+function clockParts(minute) {
+	const since = START + minute;
+	const ofDay = since % DAY;
+	return {
+		day: Math.floor(since / DAY) + 1,
+		time: `${pad(Math.floor(ofDay / 60))}:${pad(ofDay % 60)}`
+	};
+}
+/** The clock as the Players read it: "day 3, 14:20". */
+function formatClock(minute) {
+	const { day, time } = clockParts(minute);
+	return `day ${day}, ${time}`;
+}
+/** The minute a "day 3, 14:20" reading names, or null when it isn't one (or is before the start). */
+function parseClock(text) {
+	const match = /^\s*day\s+(\d+),?\s+(\d{1,2}):(\d{2})\s*$/i.exec(text);
+	if (!match) return null;
+	const [day, hours, minutes] = match.slice(1).map(Number);
+	if (day < 1 || hours > 23 || minutes > 59) return null;
+	const minute = (day - 1) * DAY + hours * 60 + minutes - START;
+	return minute < 0 ? null : minute;
+}
 // src/lib/server/world/names.ts
 /** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
 var plain$1 = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -223,6 +255,118 @@ function isNearName(a, b) {
 	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
 	const words = new Set(long.split(" "));
 	return short.split(" ").every((w) => words.has(w));
+}
+// src/lib/server/play/scene.ts
+/** A move of the clock that would take it backwards. */
+var ClockBackwardsError = class extends Error {};
+/** The Campaign clock: in-fiction minutes since the Campaign started. */
+function currentMinute(db) {
+	return db.select({ minute: campaign.clockMinute }).from(campaign).get()?.minute ?? 0;
+}
+/**
+* Moves the Campaign clock to `to`, inside the caller's transaction. The one way the clock moves:
+* `advance_time`, rests and the end of a Combat all go through here. Refuses to go backwards.
+*/
+function advanceClock(db, to) {
+	const from = currentMinute(db);
+	if (!Number.isInteger(to) || to < from) throw new ClockBackwardsError(`The clock is at ${formatClock(from)}; it cannot go back to ${formatClock(Math.max(0, Math.floor(to)))}`);
+	db.update(campaign).set({ clockMinute: to }).run();
+	return {
+		from,
+		to
+	};
+}
+/**
+* Every Character with its handle, in the order they joined the Party. A handle is `char:` and the
+* name's slug, numbered (`char:wren-2`) when two Characters share a name. Characters are not
+* Entities, but Facts, Beliefs and tools link to them by handle.
+*/
+function characterRefs(db) {
+	const rows = db.select().from(character).orderBy(sql`rowid`).all();
+	const taken = /* @__PURE__ */ new Set();
+	return rows.map((row) => {
+		const base = `char:${slug$1(row.name)}`;
+		let handle = base;
+		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
+		taken.add(handle);
+		return {
+			handle,
+			row
+		};
+	});
+}
+/** The Place the spotlight is on, or null before the DM first sets the Scene. */
+function scenePlace(db) {
+	const handle = db.select({ scene: campaign.scene }).from(campaign).get()?.scene ?? null;
+	if (handle === null) return null;
+	return db.select().from(entity).where(eq(entity.handle, handle)).get() ?? null;
+}
+/** Whether a Character is in the Scene. Before the Scene is first set, the whole Party is. */
+function inScene(place, row) {
+	return place === null || row.whereabouts === place.handle;
+}
+/** Live NPCs whose whereabouts is `place`. */
+function npcsAt(db, place) {
+	return db.select().from(entity).where(and(eq(entity.type, "npc"), isNull(entity.retiredAt))).orderBy(entity.name).all().filter((e) => e.fields.whereabouts === place && e.fields.status !== "dead");
+}
+/**
+* Who is in the Scene, worked out from whereabouts (never stored): the Characters there who are
+* still in play and the live NPCs at the Place. The rest of the Party is elsewhere.
+*/
+function present(db) {
+	const place = scenePlace(db);
+	const party = characterRefs(db).filter((c) => c.row.status === "alive");
+	return {
+		place,
+		characters: party.filter((c) => inScene(place, c.row)),
+		elsewhere: party.filter((c) => !inScene(place, c.row)),
+		npcs: place ? npcsAt(db, place.handle) : []
+	};
+}
+/** A spotlight request the server won't send: unknown Character, or one already in the Scene. */
+var SpotlightRefusedError = class extends Error {};
+/** The Scene as the Player's rail shows it, built from Player-safe fields only. */
+function playerScene(db) {
+	const { place, characters, elsewhere } = present(db);
+	const minute = currentMinute(db);
+	const placeName = (handle) => handle === null ? null : db.select({ name: entity.name }).from(entity).where(eq(entity.handle, handle)).get()?.name ?? null;
+	return {
+		clock: {
+			minute,
+			...clockParts(minute)
+		},
+		place: place && { name: place.name },
+		present: characters.map((c) => ({
+			id: c.row.id,
+			name: c.row.name
+		})),
+		elsewhere: elsewhere.map((c) => ({
+			id: c.row.id,
+			name: c.row.name,
+			whereabouts: placeName(c.row.whereabouts)
+		}))
+	};
+}
+/**
+* A Player's "Cut to <Name>" for a Character elsewhere, as the DM hears it: one `spotlight`
+* channel event carrying the Character and the Player. It doesn't await Narration; the DM cuts
+* with `set_scene` at a natural break.
+*/
+function spotlightRequest(db, characterId, player) {
+	const { elsewhere, characters } = present(db);
+	const target = elsewhere.find((c) => c.row.id === characterId);
+	if (!target) {
+		const here = characters.find((c) => c.row.id === characterId);
+		throw new SpotlightRefusedError(here ? `${here.row.name} is already in the Scene` : "Character not found");
+	}
+	return {
+		content: `Cut to ${target.row.name} (${target.handle}), at ${target.row.whereabouts ?? "no known Place"}`,
+		meta: {
+			kind: "spotlight",
+			character: target.handle,
+			player
+		}
+	};
 }
 // src/lib/character/acting.ts
 /**
@@ -310,24 +454,32 @@ function playSheets(party) {
 // src/lib/server/play/core-block.ts
 /** A Character's handle, from its name. */
 var characterHandle = (name) => `char:${slug$1(name)}`;
-/** The Scene: its Place and the in-fiction time. No Scene exists until the clock and Scene do. */
-function scenePart() {
-	return "Scene: none set yet.";
+/** The Scene: its Place (handle and name) and the in-fiction time. */
+function scenePart({ db }) {
+	const place = present(db).place;
+	const time = formatClock(currentMinute(db));
+	return place ? `Scene: ${place.name} (${place.handle}), ${time}.` : `Scene: none set yet, ${time}.`;
 }
 /** The Party: name, handle, HP/max, conditions, status and whereabouts per Character. */
-function partyPart({ party }) {
+function partyPart({ party, db }) {
 	const status = new Map(party.list().flatMap((m) => m.kind === "character" ? [[m.id, m.status]] : []));
+	const handles = new Map(characterRefs(db).map((c) => [c.row.id, c.handle]));
 	const sheets = playSheets(party);
 	if (sheets.length === 0) return "Party: no Characters yet.";
 	return ["Party:", ...sheets.map((c) => {
 		const hp = `HP ${c.hp.current}/${c.hp.max ?? "?"}${c.hp.temp ? ` (+${c.hp.temp} temp)` : ""}`;
 		const conditions = c.conditions.length ? c.conditions.join(", ") : "none";
-		return `- ${c.name} (${characterHandle(c.name)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? "unknown"}`;
+		return `- ${c.name} (${handles.get(c.id) ?? characterHandle(c.name)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? "unknown"}`;
 	})].join("\n");
 }
-/** The NPCs at the Scene's Place. Presence needs a Scene, so none are present yet. */
-function npcsPart() {
-	return "NPCs present: none.";
+/** The NPCs at the Scene's Place: handle, name, role and one-line description. */
+function npcsPart({ db }) {
+	const npcs = present(db).npcs;
+	if (npcs.length === 0) return "NPCs present: none.";
+	return ["NPCs present:", ...npcs.map((n) => {
+		const detail = [n.fields.role, n.fields.description].filter(Boolean).join(", ");
+		return `- ${n.name} (${n.handle})${detail ? `: ${detail}` : ""}`;
+	})].join("\n");
 }
 /** When lint last ran. */
 function lintPart() {
@@ -337,9 +489,9 @@ function lintPart() {
 function coreBlock(source) {
 	return [
 		"# Core block",
-		scenePart(),
+		scenePart(source),
 		partyPart(source),
-		npcsPart(),
+		npcsPart(source),
 		lintPart()
 	].join("\n");
 }
@@ -872,6 +1024,17 @@ function writeTool(tool) {
 		run: tool.run
 	};
 }
+/**
+* A tool that changes creation state (the Seed card, Character drafts, the creation conversation):
+* one transaction, and no Event, since the Event log starts with the story.
+*/
+function creationTool(tool) {
+	return {
+		...tool,
+		mutates: "creation",
+		run: tool.run
+	};
+}
 // src/lib/server/play/calls.ts
 /**
 * The DC for each difficulty tier, from the SRD's "Typical Difficulty Classes" table
@@ -1159,150 +1322,6 @@ function createCalls(db, now = Date.now) {
 		}
 	};
 }
-// src/lib/play/clock.ts
-/**
-* The Campaign clock counts in-fiction minutes from the Campaign's start, which is day 1 at 08:00.
-* Shown as "day 3, 14:20". Named calendars wait until the World needs them.
-*/
-var DAY = 1440;
-/** The time of day the Campaign starts, in minutes after midnight. */
-var START = 480;
-var pad = (n) => String(n).padStart(2, "0");
-/** The clock as day and time of day, e.g. `{ day: 3, time: '14:20' }`. */
-function clockParts(minute) {
-	const since = START + minute;
-	const ofDay = since % DAY;
-	return {
-		day: Math.floor(since / DAY) + 1,
-		time: `${pad(Math.floor(ofDay / 60))}:${pad(ofDay % 60)}`
-	};
-}
-/** The clock as the Players read it: "day 3, 14:20". */
-function formatClock(minute) {
-	const { day, time } = clockParts(minute);
-	return `day ${day}, ${time}`;
-}
-/** The minute a "day 3, 14:20" reading names, or null when it isn't one (or is before the start). */
-function parseClock(text) {
-	const match = /^\s*day\s+(\d+),?\s+(\d{1,2}):(\d{2})\s*$/i.exec(text);
-	if (!match) return null;
-	const [day, hours, minutes] = match.slice(1).map(Number);
-	if (day < 1 || hours > 23 || minutes > 59) return null;
-	const minute = (day - 1) * DAY + hours * 60 + minutes - START;
-	return minute < 0 ? null : minute;
-}
-// src/lib/server/play/scene.ts
-/** A move of the clock that would take it backwards. */
-var ClockBackwardsError = class extends Error {};
-/** The Campaign clock: in-fiction minutes since the Campaign started. */
-function currentMinute(db) {
-	return db.select({ minute: campaign.clockMinute }).from(campaign).get()?.minute ?? 0;
-}
-/**
-* Moves the Campaign clock to `to`, inside the caller's transaction. The one way the clock moves:
-* `advance_time`, rests and the end of a Combat all go through here. Refuses to go backwards.
-*/
-function advanceClock(db, to) {
-	const from = currentMinute(db);
-	if (!Number.isInteger(to) || to < from) throw new ClockBackwardsError(`The clock is at ${formatClock(from)}; it cannot go back to ${formatClock(Math.max(0, Math.floor(to)))}`);
-	db.update(campaign).set({ clockMinute: to }).run();
-	return {
-		from,
-		to
-	};
-}
-/**
-* Every Character with its handle, in the order they joined the Party. A handle is `char:` and the
-* name's slug, numbered (`char:wren-2`) when two Characters share a name. Characters are not
-* Entities, but Facts, Beliefs and tools link to them by handle.
-*/
-function characterRefs(db) {
-	const rows = db.select().from(character).orderBy(sql`rowid`).all();
-	const taken = /* @__PURE__ */ new Set();
-	return rows.map((row) => {
-		const base = `char:${slug$1(row.name)}`;
-		let handle = base;
-		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
-		taken.add(handle);
-		return {
-			handle,
-			row
-		};
-	});
-}
-/** The Place the spotlight is on, or null before the DM first sets the Scene. */
-function scenePlace(db) {
-	const handle = db.select({ scene: campaign.scene }).from(campaign).get()?.scene ?? null;
-	if (handle === null) return null;
-	return db.select().from(entity).where(eq(entity.handle, handle)).get() ?? null;
-}
-/** Whether a Character is in the Scene. Before the Scene is first set, the whole Party is. */
-function inScene(place, row) {
-	return place === null || row.whereabouts === place.handle;
-}
-/** Live NPCs whose whereabouts is `place`. */
-function npcsAt(db, place) {
-	return db.select().from(entity).where(and(eq(entity.type, "npc"), isNull(entity.retiredAt))).orderBy(entity.name).all().filter((e) => e.fields.whereabouts === place && e.fields.status !== "dead");
-}
-/**
-* Who is in the Scene, worked out from whereabouts (never stored): the Characters there who are
-* still in play and the live NPCs at the Place. The rest of the Party is elsewhere.
-*/
-function present(db) {
-	const place = scenePlace(db);
-	const party = characterRefs(db).filter((c) => c.row.status === "alive");
-	return {
-		place,
-		characters: party.filter((c) => inScene(place, c.row)),
-		elsewhere: party.filter((c) => !inScene(place, c.row)),
-		npcs: place ? npcsAt(db, place.handle) : []
-	};
-}
-/** A spotlight request the server won't send: unknown Character, or one already in the Scene. */
-var SpotlightRefusedError = class extends Error {};
-/** The Scene as the Player's rail shows it, built from Player-safe fields only. */
-function playerScene(db) {
-	const { place, characters, elsewhere } = present(db);
-	const minute = currentMinute(db);
-	const placeName = (handle) => handle === null ? null : db.select({ name: entity.name }).from(entity).where(eq(entity.handle, handle)).get()?.name ?? null;
-	return {
-		clock: {
-			minute,
-			...clockParts(minute)
-		},
-		place: place && { name: place.name },
-		present: characters.map((c) => ({
-			id: c.row.id,
-			name: c.row.name
-		})),
-		elsewhere: elsewhere.map((c) => ({
-			id: c.row.id,
-			name: c.row.name,
-			whereabouts: placeName(c.row.whereabouts)
-		}))
-	};
-}
-/**
-* A Player's "Cut to <Name>" for a Character elsewhere, as the DM hears it: one `spotlight`
-* channel event carrying the Character and the Player. It doesn't await Narration; the DM cuts
-* with `set_scene` at a natural break.
-*/
-function spotlightRequest(db, characterId, player) {
-	const { elsewhere, characters } = present(db);
-	const target = elsewhere.find((c) => c.row.id === characterId);
-	if (!target) {
-		const here = characters.find((c) => c.row.id === characterId);
-		throw new SpotlightRefusedError(here ? `${here.row.name} is already in the Scene` : "Character not found");
-	}
-	return {
-		content: `Cut to ${target.row.name} (${target.handle}), at ${target.row.whereabouts ?? "no known Place"}`,
-		meta: {
-			kind: "spotlight",
-			character: target.handle,
-			player
-		}
-	};
-}
 // src/lib/server/play/log.ts
 /**
 * The Campaign's current stamp: the open Session (null offline) and the Campaign clock's minute.
@@ -1522,7 +1541,10 @@ function createDmChannels(library) {
 		if (changes.length === 0) return sent;
 		const latest = new Map(changes.map((c) => [c.handle, c]));
 		const parts = ["Changed outside the DM:", ...[...latest.values()].map((c) => `- ${c.handle} v${c.version}: ${c.summary}`)];
-		if ([...latest.keys()].some((h) => h.startsWith("char:"))) parts.push("", partyPart({ party: library.party(entry.id) }));
+		if ([...latest.keys()].some((h) => h.startsWith("char:"))) parts.push("", partyPart({
+			party: library.party(entry.id),
+			db
+		}));
 		const notice = parts.join("\n");
 		return {
 			...sent,
@@ -1547,11 +1569,22 @@ function createParty(db, now = Date.now) {
 		if (!found) throw new DraftNotFoundError("Character draft not found");
 		return found;
 	}
+	/**
+	* The Player's write. A write that changes nothing (the open wizard echoing a DM write back)
+	* keeps the version; a field the Player changed loses its "✎ DM" mark.
+	*/
 	function write(id, { draft, step }) {
-		row(id);
+		const found = row(id);
+		const before = {
+			...emptyDraft(),
+			...found.data
+		};
+		const edited = new Set(changedDraftFields(before, draft));
 		db.update(characterDraft).set({
 			data: draft,
 			step,
+			version: edited.size > 0 ? found.version + 1 : found.version,
+			dmFields: found.dmFields.filter((f) => !edited.has(f)),
 			updatedAt: now()
 		}).where(eq(characterDraft.id, id)).run();
 	}
@@ -1613,7 +1646,9 @@ function createParty(db, now = Date.now) {
 					...emptyDraft(),
 					...found.data
 				},
-				step: found.step
+				step: found.step,
+				version: found.version,
+				dmFields: found.dmFields
 			};
 		},
 		/** Replaces the stored draft. Incomplete is fine: a draft is unsaved by definition. */
@@ -2035,6 +2070,20 @@ function history(db, { about, session: number, since, query, limit = 50 }) {
 		...e.dmOnly ? { dm_only: true } : {}
 	}));
 }
+// src/lib/server/creation/conversation.ts
+/** Adds a line to the creation conversation. It is out of fiction: never an Event. */
+function addConversationLine(db, line, at) {
+	return db.insert(conversationMessage).values({
+		author: line.author,
+		player: line.player ?? null,
+		text: line.text,
+		createdAt: at
+	}).returning().get();
+}
+/** A Campaign's creation conversation, oldest first. */
+function conversationLines(db) {
+	return db.select().from(conversationMessage).orderBy(asc(conversationMessage.id)).all();
+}
 // src/lib/server/campaign/registry.ts
 /**
 * The list of Campaign folders the server knows, as `registry.json` in the user-level state
@@ -2189,14 +2238,24 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		seed(id) {
 			return campaignSeedCard(find(id).found);
 		},
-		/** Saves the whole Seed; an incomplete one is fine, an invalid one is refused. */
+		/** The Seed fields the DM set and the Player has not edited since: the card's "✎ DM" marks. */
+		dmSeedFields(id) {
+			return find(id).found.dmSeedFields;
+		},
+		/**
+		* Saves the whole Seed; an incomplete one is fine, an invalid one is refused. A field the
+		* Player changed loses its "✎ DM" mark.
+		*/
 		saveSeed(id, card) {
 			const { folder, found } = find(id);
 			if (found.archivedAt !== null) throw new CampaignArchivedError("An archived Campaign cannot be changed");
+			const seed = parseCampaignSeed(card);
+			const edited = new Set(CAMPAIGN_SEED_FIELDS.filter((f) => seed[f] !== found[f]));
 			const saved = database(folder).transaction((tx) => {
 				const row = update(id, {
-					...parseCampaignSeed(card),
-					version: found.version + 1
+					...seed,
+					version: found.version + 1,
+					dmSeedFields: found.dmSeedFields.filter((f) => !edited.has(f))
 				});
 				logChange(tx, {
 					handle: "campaign",
@@ -2211,6 +2270,17 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 				name: saved.name
 			});
 			return saved;
+		},
+		/** The creation conversation in the DM pane. It is out of fiction and never logged. */
+		conversation(id) {
+			const db = database(find(id).folder);
+			return {
+				list: () => conversationLines(db),
+				add: (line) => addConversationLine(db, {
+					...line,
+					author: "player"
+				}, now())
+			};
 		},
 		/** The Campaign's Characters and Character drafts. */
 		party(id) {
@@ -2234,7 +2304,10 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 				sessionHistory: () => sessionHistory(db),
 				openSession: (bridge) => openSession(db, now(), bridge),
 				/** The DM's core block. */
-				coreBlock: () => coreBlock({ party: createParty(db, now) }),
+				coreBlock: () => coreBlock({
+					party: createParty(db, now),
+					db
+				}),
 				/** Logs a turn that went wrong, as the Player sees it in the timeline. */
 				turnError: (text) => logEvent(db, {
 					tool: "stop",
@@ -2319,6 +2392,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { slug$1 as $, advanceClock as A, callResultEvent as B, currentStamp as C, setAwaitingNarration as D, nextEventId as E, formatClock as F, readTool as G, PLUGIN_NAME as H, parseClock as I, CharacterValidationError as J, writeTool as K, CallClosedError as L, currentMinute as M, present as N, ClockBackwardsError as O, scenePlace as P, normalizeName as Q, CallRefusedError as R, createDmChannels as S, logEvent as T, ToolError as U, openCall as V, expectVersion as W, loadWizardRules as X, playSheets as Y, isNearName as Z, DeclarationNotFoundError as _, CampaignArchivedError as a, returnStrandedDrafts as b, CampaignNotFoundError as c, closeSession as d, SESSION_LIVE_MESSAGE as et, history as f, charactersInScene as g, characterHolders as h, sessions as i, characterRefs as j, SpotlightRefusedError as k, NotACampaignFolderError as l, sessionsView as m, library as n, CampaignExistsError as o, indexNarration as p, CharacterNotFoundError as q, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, DeclarationRefusedError as v, logActivity as w, DraftNotFoundError as x, DmBusyError as y, callInput as z };
+export { slug$1 as $, CallRefusedError as A, CharacterNotFoundError as B, createDmChannels as C, nextEventId as D, logEvent as E, ToolError as F, SpotlightRefusedError as G, playSheets as H, creationTool as I, currentMinute as J, advanceClock as K, expectVersion as L, callResultEvent as M, openCall as N, setAwaitingNarration as O, PLUGIN_NAME as P, normalizeName as Q, readTool as R, DraftNotFoundError as S, logActivity as T, loadWizardRules as U, CharacterValidationError as V, ClockBackwardsError as W, scenePlace as X, present as Y, isNearName as Z, charactersInScene as _, CampaignArchivedError as a, DmBusyError as b, CampaignNotFoundError as c, addConversationLine as d, formatClock as et, closeSession as f, characterHolders as g, sessionsView as h, sessions as i, callInput as j, CallClosedError as k, NotACampaignFolderError as l, indexNarration as m, library as n, SESSION_LIVE_MESSAGE as nt, CampaignExistsError as o, history as p, characterRefs as q, live as r, CampaignMissingError as s, campaignRoot as t, parseClock as tt, SessionLiveError as u, DeclarationNotFoundError as v, currentStamp as w, returnStrandedDrafts as x, DeclarationRefusedError as y, writeTool as z };
 
 //# sourceMappingURL=campaign.js.map

@@ -1,5 +1,5 @@
 import { asc, eq, sql } from 'drizzle-orm'
-import { emptyDraft, type CharacterDraft } from '#lib/character/draft.ts'
+import { changedDraftFields, emptyDraft, type CharacterDraft } from '#lib/character/draft.ts'
 import { detailToDraft } from '#lib/character/edit.ts'
 import { SOLO_PLAYER, type CharacterStatus } from '#lib/character/enums.ts'
 import { tryDraftToCharacterInput } from '#lib/character/save.ts'
@@ -38,6 +38,10 @@ export type StoredDraft = {
   controllingPlayer: string
   draft: CharacterDraft
   step: StepId
+  /** Bumped by every write that changes the draft; the DM's writes must pass it. */
+  version: number
+  /** The fields the DM set and the Player has not edited since: the wizard's "✎ DM" marks. */
+  dmFields: string[]
 }
 
 /** What the wizard writes back: the whole draft and the step it is on. */
@@ -60,10 +64,22 @@ export function createParty(db: Database, now: () => number = Date.now) {
     return found
   }
 
+  /**
+   * The Player's write. A write that changes nothing (the open wizard echoing a DM write back)
+   * keeps the version; a field the Player changed loses its "✎ DM" mark.
+   */
   function write(id: string, { draft, step }: DraftWrite) {
-    row(id)
+    const found = row(id)
+    const before = { ...emptyDraft(), ...(found.data as CharacterDraft) }
+    const edited = new Set<string>(changedDraftFields(before, draft))
     db.update(characterDraft)
-      .set({ data: draft, step, updatedAt: now() })
+      .set({
+        data: draft,
+        step,
+        version: edited.size > 0 ? found.version + 1 : found.version,
+        dmFields: found.dmFields.filter((f) => !edited.has(f)),
+        updatedAt: now()
+      })
       .where(eq(characterDraft.id, id))
       .run()
   }
@@ -134,7 +150,9 @@ export function createParty(db: Database, now: () => number = Date.now) {
         controllingPlayer: found.controllingPlayer,
         // Stored drafts may predate fields added to the draft since.
         draft: { ...emptyDraft(), ...(found.data as CharacterDraft) },
-        step: found.step
+        step: found.step,
+        version: found.version,
+        dmFields: found.dmFields
       }
     },
 

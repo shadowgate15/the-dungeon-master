@@ -11,6 +11,12 @@ export type LiveMessage =
    * Journal (fed by DM-only Reveals).
    */
   | { type: 'timeline'; campaign: string }
+  /** The Campaign Seed or its "✎ DM" markers changed. */
+  | { type: 'seed'; campaign: string }
+  /** A Character draft changed outside the wizard showing it (the DM wrote into it). */
+  | { type: 'draft'; campaign: string; draft: string }
+  /** A message was added to the creation conversation. */
+  | { type: 'conversation'; campaign: string }
   /** A permission prompt from the DM's session appeared or cleared. */
   | { type: 'permission'; campaign: string }
 
@@ -25,6 +31,16 @@ export const timelineQueryKey = (campaign: string) => ['timeline', campaign] as 
 
 /** The query holding a Campaign's Scene, as the rail shows it. */
 export const sceneQueryKey = (campaign: string) => ['scene', campaign] as const
+
+/** The query holding a Campaign's Seed and its "✎ DM" markers. */
+export const seedQueryKey = (campaign: string) => ['seed', campaign] as const
+
+/** The query holding one stored Character draft. */
+export const draftQueryKey = (campaign: string, draft: string) =>
+  ['draft', campaign, draft] as const
+
+/** The query holding a Campaign's creation conversation. */
+export const conversationQueryKey = (campaign: string) => ['conversation', campaign] as const
 
 /** The query holding the Player's Journal: what their Characters believe. */
 export const journalQueryKey = (campaign: string) => ['journal', campaign] as const
@@ -52,5 +68,11 @@ export function staleQueries(message: LiveMessage): QueryKey[] {
       ]
     case 'permission':
       return [permissionQueryKey(message.campaign)]
+    case 'seed':
+      return [seedQueryKey(message.campaign)]
+    case 'draft':
+      return [draftQueryKey(message.campaign, message.draft)]
+    case 'conversation':
+      return [conversationQueryKey(message.campaign)]
   }
 }

@@ -1,4 +1,5 @@
 import type { z } from 'zod'
+import type { LiveMessage } from '#lib/live/messages.ts'
 import type { Queryable } from '../db/connect'
 import type { Dice } from '../dice'
 
@@ -125,6 +126,22 @@ export type GameTool =
       mutates: true
       run: (ctx: ToolContext, input: unknown) => Output & { event: ToolEvent }
     })
+  | (Omit<Base<z.ZodType>, 'activity'> & {
+      activity?: Activity<never>
+      mutates: 'creation'
+      run: (ctx: ToolContext, input: unknown) => CreationOutput
+    })
+
+/**
+ * What a creation write returns. Creation is out of fiction, so it logs no Event and no
+ * DM-activity line (map #301): `line` is the muted line the creation conversation shows for it
+ * instead, and `changed` names what the browser must refetch.
+ */
+export type CreationOutput = {
+  result: Record<string, unknown>
+  line?: string
+  changed: LiveMessage[]
+}
 
 /** A tool that only reads. It logs nothing. */
 export function readTool<S extends z.ZodType>(
@@ -150,4 +167,16 @@ export function writeTool<S extends z.ZodType>(
     mutates: true,
     run: tool.run as (ctx: ToolContext, i: unknown) => never
   }
+}
+
+/**
+ * A tool that changes creation state (the Seed card, Character drafts, the creation conversation):
+ * one transaction, and no Event, since the Event log starts with the story.
+ */
+export function creationTool<S extends z.ZodType>(
+  tool: Omit<Base<S>, 'activity'> & {
+    run: (ctx: ToolContext, input: z.infer<S>) => CreationOutput
+  }
+): GameTool {
+  return { ...tool, mutates: 'creation', run: tool.run as (ctx: ToolContext, i: unknown) => never }
 }

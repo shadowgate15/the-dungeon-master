@@ -12,6 +12,9 @@ import { callResultEvent, type CallResult } from './calls'
 export { DmBusyError } from '../floor/floor'
 export { SpotlightRefusedError } from './scene'
 
+/** A creation conversation message needs a DM at the table to hear it. */
+export class DmAwayError extends Error {}
+
 type Options = {
   library: CampaignLibrary
   channels: Channels
@@ -108,6 +111,21 @@ export function createPlay({
     /** The Scene as the Player's rail shows it. */
     scene(campaignId: string): SceneView {
       return library.record(campaignId).scene()
+    },
+
+    /**
+     * The Player writes in the DM pane: the message is kept for the pane and reaches the DM as one
+     * conversation event. It is out of fiction, so it never touches the Floor or the Event log.
+     */
+    converse(campaignId: string, text: string, player: string = SOLO_PLAYER) {
+      const folder = folderOf(campaignId)
+      if (!channels.listening(folder)) {
+        throw new DmAwayError('The DM is away. Run dm in the Campaign folder to ask for help.')
+      }
+      const message = library.conversation(campaignId).add({ text, player })
+      channels.send(folder, { content: text, meta: { kind: 'conversation', player } })
+      publish({ type: 'conversation', campaign: campaignId })
+      return message
     },
 
     /**

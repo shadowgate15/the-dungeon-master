@@ -1,4 +1,4 @@
-import { _ as clsx, r as attributes } from "./server2.js";
+import { r as attributes, v as clsx } from "./server2.js";
 // src/lib/ui/Link.svelte
 function Link($$renderer, $$props) {
 	let { class: className, children, $$slots, $$events, ...rest } = $$props;

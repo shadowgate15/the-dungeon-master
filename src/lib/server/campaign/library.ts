@@ -13,7 +13,14 @@ import { logChange } from '../play/notices'
 import { logEvent, openSession, timeline } from '../play/log'
 import { playerScene, spotlightRequest } from '../play/scene'
 import { seedRulesData } from '../rules/seed'
-import { campaignSeedCard, parseCampaignSeed, type CampaignSeedCard } from '#lib/campaign/seed.ts'
+import {
+  CAMPAIGN_SEED_FIELDS,
+  campaignSeedCard,
+  parseCampaignSeed,
+  type CampaignSeedCard
+} from '#lib/campaign/seed.ts'
+import type { ConversationMessage } from '#lib/creation/conversation.ts'
+import { addConversationLine, conversationLines } from '../creation/conversation'
 import { campaignDatabasePath, canonicalFolder } from './paths'
 import { createRegistry } from './registry'
 
@@ -167,20 +174,44 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
       return campaignSeedCard(find(id).found)
     },
 
-    /** Saves the whole Seed; an incomplete one is fine, an invalid one is refused. */
+    /** The Seed fields the DM set and the Player has not edited since: the card's "✎ DM" marks. */
+    dmSeedFields(id: string): string[] {
+      return find(id).found.dmSeedFields
+    },
+
+    /**
+     * Saves the whole Seed; an incomplete one is fine, an invalid one is refused. A field the
+     * Player changed loses its "✎ DM" mark.
+     */
     saveSeed(id: string, card: Partial<CampaignSeedCard>): Campaign {
       const { folder, found } = find(id)
       if (found.archivedAt !== null) {
         throw new CampaignArchivedError('An archived Campaign cannot be changed')
       }
+      const seed = parseCampaignSeed(card)
+      const edited = new Set(CAMPAIGN_SEED_FIELDS.filter((f) => seed[f] !== found[f]))
       const saved = database(folder).transaction((tx) => {
-        const row = update(id, { ...parseCampaignSeed(card), version: found.version + 1 })
+        const row = update(id, {
+          ...seed,
+          version: found.version + 1,
+          dmSeedFields: found.dmSeedFields.filter((f) => !edited.has(f as never))
+        })
         const summary = 'the Player edited the Campaign Seed'
         logChange(tx, { handle: 'campaign', version: row.version, summary }, { at: now() })
         return row
       })
       registry.put({ id, path: folder, name: saved.name })
       return saved
+    },
+
+    /** The creation conversation in the DM pane. It is out of fiction and never logged. */
+    conversation(id: string) {
+      const db = database(find(id).folder)
+      return {
+        list: (): ConversationMessage[] => conversationLines(db),
+        add: (line: { text: string; player: string }): ConversationMessage =>
+          addConversationLine(db, { ...line, author: 'player' }, now())
+      }
     },
 
     /** The Campaign's Characters and Character drafts. */
@@ -208,7 +239,7 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
         sessionHistory: () => sessionHistory(db),
         openSession: (bridge?: string) => openSession(db, now(), bridge),
         /** The DM's core block. */
-        coreBlock: () => coreBlock({ party: createParty(db, now) }),
+        coreBlock: () => coreBlock({ party: createParty(db, now), db }),
         /** Logs a turn that went wrong, as the Player sees it in the timeline. */
         turnError: (text: string) =>
           logEvent(

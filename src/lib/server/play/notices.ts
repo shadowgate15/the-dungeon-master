@@ -81,7 +81,7 @@ export function createDmChannels(library: CampaignLibrary) {
         ...[...latest.values()].map((c) => `- ${c.handle} v${c.version}: ${c.summary}`)
       ]
       if ([...latest.keys()].some((h) => h.startsWith('char:'))) {
-        parts.push('', partyPart({ party: library.party(entry.id) }))
+        parts.push('', partyPart({ party: library.party(entry.id), db }))
       }
       const notice = parts.join('\n')
       return { ...sent, content: sent.content ? `${sent.content}\n\n${notice}` : notice }

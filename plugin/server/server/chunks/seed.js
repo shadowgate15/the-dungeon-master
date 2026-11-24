@@ -4871,6 +4871,7 @@ var schema_exports = /* @__PURE__ */ __exportAll({
 	classStartingEquipment: () => classStartingEquipment,
 	classTable: () => classTable,
 	condition: () => condition,
+	conversationMessage: () => conversationMessage,
 	damageType: () => damageType,
 	declaration: () => declaration,
 	entity: () => entity,
@@ -4939,6 +4940,10 @@ var campaign = sqliteTable("campaign", {
 	archivedAt: integer("archived_at"),
 	/** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
 	awaitingNarrationSince: integer("awaiting_narration_since"),
+	/** The Seed fields the DM set last ("✎ DM" on the card); a Player edit of a field drops it. */
+	dmSeedFields: text("dm_seed_fields", { mode: "json" }).$type().notNull().default([]),
+	/** When the Player pressed Begin (#335); null while the Campaign is still being created. */
+	begunAt: integer("begun_at"),
 	/** The last Event the DM has heard about: change notices cover the Player's edits after it. */
 	noticedThrough: integer("noticed_through").notNull().default(0),
 	/** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
@@ -5118,8 +5123,28 @@ var characterDraft = sqliteTable("character_draft", {
 	data: text("data", { mode: "json" }).$type().notNull(),
 	/** The wizard step the draft was last on. */
 	step: text("step").$type().notNull(),
+	/** The draft's Entity version: bumped by every write that changes it, from the wizard or the DM. */
+	version: integer("version").notNull().default(1),
+	/** The draft fields the DM set last ("✎ DM" in the wizard); a Player edit of a field drops it. */
+	dmFields: text("dm_fields", { mode: "json" }).$type().notNull().default([]),
 	createdAt: integer("created_at").notNull(),
 	updatedAt: integer("updated_at").notNull()
+});
+/**
+* The creation conversation in the DM pane: the Player's messages, the DM's replies and muted lines
+* for the DM's field writes. Out of fiction, so it is never part of the Event log.
+*/
+var conversationMessage = sqliteTable("conversation_message", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	author: text("author", { enum: [
+		"player",
+		"dm",
+		"dm_write"
+	] }).notNull(),
+	/** The Player who wrote it; null for the DM's lines. */
+	player: text("player"),
+	text: text("text").notNull(),
+	createdAt: integer("created_at").notNull()
 });
 /**
 * A Floor: the DM waiting on the Players' Declarations. At most one is open per Campaign; until it
@@ -6810,6 +6835,6 @@ function seedRulesData(db, dataset = loadRulesDataset(), now = Date.now) {
 		}).run();
 	});
 }
-export { damageType as $, fact as A, BACKSTORY_MAX as At, backgroundOption as B, isNotNull as Bt, event as C, subrace as Ct, belief as D, traitProficiency as Dt, session as E, trait as Et, ability as F, desc as Ft, choiceOptionItem as G, Column as Gt, backgroundProficiency as H, like as Ht, abilityScoreMethod as I, and as It, classProficiency as J, DUNGEON_MASTER_CAMPAIGNS as Jt, classLevel as K, is as Kt, alignment as L, eq as Lt, worldLink as M, CUSTOM_BACKGROUND_SLUG as Mt, ENTITY_TYPES as N, SOLO_PLAYER as Nt, entity as O, weaponProperty as Ot, NPC_STATUSES as P, asc as Pt, condition as Q, background as R, gt as Rt, declaration as S, subclass as St, returnedDraft as T, subraceTrait as Tt, choiceGroup as U, or as Ut, backgroundOptionAlignment as V, isNull as Vt, choiceOption as W, sql as Wt, classStartingEquipment as X, DUNGEON_MASTER_PORT as Xt, classSavingThrow as Y, DUNGEON_MASTER_HOME as Yt, classTable as Z, DUNGEON_MASTER_VERSION as Zt, characterDraft as _, ruleSection as _t, userStateDir as a, feature as at, characterSkill as b, spell as bt, abilities_default as c, magicSchool as ct, activityLine as d, monsterProficiency as dt, equipment as et, call as f, proficiency as ft, characterChoice as g, raceTrait as gt, character as h, raceLanguage as ht, defaultCampaignRoot as i, equipmentWeaponProperty as it, pageRevision as j, CUSTOM_BACKGROUND_FEATURE_MAX as jt, entityAlias as k, ABILITY_METHODS as kt, migrateDatabase as l, monster as lt, campaign as m, raceAbilityBonus as mt, campaignDatabasePath as n, equipmentCategoryItem as nt, loadRulesDataset as o, language as ot, callPart as p, race as pt, classLevelFeature as q, DATABASE_URL as qt, canonicalFolder as r, equipmentContent as rt, skills_default as s, magicItem as st, seedRulesData as t, equipmentCategory as tt, openDatabase as u, monsterConditionImmunity as ut, characterEquipment as v, rulesDataset as vt, floor as w, subraceAbilityBonus as wt, characterSpell as x, spellClass as xt, characterItem as y, skill as yt, backgroundEquipment as z, inArray as zt };
+export { condition as $, DUNGEON_MASTER_VERSION as $t, entityAlias as A, ABILITY_METHODS as At, backgroundEquipment as B, inArray as Bt, declaration as C, subclass as Ct, session as D, trait as Dt, returnedDraft as E, subraceTrait as Et, NPC_STATUSES as F, asc as Ft, choiceOption as G, or as Gt, backgroundOptionAlignment as H, isNull as Ht, ability as I, desc as It, classLevelFeature as J, is as Jt, choiceOptionItem as K, sql as Kt, abilityScoreMethod as L, and as Lt, pageRevision as M, CUSTOM_BACKGROUND_FEATURE_MAX as Mt, worldLink as N, CUSTOM_BACKGROUND_SLUG as Nt, belief as O, traitProficiency as Ot, ENTITY_TYPES as P, SOLO_PLAYER as Pt, classTable as Q, DUNGEON_MASTER_PORT as Qt, alignment as R, eq as Rt, conversationMessage as S, spellClass as St, floor as T, subraceAbilityBonus as Tt, backgroundProficiency as U, like as Ut, backgroundOption as V, isNotNull as Vt, choiceGroup as W, ne as Wt, classSavingThrow as X, DUNGEON_MASTER_CAMPAIGNS as Xt, classProficiency as Y, DATABASE_URL as Yt, classStartingEquipment as Z, DUNGEON_MASTER_HOME as Zt, characterDraft as _, raceTrait as _t, userStateDir as a, equipmentWeaponProperty as at, characterSkill as b, skill as bt, abilities_default as c, magicItem as ct, activityLine as d, monsterConditionImmunity as dt, damageType as et, call as f, monsterProficiency as ft, characterChoice as g, raceLanguage as gt, character as h, raceAbilityBonus as ht, defaultCampaignRoot as i, equipmentContent as it, fact as j, BACKSTORY_MAX as jt, entity as k, weaponProperty as kt, migrateDatabase as l, magicSchool as lt, campaign as m, race as mt, campaignDatabasePath as n, equipmentCategory as nt, loadRulesDataset as o, feature as ot, callPart as p, proficiency as pt, classLevel as q, Column as qt, canonicalFolder as r, equipmentCategoryItem as rt, skills_default as s, language as st, seedRulesData as t, equipment as tt, openDatabase as u, monster as ut, characterEquipment as v, ruleSection as vt, event as w, subrace as wt, characterSpell as x, spell as xt, characterItem as y, rulesDataset as yt, background as z, gt as zt };
 
 //# sourceMappingURL=seed.js.map
