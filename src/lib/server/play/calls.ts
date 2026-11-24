@@ -11,7 +11,15 @@ import type { ChannelEvent } from '../bridge/channels'
 import { createCharacterService } from '../character/service'
 import { loadWizardRules } from '../character/wizard-rules'
 import type { Database, Queryable } from '../db/connect'
-import { call, callPart, campaign, character, type CheckResult, type Sequence } from '../db/schema'
+import {
+  call,
+  callPart,
+  campaign,
+  character,
+  type CheckResult,
+  type HitDiceSpend,
+  type Sequence
+} from '../db/schema'
 import type { Dice } from '../dice'
 import { ToolError } from '../tools/contract'
 import { logEvent, setAwaitingNarration } from './log'
@@ -122,7 +130,9 @@ function labelOf(part: {
   skill: string | null
   save: string | null
   sequence?: Sequence | null
+  hitDice?: HitDiceSpend | null
 }): string | null {
+  if (part.hitDice) return 'Hit Dice'
   if (part.sequence) return part.sequence.label
   if (part.skill) return `${SKILL_NAMES.get(part.skill) ?? part.skill} check`
   if (part.save) return `${ABILITY_NAMES.get(part.save) ?? part.save} save`
@@ -243,6 +253,52 @@ export function createPendingCall(db: Queryable, parts: PendingPart[], at: numbe
   return id
 }
 
+/** One Character's Hit Dice for a short rest, addressed to its Controlling Player. */
+export type HitDicePart = {
+  characterId: string
+  player: string
+  die: number
+  available: number
+  conModifier: number
+}
+
+/**
+ * Stores a short rest's Hit Dice Call as pending, for the closing `narrate(..., call: id)` to
+ * attach: one part per Character, each answered with how many Hit Dice to spend. Returns its id.
+ */
+export function createHitDiceCall(db: Queryable, parts: HitDicePart[], at: number): string {
+  const id = db
+    .insert(call)
+    .values({
+      campaignId: db.select({ id: campaign.id }).from(campaign).get()!.id,
+      kind: 'hit_dice',
+      state: 'pending',
+      text: 'How many Hit Dice do you spend?',
+      createdAt: at
+    })
+    .returning({ id: call.id })
+    .get().id
+  parts.forEach((part, i) => {
+    db.insert(callPart)
+      .values({
+        callId: id,
+        position: i + 1,
+        characterId: part.characterId,
+        player: part.player,
+        hitDice: {
+          die: part.die,
+          available: part.available,
+          conModifier: part.conModifier,
+          rolls: null,
+          healed: null,
+          after: null
+        }
+      })
+      .run()
+  })
+  return id
+}
+
 /** The pending Calls no Narration has attached yet. */
 export function pendingCalls(db: Queryable): string[] {
   return db
@@ -307,7 +363,8 @@ export function openCallView(db: Queryable): OpenCall | null {
       reason: part.reason,
       mode: part.mode,
       answered: part.answeredAt !== null,
-      next: part.sequence ? nextStep(part.sequence) : null
+      next: part.sequence ? nextStep(part.sequence) : null,
+      hitDice: part.hitDice && { die: part.hitDice.die, available: part.hitDice.available }
     }))
   }
 }
@@ -337,12 +394,22 @@ export type CallResult = { call: string; players: string[]; parts: Answered[] }
 
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
 function resultLine(p: Answered): string {
+  if (p.hitDice) return `[${p.characterName} · ${p.player}] Hit Dice: ${hitDiceText(p.hitDice)}`
   if (p.sequence) return `[${p.characterName} · ${p.player}] ${sequenceText(p.sequence, p.mode)}`
   if (p.result === null) return `[${p.player}] ${p.answer}`
   const r = p.result
   const dice = r.dice.length > 1 ? `${r.dice.join('/')} (${p.mode}) kept ${r.kept}` : `${r.kept}`
   const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`
   return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? 'success' : 'failure'}`
+}
+
+/** What a Character's Hit Dice came to: the dice, the Con modifier per die, the HP regained. */
+function hitDiceText(spend: HitDiceSpend): string {
+  const rolls = spend.rolls ?? []
+  if (!rolls.length) return 'spent none'
+  const con = spend.conModifier * rolls.length
+  const modifier = con ? ` ${con > 0 ? '+' : '-'} ${Math.abs(con)}` : ''
+  return `spent ${rolls.length} d${spend.die}: ${rolls.join(' + ')}${modifier} = ${spend.healed} HP → ${spend.after!.hp}/${spend.after!.max} HP`
 }
 
 /** The `call_result` channel event: one body line per part, in order. */
@@ -469,6 +536,64 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     }
   }
 
+  /**
+   * A short rest's Hit Dice: the Player says how many; code rolls each, adds the Con modifier
+   * (never below 0 a die), and heals the Character up to its maximum.
+   */
+  function spendHitDice(
+    part: typeof callPart.$inferSelect,
+    spend: HitDiceSpend,
+    text: string,
+    dice: Dice | undefined
+  ) {
+    const count = /^\d+$/.test(text) ? Number(text) : NaN
+    if (!(count >= 0 && count <= spend.available)) {
+      throw new CallRefusedError(`Spend 0 to ${spend.available} Hit Dice`)
+    }
+    if (count > 0 && !dice) throw new Error('Spending Hit Dice needs the Campaign dice')
+    const row = db.select().from(character).where(eq(character.id, part.characterId!)).get()!
+    const max = maxHp(part.characterId!) ?? row.currentHp
+    const rolls = Array.from({ length: count }, () => dice!.rollExpression(`1d${spend.die}`).total)
+    const rolled = rolls.reduce((sum, r) => sum + Math.max(0, r + spend.conModifier), 0)
+    const hp = Math.min(max, row.currentHp + rolled)
+    db.update(character)
+      .set({ currentHp: hp, hitDiceSpent: row.hitDiceSpent + count })
+      .where(eq(character.id, row.id))
+      .run()
+    const done: HitDiceSpend = { ...spend, rolls, healed: hp - row.currentHp, after: { hp, max } }
+    return {
+      values: { hitDice: done, answer: String(count) },
+      event: {
+        kind: 'roll',
+        summary: `${row.name} Hit Dice: ${hitDiceText(done)}`,
+        data: {
+          part: part.id,
+          characterName: row.name,
+          player: part.player,
+          what: `Hit Dice (${count}d${spend.die})`,
+          mode: 'normal',
+          reason: null,
+          dice: rolls,
+          modifier: spend.conModifier * count,
+          total: done.healed,
+          outcome: null,
+          target: null
+        }
+      }
+    }
+  }
+
+  /** A Character's derived HP maximum. */
+  function maxHp(characterId: string): number | null {
+    const detail = createCharacterService(db, now).get(characterId)
+    if (!detail) return null
+    const { stats } = buildSummary(loadWizardRules(), {
+      ...detailToSummaryData(detail),
+      equipment: detail.inventory
+    })
+    return stats.hitPoints.status === 'ok' ? stats.hitPoints.value : null
+  }
+
   return {
     /** The open Call, Player-safe. */
     open: () => openCallView(db),
@@ -480,6 +605,7 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     roll(callId: string, partId: string, dice: Dice, player: string = SOLO_PLAYER) {
       return answer(callId, partId, player, (part) => {
         if (!part.characterId) throw new CallRefusedError('That part is a question: answer it')
+        if (part.hitDice) throw new CallRefusedError('Say how many Hit Dice to spend')
         if (part.sequence) return rollSequenceStep(part, dice, player)
         const modifier = modifierFor(part.characterId, part)
         const d20 =
@@ -520,10 +646,20 @@ export function createCalls(db: Database, now: () => number = Date.now) {
       })
     },
 
-    /** Answers a question part; with choices, the answer must be one of them. */
-    answer(callId: string, partId: string, text: string, player: string = SOLO_PLAYER) {
+    /**
+     * Answers a question part (with choices, the answer must be one of them), or a Hit Dice part
+     * with how many to spend, which code then rolls with `dice`.
+     */
+    answer(
+      callId: string,
+      partId: string,
+      text: string,
+      player: string = SOLO_PLAYER,
+      dice?: Dice
+    ) {
       const clean = text.trim()
       return answer(callId, partId, player, (part) => {
+        if (part.hitDice) return spendHitDice(part, part.hitDice, clean, dice)
         if (part.characterId) throw new CallRefusedError('That part is a Check: roll it')
         const { choices, text: question } = db.select().from(call).where(eq(call.id, callId)).get()!
         if (!clean) throw new CallRefusedError('Give an answer')

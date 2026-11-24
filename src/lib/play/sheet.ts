@@ -15,7 +15,9 @@ export interface PlaySheet {
   /** Where the Character is, when set. */
   whereabouts: string | null
   hp: { current: number; max: number | null; temp: number }
-  /** Unarmored AC until equipped armor is tracked; null while it can't be derived. */
+  /** Hit Dice: the die size, how many the Character has (its level) and how many are spent. */
+  hitDice: { die: number; total: number; spent: number } | null
+  /** AC from equipped armor and shield (`note` names them, or "unarmored"); null while underivable. */
   ac: { value: number; note: string } | null
   conditions: string[]
   /** The spell being concentrated on. */
@@ -26,5 +28,6 @@ export interface PlaySheet {
   spellSlots: { level: number; max: number; spent: number }[]
   /** Features, with spent uses where play has spent any. */
   features: { slug: string; name: string; spent: number }[]
-  inventory: { name: string; quantity: number }[]
+  inventory: { name: string; quantity: number; equipped: boolean }[]
+  coin: { cp: number; sp: number; ep: number; gp: number; pp: number }
 }

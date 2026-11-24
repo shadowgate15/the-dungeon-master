@@ -13,7 +13,9 @@ const base = {
   concentration: null,
   spellSlots: [],
   features: [],
-  inventory: []
+  inventory: [],
+  hitDice: null,
+  coin: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 }
 } satisfies Partial<PlaySheet>
 
 export const sheets: PlaySheet[] = [
@@ -23,8 +25,10 @@ export const sheets: PlaySheet[] = [
     name: 'Wren',
     headline: 'Lightfoot Halfling Ranger 1',
     hp: { current: 9, max: 12, temp: 0 },
-    ac: { value: 14, note: 'unarmored' },
+    ac: { value: 14, note: 'Leather Armor' },
     conditions: ['poisoned'],
+    hitDice: { die: 10, total: 1, spent: 0 },
+    coin: { cp: 0, sp: 4, ep: 0, gp: 12, pp: 0 },
     concentration: 'bless',
     abilities: [
       { key: 'str', score: 10, modifier: 0 },
@@ -41,8 +45,9 @@ export const sheets: PlaySheet[] = [
       { slug: 'favored-enemy', name: 'Favored Enemy', spent: 0 }
     ],
     inventory: [
-      { name: 'Rope, hempen (50 feet)', quantity: 1 },
-      { name: 'Arrow', quantity: 20 }
+      { name: 'Leather Armor', quantity: 1, equipped: true },
+      { name: 'Rope, hempen (50 feet)', quantity: 1, equipped: false },
+      { name: 'Arrow', quantity: 20, equipped: false }
     ]
   },
   {
@@ -138,7 +143,8 @@ export const checkCall: OpenCall = {
       reason: 'The lock is old and stiff',
       mode: 'normal',
       answered: false,
-      next: null
+      next: null,
+      hitDice: null
     },
     {
       id: 'p2',
@@ -148,7 +154,8 @@ export const checkCall: OpenCall = {
       reason: 'Bram knows these streets',
       mode: 'advantage',
       answered: false,
-      next: null
+      next: null,
+      hitDice: null
     }
   ]
 }
@@ -168,7 +175,8 @@ export const questionCall: OpenCall = {
       reason: null,
       mode: 'normal',
       answered: false,
-      next: null
+      next: null,
+      hitDice: null
     }
   ]
 }
@@ -219,7 +227,8 @@ export const attackCall: OpenCall = {
       reason: null,
       mode: 'normal',
       answered: false,
-      next: 'damage'
+      next: 'damage',
+      hitDice: null
     }
   ]
 }

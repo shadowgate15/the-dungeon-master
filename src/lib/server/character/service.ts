@@ -95,6 +95,8 @@ export interface CharacterInput {
 export interface InventoryItem {
   item: string
   quantity: number
+  /** Worn or wielded; absent where it doesn't matter (the wizard's starting kit). */
+  equipped?: boolean
 }
 
 /** A list row: the stored Character plus the names the table shows. */
@@ -657,7 +659,11 @@ export function createCharacterService(
         .orderBy(asc(characterEquipment.choiceKey), asc(equipment.slug))
         .all()
       const inventory = db
-        .select({ item: equipment.slug, quantity: characterItem.quantity })
+        .select({
+          item: equipment.slug,
+          quantity: characterItem.quantity,
+          equipped: characterItem.equipped
+        })
         .from(characterItem)
         .innerJoin(equipment, eq(equipment.id, characterItem.itemId))
         .where(eq(characterItem.characterId, id))
