@@ -146,6 +146,13 @@ export function createPlay({
       publish({ type: 'seed', campaign: campaignId })
     },
 
+    /** The Player chooses Start over; it works with the DM away too. */
+    startOver(campaignId: string): void {
+      library.startOver(campaignId)
+      publish({ type: 'seed', campaign: campaignId })
+      publish({ type: 'timeline', campaign: campaignId })
+    },
+
     /** Opens the Campaign's Session as a DM attaches; a reattaching DM keeps the open one. */
     openSession(campaignId: string): { id: string; number: number } {
       return library.record(campaignId).openSession()

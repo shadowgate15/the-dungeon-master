@@ -20,7 +20,7 @@ import {
 } from '#lib/campaign/seed.ts'
 import type { ConversationMessage } from '#lib/creation/conversation.ts'
 import { addConversationLine, conversationLines } from '../creation/conversation'
-import { begin, creationStage, refuseLockedSeed } from '../creation/begin'
+import { begin, creationStage, refuseLockedSeed, startOver } from '../creation/begin'
 import { campaignDatabasePath, canonicalFolder } from './paths'
 import { createRegistry } from './registry'
 
@@ -217,6 +217,19 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
         throw new CampaignArchivedError('An archived Campaign cannot be changed')
       }
       begin(database(folder), now())
+    },
+
+    /**
+     * Start over: discards the World and the Arc and unlocks the Seed. Refused
+     * (`StartOverRefusedError`) before Begin and after the first Narration; it needs no DM.
+     */
+    startOver(id: string): void {
+      const { folder, found } = find(id)
+      if (found.archivedAt !== null) {
+        throw new CampaignArchivedError('An archived Campaign cannot be changed')
+      }
+      const db = database(folder)
+      db.transaction((tx) => startOver(tx, now()))
     },
 
     /** The creation conversation in the DM pane. It is out of fiction and never logged. */

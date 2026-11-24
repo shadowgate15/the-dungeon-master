@@ -1,7 +1,19 @@
-import { ne } from 'drizzle-orm'
+import { and, eq, gte, ne, sql } from 'drizzle-orm'
 import { campaignSeedCard, missingSeedFields } from '#lib/campaign/seed.ts'
 import type { Queryable } from '../db/connect'
-import { campaign, character } from '../db/schema'
+import {
+  belief,
+  campaign,
+  character,
+  entity,
+  entityAlias,
+  event,
+  fact,
+  pageRevision,
+  worldLink
+} from '../db/schema'
+import { logChange } from '../play/notices'
+import { discardArcs } from '../story/arc'
 
 /** Where creation stands, which the `session-opening` skill branches on. */
 export type CreationState = 'seed_incomplete' | 'party_empty' | 'ready' | 'begun'
@@ -65,4 +77,51 @@ export function refuseLockedSeed(found: { begunAt: number | null }) {
       'The story has begun, so the Seed is locked. Start over to change it.'
     )
   }
+}
+
+/** Start over is not allowed: before Begin, or once the story has a Narration. */
+export class StartOverRefusedError extends Error {}
+
+/**
+ * Start over: discards the World (Entities, Pages, Facts, links), every Belief and the Arc, and
+ * clears `begunAt` so the Seed unlocks. Allowed only after Begin and until the first Narration.
+ * It needs no DM. The Scene and the clock go back to the start with the World they pointed into.
+ */
+export function startOver(db: Queryable, at: number) {
+  const found = db.select().from(campaign).get()
+  if (!found) throw new Error('The Campaign database has no Campaign')
+  if (found.begunAt === null) {
+    throw new StartOverRefusedError('The story has not begun, so there is nothing to start over')
+  }
+  const narrated = db
+    .select({ id: event.id })
+    .from(event)
+    .where(and(eq(event.kind, 'narration'), gte(event.createdAt, found.begunAt)))
+    .get()
+  if (narrated) {
+    throw new StartOverRefusedError('The story has a Narration now, so it can no longer start over')
+  }
+  db.delete(belief).run()
+  db.delete(worldLink).run()
+  db.delete(fact).run()
+  db.delete(pageRevision).run()
+  db.delete(entityAlias).run()
+  db.run(sql`DELETE FROM world_search`)
+  db.delete(entity).run()
+  discardArcs(db)
+  const row = db
+    .update(campaign)
+    .set({ begunAt: null, scene: null, clockMinute: 0, updatedAt: at })
+    .returning()
+    .get()
+  logChange(
+    db,
+    {
+      handle: 'campaign',
+      version: row.version,
+      summary:
+        'the Player chose Start over: the World and the Arc are gone and the Seed is unlocked'
+    },
+    { at }
+  )
 }

@@ -9,7 +9,7 @@ import { addCharacter, fighterDraft } from '../character/test-characters'
 import { createPlay, DmAwayError, type Play } from '../play/play'
 import { gameTools } from '../tools'
 import { createToolHost, type ToolHost } from '../tools/host'
-import { BeginRefusedError, SeedLockedError } from './begin'
+import { BeginRefusedError, SeedLockedError, StartOverRefusedError } from './begin'
 
 let library: CampaignLibrary
 let host: ToolHost
@@ -115,5 +115,118 @@ describe('the Seed lock', () => {
     const result = call('set_seed', { version, premise: 'Something else.' })
     expect(result).toMatchObject({ isError: true, payload: { code: 'seed_locked' } })
     expect(library.seed(campaignId).premise).toBe(completeSeed.premise)
+  })
+})
+
+/** What builder writes at Begin: an NPC, the pitch as the Party's Beliefs, and the Arc. */
+function build() {
+  call('establish', {
+    type: 'npc',
+    name: 'Vizier Oren',
+    fields: {},
+    facts: [{ claim: 'Vizier Oren secretly leads the cult.' }]
+  })
+  call('reveal', {
+    claim: 'A relic must cross the burning hills before the solstice.',
+    about: 'npc:vizier-oren',
+    holders: ['char:wren'],
+    source: 'the pitch'
+  })
+  const arc = call('create_arc', {
+    title: 'The Ember Relic',
+    premise: 'A cult wants the relic.',
+    stakes: 'The hills burn.',
+    acts: [
+      {
+        name: 'The Road',
+        purpose: 'Leave town.',
+        beats: [{ title: 'Ambush', description: 'The cult strikes.' }]
+      }
+    ],
+    resolution: 'The relic is sealed.'
+  })
+  expect(arc.isError).toBe(false)
+}
+
+describe('Start over', () => {
+  it('discards the World and the Arc and unlocks the Seed before the first Narration', () => {
+    ready()
+    play.begin(campaignId)
+    build()
+
+    play.startOver(campaignId)
+
+    expect(call('creation_state').payload).toMatchObject({ state: 'ready' })
+    expect(call('search', { query: 'Oren' }).payload).toMatchObject({ results: [] })
+    expect(library.record(campaignId).journal().entries).toEqual([])
+    expect(
+      call('create_arc', {
+        title: 'A New Arc',
+        premise: 'p',
+        stakes: 's',
+        acts: [{ name: 'A', purpose: 'p', beats: [{ title: 'Ambush', description: 'd' }] }],
+        resolution: 'r'
+      }).isError
+    ).toBe(false)
+    library.saveSeed(campaignId, { ...completeSeed, premise: 'A different road.' })
+    expect(library.seed(campaignId).premise).toBe('A different road.')
+  })
+
+  it('works with the DM away', () => {
+    ready()
+    play.begin(campaignId)
+    const away = createPlay({ library, channels: createChannels(), publish: () => {} })
+    away.startOver(campaignId)
+    expect(call('creation_state').payload).toMatchObject({ state: 'ready' })
+  })
+
+  it('is refused after the first Narration of play', () => {
+    ready()
+    play.begin(campaignId)
+    build()
+    call('narrate', { text: 'The road out of Ashford is quiet.' })
+    expect(() => play.startOver(campaignId)).toThrow(StartOverRefusedError)
+    expect(call('creation_state').payload).toMatchObject({ state: 'begun' })
+  })
+
+  it('is refused before Begin', () => {
+    ready()
+    expect(() => play.startOver(campaignId)).toThrow(StartOverRefusedError)
+  })
+})
+
+describe('what the Player sees after Begin', () => {
+  it('is the pitch as their Characters’ Beliefs, and no Arc content anywhere', () => {
+    ready()
+    play.begin(campaignId)
+    build()
+    call('narrate', { text: 'The road out of Ashford is quiet.' })
+
+    const journal = library.record(campaignId).journal()
+    expect(journal.entries).toEqual([
+      expect.objectContaining({
+        text: expect.stringContaining('A relic must cross the burning hills'),
+        holders: [expect.objectContaining({ name: 'Wren' })]
+      })
+    ])
+    const payloads = JSON.stringify([
+      journal,
+      library.record(campaignId).timeline(),
+      play.scene(campaignId),
+      pushed
+    ])
+    expect(payloads).not.toMatch(/Ember Relic|Ambush|cult|arc/i)
+  })
+
+  it('has a timeline that starts with the first Narration after Begin', () => {
+    ready()
+    play.begin(campaignId)
+    build()
+    expect(library.record(campaignId).timeline().entries).toEqual([])
+
+    call('narrate', { text: 'The road out of Ashford is quiet.' })
+    expect(library.record(campaignId).timeline().entries).toEqual([
+      expect.objectContaining({ type: 'narration', text: 'The road out of Ashford is quiet.' })
+    ])
   })
 })
