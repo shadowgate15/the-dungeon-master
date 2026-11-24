@@ -23,6 +23,9 @@ export const timelineQueryKey = (campaign: string) => ['timeline', campaign] as 
 /** The query holding the Player's Journal: what their Characters believe. */
 export const journalQueryKey = (campaign: string) => ['journal', campaign] as const
 
+/** The query holding the Player's read-only Session history (`close_session` is a DM write). */
+export const sessionHistoryQueryKey = (campaign: string) => ['session-history', campaign] as const
+
 /** The query holding the permission prompt a Campaign's session is waiting on. */
 export const permissionQueryKey = (campaign: string) => ['permission', campaign] as const
 
@@ -34,7 +37,11 @@ export function staleQueries(message: LiveMessage): QueryKey[] {
     case 'floor':
       return [floorQueryKey(message.campaign)]
     case 'timeline':
-      return [timelineQueryKey(message.campaign), journalQueryKey(message.campaign)]
+      return [
+        timelineQueryKey(message.campaign),
+        journalQueryKey(message.campaign),
+        sessionHistoryQueryKey(message.campaign)
+      ]
     case 'permission':
       return [permissionQueryKey(message.campaign)]
   }

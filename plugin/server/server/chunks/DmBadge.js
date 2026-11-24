@@ -1,5 +1,5 @@
 import { y as escape_html } from "./server2.js";
-import { o as createQuery, t as SESSIONS_QUERY_KEY } from "./messages.js";
+import { s as createQuery, t as SESSIONS_QUERY_KEY } from "./messages.js";
 import { t as Badge } from "./Badge.js";
 // src/lib/live/client.ts
 /** The ids of the Campaigns with a DM at the table, starting from the server-rendered list. */

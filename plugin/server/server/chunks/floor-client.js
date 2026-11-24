@@ -1,5 +1,5 @@
 import { c as ensure_array_like, g as attr, o as derived, y as escape_html } from "./server2.js";
-import { a as timelineQueryKey, n as floorQueryKey, o as createQuery, r as journalQueryKey, s as SvelteMap } from "./messages.js";
+import { a as sessionHistoryQueryKey, c as SvelteMap, n as floorQueryKey, o as timelineQueryKey, r as journalQueryKey, s as createQuery } from "./messages.js";
 import { t as useQueryClient } from "./useQueryClient.js";
 // src/lib/play/Journal.svelte
 function Journal($$renderer, $$props) {
@@ -93,6 +93,23 @@ function createJournalQuery(campaign, initial) {
 		initialData: initial()
 	}));
 }
+/** The Player's read-only Session history, starting from the server-rendered one. */
+function createSessionHistoryQuery(campaign, initial) {
+	return createQuery(() => ({
+		queryKey: sessionHistoryQueryKey(campaign()),
+		queryFn: async () => {
+			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/sessions`);
+			if (!res.ok) throw new Error("The Session history could not be loaded");
+			return await res.json();
+		},
+		initialData: initial()
+	}));
+}
+/** End Session: asks the DM to close the sitting. */
+async function endSession(campaign) {
+	const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign)}/end-session`, { method: "POST" });
+	if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The session could not be ended");
+}
 /** Send, edit, withdraw and Done on the Campaign's open Floor; each refreshes the Floor and timeline. */
 function floorActions(campaign) {
 	const queryClient = useQueryClient();
@@ -131,6 +148,6 @@ function floorActions(campaign) {
 		}
 	};
 }
-export { floorActions as a, createTimelineQuery as i, createFloorQuery as n, Journal as o, createJournalQuery as r, FloorChangeError as t };
+export { createTimelineQuery as a, Journal as c, createSessionHistoryQuery as i, createFloorQuery as n, endSession as o, createJournalQuery as r, floorActions as s, FloorChangeError as t };
 
 //# sourceMappingURL=floor-client.js.map

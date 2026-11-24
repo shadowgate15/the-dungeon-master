@@ -53,6 +53,9 @@
   {#each shown as entry (entry.id)}
     {#if entry.type === 'narration'}
       <li class="max-w-[85%] self-start rounded-panel bg-raised px-3 py-2 text-sm">
+        {#if entry.recap}<span class="block text-xs font-semibold text-muted uppercase"
+            >Previously</span
+          >{/if}
         {#if entry.voice}<span class="block text-xs font-semibold text-primary">{entry.voice}</span
           >{/if}
         <span class="whitespace-pre-wrap">{entry.text}</span>

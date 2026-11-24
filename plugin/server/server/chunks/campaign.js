@@ -31,7 +31,8 @@ function createSessions() {
 				});
 				emit({
 					campaign,
-					attached: true
+					attached: true,
+					session
 				});
 			}
 			return true;
@@ -44,7 +45,8 @@ function createSessions() {
 			live.delete(campaign);
 			emit({
 				campaign,
-				attached: false
+				attached: false,
+				session
 			});
 		},
 		/** Whether a session is attached to the Campaign. */
@@ -384,9 +386,20 @@ function createChannels({ annotate } = {}) {
 */
 function currentStamp(db) {
 	return {
-		sessionId: db.select({ id: session.id }).from(session).where(isNull(session.closedAt)).get()?.id ?? null,
+		sessionId: currentSession(db)?.id ?? null,
 		minute: 0
 	};
+}
+/**
+* The current Session: the newest one still open, or undefined offline. An older open one is a
+* sitting that stopped without End Session, waiting for its catch-up close.
+*/
+function currentSession(db) {
+	return db.select().from(session).where(isNull(session.closedAt)).orderBy(desc(session.number)).get();
+}
+/** Whether any non-recap Narration was logged in the Session. */
+function hasNarration(db, sessionId) {
+	return db.select({ id: event.id }).from(event).where(and(eq(event.sessionId, sessionId), eq(event.kind, "narration"), sql`coalesce(json_extract(${event.data}, '$.recap'), 0) = 0`)).get() !== void 0;
 }
 /** The id the next Event will get. The log is append-only, so ids are never reused. */
 function nextEventId(db) {
@@ -416,21 +429,34 @@ function logActivity(db, text, { at, afterEvent = nextEventId(db) - 1 }) {
 		createdAt: at
 	}).run();
 }
-/** The open Session, opened now (numbered after the last) if none is. */
-function openSession(db, at) {
-	const open = db.select({
+/**
+* The Session for a DM attaching through `bridge` (one per Claude Code session). A reconnect of
+* the same bridge keeps its Session, even one End Session closed. A new bridge opens the next
+* Session; an older open one stays open for its catch-up close, unless it has no Narration, in
+* which case it closes now with no summary. With no bridge, the current Session is reused.
+*/
+function openSession(db, at, bridge) {
+	const pick = {
 		id: session.id,
 		number: session.number
-	}).from(session).where(isNull(session.closedAt)).get();
-	if (open) return open;
+	};
+	if (bridge !== void 0) {
+		const own = db.select(pick).from(session).where(eq(session.bridge, bridge)).get();
+		if (own) return own;
+	} else {
+		const current = currentSession(db);
+		if (current) return {
+			id: current.id,
+			number: current.number
+		};
+	}
+	for (const stale of db.select().from(session).where(isNull(session.closedAt)).all()) if (!hasNarration(db, stale.id)) db.update(session).set({ closedAt: at }).where(eq(session.id, stale.id)).run();
 	const last = db.select({ number: session.number }).from(session).orderBy(desc(session.number)).get();
 	return db.insert(session).values({
 		number: (last?.number ?? 0) + 1,
+		bridge: bridge ?? null,
 		startedAt: at
-	}).returning({
-		id: session.id,
-		number: session.number
-	}).get();
+	}).returning(pick).get();
 }
 /** When the open turn started waiting on the DM, or null when nothing awaits Narration. */
 function awaitingNarrationSince(db) {
@@ -467,7 +493,8 @@ function entryFor(e) {
 		type: "narration",
 		id,
 		text: String(data.text),
-		voice: typeof data.voiceName === "string" ? data.voiceName : null
+		voice: typeof data.voiceName === "string" ? data.voiceName : null,
+		...data.recap === true ? { recap: true } : {}
 	};
 }
 /**
@@ -1337,6 +1364,171 @@ function journal(db, player) {
 	}
 	return { entries: [...entries.values()] };
 }
+// src/lib/server/tools/contract.ts
+/**
+* The shared contract every game tool follows: short snake_case names, per-Entity versions on
+* every read and write, one transaction and one Event per mutating call, and errors shaped
+* `{code, message, next}`.
+*/
+/** The plugin's name, which namespaces the skills a tool points to. */
+var PLUGIN_NAME = "the-dungeon-master";
+/**
+* A refusal the DM can act on: what went wrong and the call to make next. `details` adds
+* structured data to the payload (such as the matches a near-duplicate refusal found).
+*/
+var ToolError = class ToolError extends Error {
+	code;
+	next;
+	details;
+	constructor(code, message, next, details) {
+		super(message);
+		this.code = code;
+		this.next = next;
+		this.details = details;
+	}
+	/** The handle names no Entity. */
+	static unknownHandle(handle) {
+		return new ToolError("unknown_handle", `No Entity has the handle ${handle}`, "Check the handle against a recent read and call again");
+	}
+	/** The write passed an old version: someone changed the Entity since the DM read it. */
+	static staleVersion(handle, given, current, read) {
+		return new ToolError("stale_version", `${handle} is at version ${current}, not ${given}: it changed since you read it`, read);
+	}
+	/** The input breaks a rule the forms enforce too. */
+	static invalidInput(tool, message) {
+		return new ToolError("invalid_input", message, `Fix the arguments and call ${tool} again`);
+	}
+};
+/** Refuses a write whose version is not the Entity's current one. */
+function expectVersion(entity, given) {
+	if (entity.version !== given) throw ToolError.staleVersion(entity.handle, given, entity.version, entity.read);
+}
+/** A tool that only reads. It logs nothing. */
+function readTool(tool) {
+	return {
+		...tool,
+		activity: tool.activity,
+		mutates: false,
+		run: tool.run
+	};
+}
+/** A tool that changes state: one transaction, exactly one Event. */
+function writeTool(tool) {
+	return {
+		...tool,
+		activity: tool.activity,
+		mutates: true,
+		run: tool.run
+	};
+}
+// src/lib/server/play/sessions.ts
+/** The in-fiction span of a Session: the clock minutes of its first and last Events. */
+function span(db, sessionId) {
+	const row = db.get(sql`SELECT min(${event.minute}) AS "from", max(${event.minute}) AS "to" FROM ${event}
+        WHERE ${event.sessionId} = ${sessionId}`);
+	return row?.from == null || row.to == null ? null : {
+		from: row.from,
+		to: row.to
+	};
+}
+/** Whether the Session closed with no summary (it had no Narration): it is left out of lists. */
+var empty = (s) => s.closedAt !== null && s.summary === null;
+/**
+* Closes a Session with its summary, in the caller's transaction: the current Session, or the
+* numbered one for a catch-up close. A Session with no Narration closes with no summary.
+*/
+function closeSession(db, { summary, threads, session: number, at }) {
+	const target = number === void 0 ? currentSession(db) : db.select().from(session).where(eq(session.number, number)).get();
+	if (!target) throw number === void 0 ? new ToolError("no_open_session", "No Session is open", "Call sessions to see which Sessions exist") : new ToolError("unknown_session", `There is no Session ${number}`, "Call sessions for the Session numbers");
+	if (target.closedAt !== null) throw new ToolError("session_closed", `Session ${target.number} is already closed; summaries are not rewritten`, "Fix anything wrong in play through the ordinary tools");
+	const written = hasNarration(db, target.id);
+	db.update(session).set({
+		closedAt: at,
+		summary: written ? summary : null,
+		threads: written ? threads : null
+	}).where(eq(session.id, target.id)).run();
+	return written ? {
+		session: target.number,
+		summarised: true
+	} : {
+		session: target.number,
+		summarised: false,
+		note: "The Session had no Narration, so it closed with no summary"
+	};
+}
+/**
+* What the DM recalls of earlier sittings: Session summaries newest first (none for empty
+* Sessions), the current Session, older unclosed ones awaiting a catch-up close, and whether a
+* recap is due (a summary exists from an earlier sitting and none was given this one).
+*/
+function sessionsView(db, last) {
+	const all = db.select().from(session).orderBy(desc(session.number)).all();
+	const current = currentSession(db);
+	const listed = all.filter((s) => !empty(s) && s.id !== current?.id);
+	const recapGiven = current !== void 0 && db.select({ id: event.id }).from(event).where(and(eq(event.sessionId, current.id), eq(event.kind, "narration"), sql`json_extract(${event.data}, '$.recap') = 1`)).get() !== void 0;
+	return {
+		current: current?.number ?? null,
+		unclosed: all.filter((s) => s.closedAt === null && s.id !== current?.id).map((s) => s.number).reverse(),
+		recap_due: current !== void 0 && !recapGiven && all.some((s) => s.number < current.number && s.summary !== null),
+		sessions: listed.slice(0, last).map((s) => ({
+			number: s.number,
+			closed: s.closedAt !== null,
+			started_at: new Date(s.startedAt).toISOString(),
+			span: span(db, s.id),
+			summary: s.summary,
+			threads: s.threads ?? []
+		}))
+	};
+}
+/**
+* The Player's Session history: each closed Session with a summary, newest first. It reads only
+* summaries, which are Player-safe, so it cannot leak.
+*/
+function sessionHistory(db) {
+	return { sessions: db.select().from(session).where(and(isNotNull(session.closedAt), isNotNull(session.summary))).orderBy(desc(session.number)).all().map((s) => ({
+		number: s.number,
+		startedAt: s.startedAt,
+		span: span(db, s.id),
+		summary: s.summary,
+		threads: s.threads ?? []
+	})) };
+}
+/** Indexes a Narration's text for `history`'s full-text query. Recaps are never indexed. */
+function indexNarration(db, eventId, text) {
+	db.run(sql`INSERT INTO narration_search (event_id, text) VALUES (${eventId}, ${text})`);
+}
+/**
+* The Event log for the DM, newest first: every Event (DM-only ones too) but recaps, which never
+* feed later summaries. `query` is full-text over Narration.
+*/
+function history(db, { about, session: number, since, query, limit = 50 }) {
+	const numbers = new Map(db.select({
+		id: session.id,
+		number: session.number
+	}).from(session).all().map((s) => [s.id, s.number]));
+	const where = [sql`NOT (${event.kind} = 'narration' AND coalesce(json_extract(${event.data}, '$.recap'), 0) = 1)`];
+	if (number !== void 0) {
+		const id = [...numbers].find(([, n]) => n === number)?.[0];
+		where.push(id === void 0 ? sql`0` : eq(event.sessionId, id));
+	}
+	if (since !== void 0) where.push(gt(event.id, since));
+	if (about !== void 0) where.push(sql`(instr(${event.summary}, ${about}) > 0 OR instr(coalesce(${event.data}, ''), ${about}) > 0)`);
+	if (query !== void 0) {
+		const words = query.match(/[\p{L}\p{N}]+/gu) ?? [];
+		if (!words.length) return [];
+		const match = words.map((w) => `"${w}"*`).join(" OR ");
+		where.push(sql`${event.id} IN (SELECT event_id FROM narration_search WHERE narration_search MATCH ${match})`);
+	}
+	return db.select().from(event).where(and(...where)).orderBy(desc(event.id)).limit(limit).all().map((e) => ({
+		id: e.id,
+		session: e.sessionId === null ? null : numbers.get(e.sessionId) ?? null,
+		minute: e.minute,
+		tool: e.tool,
+		kind: e.kind,
+		summary: e.summary,
+		...e.dmOnly ? { dm_only: true } : {}
+	}));
+}
 // src/lib/server/campaign/registry.ts
 /**
 * The list of Campaign folders the server knows, as `registry.json` in the user-level state
@@ -1528,7 +1720,9 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 			return {
 				timeline: () => timeline(db),
 				journal: () => journal(db),
-				openSession: () => openSession(db, now()),
+				/** The Player's read-only Session history. */
+				sessionHistory: () => sessionHistory(db),
+				openSession: (bridge) => openSession(db, now(), bridge),
 				/** The DM's core block. */
 				coreBlock: () => coreBlock({ party: createParty(db, now) }),
 				/** Logs a turn that went wrong, as the Player sees it in the timeline. */
@@ -1613,6 +1807,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { SESSION_LIVE_MESSAGE as A, nextEventId as C, isNearName as D, loadWizardRules as E, normalizeName as O, logEvent as S, playSheets as T, CharacterNotFoundError as _, CampaignArchivedError as a, currentStamp as b, CampaignNotFoundError as c, characterHolders as d, charactersInScene as f, DraftNotFoundError as g, DmBusyError as h, sessions as i, slug as k, NotACampaignFolderError as l, DeclarationRefusedError as m, library as n, CampaignExistsError as o, DeclarationNotFoundError as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, CharacterValidationError as v, setAwaitingNarration as w, logActivity as x, createDmChannels as y };
+export { logActivity as A, DeclarationRefusedError as C, CharacterValidationError as D, CharacterNotFoundError as E, loadWizardRules as F, isNearName as I, normalizeName as L, nextEventId as M, setAwaitingNarration as N, createDmChannels as O, playSheets as P, slug as R, DeclarationNotFoundError as S, DraftNotFoundError as T, expectVersion as _, CampaignArchivedError as a, characterHolders as b, CampaignNotFoundError as c, closeSession as d, history as f, ToolError as g, PLUGIN_NAME as h, sessions as i, logEvent as j, currentStamp as k, NotACampaignFolderError as l, sessionsView as m, library as n, CampaignExistsError as o, indexNarration as p, live as r, CampaignMissingError as s, campaignRoot as t, SessionLiveError as u, readTool as v, DmBusyError as w, charactersInScene as x, writeTool as y, SESSION_LIVE_MESSAGE as z };
 
 //# sourceMappingURL=campaign.js.map

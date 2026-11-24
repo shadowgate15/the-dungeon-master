@@ -1,7 +1,13 @@
 import { createQuery, useQueryClient } from '@tanstack/svelte-query'
-import { floorQueryKey, journalQueryKey, timelineQueryKey } from '#lib/live/messages.ts'
+import {
+  floorQueryKey,
+  journalQueryKey,
+  sessionHistoryQueryKey,
+  timelineQueryKey
+} from '#lib/live/messages.ts'
 import type { OpenFloor, PendingDeclaration } from './floor'
 import type { Journal } from './journal'
+import type { SessionHistory } from './sessions'
 import type { Timeline } from './timeline'
 
 /** A Floor change the server refused, with its message for the Player. */
@@ -44,6 +50,30 @@ export function createJournalQuery(campaign: () => string, initial: () => Journa
     },
     initialData: initial()
   }))
+}
+
+/** The Player's read-only Session history, starting from the server-rendered one. */
+export function createSessionHistoryQuery(campaign: () => string, initial: () => SessionHistory) {
+  return createQuery(() => ({
+    queryKey: sessionHistoryQueryKey(campaign()),
+    queryFn: async (): Promise<SessionHistory> => {
+      const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/sessions`)
+      if (!res.ok) throw new Error('The Session history could not be loaded')
+      return (await res.json()) as SessionHistory
+    },
+    initialData: initial()
+  }))
+}
+
+/** End Session: asks the DM to close the sitting. */
+export async function endSession(campaign: string): Promise<void> {
+  const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign)}/end-session`, {
+    method: 'POST'
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new FloorChangeError(body.error ?? 'The session could not be ended')
+  }
 }
 
 /** Send, edit, withdraw and Done on the Campaign's open Floor; each refreshes the Floor and timeline. */

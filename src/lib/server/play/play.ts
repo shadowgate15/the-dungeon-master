@@ -53,6 +53,17 @@ export function createPlay({ library, channels, publish }: Options) {
     },
 
     /**
+     * The Player presses End Session: the DM gets one `end_session` event and closes the sitting
+     * (closing beat, summary, Arc review, lint) with the ending-a-sitting skill.
+     */
+    endSession(campaignId: string) {
+      channels.send(folderOf(campaignId), {
+        content: 'The Player pressed End Session. Close the sitting.',
+        meta: { kind: 'end_session' }
+      })
+    },
+
+    /**
      * Opens the Campaign's Session as a DM attaches through `bridge`; a reconnecting bridge keeps
      * its own Session.
      */
