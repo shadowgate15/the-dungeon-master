@@ -1,5 +1,5 @@
 import { $t as DUNGEON_MASTER_VERSION, A as entityAlias, Bt as inArray, F as NPC_STATUSES, Ft as asc, Gt as or, Ht as isNull, It as desc, Kt as sql, Lt as and, M as pageRevision, N as worldLink, O as belief, P as ENTITY_TYPES, Pt as SOLO_PLAYER, Qt as DUNGEON_MASTER_PORT, Rt as eq, Ut as like, Vt as isNotNull, Wt as ne, Zt as DUNGEON_MASTER_HOME, _ as characterDraft, a as userStateDir, h as character, j as fact, k as entity, m as campaign, w as event } from "./seed.js";
-import { $ as slug$1, C as createDmChannels, D as nextEventId, E as logEvent, F as ToolError, I as creationTool, J as currentMinute, K as advanceClock, L as expectVersion, M as callResultEvent, N as openCall, O as setAwaitingNarration, P as PLUGIN_NAME, Q as normalizeName, R as readTool, T as logActivity, U as loadWizardRules, W as ClockBackwardsError, X as scenePlace, Y as present, Z as isNearName, _ as charactersInScene, c as CampaignNotFoundError, d as addConversationLine, et as formatClock, f as closeSession, g as characterHolders, h as sessionsView, i as sessions, j as callInput, l as NotACampaignFolderError, m as indexNarration, n as library, nt as SESSION_LIVE_MESSAGE, p as history, q as characterRefs, r as live, tt as parseClock, w as currentStamp, x as returnStrandedDrafts, z as writeTool } from "./campaign.js";
+import { $ as normalizeName, B as writeTool, D as logEvent, E as logActivity, F as PLUGIN_NAME, G as ClockBackwardsError, I as ToolError, J as characterRefs, L as creationTool, M as callInput, N as callResultEvent, O as nextEventId, P as openCall, Q as isNearName, R as expectVersion, T as currentStamp, W as loadWizardRules, X as present, Y as currentMinute, Z as scenePlace, _ as charactersInScene, c as CampaignNotFoundError, d as addConversationLine, et as slug$1, f as closeSession, g as characterHolders, h as sessionsView, i as sessions, k as setAwaitingNarration, l as NotACampaignFolderError, m as indexNarration, n as library, nt as parseClock, p as history, q as advanceClock, r as live, rt as SESSION_LIVE_MESSAGE, tt as formatClock, w as createDmChannels, x as returnStrandedDrafts, z as readTool } from "./campaign.js";
 import { a as missingSeedFields, n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { _ as prettifyError, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { d as reconcile, j as rollTotals, l as changedDraftFields, u as emptyDraft, w as arrangementProblem, y as lengthIssue } from "./summary.js";
@@ -2081,8 +2081,10 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 	};
 }
 // src/lib/server/play/play.ts
-/** A creation conversation message needs a DM at the table to hear it. */
+/** Play input (and a creation conversation message) needs a DM at the table to hear it. */
 var DmAwayError = class extends Error {};
+/** What every refused play input says while no session is attached. */
+var DM_AWAY_MESSAGE = "The DM is away. Run dm in the Campaign folder to start a sitting; your drafts wait here.";
 /**
 * A closed Floor as the DM hears it: one `floor` channel event, one body line per Declaration in
 * send order (`[d1 Wren · player] picks the lock`). An empty body hands the DM the initiative.
@@ -2109,6 +2111,15 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		if (!entry) throw new CampaignNotFoundError("Campaign not found");
 		return entry.path;
 	}
+	/**
+	* The Campaign's folder, refusing play input while no DM is at the table. Open Calls and waiting
+	* Floors stay as they are for the next opening.
+	*/
+	function atTable(campaignId) {
+		const folder = folderOf(campaignId);
+		if (!channels.listening(folder)) throw new DmAwayError(DM_AWAY_MESSAGE);
+		return folder;
+	}
 	function answered(campaignId, result) {
 		if (result) channels.send(folderOf(campaignId), callResultEvent(result));
 		publish({
@@ -2118,11 +2129,21 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		return { complete: result !== null };
 	}
 	return {
+		/** Whether a DM is at the table for the Campaign. */
+		attended(campaignId) {
+			return channels.listening(folderOf(campaignId));
+		},
+		/** The open Floor, to send, edit or withdraw Declarations; refused while the DM is away. */
+		floor(campaignId) {
+			atTable(campaignId);
+			return library.floor(campaignId);
+		},
 		/**
 		* The Player presses Done. When it closes the Floor, the DM gets exactly one floor event and
 		* the Campaign awaits Narration.
 		*/
 		done(campaignId, player = SOLO_PLAYER) {
+			atTable(campaignId);
 			const outcome = library.floor(campaignId).done(player);
 			if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome));
 			publish({
@@ -2140,10 +2161,12 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* wakes the DM with one call_result event and sets awaiting Narration.
 		*/
 		roll(campaignId, callId, partId, player = SOLO_PLAYER) {
+			atTable(campaignId);
 			return answered(campaignId, library.calls(campaignId).roll(callId, partId, dice(campaignId), player));
 		},
 		/** The Player answers a question Call; the last answer wakes the DM like a roll does. */
 		answer(campaignId, callId, partId, text, player = SOLO_PLAYER) {
+			atTable(campaignId);
 			return answered(campaignId, library.calls(campaignId).answer(callId, partId, text, player));
 		},
 		/**
@@ -2151,8 +2174,9 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* Refused (`SpotlightRefusedError`) for a Character who is already in the Scene.
 		*/
 		spotlight(campaignId, character, player = SOLO_PLAYER) {
+			const folder = atTable(campaignId);
 			const request = library.record(campaignId).spotlight(character, player);
-			channels.send(folderOf(campaignId), request);
+			channels.send(folder, request);
 		},
 		/** The Scene as the Player's rail shows it. */
 		scene(campaignId) {
@@ -2187,7 +2211,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* (closing beat, summary, Arc review, lint) with the ending-a-sitting skill.
 		*/
 		endSession(campaignId) {
-			channels.send(folderOf(campaignId), {
+			channels.send(atTable(campaignId), {
 				content: "The Player pressed End Session. Close the sitting.",
 				meta: { kind: "end_session" }
 			});
@@ -2216,6 +2240,13 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 				campaign: campaignId
 			});
 			return { block: false };
+		},
+		/**
+		* What SessionStart injects when a sitting opens: the core block, the "changed since last
+		* sitting" notice for offline edits (told once) and any turn left awaiting Narration.
+		*/
+		sessionStart(campaignId) {
+			return library.record(campaignId).opening();
 		},
 		/** The DM's core block, for SessionStart and after compaction. */
 		coreBlock(campaignId) {
@@ -2287,7 +2318,9 @@ var SESSION_LIVE = {
 *   `{id, name, attached}`.
 * - `POST stop-check` with `{campaign, again}`: whether the Stop hook refuses to end the DM's turn,
 *   as `{block, reason}`.
-* - `GET  core-block?campaign=<folder>`: the DM's core block, as `{text}`, for SessionStart.
+* - `GET  core-block?campaign=<folder>`: the DM's core block, as `{text}`, after compaction.
+* - `POST session-start` with `{campaign}`: what a sitting's opening injects, as `{text}`: the core
+*   block, then what changed since the last sitting (told once) and a turn awaiting Narration.
 * - `POST permission_request` with `{campaign, request_id, tool_name, description, input_preview}`:
 *   the session's permission prompt, shown to the Player; the verdict comes back on `events`.
 */
@@ -2326,6 +2359,12 @@ function createBridgeApi({ library, host, channels, sessions, permissions, play,
 			const entry = campaign && library.entryAt(campaign);
 			if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404);
 			return json(play.stopCheck(entry.id, again === true));
+		}
+		if (route === "session-start" && request.method === "POST") {
+			const { campaign } = await request.json();
+			const entry = campaign && library.entryAt(campaign);
+			if (!entry) return json({ error: `${campaign} is not a registered Campaign folder` }, 404);
+			return json({ text: play.sessionStart(entry.id) });
 		}
 		if (route === "core-block" && request.method === "GET") {
 			const campaign = url.searchParams.get("campaign");

@@ -1497,8 +1497,12 @@ function timeline(db) {
 // src/lib/server/play/notices.ts
 var TOOL = "player";
 var KIND = "change";
-/** Logs a change the Player made outside the DM (a UI edit), so the DM hears of it next. */
-function logChange(db, change, { at }) {
+/**
+* Logs a change the Player made outside the DM (a UI edit), so the DM hears of it next. An
+* `offline` edit (no DM at the table) belongs to no Session, even while an earlier sitting's
+* Session is still open for its catch-up close.
+*/
+function logChange(db, change, { at, offline = false }) {
 	logEvent(db, {
 		tool: TOOL,
 		kind: KIND,
@@ -1507,7 +1511,13 @@ function logChange(db, change, { at }) {
 			handle: change.handle,
 			version: change.version
 		}
-	}, { at });
+	}, offline ? {
+		at,
+		stamp: {
+			...currentStamp(db),
+			sessionId: null
+		}
+	} : { at });
 }
 /**
 * The changes the DM has not heard about yet, marking them heard: each Player edit logged in the
@@ -1527,6 +1537,36 @@ function takeChanges(db) {
 		summary: e.summary
 	}));
 }
+/** The latest version of each changed handle, in the order they changed, as notice lines. */
+function changeLines(changes) {
+	return [...new Map(changes.map((c) => [c.handle, c])).values()].map((c) => `- ${c.handle} v${c.version}: ${c.summary}`);
+}
+/**
+* The offline edits no opening has told the DM about yet, marking them told: each Player edit
+* logged in no Session since the last opening.
+*/
+function takeOfflineChanges(db) {
+	const through = db.select({ at: campaign.offlineNoticedThrough }).from(campaign).get()?.at ?? 0;
+	const rows = db.select().from(event).where(and(gt(event.id, through), isNull(event.sessionId), eq(event.tool, TOOL), eq(event.kind, KIND))).orderBy(event.id).all();
+	if (rows.length > 0) db.update(campaign).set({ offlineNoticedThrough: rows.at(-1).id }).run();
+	return rows.map((e) => ({
+		handle: String(e.data?.handle),
+		version: Number(e.data?.version),
+		summary: e.summary
+	}));
+}
+/**
+* What a sitting's opening adds to the core block, in the caller's transaction: the "changed since
+* last sitting" notice for offline edits (told once), and a turn left awaiting Narration, to answer
+* after the recap. Empty when neither applies.
+*/
+function openingNotice(db) {
+	const parts = [];
+	const changes = takeOfflineChanges(db);
+	if (changes.length > 0) parts.push(["Changed since last sitting:", ...changeLines(changes)].join("\n"));
+	if (awaitingNarrationSince(db) !== null) parts.push("A turn awaits Narration: the last sitting ended before the DM answered it. Read it with history and answer it with narrate after the recap.");
+	return parts.join("\n\n");
+}
 /**
 * The DM's channel: every channel event carries the changes made outside the DM since the last
 * one, as `handle vN: summary` lines; a changed core-block part is re-sent whole. Notices are
@@ -1539,9 +1579,8 @@ function createDmChannels(library) {
 		if (!entry || !db) return sent;
 		const changes = db.transaction((tx) => takeChanges(tx));
 		if (changes.length === 0) return sent;
-		const latest = new Map(changes.map((c) => [c.handle, c]));
-		const parts = ["Changed outside the DM:", ...[...latest.values()].map((c) => `- ${c.handle} v${c.version}: ${c.summary}`)];
-		if ([...latest.keys()].some((h) => h.startsWith("char:"))) parts.push("", partyPart({
+		const parts = ["Changed outside the DM:", ...changeLines(changes)];
+		if (changes.some((c) => c.handle.startsWith("char:"))) parts.push("", partyPart({
 			party: library.party(entry.id),
 			db
 		}));
@@ -1553,6 +1592,16 @@ function createDmChannels(library) {
 	} });
 }
 // src/lib/server/character/party.ts
+/** An edit only the DM may make while no DM is at the table to make it. */
+var DmOnlyEditError = class extends Error {};
+var DETAIL_LIMITS = {
+	notes: BACKSTORY_MAX,
+	personality: 500,
+	appearance: 500,
+	backstory: BACKSTORY_MAX
+};
+/** "notes, personality and appearance". */
+var listed = (words) => words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
 /** The Campaign has no draft with this id. */
 var DraftNotFoundError = class extends Error {};
 var stepLabel = (step) => STEPS.find((s) => s.id === step)?.label ?? step;
@@ -1560,10 +1609,18 @@ var stepLabel = (step) => STEPS.find((s) => s.id === step)?.label ?? step;
 * A Campaign's Characters and Character drafts, over its database. Drafts are stored with the
 * Campaign so a reload loses nothing (and the DM's tools can write into them later); a draft joins
 * the Party only when it is saved, which needs every wizard step to be valid.
+*
+* `attended` says whether a DM is at the table. Without one, a Player edit belongs to no Session
+* and, after Begin, is limited to what moves no clock and sets no number code didn't compute.
 */
-function createParty(db, now = Date.now) {
+function createParty(db, now = Date.now, { attended = () => true } = {}) {
 	const rules = loadWizardRules();
 	const characters = createCharacterService(db, now);
+	const begun = () => db.select({ at: campaign.begunAt }).from(campaign).get()?.at != null;
+	/** Refuses an edit the DM must make, while the Campaign has begun and the DM is away. */
+	function dmOnly(what) {
+		if (begun() && !attended()) throw new DmOnlyEditError(`${what} is the DM’s to change once the Campaign has begun. Run dm in the Campaign folder and ask at the table.`);
+	}
 	function row(id) {
 		const found = db.select().from(characterDraft).where(eq(characterDraft.id, id)).get();
 		if (!found) throw new DraftNotFoundError("Character draft not found");
@@ -1595,7 +1652,10 @@ function createParty(db, now = Date.now) {
 			handle: characterHandle(row.name),
 			version: row.version,
 			summary
-		}, { at: now() });
+		}, {
+			at: now(),
+			offline: !attended()
+		});
 	}
 	/** The draft as the service's input; refused while any step is not valid. */
 	function input(draft) {
@@ -1681,12 +1741,43 @@ function createParty(db, now = Date.now) {
 				draft: detailToDraft(rules, found)
 			};
 		},
-		/** Replaces a saved Character's choices from the edit wizard's draft. */
+		/**
+		* Replaces a saved Character's choices from the edit wizard's draft. It resets play state (HP,
+		* slots, coin, inventory), so once the Campaign has begun it is the DM's while the DM is away.
+		*/
 		updateCharacter(id, draft) {
+			dmOnly("Rewriting a Character in the wizard");
 			return db.transaction(() => {
 				const updated = characters.update(id, input(draft));
 				db.update(character).set({ version: sql`${character.version} + 1` }).where(eq(character.id, id)).run();
 				noteChange(id, `the Player edited ${updated.name}`);
+				return updated;
+			});
+		},
+		/**
+		* Edits a Character's notes, personality, appearance or backstory, leaving play state alone.
+		* Backstory after Begin is the DM's while the DM is away.
+		*/
+		updateDetails(id, details) {
+			const fields = Object.keys(DETAIL_LIMITS).filter((f) => details[f] !== void 0);
+			if (fields.includes("backstory")) dmOnly("Backstory");
+			const values = {};
+			for (const f of fields) {
+				const value = details[f];
+				if (value !== null && typeof value !== "string") throw new CharacterValidationError(`${f} must be text`);
+				const trimmed = value?.trim() || null;
+				if (trimmed && trimmed.length > DETAIL_LIMITS[f]) throw new CharacterValidationError(`${f} must be at most ${DETAIL_LIMITS[f]} characters`);
+				values[f] = trimmed;
+			}
+			if (fields.length === 0) throw new CharacterValidationError("Nothing to change");
+			return db.transaction(() => {
+				const updated = db.update(character).set({
+					...values,
+					version: sql`${character.version} + 1`,
+					updatedAt: now()
+				}).where(eq(character.id, id)).returning().get();
+				if (!updated) throw new CharacterNotFoundError("Character not found");
+				noteChange(id, `the Player edited ${updated.name}’s ${listed(fields)}`);
 				return updated;
 			});
 		}
@@ -2261,7 +2352,10 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 					handle: "campaign",
 					version: row.version,
 					summary: "the Player edited the Campaign Seed"
-				}, { at: now() });
+				}, {
+					at: now(),
+					offline: !live(id)
+				});
 				return row;
 			});
 			registry.put({
@@ -2284,7 +2378,7 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		},
 		/** The Campaign's Characters and Character drafts. */
 		party(id) {
-			return createParty(database(find(id).folder), now);
+			return createParty(database(find(id).folder), now, { attended: () => live(id) });
 		},
 		/** The Campaign's open Floor and the Declarations on it. */
 		floor(id) {
@@ -2307,6 +2401,18 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 				coreBlock: () => coreBlock({
 					party: createParty(db, now),
 					db
+				}),
+				/**
+				* What a sitting's opening injects: the core block, then what changed since the last
+				* sitting (told once) and any turn still awaiting Narration.
+				*/
+				opening: () => db.transaction((tx) => {
+					const notice = openingNotice(tx);
+					const core = coreBlock({
+						party: createParty(db, now),
+						db
+					});
+					return notice ? `${core}\n\n${notice}` : core;
 				}),
 				/** Logs a turn that went wrong, as the Player sees it in the timeline. */
 				turnError: (text) => logEvent(db, {
@@ -2392,6 +2498,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { slug$1 as $, CallRefusedError as A, CharacterNotFoundError as B, createDmChannels as C, nextEventId as D, logEvent as E, ToolError as F, SpotlightRefusedError as G, playSheets as H, creationTool as I, currentMinute as J, advanceClock as K, expectVersion as L, callResultEvent as M, openCall as N, setAwaitingNarration as O, PLUGIN_NAME as P, normalizeName as Q, readTool as R, DraftNotFoundError as S, logActivity as T, loadWizardRules as U, CharacterValidationError as V, ClockBackwardsError as W, scenePlace as X, present as Y, isNearName as Z, charactersInScene as _, CampaignArchivedError as a, DmBusyError as b, CampaignNotFoundError as c, addConversationLine as d, formatClock as et, closeSession as f, characterHolders as g, sessionsView as h, sessions as i, callInput as j, CallClosedError as k, NotACampaignFolderError as l, indexNarration as m, library as n, SESSION_LIVE_MESSAGE as nt, CampaignExistsError as o, history as p, characterRefs as q, live as r, CampaignMissingError as s, campaignRoot as t, parseClock as tt, SessionLiveError as u, DeclarationNotFoundError as v, currentStamp as w, returnStrandedDrafts as x, DeclarationRefusedError as y, writeTool as z };
+export { normalizeName as $, CallClosedError as A, writeTool as B, DraftNotFoundError as C, logEvent as D, logActivity as E, PLUGIN_NAME as F, ClockBackwardsError as G, CharacterValidationError as H, ToolError as I, characterRefs as J, SpotlightRefusedError as K, creationTool as L, callInput as M, callResultEvent as N, nextEventId as O, openCall as P, isNearName as Q, expectVersion as R, DmOnlyEditError as S, currentStamp as T, playSheets as U, CharacterNotFoundError as V, loadWizardRules as W, present as X, currentMinute as Y, scenePlace as Z, charactersInScene as _, CampaignArchivedError as a, DmBusyError as b, CampaignNotFoundError as c, addConversationLine as d, slug$1 as et, closeSession as f, characterHolders as g, sessionsView as h, sessions as i, CallRefusedError as j, setAwaitingNarration as k, NotACampaignFolderError as l, indexNarration as m, library as n, parseClock as nt, CampaignExistsError as o, history as p, advanceClock as q, live as r, SESSION_LIVE_MESSAGE as rt, CampaignMissingError as s, campaignRoot as t, formatClock as tt, SessionLiveError as u, DeclarationNotFoundError as v, createDmChannels as w, returnStrandedDrafts as x, DeclarationRefusedError as y, readTool as z };
 
 //# sourceMappingURL=campaign.js.map

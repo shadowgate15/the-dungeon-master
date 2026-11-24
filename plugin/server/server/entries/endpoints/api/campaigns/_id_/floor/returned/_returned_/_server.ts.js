@@ -4,7 +4,7 @@ import { t as changeFloor } from "../../../../../../../../chunks/respond2.js";
 var DELETE = ({ params }) => changeFloor(params.id, null, (floor) => {
 	floor.clearReturned(params.returned);
 	return new Response(null, { status: 204 });
-});
+}, { offline: true });
 export { DELETE };
 
 //# sourceMappingURL=_server.ts.js.map
