@@ -149,6 +149,9 @@
   {/if}
 
   {#if method && !(method === 'rolling' && !draft.abilityRolls)}
+    {#if wizard.dmFields.includes('baseScores')}
+      <p class="text-xs text-accent">✎ DM arranged these scores. Change any to make them yours.</p>
+    {/if}
     <table class="w-full text-left text-sm">
       <thead class="text-muted">
         <tr>

@@ -20,9 +20,12 @@
     seed: CampaignSeedCard
     /** Read-only: every field is disabled. */
     disabled?: boolean
+    /** The fields the DM set, each marked "✎ DM". */
+    dmFields?: readonly string[]
   }
 
-  let { seed = $bindable(), disabled = false }: Props = $props()
+  let { seed = $bindable(), disabled = false, dmFields = [] }: Props = $props()
+  const dm = (field: keyof CampaignSeedCard) => dmFields.includes(field)
 
   const required = [
     { name: 'tone', label: 'Tone', options: TONES },
@@ -52,7 +55,7 @@
   p: { name: keyof CampaignSeedCard; label: string; options: readonly string[] },
   empty: string
 )}
-  <Field label={p.label}>
+  <Field label={p.label} dm={dm(p.name)}>
     {#snippet children(id, describedby)}
       <Select
         {id}
@@ -71,7 +74,7 @@
 {/snippet}
 
 <div class="space-y-3">
-  <Field label="Name">
+  <Field label="Name" dm={dm('name')}>
     {#snippet children(id, describedby)}
       <TextInput
         {id}
@@ -82,7 +85,7 @@
       />
     {/snippet}
   </Field>
-  <Field label="Premise">
+  <Field label="Premise" dm={dm('premise')}>
     {#snippet children(id, describedby)}
       <Textarea
         {id}
@@ -108,7 +111,7 @@
 
   <fieldset class="space-y-3 border-t border-border pt-3">
     <legend class="pr-2 text-sm text-muted">World (optional)</legend>
-    <Field label="World name">
+    <Field label="World name" dm={dm('worldName')}>
       {#snippet children(id, describedby)}
         <TextInput
           {id}

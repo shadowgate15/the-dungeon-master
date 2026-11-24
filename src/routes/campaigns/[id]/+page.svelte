@@ -10,6 +10,11 @@
   import Panel from '#lib/ui/Panel.svelte'
   import DmBadge from '#lib/campaign/DmBadge.svelte'
   import { createSessionsQuery } from '#lib/live/client.ts'
+  import { seedQueryKey } from '#lib/live/messages.ts'
+  import { createSeedQuery } from '#lib/creation/client.ts'
+  import CreationPage from '#lib/creation/CreationPage.svelte'
+  import { useQueryClient } from '@tanstack/svelte-query'
+  import { untrack } from 'svelte'
 
   let { data, form } = $props()
 
@@ -24,17 +29,51 @@
   })
   let saved = $state(false)
   const archived = $derived(data.campaign.status === 'archived')
+  const attached = $derived(sessions.data.includes(data.campaign.id))
+
+  // The stored Seed: a DM write ("✎ DM") refetches it and its fields land in the open card.
+  const queryClient = useQueryClient()
+  const stored = createSeedQuery(
+    () => data.campaign.id,
+    () => ({ seed: { ...emptyCampaignSeed(), ...(data.seed ?? {}) }, dmFields: data.dmFields })
+  )
+  let merged = untrack(() => stored.data)
+  $effect(() => {
+    const next = stored.data
+    untrack(() => {
+      if (next === merged) return
+      for (const field of next.dmFields as (keyof Seed)[]) {
+        if (next.seed[field] !== merged.seed[field]) seed[field] = next.seed[field]
+      }
+      merged = next
+    })
+  })
+  // A field keeps its mark until the Player changes it.
+  const dmFields = $derived(
+    (stored.data.dmFields as (keyof Seed)[]).filter((f) => seed[f] === stored.data.seed[f])
+  )
 </script>
 
 <svelte:head><title>{data.campaign.name}</title></svelte:head>
 
-<main class="mx-auto max-w-3xl space-y-6 p-6">
+<CreationPage
+  width="narrow"
+  pane={data.campaign.status === 'missing'
+    ? null
+    : {
+        campaign: data.campaign.id,
+        folder: data.campaign.path,
+        attached,
+        messages: data.conversation,
+        disabled: archived
+      }}
+>
   <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
   <header class="space-y-1">
     <div class="flex items-center gap-3">
       <h1 class="font-display text-2xl">{data.campaign.name}</h1>
       {#if data.campaign.status !== 'missing'}
-        <DmBadge attached={sessions.data.includes(data.campaign.id)} />
+        <DmBadge {attached} />
         <Link
           href={resolve('/campaigns/[id]/play', { id: data.campaign.id })}
           class="ml-auto text-sm">Play console</Link
@@ -72,11 +111,12 @@
           return async ({ result, update }) => {
             await update({ reset: false })
             saved = result.type === 'success'
+            await queryClient.invalidateQueries({ queryKey: seedQueryKey(data.campaign.id) })
           }
         }}
         oninput={() => (saved = false)}
       >
-        <CampaignSeedCard bind:seed disabled={archived} />
+        <CampaignSeedCard bind:seed disabled={archived} {dmFields} />
         {#if form && 'error' in form && form.error}
           <Alert variant="danger">{form.error}</Alert>
         {/if}
@@ -89,4 +129,4 @@
       </form>
     </Panel>
   {/if}
-</main>
+</CreationPage>
