@@ -35,6 +35,14 @@ describe('the dm agent', () => {
     )
   })
 
+  it('names only skills the plugin ships, rests and levels among them', () => {
+    const skills = [...agent.body.matchAll(/the-dungeon-master:([a-z-]+)/g)].map((m) => m[1])
+    expect(skills).toEqual(expect.arrayContaining(['rests-and-downtime', 'level-up']))
+    for (const name of skills) {
+      expect(parse(path.join(plugin, `skills/${name}/SKILL.md`)).meta.name).toBe(name)
+    }
+  })
+
   it('has a prompt of six parts', () => {
     expect([...agent.body.matchAll(/^## /gm)]).toHaveLength(6)
   })
