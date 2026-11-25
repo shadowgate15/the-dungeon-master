@@ -1,3 +1,4 @@
+import { handleKind } from '#lib/world/entity-types.ts'
 import { eq } from 'drizzle-orm'
 import { canAct } from '#lib/character/acting.ts'
 import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
@@ -175,57 +176,219 @@ function creatureCombatant(db: Queryable, handle: string): Combatant | null {
   }
 }
 
+type CharacterCombatant = Extract<Combatant, { kind: 'character' }>
+type Foe = Extract<Combatant, { kind: 'npc' | 'creature' }>
+
+/** What a combatant's HP, conditions and concentration become. */
+type Write = { hp?: number; conditions?: string[]; concentration?: string | null }
+
+/**
+ * Everything that differs between Characters, NPCs and Creatures, in one place. Every rule below
+ * asks its combatant's kind rather than branching on it.
+ */
+type KindRules<C extends Combatant> = {
+  /** The combatant a ref names, or null. */
+  find: (db: Queryable, ref: string) => C | null
+  saveBonus: (who: C, ability: AbilityKey) => number
+  /** Whether it can take an action now. */
+  canAct: (who: C) => boolean
+  /** How its resistances, immunities and vulnerabilities scale damage of one type. */
+  damageFactor: (who: C, damageType: string | null) => number
+  /** Takes damage already scaled; returns its HP after and the DM's notes on what came of it. */
+  takeDamage: (
+    db: Queryable,
+    who: C,
+    dealt: number,
+    blow: { crit: boolean; knockOut: boolean }
+  ) => { hp: number; notes: string[] }
+  /** Refuses healing for the dead. */
+  assertHealable: (db: Queryable, who: C) => void
+  /** Sets its HP after healing; one at 0 HP brought above it wakes. */
+  restore: (db: Queryable, who: C, hp: number) => void
+  /** Whether it is out of the Combat for good. */
+  isOut: (db: Queryable, who: C) => boolean
+  write: (db: Queryable, who: C, set: Write) => void
+}
+
+const deadRefusal = (who: Combatant, status: string, code: string) =>
+  new ToolError(
+    code,
+    `${who.name} is ${status}; healing can't bring them back`,
+    'Only magic that restores life can; narrate it and leave the HP alone'
+  )
+
+const CHARACTER: KindRules<CharacterCombatant> = {
+  find: (db, ref) => characterCombatant(db, ref) as CharacterCombatant | null,
+  saveBonus: (who, ability) => ok(who.stats.savingThrows[ability])?.modifier ?? 0,
+  canAct: (who) => canAct(who.detail),
+  damageFactor: () => 1,
+  takeDamage(db, who, dealt, { crit }) {
+    const absorbed = Math.min(who.detail.tempHp, dealt)
+    const taken = dealt - absorbed
+    const hp = Math.max(0, who.hp - taken)
+    db.update(character)
+      .set({ currentHp: hp, tempHp: who.detail.tempHp - absorbed })
+      .where(eq(character.id, who.id))
+      .run()
+    const notes = damagedCharacter(db, who.detail, {
+      before: who.hp,
+      taken,
+      maxHp: who.maxHp,
+      crit
+    })
+    return { hp, notes }
+  },
+  assertHealable(_db, who) {
+    if (who.detail.status !== 'alive') throw deadRefusal(who, who.detail.status, 'character_dead')
+  },
+  restore(db, who, hp) {
+    db.update(character).set({ currentHp: hp }).where(eq(character.id, who.id)).run()
+    healedCharacter(db, who.detail, hp)
+  },
+  isOut: (_db, who) => who.detail.status !== 'alive',
+  write(db, who, { hp, conditions, concentration }) {
+    db.update(character)
+      .set({
+        ...(hp !== undefined ? { currentHp: hp } : {}),
+        ...(conditions !== undefined ? { conditions } : {}),
+        ...(concentration !== undefined ? { concentration } : {})
+      })
+      .where(eq(character.id, who.id))
+      .run()
+  }
+}
+
+/** The rules NPCs and Creatures share: a stat block, and their own HP and conditions. */
+function foeRules(
+  find: KindRules<Foe>['find'],
+  write: KindRules<Foe>['write'],
+  { dead, die }: { dead: KindRules<Foe>['isOut']; die: (db: Queryable, who: Foe) => void }
+): KindRules<Foe> {
+  const rules: KindRules<Foe> = {
+    find,
+    write,
+    saveBonus(who, ability) {
+      const proficiencies = who.statBlock.proficiencies as { proficiency: string; value: number }[]
+      const proficient = proficiencies.find((p) => p.proficiency === `saving-throw-${ability}`)
+      if (proficient) return proficient.value
+      const score = (who.statBlock.abilityScores as Record<AbilityKey, number>)[ability] ?? 10
+      return Math.floor((score - 10) / 2)
+    },
+    canAct: () => true,
+    damageFactor(who, damageType) {
+      if (!damageType) return 1
+      const has = (list: unknown) =>
+        (list as string[]).some((entry) =>
+          entry
+            .toLowerCase()
+            .split(/[,;]\s*|\s+and\s+/)
+            .includes(damageType)
+        )
+      if (has(who.statBlock.damageImmunities)) return 0
+      if (has(who.statBlock.damageResistances)) return 0.5
+      if (has(who.statBlock.damageVulnerabilities)) return 2
+      return 1
+    },
+    takeDamage(db, who, dealt, { knockOut }) {
+      const hp = Math.max(0, who.hp - dealt)
+      write(db, who, { hp })
+      return { hp, notes: who.hp > 0 && hp === 0 ? down(db, who, knockOut) : [] }
+    },
+    assertHealable(db, who) {
+      if (rules.isOut(db, who)) throw deadRefusal(who, 'dead', 'npc_dead')
+    },
+    restore(db, who, hp) {
+      // A knocked-out foe brought above 0 wakes.
+      const conditions = hp > 0 ? who.conditions.filter((c) => c !== 'unconscious') : who.conditions
+      write(db, who, { hp, conditions })
+    },
+    isOut: (db, who) => dead(db, who) || (who.hp === 0 && !who.conditions.includes('unconscious'))
+  }
+
+  /** At 0 HP: knocked out (Unconscious) when the DM rules it, else dead. */
+  function down(db: Queryable, who: Foe, knockOut: boolean) {
+    const ended = who.concentration ? [`concentration on ${who.concentration} ends`] : []
+    if (who.concentration) write(db, who, { concentration: null })
+    if (knockOut) {
+      if (!who.conditions.includes('unconscious')) {
+        write(db, who, { conditions: [...who.conditions, 'unconscious'] })
+      }
+      return [[`${who.name} is knocked out`, ...ended].join('; ')]
+    }
+    die(db, who)
+    return [[`${who.name} dies`, ...ended].join('; ')]
+  }
+
+  return rules
+}
+
+/** An NPC keeps its combat state apart from its World page; a dead one's `status` is `dead`. */
+const NPC = foeRules(
+  (db, ref) => npcCombatant(db, ref) as Foe | null,
+  (db, who, set) => {
+    db.update(npcCombat).set(set).where(eq(npcCombat.handle, who.handle)).run()
+  },
+  {
+    dead: (db, who) =>
+      db.select().from(entity).where(eq(entity.handle, who.handle)).get()?.fields.status === 'dead',
+    die(db, who) {
+      const npc = db.select().from(entity).where(eq(entity.handle, who.handle)).get()!
+      db.update(entity)
+        .set({ fields: { ...npc.fields, status: 'dead' }, version: npc.version + 1 })
+        .where(eq(entity.handle, who.handle))
+        .run()
+    }
+  }
+)
+
+/** A Creature keeps its state on its combatant row in the live Combat. */
+const CREATURE = foeRules(
+  (db, ref) => creatureCombatant(db, ref) as Foe | null,
+  (db, who, set) => {
+    const row = liveCreature(db, who.handle)!
+    db.update(combatantTable).set(set).where(eq(combatantTable.id, row.id)).run()
+  },
+  { dead: () => false, die: () => {} }
+)
+
+const KINDS: {
+  character: KindRules<CharacterCombatant>
+  npc: KindRules<Foe>
+  creature: KindRules<Foe>
+} = {
+  character: CHARACTER,
+  npc: NPC,
+  creature: CREATURE
+}
+
+/** The rules for a combatant's kind. */
+const rulesOf = (who: Combatant) => KINDS[who.kind] as KindRules<Combatant>
+
 /**
  * The combatant a tool names: a Character by handle (`char:wren`) or name, an NPC by handle, or a
  * Creature in the live Combat (`creature:goblin-2`). The one lookup every action tool and primitive
  * goes through.
  */
 export function combatant(db: Queryable, ref: string): Combatant {
-  const found = ref.startsWith('npc:')
-    ? npcCombatant(db, ref)
-    : ref.startsWith('creature:')
-      ? creatureCombatant(db, ref)
-      : characterCombatant(db, ref)
+  const kind = handleKind(ref)
+  const found = (kind === 'npc' || kind === 'creature' ? KINDS[kind] : CHARACTER).find(db, ref)
   if (!found) throw ToolError.unknownHandle(ref)
   return found
 }
 
 /** A combatant's saving throw bonus: a Character's derived save, a stat block's proficiency or ability. */
-export function saveBonus(who: Combatant, ability: AbilityKey): number {
-  if (who.kind === 'character') return ok(who.stats.savingThrows[ability])?.modifier ?? 0
-  const proficient = (who.statBlock.proficiencies as { proficiency: string; value: number }[]).find(
-    (p) => p.proficiency === `saving-throw-${ability}`
-  )
-  if (proficient) return proficient.value
-  const score = (who.statBlock.abilityScores as Record<AbilityKey, number>)[ability] ?? 10
-  return Math.floor((score - 10) / 2)
-}
+export const saveBonus = (who: Combatant, ability: AbilityKey): number =>
+  rulesOf(who).saveBonus(who, ability)
 
 /** A Character who acts must be able to. */
 export function mustAct(who: Combatant) {
-  if (who.kind === 'character' && !canAct(who.detail)) {
+  if (!rulesOf(who).canAct(who)) {
     throw new ToolError(
       'character_cannot_act',
       `${who.name} can't act`,
       'Choose a Character who can act'
     )
   }
-}
-
-/** How a stat block's resistances, immunities and vulnerabilities scale damage of one type. */
-function damageFactor(who: Combatant, damageType: string | null): number {
-  if (who.kind === 'character' || !damageType) return 1
-  const has = (list: unknown) =>
-    (list as string[]).some((entry) =>
-      entry
-        .toLowerCase()
-        .split(/[,;]\s*|\s+and\s+/)
-        .includes(damageType)
-    )
-  if (has(who.statBlock.damageImmunities)) return 0
-  if (has(who.statBlock.damageResistances)) return 0.5
-  if (has(who.statBlock.damageVulnerabilities)) return 2
-  return 1
 }
 
 /** Where a combatant was left by damage or healing, with the DM's notes on what came of it. */
@@ -257,97 +420,34 @@ export function applyDamage(
   damageType: string | null,
   { crit = false, knockOut = false, dice, at = Date.now() }: DamageOptions = {}
 ): HpChange {
-  const dealt = Math.floor(amount * damageFactor(who, damageType))
-  const saving = (hp: number) =>
+  const rules = rulesOf(who)
+  const dealt = Math.floor(amount * rules.damageFactor(who, damageType))
+  const { hp, notes } = rules.takeDamage(db, who, dealt, { crit, knockOut })
+  const save =
     dice && hp > 0
-      ? concentrationCheck(db, who, dealt, { dice, at, bonus: saveBonus(who, 'con') })
+      ? concentrationCheck(db, who, dealt, { dice, at, bonus: rules.saveBonus(who, 'con') })
       : { notes: [], calls: [] }
-  if (who.kind === 'character') {
-    const absorbed = Math.min(who.detail.tempHp, dealt)
-    const taken = dealt - absorbed
-    const hp = Math.max(0, who.hp - taken)
-    db.update(character)
-      .set({ currentHp: hp, tempHp: who.detail.tempHp - absorbed })
-      .where(eq(character.id, who.id))
-      .run()
-    const notes = damagedCharacter(db, who.detail, {
-      before: who.hp,
-      taken,
-      maxHp: who.maxHp,
-      crit
-    })
-    const save = saving(hp)
-    return { dealt, hp, max: who.maxHp, notes: [...notes, ...save.notes], calls: save.calls }
-  }
-  const hp = Math.max(0, who.hp - dealt)
-  writeFoe(db, who, { hp })
-  const notes = who.hp > 0 && hp === 0 ? foeDown(db, who, knockOut) : []
-  const save = saving(hp)
   return { dealt, hp, max: who.maxHp, notes: [...notes, ...save.notes], calls: save.calls }
-}
-
-/**
- * An NPC or Creature at 0 HP: knocked out (Unconscious) when the DM rules it, else dead. A dead
- * NPC's `status` field becomes `dead`.
- */
-function foeDown(db: Queryable, who: Combatant & { kind: 'npc' | 'creature' }, knockOut: boolean) {
-  const ended = who.concentration ? [`concentration on ${who.concentration} ends`] : []
-  if (who.concentration) writeFoe(db, who, { concentration: null })
-  if (knockOut) {
-    if (!who.conditions.includes('unconscious')) {
-      writeFoe(db, who, { conditions: [...who.conditions, 'unconscious'] })
-    }
-    return [[`${who.name} is knocked out`, ...ended].join('; ')]
-  }
-  if (who.kind === 'npc') {
-    const npc = db.select().from(entity).where(eq(entity.handle, who.handle)).get()!
-    db.update(entity)
-      .set({ fields: { ...npc.fields, status: 'dead' }, version: npc.version + 1 })
-      .where(eq(entity.handle, who.handle))
-      .run()
-  }
-  return [[`${who.name} dies`, ...ended].join('; ')]
 }
 
 /** Restores HP, never above the maximum. A Character at 0 HP wakes; the dead stay dead. */
 export function applyHealing(db: Queryable, who: Combatant, amount: number): HpChange {
-  if (who.kind === 'character' && who.detail.status !== 'alive') {
-    throw new ToolError(
-      'character_dead',
-      `${who.name} is ${who.detail.status}; healing can't bring them back`,
-      'Only magic that restores life can; narrate it and leave the HP alone'
-    )
-  }
-  if (who.kind !== 'character' && isOut(db, who)) {
-    throw new ToolError(
-      'npc_dead',
-      `${who.name} is dead; healing can't bring them back`,
-      'Only magic that restores life can; narrate it and leave the HP alone'
-    )
-  }
+  const rules = rulesOf(who)
+  rules.assertHealable(db, who)
   const hp = Math.min(who.maxHp, who.hp + amount)
-  if (who.kind === 'character') {
-    db.update(character).set({ currentHp: hp }).where(eq(character.id, who.id)).run()
-    healedCharacter(db, who.detail, hp)
-  } else {
-    // A knocked-out foe brought above 0 wakes.
-    const conditions = hp > 0 ? who.conditions.filter((c) => c !== 'unconscious') : who.conditions
-    writeFoe(db, who, { hp, conditions })
-  }
+  rules.restore(db, who, hp)
   return { dealt: hp - who.hp, hp, max: who.maxHp, notes: [], calls: [] }
 }
 
 /**
- * Whether a combatant is out of the fight for good: a dead Character, or an NPC or Creature that
+ * Whether a combatant is out of the Combat for good: a dead Character, or an NPC or Creature that
  * is dead or at 0 HP without being knocked out. A Character at 0 HP still rolls Death saves.
  */
-export function isOut(db: Queryable, who: Combatant): boolean {
-  if (who.kind === 'character') return who.detail.status !== 'alive'
-  if (who.kind === 'npc') {
-    const npc = db.select().from(entity).where(eq(entity.handle, who.handle)).get()
-    if (npc?.fields.status === 'dead') return true
-  }
-  return who.hp === 0 && !who.conditions.includes('unconscious')
+export const isOut = (db: Queryable, who: Combatant): boolean => rulesOf(who).isOut(db, who)
+
+/** Replaces a combatant's conditions. */
+export function setConditions(db: Queryable, who: Combatant, conditions: string[]) {
+  rulesOf(who).write(db, who, { conditions })
 }
 
 /** Conditions that leave a creature incapacitated, which ends its concentration (SRD). */
@@ -361,26 +461,3 @@ const INCAPACITATING = new Set([
 
 /** Whether a condition leaves its bearer incapacitated. */
 export const incapacitates = (condition: string) => INCAPACITATING.has(condition)
-
-/** Replaces a combatant's conditions. */
-export function setConditions(db: Queryable, who: Combatant, conditions: string[]) {
-  if (who.kind === 'character') {
-    db.update(character).set({ conditions }).where(eq(character.id, who.id)).run()
-  } else {
-    writeFoe(db, who, { conditions })
-  }
-}
-
-/** Writes an NPC's or Creature's own HP or conditions. */
-function writeFoe(
-  db: Queryable,
-  who: Combatant,
-  set: { hp?: number; conditions?: string[]; concentration?: string | null }
-) {
-  if (who.kind === 'creature') {
-    const row = liveCreature(db, who.handle)!
-    db.update(combatantTable).set(set).where(eq(combatantTable.id, row.id)).run()
-  } else {
-    db.update(npcCombat).set(set).where(eq(npcCombat.handle, who.handle)).run()
-  }
-}
