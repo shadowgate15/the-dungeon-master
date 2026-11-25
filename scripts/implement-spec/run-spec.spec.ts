@@ -1636,6 +1636,18 @@ describe('runSpec', () => {
       expect(lines).toContain('merged #1 by git, checks passed')
     })
 
+    it('times the re-run checks from when they started again, not from the interrupted run', async () => {
+      const { ports } = await interruptedDuringChecks([ticket(1)])
+      clock.at = START + 3 * 60 * MINUTE
+
+      await runSpec(100, {}, ports)
+
+      expect(readState(100).tickets[1].gitMerge).toMatchObject({
+        startedAt: START + 3 * 60 * MINUTE,
+        endedAt: START + 3 * 60 * MINUTE + 2 * MINUTE
+      })
+    })
+
     it('hands the fix to a merger, as after a fresh clean merge, when the re-run checks fail', async () => {
       const { ports, git, claude, tracker } = await interruptedDuringChecks(
         [ticket(1), ticket(2, [{ number: 1, open: true }])],
@@ -1729,10 +1741,10 @@ describe('runSpec', () => {
         model: 'opus'
       })
       expect(resumed?.prompt).toMatch(/exited with code 1/)
-      // The resume makes no git attempt, so its prompt has no section on why git couldn't merge.
-      expect(resumed?.prompt).toContain(failedMerger?.prompt.split('\n\nThe script tried')[0])
+      // The resume makes no git attempt, but its prompt still says why the first git merge didn't land.
+      expect(resumed?.prompt).toContain(failedMerger?.prompt)
       expect(resumed?.prompt).toContain('1. Merge implement-spec/100-1 into implement-spec/100')
-      expect(resumed?.prompt).not.toMatch(/The script tried/)
+      expect(resumed?.prompt).toMatch(/aborted it on conflicts in:\n- conflicted.ts/)
       expect(events.filter((event) => event.startsWith('start merger'))).toEqual([
         'start merger-1',
         'start merger-3',
@@ -2038,8 +2050,12 @@ describe('runSpec', () => {
       ])
     })
 
-    it('treats a git call that throws while merging as a failed merger', async () => {
-      const { ports, git, claude } = portsFor([ticket(1), ticket(2, [{ number: 1, open: true }])])
+    it('records a git call that throws before any merger as a merge error, and retries git on a re-run with no merger', async () => {
+      const { ports, git, claude } = portsFor(
+        [ticket(1), ticket(2, [{ number: 1, open: true }])],
+        succeeds,
+        { merge: () => ({ result: 'clean' }) }
+      )
       const head = git.git.head
       let broken = true
       git.git.head = async (branch) => {
@@ -2052,14 +2068,44 @@ describe('runSpec', () => {
       expect(result.ok).toBe(false)
       expect(claude.sessions.map(({ role }) => role)).toEqual(['implementer'])
       const state = readState(100)
+      expect(state.tickets[1]).toMatchObject({ status: 'implemented', mergeError: 'bad ref' })
+      expect(state.tickets[1].merger).toBeUndefined()
+      expect(lines).toContainEqual('  #1 merge error: bad ref')
+
+      broken = false
+      claude.sessions.length = 0
+      expect((await runSpec(100, {}, ports)).ok).toBe(true)
+      expect(git.merges).toEqual(['implement-spec/100-1', 'implement-spec/100-2'])
+      expect(claude.sessions.map(({ role }) => role)).not.toContain('merger')
+      expect(readState(100).tickets[1].mergeError).toBeUndefined()
+    })
+
+    it('records checks that throw as a merge error with the checks ended, and runs them again on a re-run with no merger', async () => {
+      let broken = true
+      const { ports, git, claude, checks } = portsFor([ticket(1)], succeeds, {
+        merge: () => ({ result: 'clean' }),
+        checks: () => {
+          clock.at += 2 * MINUTE
+          if (broken) throw new Error('pnpm vanished')
+          return { passed: true }
+        }
+      })
+
+      expect((await runSpec(100, {}, ports)).ok).toBe(false)
+      const state = readState(100)
       expect(state.tickets[1]).toMatchObject({
         status: 'implemented',
-        merger: { outcome: { check: 'error', error: 'bad ref' } }
+        mergeError: 'pnpm vanished',
+        gitMerge: { startedAt: START, endedAt: START + 2 * MINUTE }
       })
-      expect(lines).toContainEqual(expect.stringMatching(/^ {2}#1 merger error \(log /))
+      expect(state.tickets[1].merger).toBeUndefined()
 
       broken = false
       expect((await runSpec(100, {}, ports)).ok).toBe(true)
+      expect(git.merges).toEqual(['implement-spec/100-1'])
+      expect(checks.runs).toHaveLength(2)
+      expect(claude.sessions.map(({ role }) => role)).not.toContain('merger')
+      expect(readState(100).tickets[1].status).toBe('done')
     })
 
     it('fails a run that stalls with no failure, naming each ticket left stuck and its open blockers', async () => {
