@@ -1,0 +1,118 @@
+<script lang="ts">
+  import Button from '#lib/ui/Button.svelte'
+  import type { OpenCall } from './call'
+
+  /**
+   * The open Call at the foot of the timeline: one button group per Character for a Check (the
+   * skill or save and the reason, never the DC; advantage marked), or for a roll sequence such as
+   * an attack (its next roll: to hit, then damage; never the AC), or a question with its choices
+   * as buttons (free text without), or a short rest's Hit Dice (how many to spend, as buttons up
+   * to what is left), or a reaction (take it or pass; once taken, its attack rolls like any).
+   * Clicking rolls on the server; nothing is rolled here.
+   */
+  let {
+    call,
+    onroll,
+    onanswer,
+    disabled = false
+  }: {
+    call: OpenCall
+    onroll: (part: string) => void
+    onanswer: (part: string, answer: string) => void
+    disabled?: boolean
+  } = $props()
+
+  let drafts = $state<Record<string, string>>({})
+</script>
+
+<section
+  aria-label="Call"
+  class="flex shrink-0 flex-col gap-2 rounded-panel border-2 border-primary bg-raised p-3 text-sm"
+>
+  {#if call.kind === 'question' || call.kind === 'hit_dice' || call.kind === 'reaction'}
+    <p class="font-medium">{call.text}</p>
+  {/if}
+  {#each call.parts as part (part.id)}
+    <div
+      role="group"
+      aria-label={part.character ?? part.player}
+      class="flex flex-wrap items-center gap-2"
+    >
+      {#if call.kind !== 'question' && call.kind !== 'hit_dice'}
+        <span class="font-medium">{part.character}</span>
+        <span>{part.label}</span>
+        {#if part.mode !== 'normal'}
+          <span class="text-xs font-semibold text-accent uppercase"
+            >{part.mode === 'advantage' ? 'Advantage' : 'Disadvantage'}</span
+          >
+        {/if}
+        {#if part.reason}
+          <span class="text-muted">{part.reason}</span>
+        {/if}
+        {#if part.answered}
+          <span class="ml-auto text-xs text-muted"
+            >{call.kind === 'reaction' ? 'Answered' : 'Rolled'}</span
+          >
+        {:else if part.offer}
+          <span class="ml-auto flex gap-1">
+            {#each part.offer as choice (choice)}
+              <Button
+                size="sm"
+                variant="secondary"
+                {disabled}
+                onclick={() => onanswer(part.id, choice)}>{choice}</Button
+              >
+            {/each}
+          </span>
+        {:else}
+          <Button
+            size="sm"
+            class="ml-auto"
+            aria-label="Roll {part.next ?? part.label} for {part.character}"
+            {disabled}
+            onclick={() => onroll(part.id)}>🎲 Roll{part.next ? ` ${part.next}` : ''}</Button
+          >
+        {/if}
+      {:else if part.answered}
+        <span class="text-xs text-muted">Answered</span>
+      {:else if part.hitDice}
+        {@const { die, available } = part.hitDice}
+        <span class="font-medium">{part.character}</span>
+        <span class="text-muted">{available} d{die} left</span>
+        <span class="ml-auto flex gap-1">
+          {#each Array.from({ length: available + 1 }, (_, n) => n) as n (n)}
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={n === 0 ? 'Spend none' : `Spend ${n}`}
+              {disabled}
+              onclick={() => onanswer(part.id, String(n))}>{n === 0 ? 'None' : n}</Button
+            >
+          {/each}
+        </span>
+      {:else if call.choices.length}
+        {#each call.choices as choice (choice)}
+          <Button size="sm" variant="secondary" {disabled} onclick={() => onanswer(part.id, choice)}
+            >{choice}</Button
+          >
+        {/each}
+      {:else}
+        <form
+          class="flex flex-1 gap-2"
+          onsubmit={(e) => {
+            e.preventDefault()
+            const text = (drafts[part.id] ?? '').trim()
+            if (text) onanswer(part.id, text)
+          }}
+        >
+          <input
+            aria-label="Your answer"
+            class="flex-1 rounded-control border border-control-border bg-surface px-2 py-1"
+            bind:value={drafts[part.id]}
+          />
+          <Button size="sm" type="submit" {disabled}>Answer</Button>
+        </form>
+      {/if}
+    </div>
+  {/each}
+</section>

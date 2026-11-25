@@ -1,138 +1,139 @@
 <script lang="ts">
   import { enhance } from '$app/forms'
-  import { invalidateAll } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import ArcSection from '#lib/arc/ArcSection.svelte'
+  import CampaignSeedCard from '#lib/campaign/CampaignSeedCard.svelte'
+  import CreationStepper from '#lib/campaign/CreationStepper.svelte'
+  import { emptyCampaignSeed, type CampaignSeedCard as Seed } from '#lib/campaign/seed.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Link from '#lib/ui/Link.svelte'
-  import Select from '#lib/ui/Select.svelte'
-  import SectionNav from '#lib/SectionNav.svelte'
+  import Panel from '#lib/ui/Panel.svelte'
+  import DmBadge from '#lib/campaign/DmBadge.svelte'
+  import { createSessionsQuery } from '#lib/live/client.ts'
+  import { seedQueryKey } from '#lib/live/messages.ts'
+  import { createSeedQuery } from '#lib/creation/client.ts'
+  import CreationPage from '#lib/creation/CreationPage.svelte'
+  import { useQueryClient } from '@tanstack/svelte-query'
+  import { untrack } from 'svelte'
 
   let { data, form } = $props()
 
-  const locked = $derived(data.campaign.archived || data.campaign.readOnly)
-  const arcAccepted = $derived(data.arc?.status === 'accepted')
-  let starting = $state(false)
-  const startFailed = $derived(Boolean(form && 'retry' in form && form.retry))
+  const sessions = createSessionsQuery(() => data.attached)
+
+  // A failed save keeps what the Player typed; otherwise the card starts from the saved Seed.
+  // svelte-ignore state_referenced_locally
+  let seed = $state<Seed>({
+    ...emptyCampaignSeed(),
+    ...(data.seed ?? {}),
+    ...(form && 'seed' in form ? form.seed : {})
+  })
+  let saved = $state(false)
+  const archived = $derived(data.campaign.status === 'archived')
+  const locked = $derived(data.begun)
+  const attached = $derived(sessions.data.includes(data.campaign.id))
+
+  // The stored Seed: a DM write ("✎ DM") refetches it and its fields land in the open card.
+  const queryClient = useQueryClient()
+  const stored = createSeedQuery(
+    () => data.campaign.id,
+    () => ({ seed: { ...emptyCampaignSeed(), ...(data.seed ?? {}) }, dmFields: data.dmFields })
+  )
+  let merged = untrack(() => stored.data)
+  $effect(() => {
+    const next = stored.data
+    untrack(() => {
+      if (next === merged) return
+      for (const field of next.dmFields as (keyof Seed)[]) {
+        if (next.seed[field] !== merged.seed[field]) seed[field] = next.seed[field]
+      }
+      merged = next
+    })
+  })
+  // A field keeps its mark until the Player changes it.
+  const dmFields = $derived(
+    (stored.data.dmFields as (keyof Seed)[]).filter((f) => seed[f] === stored.data.seed[f])
+  )
 </script>
 
 <svelte:head><title>{data.campaign.name}</title></svelte:head>
 
-<main class="mx-auto max-w-3xl space-y-6 p-6">
-  <SectionNav current="campaigns" />
+<CreationPage
+  width="narrow"
+  pane={data.campaign.status === 'missing'
+    ? null
+    : {
+        campaign: data.campaign.id,
+        folder: data.campaign.path,
+        attached,
+        messages: data.conversation,
+        disabled: archived
+      }}
+>
   <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
-  <header>
-    <h1 class="font-display text-2xl">{data.campaign.name}</h1>
-    <p class="text-muted">{data.campaign.premise}</p>
+  <header class="space-y-1">
+    <div class="flex items-center gap-3">
+      <h1 class="font-display text-2xl">{data.campaign.name}</h1>
+      {#if data.campaign.status !== 'missing'}
+        <DmBadge {attached} />
+        <Link
+          href={resolve('/campaigns/[id]/play', { id: data.campaign.id })}
+          class="ml-auto text-sm">Play console</Link
+        >
+      {/if}
+    </div>
+    <p class="text-xs text-muted">{data.campaign.path}</p>
   </header>
 
-  {#if locked}
+  {#if data.campaign.status === 'missing'}
     <Alert variant="warning">
-      This Campaign is read-only, so it cannot be changed. Restore it, or the Worlds it uses, to
-      edit it.
+      This Campaign's folder is missing. Re-add it from the Campaign library to open it.
     </Alert>
-  {/if}
-  {#if form && 'error' in form && form.error && !startFailed}
-    <Alert variant="danger">{form.error}</Alert>
-  {/if}
+  {:else}
+    <CreationStepper
+      current="Seed"
+      hrefs={{
+        Seed: resolve('/campaigns/[id]', { id: data.campaign.id }),
+        Party: resolve('/campaigns/[id]/party', { id: data.campaign.id }),
+        Begin: resolve('/campaigns/[id]/begin', { id: data.campaign.id })
+      }}
+    />
 
-  <section aria-label="Character" class="space-y-2">
-    <h2 class="font-display text-lg">Character</h2>
-    {#if data.linkedCharacter}
-      <p>Playing as <strong>{data.linkedCharacter.name}</strong>.</p>
-    {:else}
-      <p class="text-muted">No Character linked yet.</p>
+    {#if archived}
+      <Alert variant="warning">This Campaign is archived. Restore it to change it.</Alert>
+    {:else if locked}
+      <Alert variant="info">
+        The story has begun, so the Seed is locked.
+        <Link href={resolve('/campaigns/[id]/begin', { id: data.campaign.id })}>Start over</Link>
+        (until the first Narration) to change it.
+      </Alert>
     {/if}
-    {#if data.characterLocked}
-      <p class="text-sm text-muted">
-        The Character is fixed because this Campaign has a Session. It cannot be changed or
-        unlinked.
-      </p>
-    {:else if data.characters.length === 0}
-      <p class="text-sm">
-        You have no Characters yet. <Link href={resolve('/characters/new')}>Create one</Link>.
-      </p>
-    {:else if !locked}
-      <form method="POST" action="?/linkCharacter" use:enhance class="flex items-end gap-2">
-        <label class="flex-1 text-sm">
-          Character
-          <Select name="characterId" value={data.linkedCharacter?.id ?? data.characters[0].id}>
-            {#each data.characters as c (c.id)}
-              <option value={c.id}>{c.name}</option>
-            {/each}
-          </Select>
-        </label>
-        <Button type="submit" variant="secondary">Link Character</Button>
-      </form>
-      {#if data.linkedCharacter}
-        <form method="POST" action="?/unlinkCharacter" use:enhance>
-          <Button type="submit" variant="secondary">Unlink Character</Button>
-        </form>
-      {/if}
-    {/if}
-  </section>
 
-  <ArcSection
-    campaignId={data.campaign.id}
-    length={data.campaign.length}
-    arc={data.arc}
-    canGenerate={data.arcAvailability.canGenerate}
-    readOnly={locked || data.arcAvailability.locked}
-    onchange={() => invalidateAll()}
-  />
-
-  <section aria-label="Sessions" class="space-y-2">
-    <h2 class="font-display text-lg">Sessions</h2>
-    {#if data.openSessionId}
-      <Button
-        href={resolve('/campaigns/[id]/sessions/[sessionId]', {
-          id: data.campaign.id,
-          sessionId: data.openSessionId
-        })}>Resume Session</Button
-      >
-    {:else}
-      {#if startFailed && form && 'error' in form}
-        <Alert variant="danger">{form.error}</Alert>
-      {/if}
+    <Panel title="Seed">
       <form
         method="POST"
-        action="?/startSession"
+        action="?/saveSeed"
+        class="space-y-3"
         use:enhance={() => {
-          starting = true
-          return async ({ update }) => {
-            await update()
-            starting = false
+          saved = false
+          return async ({ result, update }) => {
+            await update({ reset: false })
+            saved = result.type === 'success'
+            await queryClient.invalidateQueries({ queryKey: seedQueryKey(data.campaign.id) })
           }
         }}
+        oninput={() => (saved = false)}
       >
-        <Button
-          type="submit"
-          disabled={locked || !data.linkedCharacter || !arcAccepted || starting}
-        >
-          {starting ? 'Preparing the opening Scene…' : startFailed ? 'Retry' : 'Start Session'}
-        </Button>
+        <CampaignSeedCard bind:seed disabled={archived || locked} {dmFields} />
+        {#if form && 'error' in form && form.error}
+          <Alert variant="danger">{form.error}</Alert>
+        {/if}
+        {#if !archived && !locked}
+          <div class="flex items-center gap-3">
+            <Button type="submit">Save Seed</Button>
+            {#if saved}<span class="text-sm text-muted">Saved</span>{/if}
+          </div>
+        {/if}
       </form>
-      {#if !data.linkedCharacter && !locked}
-        <p class="text-sm text-muted">Link a Character to start a Session.</p>
-      {:else if !arcAccepted && !locked}
-        <p class="text-sm text-muted">Accept the Arc to start a Session.</p>
-      {/if}
-    {/if}
-    {#if data.sessions.length > 0}
-      <ul class="space-y-1 text-sm">
-        {#each [...data.sessions].reverse() as s (s.id)}
-          <li>
-            <Link
-              href={resolve('/campaigns/[id]/sessions/[sessionId]', {
-                id: data.campaign.id,
-                sessionId: s.id
-              })}>Session {s.number}</Link
-            >
-            <span class="text-muted">{s.endedAt === null ? 'open' : 'ended'}</span>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-  </section>
-</main>
+    </Panel>
+  {/if}
+</CreationPage>

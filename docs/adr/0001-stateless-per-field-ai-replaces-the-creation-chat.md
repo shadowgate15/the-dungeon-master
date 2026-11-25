@@ -2,6 +2,8 @@
 
 Status: accepted and implemented for Worlds, Campaigns and Characters (#142).
 
+Superseded by ADR 0006 (one DM agent with tools replaces the Exchange pipeline): Field AI is gone, and the DM writes form fields through tools only when the Player asks (spec #313).
+
 ## Context
 
 Creating a World, a Campaign or a Character went through a chat beside the form: the player talked, the AI answered with Proposal cards, and a context meter with compaction summaries kept the conversation inside the model's window. The target models are small and local. They lose the thread in long conversations, echo old values and ignore length instructions, and the compaction machinery added more calls that could fail. The form was meant to be the source of truth, yet the AI sat beside it rather than in it.

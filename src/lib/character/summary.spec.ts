@@ -1,17 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { migrateDatabase, openDatabase } from '#lib/server/db/connect.ts'
+import { openCampaignTestDatabase } from '#lib/server/db/test-database.ts'
 import { createCharacterService } from '#lib/server/character/service.ts'
 import { loadWizardRules } from '#lib/server/character/wizard-rules.ts'
-import { seedRulesData } from '#lib/server/rules/seed.ts'
 import { emptyDraft } from './draft.ts'
 import { buildSummary, detailToSummaryData, draftToSummaryData } from './summary.ts'
 
 const rules = loadWizardRules()
 
 function seeded() {
-  const db = openDatabase(':memory:')
-  migrateDatabase(db)
-  seedRulesData(db)
+  const db = openCampaignTestDatabase().db
   const service = createCharacterService(db)
   const created = service.create({
     name: 'Brannoch',
@@ -95,9 +92,7 @@ describe('custom background in the summary', () => {
   }
 
   it('shows the name and feature of a saved custom-background Character', () => {
-    const db = openDatabase(':memory:')
-    migrateDatabase(db)
-    seedRulesData(db)
+    const db = openCampaignTestDatabase().db
     const service = createCharacterService(db)
     const created = service.create({
       name: 'Vesper',

@@ -1,18 +1,19 @@
-import { asc, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm'
+import { asc, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db/connect'
 import {
   abilityScoreMethod,
   alignment as alignmentTable,
   background,
+  campaign,
   character,
   characterChoice,
+  characterItem,
   characterEquipment,
   characterSkill,
   characterSpell,
   classTable,
   equipment,
   race,
-  session,
   skill,
   spell,
   subclass,
@@ -22,6 +23,7 @@ import { equipmentGroupKeys } from '../../character/equipment'
 import { loadRulesDataset } from '../rules/dataset'
 import { ABILITY_KEYS, type AbilityKey } from '../../rules/registry'
 import { resolveFeatures, type ResolverRules } from '../../rules/resolver'
+import { deriveStats, type DeriveRules } from '../../rules/derive-stats'
 import {
   ABILITY_METHODS,
   BACKSTORY_MAX,
@@ -29,6 +31,7 @@ import {
   CUSTOM_BACKGROUND_NAME_MAX,
   CUSTOM_BACKGROUND_SLUG,
   NAME_MAX,
+  SOLO_PLAYER,
   TEXT_MAX,
   type AbilityMethod,
   type Alignment,
@@ -88,6 +91,14 @@ export interface CharacterInput {
   equipment?: { choiceKey: string; item: string; quantity?: number }[]
 }
 
+/** One carried item: equipment slug and count. */
+export interface InventoryItem {
+  item: string
+  quantity: number
+  /** Worn or wielded; absent where it doesn't matter (the wizard's starting kit). */
+  equipped?: boolean
+}
+
 /** A list row: the stored Character plus the names the table shows. */
 export type CharacterSummary = Character & {
   raceSlug: string
@@ -109,6 +120,8 @@ export type CharacterDetail = Character & {
   /** Picked spells (spell slugs) with their source. */
   spells: { spell: string; level: number; source: PickSource }[]
   equipment: StoredEquipment[]
+  /** What the Character carries now. */
+  inventory: InventoryItem[]
   /** Raw character_choice rows. */
   choices: { choiceKey: string; optionSlug: string }[]
   /**
@@ -121,7 +134,7 @@ export type CharacterDetail = Character & {
   classSpells: string[]
 }
 
-/** The input breaks a Character rule (required or conditional field, bad score, unknown key or slug, not editable). */
+/** The input breaks a Character rule (required or conditional field, bad score, unknown key or slug). */
 export class CharacterValidationError extends Error {}
 
 /** The Character does not exist. */
@@ -200,10 +213,14 @@ function checkScores(input: CharacterInput, config: MethodConfig) {
   }
 }
 
+/**
+ * The Characters of the Campaign whose database this is. Every Character belongs to that one
+ * Campaign and has a Controlling Player and a status.
+ */
 export function createCharacterService(
   db: Database,
   now: () => number = Date.now,
-  rules: ResolverRules = loadRulesDataset()
+  rules: ResolverRules & DeriveRules = loadRulesDataset()
 ) {
   const bySlug = <T extends { slug: string }>(list: readonly T[]) =>
     new Map(list.map((r) => [r.slug, r]))
@@ -417,6 +434,50 @@ export function createCharacterService(
       quantity: r.quantity ?? 1
     }))
 
+    // Play state starts from the choices: full HP, the starting gear (fixed items plus picks) and
+    // the background's starting coin, nothing spent.
+    const hitPoints = deriveStats(rules, resolved, {
+      class: input.class,
+      level: 1,
+      baseScores: input.scores,
+      equipment: []
+    }).hitPoints
+    if (hitPoints.status !== 'ok') fail(`Hit points need ${hitPoints.missing.join(', ')}`)
+    const carried = new Map<string, number>()
+    const carry = (item: string, quantity: number) =>
+      carried.set(item, (carried.get(item) ?? 0) + quantity)
+    const backgroundRule = backgroundRules.get(input.background)
+    for (const e of classRules.get(input.class)?.startingEquipment ?? []) carry(e.item, e.quantity)
+    for (const e of backgroundRule?.startingEquipment ?? []) carry(e.item, e.quantity)
+    for (const r of gear) carry(r.item, r.quantity ?? 1)
+    const carriedIds = new Map(
+      db
+        .select({ slug: equipment.slug, id: equipment.id })
+        .from(equipment)
+        .where(inArray(equipment.slug, [...carried.keys()]))
+        .all()
+        .map((r) => [r.slug, r.id])
+    )
+    const inventory = [...carried].map(([item, quantity]) => ({
+      itemId: carriedIds.get(item) ?? fail(`Unknown item: ${item}`),
+      quantity
+    }))
+    const coin = { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 }
+    const unit = backgroundRule?.startingGoldUnit as keyof typeof coin | null | undefined
+    if (unit && unit in coin) coin[unit] = backgroundRule?.startingGoldQuantity ?? 0
+    const playState = {
+      currentHp: hitPoints.status === 'ok' ? hitPoints.value : 0,
+      tempHp: 0,
+      spentSlots: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+      hitDiceSpent: 0,
+      featureUses: {},
+      conditions: [],
+      coin,
+      concentration: null,
+      deathSaves: { successes: 0, failures: 0 },
+      whereabouts: null
+    }
+
     return {
       row: {
         name,
@@ -438,9 +499,11 @@ export function createCharacterService(
         cha: input.scores.cha,
         abilityRolls
       },
+      playState,
       skills: [...skills].map(([skillId, source]) => ({ skillId, source })),
       spells,
       equipment: equipmentRows,
+      inventory,
       choices: choiceRows
     }
   }
@@ -469,22 +532,14 @@ export function createCharacterService(
         .values(p.choices.map((c) => ({ ...c, characterId })))
         .run()
     }
+    if (p.inventory.length) {
+      tx.insert(characterItem)
+        .values(p.inventory.map((i) => ({ ...i, characterId })))
+        .run()
+    }
   }
 
-  function setArchived(id: string, archivedAt: number | null): Character {
-    const current = db.select().from(character).where(eq(character.id, id)).get()
-    if (!current) throw new CharacterNotFoundError('Character not found')
-    // Already in the requested state: no-op, so archived_at/updated_at are not overwritten.
-    if ((current.archivedAt === null) === (archivedAt === null)) return current
-    return db
-      .update(character)
-      .set({ archivedAt, updatedAt: now() })
-      .where(eq(character.id, id))
-      .returning()
-      .get()
-  }
-
-  function summaries(where: SQL, order: SQL[]) {
+  function summaries(order: ReturnType<typeof asc>[]) {
     const rows = db
       .select({
         character,
@@ -499,21 +554,33 @@ export function createCharacterService(
       .leftJoin(subrace, eq(subrace.id, character.subraceId))
       .innerJoin(classTable, eq(classTable.id, character.classId))
       .innerJoin(background, eq(background.id, character.backgroundId))
-      .where(where)
       .orderBy(...order)
       .all()
     return rows.map(({ character: c, ...names }): CharacterSummary => ({ ...c, ...names }))
   }
 
   return {
-    /** Validates, then inserts the Character and all its child rows atomically. Level is 1. */
-    create(input: CharacterInput): Character {
+    /**
+     * Validates, then inserts the Character and all its child rows atomically: level 1, alive,
+     * controlled by `player` (the solo Player by default), with play state at its defaults.
+     */
+    create(input: CharacterInput, { player = SOLO_PLAYER }: { player?: string } = {}): Character {
       const p = prepare(input)
+      const owner = db.select({ id: campaign.id }).from(campaign).get()
+      if (!owner) throw new Error('This database holds no Campaign')
       return db.transaction((tx) => {
         const at = now()
         const created = tx
           .insert(character)
-          .values({ ...p.row, level: 1, createdAt: at, updatedAt: at })
+          .values({
+            ...p.row,
+            ...p.playState,
+            campaignId: owner.id,
+            controllingPlayer: player,
+            level: 1,
+            createdAt: at,
+            updatedAt: at
+          })
           .returning()
           .get()
         writeChildren(tx, created.id, p)
@@ -522,20 +589,18 @@ export function createCharacterService(
     },
 
     /**
-     * Replaces the scalar fields and every child row in one transaction; updated_at always moves.
-     * Level, created_at and archived state are kept. An archived Character cannot be edited.
+     * Replaces the choices and every child row in one transaction; updated_at always moves. Level,
+     * status, Controlling Player and created_at are kept. Wizard edits happen before play, so play
+     * state starts over from the new choices.
      */
     update(id: string, input: CharacterInput): Character {
       const p = prepare(input)
       return db.transaction((tx) => {
         const current = tx.select().from(character).where(eq(character.id, id)).get()
         if (!current) throw new CharacterNotFoundError('Character not found')
-        if (current.archivedAt !== null) {
-          throw new CharacterValidationError('An archived Character cannot be edited')
-        }
         const updated = tx
           .update(character)
-          .set({ ...p.row, updatedAt: now() })
+          .set({ ...p.row, ...p.playState, updatedAt: now() })
           .where(eq(character.id, id))
           .returning()
           .get()
@@ -543,41 +608,19 @@ export function createCharacterService(
         tx.delete(characterSpell).where(eq(characterSpell.characterId, id)).run()
         tx.delete(characterEquipment).where(eq(characterEquipment.characterId, id)).run()
         tx.delete(characterChoice).where(eq(characterChoice.characterId, id)).run()
+        tx.delete(characterItem).where(eq(characterItem.characterId, id)).run()
         writeChildren(tx, id, p)
         return updated
       })
     },
 
-    /** Always allowed; a no-op when already archived. */
-    archive(id: string): Character {
-      return setArchived(id, now())
-    },
-
-    /** Always allowed; a no-op when already active. */
-    restore(id: string): Character {
-      return setArchived(id, null)
-    },
-
-    /**
-     * Hard delete; child rows cascade. Refused once the Character has played any Session:
-     * deleting it would erase the Event logs, which are append-only.
-     */
+    /** Hard delete; child rows cascade. */
     delete(id: string): void {
-      const played = db
-        .select({ id: session.id })
-        .from(session)
-        .where(eq(session.characterId, id))
-        .get()
-      if (played) {
-        throw new CharacterValidationError(
-          'This Character has played Sessions and cannot be deleted. Archive it instead.'
-        )
-      }
       const deleted = db.delete(character).where(eq(character.id, id)).returning().get()
       if (!deleted) throw new CharacterNotFoundError('Character not found')
     },
 
-    /** One Character with its children, or undefined. Archived Characters are returned too. */
+    /** One Character with its children, or undefined. */
     get(id: string): CharacterDetail | undefined {
       const found = db.select().from(character).where(eq(character.id, id)).get()
       if (!found) return undefined
@@ -614,6 +657,17 @@ export function createCharacterService(
         .innerJoin(equipment, eq(equipment.id, characterEquipment.itemId))
         .where(eq(characterEquipment.characterId, id))
         .orderBy(asc(characterEquipment.choiceKey), asc(equipment.slug))
+        .all()
+      const inventory = db
+        .select({
+          item: equipment.slug,
+          quantity: characterItem.quantity,
+          equipped: characterItem.equipped
+        })
+        .from(characterItem)
+        .innerJoin(equipment, eq(equipment.id, characterItem.itemId))
+        .where(eq(characterItem.characterId, id))
+        .orderBy(asc(equipment.slug))
         .all()
       const choices = db
         .select({
@@ -668,26 +722,16 @@ export function createCharacterService(
         skills,
         spells,
         equipment: gear,
+        inventory,
         choices,
         picks,
         classSpells: spells.filter((s) => s.source === 'class').map((s) => s.spell)
       }
     },
 
-    /** Active Characters, oldest first, with the names the list shows. */
+    /** Every Character of the Campaign, whatever their status, oldest first. */
     list(): CharacterSummary[] {
-      return summaries(isNull(character.archivedAt), [
-        asc(character.createdAt),
-        asc(sql`${character}.rowid`)
-      ])
-    },
-
-    /** Archived Characters, most recently archived first. */
-    listArchived(): CharacterSummary[] {
-      return summaries(isNotNull(character.archivedAt), [
-        desc(character.archivedAt),
-        desc(sql`${character}.rowid`)
-      ])
+      return summaries([asc(character.createdAt), asc(sql`${character}.rowid`)])
     }
   }
 }

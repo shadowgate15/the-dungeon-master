@@ -8,5 +8,7 @@ writeDataset(dataset)
 console.log(
   `Wrote Rules Data ${dataset.meta.sourceTag}: ${dataset.races.length} races, ` +
     `${dataset.classes.length} classes, ${dataset.spells.length} spells, ` +
-    `${dataset.equipment.length} equipment items.`
+    `${dataset.equipment.length} equipment items, ${dataset.monsters.length} monsters, ` +
+    `${dataset.conditions.length} conditions, ${dataset.magicItems.length} magic items, ` +
+    `${dataset.ruleSections.length} rules sections.`
 )

@@ -24,6 +24,20 @@ describe('credits', () => {
     expect(credits.mitNotice).toContain('MIT License')
   })
 
+  it('names each kind of SRD content the seeded rules data includes, new datasets too', () => {
+    const contents = loadCredits(seeded()).dataset!.contents
+
+    expect(contents).toEqual(
+      expect.arrayContaining([
+        { name: 'Spells', count: 319 },
+        { name: 'Monsters', count: 334 },
+        { name: 'Conditions', count: 15 },
+        { name: 'Magic items', count: 362 },
+        { name: 'Rules sections', count: 33 }
+      ])
+    )
+  })
+
   it('says so when no dataset has been seeded', () => {
     const db = openDatabase(':memory:')
     migrateDatabase(db)
@@ -43,5 +57,9 @@ describe('NOTICE', () => {
     expect(notice).toContain(SRD_WORDING)
     expect(notice).toContain(mit.trim())
     expect(notice).toContain(`Rules data version: ${loadCredits(seeded()).dataset!.version}`)
+  })
+
+  it('lists every kind of SRD content the rules data includes', () => {
+    for (const { name } of loadCredits(seeded()).dataset!.contents) expect(notice).toContain(name)
   })
 })

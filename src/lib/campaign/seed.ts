@@ -1,42 +1,108 @@
-import { LENGTHS, TONES } from './enums.ts'
+import {
+  GENRE_FLAVORS,
+  LENGTHS,
+  MAGIC_LEVELS,
+  NAME_MAX,
+  PREMISE_SERVICE_MAX,
+  SCALES,
+  TECH_LEVELS,
+  TONES,
+  type GenreFlavor,
+  type Length,
+  type MagicLevel,
+  type Scale,
+  type TechLevel,
+  type Tone
+} from './enums'
 
-export const CAMPAIGN_SEED_FIELDS = ['name', 'premise', 'tone', 'length'] as const
+/** Every Campaign Seed field, in the Seed card's order. */
+export const CAMPAIGN_SEED_FIELDS = [
+  'name',
+  'premise',
+  'tone',
+  'length',
+  'worldName',
+  'genreFlavor',
+  'scale',
+  'magicLevel',
+  'techLevel'
+] as const
+
+/** The fields a complete Seed must have; the rest are optional. */
+export const REQUIRED_SEED_FIELDS = ['name', 'premise', 'tone', 'length'] as const
 
 export type CampaignSeedField = (typeof CAMPAIGN_SEED_FIELDS)[number]
+export type RequiredSeedField = (typeof REQUIRED_SEED_FIELDS)[number]
 
-/** The AI-proposable seed fields. An empty string means unset. */
-export type CampaignSeedFields = Record<CampaignSeedField, string>
+/** The Campaign Seed card's live values. An empty string means unset. */
+export type CampaignSeedCard = Record<CampaignSeedField, string>
+
+export function emptyCampaignSeed(): CampaignSeedCard {
+  return Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, ''])) as CampaignSeedCard
+}
+
+/** The required fields still blank, in card order. */
+export function missingSeedFields(seed: CampaignSeedCard): RequiredSeedField[] {
+  return REQUIRED_SEED_FIELDS.filter((f) => seed[f].trim() === '')
+}
+
+/** Complete once every required field is set. */
+export function isCampaignSeedComplete(seed: CampaignSeedCard): boolean {
+  return missingSeedFields(seed).length === 0
+}
+
+/** The stored Campaign Seed. `null` means unset. */
+export type CampaignSeed = {
+  name: string
+  premise: string | null
+  tone: Tone | null
+  length: Length | null
+  worldName: string | null
+  genreFlavor: GenreFlavor | null
+  scale: Scale | null
+  magicLevel: MagicLevel | null
+  techLevel: TechLevel | null
+}
+
+/** The Seed breaks a rule: a blank name, over-long text or a value outside its list. */
+export class CampaignSeedError extends Error {}
+
+function text(label: string, value: string | undefined, max: number): string | null {
+  const trimmed = (value ?? '').trim()
+  if (trimmed.length > max)
+    throw new CampaignSeedError(`${label} must be at most ${max} characters`)
+  return trimmed === '' ? null : trimmed
+}
+
+function oneOf<T extends string>(label: string, values: readonly T[], value: string | undefined) {
+  if (!value) return null
+  if (!(values as readonly string[]).includes(value)) {
+    throw new CampaignSeedError(`Invalid ${label}: ${value}`)
+  }
+  return value as T
+}
 
 /**
- * The Campaign Seed card's live values. `worldIds` are the chosen World ids; only the
- * player chooses these, the AI never proposes Worlds.
+ * The card's values as a stored Seed. An incomplete Seed is fine (blanks become unset), but a
+ * Campaign always has a name, and set values must be valid.
  */
-export type CampaignSeedCard = CampaignSeedFields & { worldIds: string[] }
-
-export const CAMPAIGN_FIELD_LABELS: Record<CampaignSeedField, string> = {
-  name: 'Name',
-  premise: 'Premise',
-  tone: 'Tone',
-  length: 'Length'
+export function parseCampaignSeed(card: Partial<CampaignSeedCard>): CampaignSeed {
+  const name = text('Name', card.name, NAME_MAX)
+  if (!name) throw new CampaignSeedError('Name is required')
+  return {
+    name,
+    premise: text('Premise', card.premise, PREMISE_SERVICE_MAX),
+    tone: oneOf('tone', TONES, card.tone),
+    length: oneOf('length', LENGTHS, card.length),
+    worldName: text('World name', card.worldName, NAME_MAX),
+    genreFlavor: oneOf('genre flavor', GENRE_FLAVORS, card.genreFlavor),
+    scale: oneOf('scale', SCALES, card.scale),
+    magicLevel: oneOf('magic level', MAGIC_LEVELS, card.magicLevel),
+    techLevel: oneOf('tech level', TECH_LEVELS, card.techLevel)
+  }
 }
 
-/** Allowed values for the enum-backed fields; undefined for free text. */
-export const CAMPAIGN_FIELD_OPTIONS: Partial<Record<CampaignSeedField, readonly string[]>> = {
-  tone: TONES,
-  length: LENGTHS
-}
-
-export function emptyCampaignSeed(worldIds: string[] = []): CampaignSeedCard {
-  return { name: '', premise: '', tone: '', length: '', worldIds: [...worldIds] }
-}
-
-/** Create stays disabled until every field, including at least one World, is set. */
-export function isCampaignSeedComplete(seed: CampaignSeedCard): boolean {
-  return (
-    seed.name.trim() !== '' &&
-    seed.premise.trim() !== '' &&
-    seed.tone !== '' &&
-    seed.length !== '' &&
-    seed.worldIds.length > 0
-  )
+/** A stored Seed as card values. */
+export function campaignSeedCard(seed: CampaignSeed): CampaignSeedCard {
+  return Object.fromEntries(CAMPAIGN_SEED_FIELDS.map((f) => [f, seed[f] ?? ''])) as CampaignSeedCard
 }

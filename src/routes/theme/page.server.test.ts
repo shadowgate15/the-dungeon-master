@@ -24,10 +24,10 @@ async function run(theme: string, redirectTo?: string) {
 
 describe('theme action', () => {
   it('stores light and redirects back', async () => {
-    const { redirect, set } = await run('light', '/worlds?x=1')
+    const { redirect, set } = await run('light', '/campaigns?x=1')
     expect(set).toEqual([['theme', 'light']])
     expect(redirect.status).toBe(303)
-    expect(redirect.location).toBe('/worlds?x=1')
+    expect(redirect.location).toBe('/campaigns?x=1')
   })
 
   it('clears the cookie for system', async () => {

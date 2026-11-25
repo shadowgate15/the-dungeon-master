@@ -1,0 +1,86 @@
+CREATE TABLE `character_draft` (
+	`id` text PRIMARY KEY NOT NULL,
+	`campaign_id` text NOT NULL,
+	`controlling_player` text NOT NULL,
+	`data` text NOT NULL,
+	`step` text NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`campaign_id`) REFERENCES `campaign`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `character_item` (
+	`character_id` text NOT NULL,
+	`item_id` integer NOT NULL,
+	`quantity` integer NOT NULL,
+	PRIMARY KEY(`character_id`, `item_id`),
+	FOREIGN KEY (`character_id`) REFERENCES `character`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`item_id`) REFERENCES `equipment`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "character_item_quantity_check" CHECK(quantity >= 1)
+);
+--> statement-breakpoint
+-- No Campaign database holds a Character yet, so the table is rebuilt empty.
+PRAGMA foreign_keys=OFF;--> statement-breakpoint
+DROP TABLE `character`;--> statement-breakpoint
+CREATE TABLE `character` (
+	`id` text PRIMARY KEY NOT NULL,
+	`campaign_id` text NOT NULL,
+	`controlling_player` text NOT NULL,
+	`status` text DEFAULT 'alive' NOT NULL,
+	`name` text NOT NULL,
+	`alignment` text,
+	`appearance` text,
+	`personality` text,
+	`ideal` text,
+	`bond` text,
+	`flaw` text,
+	`backstory` text,
+	`level` integer DEFAULT 1 NOT NULL,
+	`race_id` integer NOT NULL,
+	`subrace_id` integer,
+	`class_id` integer NOT NULL,
+	`subclass_id` integer,
+	`background_id` integer NOT NULL,
+	`custom_background_name` text,
+	`custom_background_feature` text,
+	`ability_method` text NOT NULL,
+	`str` integer NOT NULL,
+	`dex` integer NOT NULL,
+	`con` integer NOT NULL,
+	`int` integer NOT NULL,
+	`wis` integer NOT NULL,
+	`cha` integer NOT NULL,
+	`ability_rolls` text,
+	`current_hp` integer NOT NULL,
+	`temp_hp` integer DEFAULT 0 NOT NULL,
+	`spent_slots` text NOT NULL,
+	`hit_dice_spent` integer DEFAULT 0 NOT NULL,
+	`feature_uses` text NOT NULL,
+	`conditions` text NOT NULL,
+	`coin` text NOT NULL,
+	`concentration` text,
+	`death_saves` text NOT NULL,
+	`whereabouts` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`campaign_id`) REFERENCES `campaign`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`race_id`) REFERENCES `race`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`subrace_id`) REFERENCES `subrace`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`class_id`) REFERENCES `class`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`subclass_id`) REFERENCES `subclass`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`background_id`) REFERENCES `background`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "character_level_check" CHECK(level BETWEEN 1 AND 20),
+	CONSTRAINT "character_status_check" CHECK(status IS NULL OR status IN ('alive', 'dead', 'departed')),
+	CONSTRAINT "character_temp_hp_check" CHECK(temp_hp >= 0),
+	CONSTRAINT "character_hit_dice_spent_check" CHECK(hit_dice_spent >= 0),
+	CONSTRAINT "character_alignment_check" CHECK(alignment IS NULL OR alignment IN ('lawful-good', 'neutral-good', 'chaotic-good', 'lawful-neutral', 'neutral', 'chaotic-neutral', 'lawful-evil', 'neutral-evil', 'chaotic-evil')),
+	CONSTRAINT "character_ability_method_check" CHECK(ability_method IS NULL OR ability_method IN ('standard-array', 'point-buy', 'roll')),
+	CONSTRAINT "character_str_check" CHECK("str" BETWEEN 1 AND 30),
+	CONSTRAINT "character_dex_check" CHECK("dex" BETWEEN 1 AND 30),
+	CONSTRAINT "character_con_check" CHECK("con" BETWEEN 1 AND 30),
+	CONSTRAINT "character_int_check" CHECK("int" BETWEEN 1 AND 30),
+	CONSTRAINT "character_wis_check" CHECK("wis" BETWEEN 1 AND 30),
+	CONSTRAINT "character_cha_check" CHECK("cha" BETWEEN 1 AND 30)
+);
+--> statement-breakpoint
+PRAGMA foreign_keys=ON;
