@@ -106,6 +106,20 @@ describe('Campaign library', () => {
       ])
     })
 
+    it('keeps a live Campaign at its folder when a copy of it registers', () => {
+      const live = new Set<string>()
+      const guarded = createCampaignLibrary({ home, live: (id) => live.has(id) })
+      const created = guarded.create({ name: 'Ember Road', folder: folder('ember-road') })
+      fs.cpSync(folder('ember-road'), folder('clone'), { recursive: true })
+      live.add(created.id)
+
+      expect(guarded.register(folder('clone'))).toMatchObject({ id: created.id })
+      expect(guarded.list()).toEqual([
+        expect.objectContaining({ id: created.id, path: folder('ember-road') })
+      ])
+      guarded.close()
+    })
+
     it('refuses to register a folder that holds no Campaign', () => {
       fs.mkdirSync(folder('empty'), { recursive: true })
 

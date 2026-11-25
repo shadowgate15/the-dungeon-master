@@ -142,12 +142,15 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
 
     /**
      * Registers an existing Campaign folder. A folder whose Campaign is already registered under
-     * another path (it was moved) replaces that entry, so a Missing Campaign comes back.
+     * another path (it was moved) replaces that entry, so a Missing Campaign comes back. A live
+     * Campaign keeps its folder: a copy of it (a git clone) registering must not repoint the
+     * session's calls.
      */
     register(input: string): Campaign {
       const folder = path.resolve(input)
       const found = readCampaign(folder)
       if (!found) throw new NotACampaignFolderError(`No Campaign in ${folder}`)
+      if (live(found.id) && registry.get(found.id)) return found
       registry.put({ id: found.id, path: folder, name: found.name })
       return found
     },
