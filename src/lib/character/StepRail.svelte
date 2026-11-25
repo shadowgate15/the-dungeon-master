@@ -7,8 +7,6 @@
     status: StepStatus
     /** Why the step is not valid; shown as the tooltip. */
     issues?: string[]
-    /** Pending AI suggestions for this step; any number above zero shows a dot. */
-    suggestions?: number
   }
 
   export const STATUS_LABEL: Record<StepStatus, string> = {
@@ -79,14 +77,6 @@
           </svg>
           <span>{i + 1}. {step.label}</span>
           <span class="sr-only">, {STATUS_LABEL[step.status]}</span>
-          {#if step.suggestions}
-            <span
-              data-testid="suggestion-dot"
-              class="ml-auto inline-block h-2 w-2 shrink-0 rounded-full bg-primary"
-              title="AI has suggestions"
-            ></span>
-            <span class="sr-only">, AI has suggestions</span>
-          {/if}
         </button>
       </li>
     {/each}

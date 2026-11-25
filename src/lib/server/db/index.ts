@@ -1,10 +1,20 @@
-import { DATABASE_URL } from '$app/env/private'
+import path from 'node:path'
+import { DATABASE_URL, DUNGEON_MASTER_HOME } from '$app/env/private'
+import { userStateDir } from '../campaign/paths'
 import { seedRulesData } from '../rules/seed'
-import { migrateDatabase, openDatabase } from './connect'
+import { migrateDatabase, openDatabase, type Database } from './connect'
 
-if (!DATABASE_URL) throw new Error('DATABASE_URL is not set')
+let db: Database | undefined
 
-export const db = openDatabase(DATABASE_URL)
-
-migrateDatabase(db)
-seedRulesData(db)
+/**
+ * The server's own rules database (for the credits page), opened on first use so building the
+ * app opens nothing. Defaults to `rules.db` in the user-level state directory.
+ */
+export function rulesDatabase(): Database {
+  if (!db) {
+    db = openDatabase(DATABASE_URL || path.join(userStateDir({ DUNGEON_MASTER_HOME }), 'rules.db'))
+    migrateDatabase(db)
+    seedRulesData(db)
+  }
+  return db
+}

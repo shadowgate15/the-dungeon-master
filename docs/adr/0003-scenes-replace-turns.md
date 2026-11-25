@@ -2,6 +2,8 @@
 
 Status: accepted (spec #200). Supersedes the Turn model and ADR 0002 (post-turn extraction instead of in-turn tools). Its Director pipeline is superseded by ADR 0005 (Exchanges replace the Director pipeline); the Scene, Mode and Event log stand.
 
+Superseded by ADR 0006 (one DM agent with tools replaces the Exchange pipeline) and ADR 0007 (hybrid knowledge model, with visibility as data): Mode and World memory are gone; the Scene and the Event log are carried into spec #313 in a new form.
+
 ## Context
 
 Play was a chat: the player typed, the DM replied with one streamed block, and Turns alternated in a transcript. Everything the player needs to know (where they are, who is present, what is possible) was buried in that scrolling log, so the UI could not show it. The target models are small and local, and one call was asked to do too much: narrate, voice every NPC, decide when to ask for a roll and call tools. ADR 0002 moved memory out of the turn to keep that call reliable, but the turn itself stayed one overloaded agent.

@@ -1,15 +1,12 @@
 <script lang="ts">
   import { beforeNavigate, goto } from '$app/navigation'
-  import AiStatusChip from '#lib/ai/AiStatusChip.svelte'
-  import { createAiStatus } from '#lib/ai/ai-status.svelte.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Dialog from '#lib/ui/Dialog.svelte'
-  import { createCharacterFieldAi } from './field-ai.svelte.ts'
   import StatsStrip from './StatsStrip.svelte'
   import StepRail from './StepRail.svelte'
   import { STEP_VIEWS } from './step-views.ts'
-  import { submitDraft } from './submit.ts'
+  import { draftWrite, submitDraft } from './submit.ts'
   import type { CharacterWizard } from './wizard.svelte.ts'
 
   type Props = {
@@ -21,19 +18,6 @@
   }
 
   let { wizard, backHref, onabandon }: Props = $props()
-
-  // Per-field AI for every step. Each step view is keyed on the step id below, so changing
-  // step unmounts it; the controller lives here, so it also aborts in-flight calls on a step
-  // change (and, via its own cleanup, on leaving the wizard) and discards their results.
-  const aiStatus = createAiStatus()
-  // svelte-ignore state_referenced_locally
-  const fieldAi = createCharacterFieldAi(wizard, aiStatus)
-  // svelte-ignore state_referenced_locally
-  wizard.ai = fieldAi
-  $effect(() => {
-    void wizard.current
-    return () => fieldAi.abortAll()
-  })
 
   let confirming = $state(false)
   /** Where an in-app navigation was headed when it was held back to ask about the draft. */
@@ -48,6 +32,37 @@
     leavingTo = to.url
     discarding = true
   })
+
+  // A draft stored with the Campaign is written shortly after each change and each step move, so
+  // a reload loses nothing. `dirty` holds while a write is pending, which keeps the leave guards on.
+  let draftSaved = $state(false)
+  let latest = 0
+  let opened = false
+  $effect(() => {
+    const target = wizard.target
+    if (!target || !('draft' in target)) return
+    const { url, init } = draftWrite(target, wizard)
+    if (!opened) {
+      opened = true
+      return
+    }
+    const request = ++latest
+    wizard.dirty = true
+    draftSaved = false
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(url, init)
+        if (response.ok && request === latest) {
+          wizard.dirty = false
+          draftSaved = true
+        }
+      } catch {
+        // Kept dirty: the next change tries again, and leaving still asks first.
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  })
+
   const active = $derived(wizard.step(wizard.current))
   const View = $derived(STEP_VIEWS[wizard.current])
   /** The steps keeping Review locked, so the player sees why Next cannot get there. */
@@ -60,26 +75,19 @@
 
 <svelte:window
   onbeforeunload={(e) => {
-    // A reload loses the browser-only draft; ask first once there is something to lose.
+    // A reload before the pending draft write lands would lose it; ask first.
     if (wizard.dirty) e.preventDefault()
   }}
 />
 
-<main class="mx-auto grid max-w-7xl gap-4 p-4 lg:grid-cols-[13rem_1fr]">
+<section aria-label="Character wizard" class="grid gap-4 lg:grid-cols-[13rem_1fr]">
   <div class="lg:sticky lg:top-4 lg:self-start">
     <StepRail
-      steps={wizard.steps.map((s) => ({
-        ...s,
-        suggestions: wizard.suggestions[s.id] ?? 0
-      }))}
+      steps={wizard.steps}
       current={wizard.current}
       onselect={(id) => wizard.go(id)}
       onabandon={() => (confirming = true)}
-    >
-      {#snippet header()}
-        <AiStatusChip ai={aiStatus} align="left" />
-      {/snippet}
-    </StepRail>
+    />
   </div>
 
   <section class="min-w-0 space-y-4">
@@ -104,6 +112,10 @@
       <View {wizard} />
     </div>
 
+    {#if draftSaved}
+      <p class="text-sm text-muted" role="status">Draft saved</p>
+    {/if}
+
     {#if blockingReview.length > 0}
       <p class="text-sm text-muted" data-testid="review-blockers">
         Review unlocks when every step is done. Still open: {blockingReview.join(', ')}.
@@ -125,14 +137,14 @@
       {:else}
         <Button
           disabled={!wizard.characterInput || wizard.saving}
-          onclick={() => submitDraft(wizard)}
+          onclick={() => submitDraft(wizard, backHref)}
         >
           {wizard.saving ? 'Saving…' : wizard.characterId ? 'Save changes' : 'Save Character'}
         </Button>
       {/if}
     </div>
   </section>
-</main>
+</section>
 
 <Dialog
   bind:open={discarding}
@@ -140,9 +152,7 @@
   closeHref={backHref}
   class="!w-[min(28rem,calc(100vw-2rem))]"
 >
-  <p class="mb-4 text-sm">
-    You have unsaved changes. They live only in this browser and will be lost if you leave.
-  </p>
+  <p class="mb-4 text-sm">You have unsaved changes. They will be lost if you leave.</p>
   <div class="flex justify-end gap-2">
     <Button variant="secondary" onclick={() => (discarding = false)}>Keep editing</Button>
     <Button
@@ -165,8 +175,8 @@
   class="!w-[min(28rem,calc(100vw-2rem))]"
 >
   <p class="mb-4 text-sm">
-    Your draft lives only in this browser and has not been saved. Abandoning it discards everything
-    you have entered.
+    This Character has not been saved. Abandoning it discards the draft and everything you have
+    entered.
   </p>
   <div class="flex justify-end gap-2">
     <Button variant="secondary" onclick={() => (confirming = false)}>Keep editing</Button>

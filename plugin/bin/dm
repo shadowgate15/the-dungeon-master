@@ -1,0 +1,4 @@
+#!/bin/sh
+# The dm launcher, on Claude's own PATH while the plugin is enabled. The terminal gets a shim
+# in ~/.local/bin (written by the SessionStart hook) that runs the same launcher.
+exec node "$(dirname "$0")/dm.mjs" "$@"

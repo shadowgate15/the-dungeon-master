@@ -19,6 +19,12 @@ export const ABILITY_METHODS = ['standard-array', 'point-buy', 'roll'] as const
 /** Where a stored skill or spell pick comes from. */
 export const PICK_SOURCES = ['class', 'race', 'background'] as const
 
+/** A Character's status. The Party is every Character who has not departed. */
+export const CHARACTER_STATUSES = ['alive', 'dead', 'departed'] as const
+
+/** The one Player of a solo Campaign; every Character and draft names its Controlling Player. */
+export const SOLO_PLAYER = 'player'
+
 /** The seeded app-authored background that requires the custom_background_* fields. */
 export const CUSTOM_BACKGROUND_SLUG = 'custom'
 
@@ -32,3 +38,4 @@ export const CUSTOM_BACKGROUND_FEATURE_MAX = 1000
 export type Alignment = (typeof ALIGNMENTS)[number]
 export type AbilityMethod = (typeof ABILITY_METHODS)[number]
 export type PickSource = (typeof PICK_SOURCES)[number]
+export type CharacterStatus = (typeof CHARACTER_STATUSES)[number]

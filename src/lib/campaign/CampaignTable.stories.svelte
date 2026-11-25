@@ -9,10 +9,8 @@
     tone: 'tense',
     length: 'short',
     updatedAt: Date.UTC(2026, 10, 2),
-    worlds: [
-      { id: 'w1', name: 'Ashfall', archived: false },
-      { id: 'w2', name: 'Bramble', archived: true }
-    ]
+    status: 'active',
+    path: '/home/player/dm-campaigns/ember-road'
   }
   const calm: CampaignListItem = {
     ...ember,
@@ -21,7 +19,17 @@
     premise: 'A quiet valley hides an old promise.',
     tone: 'lighthearted',
     length: 'long',
-    worlds: [{ id: 'w1', name: 'Ashfall', archived: false }]
+    path: '/home/player/dm-campaigns/lantern-vale'
+  }
+  const lost: CampaignListItem = {
+    id: 'c3',
+    name: 'Lost Vale',
+    premise: null,
+    tone: null,
+    length: null,
+    updatedAt: null,
+    status: 'missing',
+    path: '/home/player/dm-campaigns/lost-vale'
   }
 
   const { Story } = defineMeta({
@@ -33,5 +41,5 @@
 </script>
 
 <Story name="Active" />
-<Story name="Filtered by World" args={{ worldFilter: { id: 'w1', name: 'Ashfall' } }} />
+<Story name="With a Missing Campaign" args={{ campaigns: [ember, lost] }} />
 <Story name="Empty" args={{ campaigns: [], activeCount: 0 }} />

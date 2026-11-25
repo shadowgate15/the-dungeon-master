@@ -1,0 +1,12 @@
+{
+  "name": "the-dungeon-master",
+  "owner": { "name": "shadowgate15" },
+  "description": "The Dungeon Master: an AI Dungeon Master for D&D 5e, packaged as a Claude Code plugin.",
+  "plugins": [
+    {
+      "name": "the-dungeon-master",
+      "source": "./plugin",
+      "description": "An AI Dungeon Master for Dungeons & Dragons, run by Claude Code."
+    }
+  ]
+}

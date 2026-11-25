@@ -30,6 +30,9 @@ _Avoid_: Owner, author
 Whether a Character is alive, dead or departed. Death is a state the story can reverse, so a dead Character stays in the Party. Departed means its Controlling Player took it out of play; it stays on record, read-only, and can rejoin. Unconscious, dying and other conditions are play state, not status.
 _Avoid_: Archived Character, retired Character
 
+**Play state**:
+The parts of a Character that change in play: current and temporary hit points, spent spell slots, spent Hit Dice, feature uses, conditions, coin, inventory, concentration, death saves and whereabouts. Saving a Character from the wizard sets it to its starting values: full hit points, nothing spent, the starting equipment and the background's starting gold.
+
 **Party**:
 The Characters adventuring in a Campaign: every Character that has not departed. A Campaign has exactly one Party, whose members change over time. A split Party is still one Party, with its Characters in different Places.
 _Avoid_: Group, team, adventurers
@@ -79,7 +82,7 @@ The step-by-step flow in which a Player builds a Character: Concept (name, race,
 _Avoid_: Character form, character builder
 
 **Character draft**:
-The unsaved state of a Character while it is being built in the wizard. It is kept with its Campaign, so it survives a reload and the DM can write into it when a Player asks, and it is discarded only when abandoned. It is not a Character, and does not join the Party, until it is saved.
+The unsaved state of a Character while it is being built in the wizard. It is kept with its Campaign, together with the step it is on, so it survives a reload and the DM can write into it when a Player asks, and it is discarded only when abandoned. It is not a Character, and does not join the Party, until it is saved, which needs every step to be valid.
 _Avoid_: Saved draft, work in progress
 
 **Ability Score Method**:
@@ -111,7 +114,7 @@ A spell a Character has for free from race, subrace or subclass, such as Tieflin
 _Avoid_: Bonus spell, free spell
 
 **Rules Data**:
-The D&D 5e SRD 5.1 reference content (races, classes, backgrounds, spells, equipment and so on). It is read-only and seeded from a pinned dataset. Characters refer to it rather than copy it.
+The D&D 5e SRD 5.1 reference content (races, classes, backgrounds, spells, equipment, monsters, conditions, magic items, rules sections and so on) held in the database. It is read-only to the app and seeded from a pinned dataset. Characters refer to it rather than copy it. Its spells, monsters, conditions, magic items and rules sections are each named by a handle (`spell:fireball`, `monster:goblin`, `condition:prone`, `magic-item:bag-of-holding`, `rule:cover`).
 _Avoid_: Reference data, compendium
 
 ### Play

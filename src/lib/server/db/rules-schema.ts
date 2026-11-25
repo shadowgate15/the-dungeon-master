@@ -454,6 +454,101 @@ export const subclassSpell = sqliteTable(
   (t) => [primaryKey({ columns: [t.subclassId, t.spellId] })]
 )
 
+// --- Monsters, conditions, magic items, rules sections -----------------------------------------
+
+const json = <T>(name: string) => text(name, { mode: 'json' }).$type<T>().notNull()
+
+export const condition = sqliteTable('condition', {
+  id: id(),
+  slug: slug(),
+  name: text('name').notNull(),
+  description: lines('description')
+})
+
+/** An SRD stat block. Attacks, traits and actions keep the upstream shape as JSON. */
+export const monster = sqliteTable(
+  'monster',
+  {
+    id: id(),
+    slug: slug(),
+    name: text('name').notNull(),
+    size: text('size').notNull(),
+    type: text('type').notNull(),
+    subtype: text('subtype'),
+    alignment: text('alignment').notNull(),
+    armorClass: json<unknown[]>('armor_class'),
+    hitPoints: integer('hit_points').notNull(),
+    hitDice: text('hit_dice').notNull(),
+    hitPointsRoll: text('hit_points_roll').notNull(),
+    speed: json<Record<string, string | boolean>>('speed'),
+    str: integer('str').notNull(),
+    dex: integer('dex').notNull(),
+    con: integer('con').notNull(),
+    int: integer('int').notNull(),
+    wis: integer('wis').notNull(),
+    cha: integer('cha').notNull(),
+    damageVulnerabilities: lines('damage_vulnerabilities'),
+    damageResistances: lines('damage_resistances'),
+    damageImmunities: lines('damage_immunities'),
+    senses: json<Record<string, string | number>>('senses'),
+    languages: text('languages').notNull(),
+    challengeRating: real('challenge_rating').notNull(),
+    proficiencyBonus: integer('proficiency_bonus').notNull(),
+    xp: integer('xp').notNull(),
+    specialAbilities: json<unknown[]>('special_abilities'),
+    actions: json<unknown[]>('actions'),
+    legendaryActions: json<unknown[]>('legendary_actions'),
+    reactions: json<unknown[]>('reactions'),
+    /** Slugs of the other stat blocks the same creature can take. */
+    forms: lines('forms'),
+    description: text('description')
+  },
+  (t) => [index('monster_challenge_rating_idx').on(t.challengeRating)]
+)
+
+/** A monster's saving throw and skill bonuses, in stat-block order. */
+export const monsterProficiency = sqliteTable(
+  'monster_proficiency',
+  {
+    monsterId: ownedBy('monster_id', () => monster.id),
+    proficiencyId: entityRef('proficiency_id', () => proficiency.id),
+    position: integer('position').notNull(),
+    value: integer('value').notNull()
+  },
+  (t) => [primaryKey({ columns: [t.monsterId, t.proficiencyId] })]
+)
+
+export const monsterConditionImmunity = sqliteTable(
+  'monster_condition_immunity',
+  {
+    monsterId: ownedBy('monster_id', () => monster.id),
+    conditionId: entityRef('condition_id', () => condition.id)
+  },
+  (t) => [primaryKey({ columns: [t.monsterId, t.conditionId] })]
+)
+
+export const magicItem = sqliteTable('magic_item', {
+  id: id(),
+  slug: slug(),
+  name: text('name').notNull(),
+  categoryId: entityRef('category_id', () => equipmentCategory.id),
+  rarity: text('rarity').notNull(),
+  /** The generic item this one is a version of ("Ammunition, +1" of "Ammunition"). */
+  variantOfId: optionalRef('variant_of_id', (): AnySQLiteColumn => magicItem.id),
+  description: lines('description')
+})
+
+/** One section of the SRD rules text, under its top-level rule (Combat, Spellcasting...). */
+export const ruleSection = sqliteTable('rule_section', {
+  id: id(),
+  slug: slug(),
+  name: text('name').notNull(),
+  rule: text('rule').notNull(),
+  ruleName: text('rule_name').notNull(),
+  /** Markdown. */
+  description: text('description').notNull()
+})
+
 // --- Backgrounds --------------------------------------------------------------------------------
 
 export const background = sqliteTable('background', {

@@ -7,7 +7,7 @@ Produces the **Evidence** section of the `pr` skill's template for visual change
 
 ## 1. Pick the target
 
-- **Whole app:** `pnpm build && pnpm preview` serves on `http://localhost:4173`. For anything that needs the LLM, also start the fake LM Studio so output is deterministic: `FAKE_LM_STUDIO_PORT=1235 FAKE_LM_STUDIO_MODEL=fake-model node src/lib/testing/fake-lm-studio/cli.ts`, and run preview with `LM_STUDIO_BASE_URL=http://127.0.0.1:1235/v1 LM_STUDIO_MODEL=fake-model DATABASE_URL=evidence.db`. Never point at `local.db`.
+- **Whole app:** `pnpm build && pnpm preview` serves on `http://localhost:4173`. Run preview with `DATABASE_URL=evidence.db`. Never point at `local.db`.
 - **A single component:** `pnpm storybook` serves on `http://localhost:6006`. Use `iframe.html?id=<story-id>&viewMode=story` for a chrome-free capture.
 
 Start servers in the background and stop them when done.

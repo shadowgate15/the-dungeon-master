@@ -5,8 +5,8 @@ import { reconcileEquipment, type EquipmentPick } from './equipment.ts'
 import { reconcileSpells } from './spells.ts'
 
 /**
- * The Character draft: the unsaved state of a Character while the wizard is open. Browser-only
- * (see GLOSSARY.md); nothing is stored until the Character is saved. Slugs everywhere, never
+ * The Character draft: the unsaved state of a Character while the wizard is open. It is stored
+ * with the Campaign, so the DM's tools can write into it, but it joins the Party only when saved. Slugs everywhere, never
  * numbers, so it feeds the resolver and `deriveStats` unchanged. Later steps extend this interface
  * and `emptyDraft` with their own fields (ability rolls, equipment, spells, custom background).
  */
@@ -195,4 +195,19 @@ export function reconcile(rules: WizardRules, input: CharacterDraft): Reconciled
   draft.classSpells = spells.classSpells
   notices.push(...spells.notices)
   return { draft, notices }
+}
+
+/** A value as JSON with object keys sorted, so equal drafts compare equal whatever the key order. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
+      : v
+  )
+}
+
+/** The draft fields whose values differ between two drafts. */
+export function changedDraftFields(a: CharacterDraft, b: CharacterDraft): (keyof CharacterDraft)[] {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof CharacterDraft>
+  return [...keys].filter((k) => canonical(a[k]) !== canonical(b[k]))
 }

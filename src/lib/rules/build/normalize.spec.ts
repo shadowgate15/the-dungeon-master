@@ -45,6 +45,70 @@ describe('Rules Data normalizer', () => {
     expect(dataset.features.length).toBeGreaterThan(400)
   })
 
+  it('carries every SRD monster, condition, magic item and rules section', () => {
+    expect(dataset.monsters).toHaveLength(334)
+    expect(dataset.conditions).toHaveLength(15)
+    expect(dataset.magicItems).toHaveLength(362)
+    expect(dataset.ruleSections).toHaveLength(33)
+  })
+
+  it('keeps a monster stat block whole', () => {
+    const goblin = bySlug(dataset.monsters, 'goblin')
+
+    expect(goblin).toMatchObject({
+      name: 'Goblin',
+      size: 'Small',
+      type: 'humanoid',
+      subtype: 'goblinoid',
+      alignment: 'neutral evil',
+      hitPoints: 7,
+      hitDice: '2d6',
+      abilityScores: { str: 8, dex: 14, con: 10, int: 10, wis: 8, cha: 8 },
+      challengeRating: 0.25,
+      xp: 50,
+      languages: 'Common, Goblin',
+      proficiencies: [{ proficiency: 'skill-stealth', value: 6 }],
+      armorClass: [{ type: 'armor', value: 15, armor: ['leather-armor', 'shield'] }]
+    })
+    expect(goblin.actions[0]).toMatchObject({
+      name: 'Scimitar',
+      attack_bonus: 4,
+      damage: [{ damage_type: 'slashing', damage_dice: '1d6+2' }]
+    })
+    expect(goblin.specialAbilities.map((a) => (a as { name: string }).name)).toEqual([
+      'Nimble Escape'
+    ])
+    expect(bySlug(dataset.monsters, 'adult-red-dragon').legendaryActions.length).toBeGreaterThan(0)
+    // Upstream lists Blinded twice for a few blindsighted creatures.
+    expect(bySlug(dataset.monsters, 'ochre-jelly').conditionImmunities).toEqual([
+      'blinded',
+      'charmed',
+      'exhaustion',
+      'frightened',
+      'prone'
+    ])
+  })
+
+  it('carries conditions, magic items with their variants, and rules sections under their rule', () => {
+    expect(bySlug(dataset.conditions, 'prone').description.join(' ')).toContain('crawl')
+    expect(bySlug(dataset.magicItems, 'bag-of-holding')).toMatchObject({
+      category: 'wondrous-items',
+      rarity: 'Uncommon',
+      variantOf: null
+    })
+    expect(bySlug(dataset.magicItems, 'ammunition')).toMatchObject({
+      rarity: 'Varies',
+      variants: ['ammunition-1', 'ammunition-2', 'ammunition-3']
+    })
+    expect(bySlug(dataset.magicItems, 'ammunition-2').variantOf).toBe('ammunition')
+    expect(bySlug(dataset.ruleSections, 'cover')).toMatchObject({
+      name: 'Cover',
+      rule: 'combat',
+      ruleName: 'Combat'
+    })
+    expect(bySlug(dataset.ruleSections, 'cover').description).toContain('three-quarters cover')
+  })
+
   it('keeps slugs unique within each collection', () => {
     for (const name of COLLECTIONS) {
       const rows = dataset[name] as { slug?: string }[]
@@ -70,6 +134,19 @@ describe('Rules Data normalizer', () => {
     }
     for (const cat of d.equipmentCategories)
       for (const i of cat.items) expect(equipment.has(i)).toBe(true)
+    const conditions = has(d.conditions)
+    const monsters = has(d.monsters)
+    const magicItems = has(d.magicItems)
+    const categories = has(d.equipmentCategories)
+    for (const m of d.monsters) {
+      for (const c of m.conditionImmunities) expect(conditions.has(c)).toBe(true)
+      for (const f of m.forms) expect(monsters.has(f)).toBe(true)
+      for (const p of m.proficiencies) expect(proficiencies.has(p.proficiency)).toBe(true)
+    }
+    for (const i of d.magicItems) {
+      expect(categories.has(i.category)).toBe(true)
+      for (const v of i.variants) expect(magicItems.has(v)).toBe(true)
+    }
   })
 
   describe('choice flattening', () => {
