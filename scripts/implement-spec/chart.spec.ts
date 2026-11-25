@@ -211,6 +211,46 @@ describe('render', () => {
     expect(row).toBe('  ✗ #1 Ticket 1  merge interrupted · impl 8m · merge (git) 10m')
   })
 
+  it('queues checks an earlier run left open while a live re-run has not reached them yet', () => {
+    const implemented = (finishOrder: number, startedAt?: number) => ({
+      status: 'implemented' as const,
+      session: ran(0, 8, { outcome: passed }),
+      finishOrder,
+      ...(startedAt === undefined ? {} : { gitMerge: { startedAt } })
+    })
+    const state = stateWith(
+      { 1: implemented(1), 2: implemented(2, START + 10 * MINUTE) },
+      {
+        runs: [
+          { startedAt: START, endedAt: START + 12 * MINUTE },
+          { startedAt: START + 20 * MINUTE, endedAt: START + 20 * MINUTE }
+        ]
+      }
+    )
+
+    const [, , first, second] = render(state, [ticket(1), ticket(2)], options()).split('\n')
+
+    expect([first, second]).toEqual([
+      '  ● #1 Ticket 1  queued 1 · impl 8m',
+      '  ● #2 Ticket 2  queued 2 · impl 8m'
+    ])
+  })
+
+  it('shows a merge stopped by an error before any merger as failed, with the error', () => {
+    const state = stateWith({
+      1: {
+        status: 'implemented',
+        session: ran(0, 8, { outcome: passed }),
+        gitMerge: { startedAt: START + 10 * MINUTE, endedAt: START + 12 * MINUTE },
+        mergeError: 'pnpm vanished'
+      }
+    })
+
+    const [, , row] = render(state, [ticket(1)], options()).split('\n')
+
+    expect(row).toBe('  ✗ #1 Ticket 1  merge error: pnpm vanished · impl 8m')
+  })
+
   it('shows a dash for the total time of a run from before times were recorded', () => {
     const state = stateWith({ 1: { status: 'pending' } }, { runs: undefined })
 

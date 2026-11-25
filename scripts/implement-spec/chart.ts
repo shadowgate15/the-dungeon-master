@@ -2,6 +2,7 @@
 // and times, and the end-of-run steps. Pure: the same state, tickets and options give the same frame.
 import {
   checksLogPath,
+  failedChecks,
   logPath,
   openBlockers,
   runPaths,
@@ -69,6 +70,8 @@ type Context = {
   openUntil: number
   /** A role's log, relative to the repository root. */
   log: (role: Role, ticket?: number) => string
+  /** A ticket's checks log, relative to the repository root. */
+  checksLog: (ticket: number) => string
 }
 
 /** `45s`, `12m` or `1h 52m`. */
@@ -177,8 +180,27 @@ const gitMerged = (record: GitMergeState, context: Context) =>
   `merge (git) ${duration((record.endedAt ?? context.openUntil) - record.startedAt)}`
 
 /**
- * A row for a ticket merged by git with no merger since: running while its checks run (interrupted
- * once the run stops), failed with the checks log when they failed, else undefined.
+ * Whether a ticket's checks were started by the latest run and haven't ended: running while it is
+ * live. Open checks from an earlier run wait for the latest run to reach them again.
+ */
+const checksOpen = (entry: TicketState, state: RunState) => {
+  const record = entry.gitMerge
+  if (record === undefined || record.endedAt !== undefined) return false
+  return record.startedAt >= (state.runs?.at(-1)?.startedAt ?? 0)
+}
+
+/** Whether an `implemented` ticket waits in the merge queue: nothing has tried or failed its merge. */
+const queued = (entry: TicketState, state: RunState) =>
+  entry.status === 'implemented' &&
+  entry.merger === undefined &&
+  entry.mergeError === undefined &&
+  failedChecks(entry) === undefined &&
+  !checksOpen(entry, state)
+
+/**
+ * A row for an `implemented` ticket with no merger: failed with the error that stopped its merge,
+ * running while its checks run (interrupted once the run stops), failed with the checks log when
+ * they failed, else undefined.
  */
 const gitMergeRow = (
   label: string,
@@ -187,22 +209,24 @@ const gitMergeRow = (
   impl: string | undefined,
   context: Context
 ): Row | undefined => {
-  const record = entry.gitMerge
-  if (record === undefined || entry.merger !== undefined || entry.status !== 'implemented') {
-    return undefined
+  if (entry.merger !== undefined || entry.status !== 'implemented') return undefined
+  if (entry.mergeError !== undefined) {
+    return { status: 'failed', label, detail: joined(`merge error: ${entry.mergeError}`, impl) }
   }
+  const record = entry.gitMerge
+  if (record === undefined) return undefined
   const merge = gitMerged(record, context)
-  if (record.endedAt === undefined) {
+  if (checksOpen(entry, context.state)) {
     return context.options.live
       ? { status: 'running', label, detail: joined(impl, merge) }
       : { status: 'interrupted', label, detail: joined('merge interrupted', impl, merge) }
   }
-  if (record.checks?.passed === false) {
-    const log = checksLogPath(runPaths('.', context.state.spec).logs, ticket)
+  const step = failedChecks(entry)
+  if (step !== undefined) {
     return {
       status: 'failed',
       label,
-      detail: joined(`checks ${record.checks.step}`, impl, merge, log)
+      detail: joined(`checks ${step}`, impl, merge, context.checksLog(ticket))
     }
   }
   return undefined
@@ -351,12 +375,12 @@ export const render = (state: RunState, tickets: Ticket[], options: ChartOptions
     state,
     options,
     openUntil: options.live ? options.now : (state.runs?.at(-1)?.endedAt ?? options.now),
-    log: (role, ticket) => logPath(logs, role, ticket)
+    log: (role, ticket) => logPath(logs, role, ticket),
+    checksLog: (ticket) => checksLogPath(logs, ticket)
   }
   const depth = layers(tickets)
   const queue = Object.entries(state.tickets)
-    .filter(([, entry]) => entry.status === 'implemented' && entry.merger === undefined)
-    .filter(([, entry]) => entry.gitMerge === undefined || entry.gitMerge.checks?.passed === true)
+    .filter(([, entry]) => queued(entry, state))
     .sort(([, a], [, b]) => (a.finishOrder ?? 0) - (b.finishOrder ?? 0))
     .map(([key]) => Number(key))
 
