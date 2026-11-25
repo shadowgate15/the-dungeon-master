@@ -21,3 +21,4 @@
     onlevelup: () => {}
   }}
 />
+<Story name="Downed, rolling Death saves" args={{ acting: 'osric' }} />

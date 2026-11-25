@@ -23,6 +23,8 @@ export interface PlaySheet {
   conditions: string[]
   /** The spell being concentrated on. */
   concentration: string | null
+  /** Death save tallies while alive at 0 HP; null otherwise. */
+  deathSaves: { successes: number; failures: number; stable: boolean } | null
   abilities: { key: AbilityKey; score: number; modifier: number }[]
   attacks: { name: string; attackBonus: number; damage: string | null }[]
   /** Only the slot levels the Character has. */

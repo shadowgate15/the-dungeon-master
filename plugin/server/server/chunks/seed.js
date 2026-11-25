@@ -5121,6 +5121,7 @@ var character = sqliteTable("character", {
 	})),
 	/** The spell slug being concentrated on. */
 	concentration: text("concentration"),
+	/** Death save tallies at 0 HP; `stable` after three successes (absent on older rows). */
 	deathSaves: text("death_saves", { mode: "json" }).$type().notNull().$defaultFn(() => ({
 		successes: 0,
 		failures: 0
@@ -5273,15 +5274,20 @@ var activityLine = sqliteTable("activity_line", {
 	createdAt: integer("created_at").notNull()
 });
 /**
-* What a Call asks for: a Check, a question, an action's roll sequences, or Combat initiative
-* (one roll per Character, recorded in the Combat's order).
+* What a Call asks for: a Check, a question, an action's roll sequences, Combat initiative (one
+* roll per Character, recorded in the Combat's order), a short rest's Hit Dice, a downed Character's Death
+* save, a concentrating Character's Constitution save to keep their spell, or a reaction a
+* Character can take or pass.
 */
 var CALL_KINDS = [
 	"check",
 	"question",
 	"roll_sequence",
 	"initiative",
-	"hit_dice"
+	"hit_dice",
+	"death_save",
+	"concentration",
+	"reaction"
 ];
 /**
 * A Call: the DM's open request to the Players, a Check to roll or a question to answer. At most
@@ -5340,6 +5346,8 @@ var callPart = sqliteTable("call_part", {
 	sequence: text("sequence", { mode: "json" }).$type(),
 	/** A short rest's Hit Dice: what the Character can spend and, once answered, what it rolled. */
 	hitDice: text("hit_dice", { mode: "json" }).$type(),
+	/** A reaction's name, such as `Opportunity attack`; the Call's choices take it or pass. */
+	reaction: text("reaction"),
 	answer: text("answer"),
 	answeredAt: integer("answered_at")
 }, (t) => [index("call_part_call_idx").on(t.callId)]);
@@ -5351,7 +5359,9 @@ var npcCombat = sqliteTable("npc_combat", {
 	handle: text("handle").primaryKey(),
 	hp: integer("hp").notNull(),
 	maxHp: integer("max_hp").notNull(),
-	conditions: text("conditions", { mode: "json" }).$type().notNull().$defaultFn(() => [])
+	conditions: text("conditions", { mode: "json" }).$type().notNull().$defaultFn(() => []),
+	/** The spell slug the NPC is concentrating on. */
+	concentration: text("concentration")
 });
 /**
 * A fight in the Scene, run in initiative order. At most one is live (`endedAt` null). `round` is 0
@@ -5398,7 +5408,9 @@ var combatant = sqliteTable("combatant", {
 	/** A Creature's HP (starting at the stat block's average), max and conditions. */
 	hp: integer("hp"),
 	maxHp: integer("max_hp"),
-	conditions: text("conditions", { mode: "json" }).$type().notNull().$defaultFn(() => [])
+	conditions: text("conditions", { mode: "json" }).$type().notNull().$defaultFn(() => []),
+	/** The spell slug a Creature is concentrating on. */
+	concentration: text("concentration")
 }, (t) => [index("combatant_combat_idx").on(t.combatId)]);
 /**
 * A Declaration sent back to its Player's composer as unsent text: its Character left the Scene

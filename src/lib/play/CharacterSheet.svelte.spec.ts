@@ -66,6 +66,34 @@ describe('CharacterSheet', () => {
       .toHaveAttribute('title', 'AC (Leather Armor)')
   })
 
+  it("shows a downed Character's Death save tallies", async () => {
+    render(CharacterSheet, { sheets, acting: 'osric' })
+
+    const osric = page.getByRole('tabpanel', { name: 'Osric' })
+    const tallies = osric.getByRole('group', { name: 'Death saves' })
+    await expect.element(tallies).toHaveTextContent('Successes 1 / 3')
+    await expect.element(tallies).toHaveTextContent('Failures 2 / 3')
+    await expect.element(osric.getByText('Unconscious')).toBeVisible()
+  })
+
+  it('marks a stable Character as stable', async () => {
+    const stable = sheets.map((s) =>
+      s.id === 'osric' ? { ...s, deathSaves: { successes: 0, failures: 0, stable: true } } : s
+    )
+    render(CharacterSheet, { sheets: stable, acting: 'osric' })
+
+    await expect
+      .element(page.getByRole('group', { name: 'Death saves' }))
+      .toHaveTextContent('Stable')
+  })
+
+  it('shows no Death saves for a Character with HP', async () => {
+    render(CharacterSheet, { sheets, acting: 'wren' })
+
+    await expect.element(page.getByRole('tabpanel', { name: 'Wren' })).toBeVisible()
+    await expect.element(page.getByRole('group', { name: 'Death saves' })).not.toBeInTheDocument()
+  })
+
   it('hides Level up until the DM awards a level', async () => {
     render(CharacterSheet, { sheets, acting: 'wren', onlevelup: () => {} })
 

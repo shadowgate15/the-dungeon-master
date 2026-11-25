@@ -113,6 +113,19 @@
         </p>
       {/if}
 
+      {#if shown.deathSaves}
+        {@const { successes, failures, stable } = shown.deathSaves}
+        <div role="group" aria-label="Death saves" class="flex justify-between text-xs">
+          <span class="font-medium">Death saves</span>
+          {#if stable}
+            <span>Stable</span>
+          {:else}
+            <span>Successes {successes} / 3</span>
+            <span class="text-danger">Failures {failures} / 3</span>
+          {/if}
+        </div>
+      {/if}
+
       {#if shown.conditions.length || shown.concentration}
         <div class="flex flex-wrap gap-1">
           {#each shown.conditions as c (c)}<Badge variant="danger" size="sm">{title(c)}</Badge

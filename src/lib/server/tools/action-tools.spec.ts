@@ -106,7 +106,7 @@ describe('a Character attack', () => {
     expect(heard).toHaveLength(1)
     expect(heard[0].meta).toEqual({ kind: 'call_result', call_id: id, players: 'player' })
     expect(heard[0].content).toBe(
-      `[Wren · player] Crossbow, light attack on Grik (${grik}): d20 15 + 4 = 19 vs AC 15 → hit; damage 1d8+2: 5 + 2 = 7 piercing → Grik 0/7 HP (down)`
+      `[Wren · player] Crossbow, light attack on Grik (${grik}): d20 15 + 4 = 19 vs AC 15 → hit; damage 1d8+2: 5 + 2 = 7 piercing → Grik 0/7 HP (down); Grik dies`
     )
     expect(timeline().call).toBeNull()
     expect(timeline().awaitingSince).toEqual(expect.any(Number))

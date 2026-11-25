@@ -10,6 +10,7 @@ import {
   cancelPendingCall,
   createPendingCall,
   DC_BY_TIER,
+  PASS,
   saveKey,
   TIERS,
   type PendingPart
@@ -33,6 +34,7 @@ import {
   type StepRolled
 } from '../play/sequences'
 import { spendTurnResource } from '../play/combat'
+import { concentrate } from '../play/concentration'
 import { createRulesRepository } from '../rules/repository'
 import { ToolError, writeTool, type ToolEvent } from './contract'
 
@@ -177,7 +179,8 @@ function resolve(
   const id = parts.length ? createPendingCall(db, parts, now) : null
   const outcomes = rolls
     .filter((r) => r.roller.kind !== 'character')
-    .map((r) => ({ ...r, ...rollAll(db, r.sequence, dice, r.mode) }))
+    .map((r) => ({ ...r, ...rollAll(db, r.sequence, dice, { ...r.mode, at: now }) }))
+  const concentration = outcomes.flatMap((o) => o.sequence.rolls.flatMap((r) => r.calls ?? []))
   const log = [
     ...pre.map((p) => p.log),
     ...outcomes.flatMap((o) => o.steps.map((s) => diceLogRoll(o.roller.name, s, o.mode)))
@@ -195,7 +198,8 @@ function resolve(
         return { handle: o.sequence.target.handle, hp: last?.after?.hp ?? null }
       })
     }),
-    ...(id && { pending_call: id, next: pendingNext(id) })
+    ...(id && { pending_call: id, next: pendingNext(id) }),
+    ...concentrationCalls(concentration)
   }
   if (!log.length) {
     return {
@@ -214,6 +218,15 @@ function resolve(
     }
   }
 }
+
+/** Pending concentration saves damage made, each for a closing narrate to attach. */
+const concentrationCalls = (ids: string[]) =>
+  ids.length
+    ? {
+        concentration_calls: ids,
+        concentration_next: `Attach each with a closing narrate(text, call: id), one per turn`
+      }
+    : {}
 
 /** Adds an action-economy reminder to a tool's result. */
 function withReminder<T extends { result: Record<string, unknown> }>(
@@ -398,9 +411,80 @@ export const actionTools = [
   }),
 
   writeTool({
+    name: 'offer_reaction',
+    description:
+      "Offer a Character a reaction out of turn, such as an opportunity attack when a foe leaves their reach: returns a pending Call to attach with your closing narrate(text, call: id). The Player takes it or passes; taking it spends their reaction, and with an attack they then roll to hit and damage. You hear one call_result. An NPC's reaction you resolve yourself, with attack.",
+    input: z.object({
+      character: z.string().min(1).describe('Who can react: char:…'),
+      reaction: z
+        .string()
+        .trim()
+        .min(1)
+        .describe('What the reaction is, such as opportunity attack'),
+      attack: z
+        .object({
+          target: z.string().min(1).describe('Who is attacked: npc:… or creature:…'),
+          with: z.string().trim().min(1).describe('The weapon, such as longsword')
+        })
+        .optional()
+        .describe('The attack the reaction makes, rolled once taken'),
+      take: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe('The take button; Attack with an attack, Take without'),
+      ...adv
+    }),
+    activity: 'DM offers a reaction',
+    run: ({ db, now }, input) => {
+      const who = combatant(db, input.character)
+      if (who.kind !== 'character') {
+        throw new ToolError(
+          'not_a_character',
+          `${who.name} is not a Character`,
+          "Resolve an NPC's or Creature's reaction yourself, with attack"
+        )
+      }
+      mustAct(who)
+      const target = input.attack && combatant(db, input.attack.target)
+      const attack = input.attack && findAttack(who, input.attack.with)
+      const sequence =
+        target && attack ? attackSequence(attack.name, target, attack.bonus, attack.damage) : null
+      const name = input.reaction.toLowerCase()
+      const label = name[0].toUpperCase() + name.slice(1)
+      const take = input.take ?? (sequence ? 'Attack' : 'Take')
+      if (take === PASS) {
+        throw new ToolError('bad_take', `${PASS} is the other button`, 'Name the take button')
+      }
+      const article = /^[aeiou]/.test(name) ? 'an' : 'a'
+      const text = `${who.name} can make ${article} ${name}${target ? ` on ${target.name}` : ''}`
+      const id = createPendingCall(
+        db,
+        [
+          {
+            characterId: who.id,
+            player: who.player,
+            sequence,
+            reaction: label,
+            ...modeOf(input)
+          }
+        ],
+        now,
+        'reaction',
+        { text, choices: [take, PASS] }
+      )
+      return {
+        result: { pending_call: id, next: pendingNext(id) },
+        event: { kind: 'call_pending', summary: text, data: { call: id }, dmOnly: true }
+      }
+    }
+  }),
+
+  writeTool({
     name: 'cast',
     description:
-      "Cast a spell: checks the caster has it and a free slot of the level, and spends the slot (cantrips are level 0). A spell attack from a Character returns a pending Call (to hit, then damage) to attach with narrate; an NPC's rolls at once. A save spell rolls its damage once; NPC targets save at once against the caster's DC, Character targets get a pending Call. Healing and other effects: apply them with heal, add_condition and the like.",
+      "Cast a spell: checks the caster has it and a free slot of the level, and spends the slot (cantrips are level 0). A spell attack from a Character returns a pending Call (to hit, then damage) to attach with narrate; an NPC's rolls at once. A save spell rolls its damage once; NPC targets save at once against the caster's DC, Character targets get a pending Call. Healing and other effects: apply them with heal, add_condition and the like. A concentration spell links the caster to it and ends the one they concentrated on before.",
     input: z.object({
       caster: z.string().min(1).describe('Who casts: char:… or npc:…'),
       spell: z.string().min(1).describe('The spell: spell:fire-bolt, fire-bolt or Fire Bolt'),
@@ -461,7 +545,15 @@ export const actionTools = [
         caster.name,
         /bonus action/i.test(String(spell.castingTime ?? '')) ? 'bonusAction' : 'action'
       )
-      const result = { cast: spell.name, level: input.level, slot, ...(reminder && { reminder }) }
+      const ended = spell.concentration ? concentrate(db, caster, spell.slug) : null
+      const result = {
+        cast: spell.name,
+        level: input.level,
+        slot,
+        ...(reminder && { reminder }),
+        ...(spell.concentration && { concentration: spell.slug }),
+        ...(ended && { ended_concentration: ended })
+      }
       const summary = `${caster.name} casts ${spell.name}${targets.length ? ` on ${targets.map((t) => t.name).join(', ')}` : ''}`
 
       if (spell.attackType) {
@@ -651,19 +743,36 @@ export const actionTools = [
   writeTool({
     name: 'damage',
     description:
-      "Deal damage outside an attack or save, such as a fall. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply.",
+      "Deal damage outside an attack or save, such as a fall. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply. A Character dropped to 0 falls Unconscious (or dies outright); damage at 0 is a Death save failure. An NPC or Creature dropped to 0 dies unless knock_out. notes says what came of it.",
     input: z.object({
       target: z.string().min(1).describe('char:… or npc:…'),
       amount: z.number().int().min(0),
-      type: z.string().min(1).describe('The damage type, such as bludgeoning')
+      type: z.string().min(1).describe('The damage type, such as bludgeoning'),
+      crit: z
+        .boolean()
+        .optional()
+        .describe('A critical hit: at 0 HP a Character takes two Death save failures'),
+      knock_out: z
+        .boolean()
+        .optional()
+        .describe('An NPC or Creature dropped to 0 is knocked out instead of killed')
     }),
     activity: 'DM applies damage',
-    run: ({ db }, input) => {
+    run: ({ db, dice, now }, input) => {
       const who = combatant(db, input.target)
       const type = input.type.toLowerCase()
-      const change = applyDamage(db, who, input.amount, type)
+      const { calls, ...change } = applyDamage(db, who, input.amount, type, {
+        crit: input.crit,
+        knockOut: input.knock_out,
+        dice,
+        at: now
+      })
       return {
-        result: { ...change, state: hpState(change.hp, change.max) },
+        result: {
+          ...change,
+          state: hpState(change.hp, change.max),
+          ...concentrationCalls(calls)
+        },
         event: {
           kind: 'damage',
           summary: `${who.name} takes ${change.dealt} ${type}`,

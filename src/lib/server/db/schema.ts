@@ -125,6 +125,9 @@ const campaignOwner = () =>
 /** Coin by denomination. */
 export type Coin = { cp: number; sp: number; ep: number; gp: number; pp: number }
 
+/** A Character's Death save tallies; reset when it regains HP or becomes stable. */
+export type DeathSaves = { successes: number; failures: number; stable?: boolean }
+
 /**
  * A Player's hero in one Campaign: the Player's choices plus play state. Everything computed from
  * the choices (max HP, AC, modifiers, slots) is derived and never stored. Rules references are
@@ -198,8 +201,9 @@ export const character = sqliteTable(
       .$defaultFn(() => ({ cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 })),
     /** The spell slug being concentrated on. */
     concentration: text('concentration'),
+    /** Death save tallies at 0 HP; `stable` after three successes (absent on older rows). */
     deathSaves: text('death_saves', { mode: 'json' })
-      .$type<{ successes: number; failures: number }>()
+      .$type<DeathSaves>()
       .notNull()
       .$defaultFn(() => ({ successes: 0, failures: 0 })),
     /** Where the Character is; presence in a Scene is computed from it. */
@@ -409,10 +413,21 @@ export const activityLine = sqliteTable('activity_line', {
 })
 
 /**
- * What a Call asks for: a Check, a question, an action's roll sequences, or Combat initiative
- * (one roll per Character, recorded in the Combat's order).
+ * What a Call asks for: a Check, a question, an action's roll sequences, Combat initiative (one
+ * roll per Character, recorded in the Combat's order), a short rest's Hit Dice, a downed Character's Death
+ * save, a concentrating Character's Constitution save to keep their spell, or a reaction a
+ * Character can take or pass.
  */
-export const CALL_KINDS = ['check', 'question', 'roll_sequence', 'initiative', 'hit_dice'] as const
+export const CALL_KINDS = [
+  'check',
+  'question',
+  'roll_sequence',
+  'initiative',
+  'hit_dice',
+  'death_save',
+  'concentration',
+  'reaction'
+] as const
 
 /**
  * A Call: the DM's open request to the Players, a Check to roll or a question to answer. At most
@@ -482,6 +497,10 @@ export type SequenceRoll = {
   applied: { dealt: number; damageType: string | null; condition: string | null } | null
   /** The target's HP after the step, for the DM: `{hp, max}`. */
   after: { hp: number; max: number } | null
+  /** The DM's notes on what the damage did: falling Unconscious, death, a concentration save. */
+  notes?: string[]
+  /** Pending concentration save Calls the damage made. */
+  calls?: string[]
 }
 
 /** A short rest's Hit Dice for one Character: the die, how many are left, and what was spent. */
@@ -543,6 +562,8 @@ export const callPart = sqliteTable(
     sequence: text('sequence', { mode: 'json' }).$type<Sequence>(),
     /** A short rest's Hit Dice: what the Character can spend and, once answered, what it rolled. */
     hitDice: text('hit_dice', { mode: 'json' }).$type<HitDiceSpend>(),
+    /** A reaction's name, such as `Opportunity attack`; the Call's choices take it or pass. */
+    reaction: text('reaction'),
     answer: text('answer'),
     answeredAt: integer('answered_at')
   },
@@ -560,7 +581,9 @@ export const npcCombat = sqliteTable('npc_combat', {
   conditions: text('conditions', { mode: 'json' })
     .$type<string[]>()
     .notNull()
-    .$defaultFn(() => [])
+    .$defaultFn(() => []),
+  /** The spell slug the NPC is concentrating on. */
+  concentration: text('concentration')
 })
 
 /**
@@ -618,7 +641,9 @@ export const combatant = sqliteTable(
     conditions: text('conditions', { mode: 'json' })
       .$type<string[]>()
       .notNull()
-      .$defaultFn(() => [])
+      .$defaultFn(() => []),
+    /** The spell slug a Creature is concentrating on. */
+    concentration: text('concentration')
   },
   (t) => [index('combatant_combat_idx').on(t.combatId)]
 )
