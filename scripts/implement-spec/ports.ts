@@ -1,18 +1,27 @@
 // The real tracker, git, claude and checks ports: thin, untested wrappers over the `gh`, `git`,
 // `claude` and `pnpm` CLIs.
 import { execFile, spawn } from 'node:child_process'
-import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync, writeSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  statSync,
+  writeFileSync,
+  writeSync
+} from 'node:fs'
 import { dirname } from 'node:path'
 import { promisify } from 'node:util'
 import { usageLimitReset } from './usage-limit.ts'
-import type {
-  Blocker,
-  ChecksPort,
-  ChecksStep,
-  ClaudePort,
-  GitPort,
-  Ticket,
-  TrackerPort
+import {
+  CHECKS,
+  type Blocker,
+  type ChecksPort,
+  type ClaudePort,
+  type GitPort,
+  type Ticket,
+  type TrackerPort
 } from './run-spec.ts'
 
 const execFileAsync = promisify(execFile)
@@ -136,21 +145,15 @@ export const createGit = (cwd: string): GitPort => {
   }
 }
 
-/** The checks after a clean git merge, in order, each a `pnpm` command. */
-const CHECKS: [ChecksStep, string[]][] = [
-  ['install', ['install', '--frozen-lockfile']],
-  ['lint', ['lint']],
-  ['check', ['check']],
-  ['test', ['test:unit', '--run', '--project', 'client', '--project', 'server']]
-]
-
 /**
- * Runs each check with `pnpm` in `cwd`, stopping at the first that fails (or can't be started),
- * with every command and its output appended to the log file.
+ * Runs each check with `pnpm` in `cwd`, stopping at the first that fails (or can't be started).
+ * The log file holds only this run: it is emptied first, then every command and its output is
+ * appended.
  */
 export const createChecks = (): ChecksPort => ({
   run: async ({ cwd, logFile }) => {
     mkdirSync(dirname(logFile), { recursive: true })
+    writeFileSync(logFile, '')
     for (const [step, args] of CHECKS) {
       const out = openSync(logFile, 'a')
       writeSync(out, `$ pnpm ${args.join(' ')}\n`)

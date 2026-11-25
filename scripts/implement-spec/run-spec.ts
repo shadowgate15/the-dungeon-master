@@ -73,14 +73,26 @@ export type MergeResult =
   | { result: 'conflicts'; paths: string[] }
   | { result: 'error'; message: string }
 
-/** The checks run after a clean git merge, in order: install, lint, type-check and unit tests. */
-export type ChecksStep = 'install' | 'lint' | 'check' | 'test'
+/**
+ * The checks run after a clean git merge, in order (install, lint, type-check and unit tests), each
+ * a step name and its `pnpm` arguments.
+ */
+export const CHECKS = [
+  ['install', ['install', '--frozen-lockfile']],
+  ['lint', ['lint']],
+  ['check', ['check']],
+  ['test', ['test:unit', '--run', '--project', 'client', '--project', 'server']]
+] as const
+
+/** A step of the checks, named in `CHECKS`. */
+export type ChecksStep = (typeof CHECKS)[number][0]
 
 /** How the checks ended: all passed, or stopped at the first `step` that failed. */
 export type ChecksResult = { passed: true } | { passed: false; step: ChecksStep }
 
+/** Runs the checks after a clean git merge, the `CHECKS` steps in order. */
 export type ChecksPort = {
-  /** Runs the checks in `cwd`, stopping at the first failure, with all output appended to `logFile`. */
+  /** Runs the checks in `cwd`, stopping at the first failure, with all output written to `logFile`. */
   run: (run: { cwd: string; logFile: string }) => Promise<ChecksResult>
 }
 

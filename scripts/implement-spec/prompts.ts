@@ -33,6 +33,7 @@ export const implementerPrompt = (
  */
 export type MergeReason = { conflicts: string[] } | { error: string }
 
+/** The merger prompt's section on why the script's git merge didn't land; none without a reason. */
 const reasonLines = (reason: MergeReason | undefined) => {
   if (reason === undefined) return []
   if ('conflicts' in reason) {
@@ -51,16 +52,24 @@ const reasonLines = (reason: MergeReason | undefined) => {
   ]
 }
 
+/** Every merger prompt's opening: the role, the pointers, the ticket, its branch and the worktree. */
+const mergerHeader = (
+  pointers: Pointers,
+  { ticket, branch }: { ticket: number; branch: string }
+) => [
+  `You are the merger for ticket #${ticket} of spec #${pointers.spec}.`,
+  ...pointerLines(pointers),
+  `Ticket: #${ticket} (read it with \`gh issue view ${ticket}\`).`,
+  `Ticket branch: ${branch}. Its implementer has finished and passed its done check.`,
+  `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`
+]
+
 export const mergerPrompt = (
   pointers: Pointers,
   { ticket, branch, reason }: { ticket: number; branch: string; reason?: MergeReason }
 ) =>
   [
-    `You are the merger for ticket #${ticket} of spec #${pointers.spec}.`,
-    ...pointerLines(pointers),
-    `Ticket: #${ticket} (read it with \`gh issue view ${ticket}\`).`,
-    `Ticket branch: ${branch}. Its implementer has finished and passed its done check.`,
-    `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`,
+    ...mergerHeader(pointers, { ticket, branch }),
     ...reasonLines(reason),
     '',
     `1. Merge ${branch} into ${pointers.integrationBranch} here (\`git merge --no-ff ${branch}\`).`,
@@ -83,11 +92,7 @@ export const checksFailedMergerPrompt = (
   }: { ticket: number; branch: string; step: string; checksLog: string }
 ) =>
   [
-    `You are the merger for ticket #${ticket} of spec #${pointers.spec}.`,
-    ...pointerLines(pointers),
-    `Ticket: #${ticket} (read it with \`gh issue view ${ticket}\`).`,
-    `Ticket branch: ${branch}. Its implementer has finished and passed its done check.`,
-    `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`,
+    ...mergerHeader(pointers, { ticket, branch }),
     '',
     `The script has already merged ${branch} into ${pointers.integrationBranch} cleanly, and the merge is already committed. Do not merge again or undo the merge.`,
     `The script then ran the install, lint, type-check and unit tests, and the \`${step}\` step failed. Its output is in ${checksLog}.`,
