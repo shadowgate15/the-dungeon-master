@@ -190,6 +190,18 @@ describe('recap', () => {
     expect(ok('close_session', { summary, threads: [] }).summarised).toBe(false)
   })
 
+  it('cannot ask a Call, since a recap answers nothing', () => {
+    play.openSession(campaignId, 'bridge-1')
+    expect(
+      refused('narrate', {
+        text: 'Previously, the harbour office…',
+        recap: true,
+        call: { kind: 'question', text: 'Ready?' }
+      }).code
+    ).toBe('invalid_input')
+    expect(library.record(campaignId).timeline().entries).toEqual([])
+  })
+
   it('is due once per Session after one with a summary', () => {
     play.openSession(campaignId, 'bridge-1')
     expect(ok('sessions').recap_due).toBe(false)

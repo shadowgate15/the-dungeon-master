@@ -33,6 +33,13 @@ export const narrationTools = [
     }),
     activity: null,
     run: (ctx, { text, voice, call, recap = false }) => {
+      if (recap && call !== undefined) {
+        throw new ToolError(
+          'invalid_input',
+          'A recap answers nothing, so it cannot ask a Call',
+          'Narrate the recap on its own, then ask the Call in the next narrate'
+        )
+      }
       const npc = voice === undefined ? undefined : speaker(ctx, voice)
       if (!recap) {
         setAwaitingNarration(ctx.db, null)
