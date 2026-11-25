@@ -17,7 +17,7 @@ export class DmAwayError extends Error {}
 
 /** What every refused play input says while no session is attached. */
 export const DM_AWAY_MESSAGE =
-  'The DM is away. Run dm in the Campaign folder to start a sitting; your drafts wait here.'
+  'The DM is away. Run dm in the Campaign folder to start a Session; your drafts wait here.'
 
 type Options = {
   library: CampaignLibrary
@@ -188,12 +188,12 @@ export function createPlay({
     },
 
     /**
-     * The Player presses End Session: the DM gets one `end_session` event and closes the sitting
-     * (closing beat, summary, Arc review, lint) with the ending-a-sitting skill.
+     * The Player presses End Session: the DM gets one `end_session` event and closes the Session
+     * (closing beat, Arc review, lint, goodbye, summary) with the ending-a-session skill.
      */
     endSession(campaignId: string) {
       channels.send(atTable(campaignId), {
-        content: 'The Player pressed End Session. Close the sitting.',
+        content: 'The Player pressed End Session. Close the Session.',
         meta: { kind: 'end_session' }
       })
     },
@@ -236,8 +236,8 @@ export function createPlay({
     },
 
     /**
-     * What SessionStart injects when a sitting opens: the core block, the "changed since last
-     * sitting" notice for offline edits (told once) and any turn left awaiting Narration.
+     * What SessionStart injects when a Session opens: the core block, the "changed since last
+     * Session" notice for offline edits (told once) and any turn left awaiting Narration.
      */
     sessionStart(campaignId: string): string {
       return library.record(campaignId).opening()

@@ -103,13 +103,13 @@ describe('close_session atomicity', () => {
 })
 
 describe('catch-up close', () => {
-  it('a new sitting leaves an unclosed Session for the catch-up, then closes it by number', () => {
+  it('a new Session leaves an unclosed Session for the catch-up, then closes it by number', () => {
     play.openSession(campaignId, 'bridge-1')
     ok('narrate', { text: 'The lock clicks open.' })
     clock += 3_600_000
     play.openSession(campaignId, 'bridge-2')
 
-    // A crashed sitting still gets its recap, once the catch-up close has written the summary.
+    // A crashed Session still gets its recap, once the catch-up close has written the summary.
     expect(ok('sessions')).toMatchObject({ current: 2, unclosed: [1], recap_due: true })
     expect(ok('history', { session: 1 }).events.map((e: { kind: string }) => e.kind)).toEqual([
       'narration'
@@ -149,7 +149,7 @@ describe('Sessions with no Narration', () => {
     expect(library.record(campaignId).sessionHistory().sessions).toEqual([])
   })
 
-  it('close on their own when the next sitting opens', () => {
+  it('close on their own when the next Session opens', () => {
     play.openSession(campaignId, 'bridge-1')
     play.openSession(campaignId, 'bridge-2')
 
@@ -190,7 +190,7 @@ describe('recap', () => {
     expect(ok('close_session', { summary, threads: [] }).summarised).toBe(false)
   })
 
-  it('is due once per sitting after one with a summary', () => {
+  it('is due once per Session after one with a summary', () => {
     play.openSession(campaignId, 'bridge-1')
     expect(ok('sessions').recap_due).toBe(false)
     ok('narrate', { text: 'The lock clicks open.' })

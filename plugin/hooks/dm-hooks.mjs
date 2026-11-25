@@ -76,7 +76,7 @@ async function runHook(name, input2, env = process.env) {
   const core = block?.text ?? "The game server is not running: the core block is unavailable.";
   const additionalContext = input2.source === "compact" ? core : `${core}
 
-This sitting has just started. Load skill ${SESSION_OPENING_SKILL} now and follow it.`;
+This Session has just started. Load skill ${SESSION_OPENING_SKILL} now and follow it.`;
   return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext } };
 }
 

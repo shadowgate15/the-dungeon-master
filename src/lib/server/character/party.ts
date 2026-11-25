@@ -27,7 +27,7 @@ import { loadWizardRules } from './wizard-rules'
 /** An edit only the DM may make while no DM is at the table to make it. */
 export class DmOnlyEditError extends Error {}
 
-/** The Character details a Player may edit at any time, in or out of a sitting. */
+/** The Character details a Player may edit at any time, in or out of a Session. */
 export type CharacterDetails = {
   notes?: string | null
   personality?: string | null

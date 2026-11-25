@@ -11,7 +11,7 @@ export const lintTools = [
   writeTool({
     name: 'lint',
     description:
-      'Check the World for what code can detect: near-duplicate names, broken [[links]], Facts restating a typed field, Beliefs pointing at retired Facts and Pages linking to retired Entities. Also returns the Pages of Entities changed since the last lint, for you to check each Page against its fields. Changes nothing: fix each finding with the ordinary tools. Run it when ending a sitting.',
+      'Check the World for what code can detect: near-duplicate names, broken [[links]], Facts restating a typed field, Beliefs pointing at retired Facts and Pages linking to retired Entities. Also returns the Pages of Entities changed since the last lint, for you to check each Page against its fields. Changes nothing: fix each finding with the ordinary tools. Run it when ending a Session.',
     input: z.object({}),
     run: (ctx) => {
       const result = lintWorld(ctx)

@@ -111,7 +111,7 @@ export function createSessionHistoryQuery(campaign: () => string, initial: () =>
   }))
 }
 
-/** End Session: asks the DM to close the sitting. */
+/** End Session: asks the DM to close the Session. */
 export async function endSession(campaign: string): Promise<void> {
   const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign)}/end-session`, {
     method: 'POST'

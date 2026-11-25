@@ -37,7 +37,7 @@ const changes = () =>
     .all()
     .filter((e) => e.kind === 'change')
 
-/** A sitting that stopped without End Session: its Session stays open after the DM left. */
+/** A Session that stopped without End Session: its Session stays open after the DM left. */
 function leftSitting() {
   attached = true
   library.record(campaignId).openSession('old-bridge')
@@ -85,7 +85,7 @@ describe('allowed offline', () => {
     expect(row(bram).name).toBe('Bram')
   })
 
-  it('logs offline edits in no Session, even with an earlier sitting left open', () => {
+  it('logs offline edits in no Session, even with an earlier Session left open', () => {
     leftSitting()
     const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
     library.party(campaignId).updateDetails(wren, { notes: 'Lost her map.' })
@@ -105,7 +105,7 @@ describe('allowed offline', () => {
     expect(db().select().from(campaign).get()!.begunAt).toBeNull()
   })
 
-  it('logs an offline Start over in no Session, even with an earlier sitting left open', () => {
+  it('logs an offline Start over in no Session, even with an earlier Session left open', () => {
     begin()
     leftSitting()
     library.startOver(campaignId)

@@ -83,8 +83,8 @@ const SESSION_LIVE = {
  * - `POST stop-check` with `{campaign, again}`: whether the Stop hook refuses to end the DM's turn,
  *   as `{block, reason}`.
  * - `GET  core-block?campaign=<folder>`: the DM's core block, as `{text}`, after compaction.
- * - `POST session-start` with `{campaign}`: what a sitting's opening injects, as `{text}`: the core
- *   block, then what changed since the last sitting (told once) and a turn awaiting Narration.
+ * - `POST session-start` with `{campaign}`: what a Session's opening injects, as `{text}`: the core
+ *   block, then what changed since the last Session (told once) and a turn awaiting Narration.
  * - `POST permission_request` with `{campaign, request_id, tool_name, description, input_preview}`:
  *   the session's permission prompt, shown to the Player; the verdict comes back on `events`.
  */

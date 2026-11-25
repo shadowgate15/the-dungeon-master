@@ -14,7 +14,7 @@ const KIND = 'change'
 
 /**
  * Logs a change the Player made outside the DM (a UI edit), so the DM hears of it next. An
- * `offline` edit (no DM at the table) belongs to no Session, even while an earlier sitting's
+ * `offline` edit (no DM at the table) belongs to no Session, even while an earlier Session's
  * Session is still open for its catch-up close.
  */
 export function logChange(
@@ -37,7 +37,7 @@ export function logChange(
 /**
  * The changes the DM has not heard about yet, marking them heard: each Player edit logged in the
  * open Session since the last channel event. Offline edits belong to no Session; they reach the DM
- * at the next sitting's opening instead.
+ * at the next Session's opening instead.
  */
 export function takeChanges(db: Queryable): Change[] {
   const through = db.select({ at: campaign.noticedThrough }).from(campaign).get()?.at ?? 0
@@ -107,19 +107,19 @@ export function takeOfflineChanges(db: Queryable): Change[] {
 }
 
 /**
- * What a sitting's opening adds to the core block, in the caller's transaction: the "changed since
- * last sitting" notice for offline edits (told once), and a turn left awaiting Narration, to answer
+ * What a Session's opening adds to the core block, in the caller's transaction: the "changed since
+ * last Session" notice for offline edits (told once), and a turn left awaiting Narration, to answer
  * after the recap. Empty when neither applies.
  */
 export function openingNotice(db: Queryable): string {
   const parts: string[] = []
   const changes = takeOfflineChanges(db)
   if (changes.length > 0) {
-    parts.push(['Changed since last sitting:', ...changeLines(changes)].join('\n'))
+    parts.push(['Changed since last Session:', ...changeLines(changes)].join('\n'))
   }
   if (awaitingNarrationSince(db) !== null) {
     parts.push(
-      'A turn awaits Narration: the last sitting ended before the DM answered it. Read it with history and answer it with narrate after the recap.'
+      'A turn awaits Narration: the last Session ended before the DM answered it. Read it with history and answer it with narrate after the recap.'
     )
   }
   return parts.join('\n\n')

@@ -72,7 +72,7 @@ export const campaign = sqliteTable(
     begunAt: integer('begun_at'),
     /** The last Event the DM has heard about: change notices cover the Player's edits after it. */
     noticedThrough: integer('noticed_through').notNull().default(0),
-    /** The last offline edit a sitting's opening has told the DM about ("changed since last sitting"). */
+    /** The last offline edit a Session's opening has told the DM about ("changed since last Session"). */
     offlineNoticedThrough: integer('offline_noticed_through').notNull().default(0),
     /** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
     clockMinute: integer('clock_minute').notNull().default(0),
@@ -384,7 +384,7 @@ export const declaration = sqliteTable(
 )
 
 /**
- * A Session: one sitting, begun when a DM attaches. At most one is open. Summary and threads are
+ * A Session: one stretch of play, begun when a DM attaches. At most one is open. Summary and threads are
  * written when it closes.
  */
 export const session = sqliteTable('session', {

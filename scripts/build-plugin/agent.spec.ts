@@ -74,6 +74,11 @@ describe('the builder subagent', () => {
     }
   })
 
+  it('can move the Party to the opening Place it sets as the Scene', () => {
+    expect(tools).toContain(game('move'))
+    expect(builder.body).toMatch(/`move`[^\n]*`set_scene`/)
+  })
+
   it('never talks to the Player or edits creation', () => {
     for (const name of ['narrate', 'reply', 'set_seed', 'set_draft_fields']) {
       expect(tools).not.toContain(game(name))
@@ -98,23 +103,32 @@ describe('the dm agent at Begin', () => {
   })
 })
 
-describe('the ending-a-sitting skill', () => {
+describe('the ending-a-session skill', () => {
   it('is where the agent sends the DM on End Session', () => {
-    const skill = parse(path.join(plugin, 'skills/ending-a-sitting/SKILL.md'))
-    expect(skill.meta.name).toBe('ending-a-sitting')
+    const skill = parse(path.join(plugin, 'skills/ending-a-session/SKILL.md'))
+    expect(skill.meta.name).toBe('ending-a-session')
     expect(skill.meta.description).not.toBe('')
     expect(parse(path.join(plugin, 'agents/dm.md')).body).toContain(
-      'the-dungeon-master:ending-a-sitting'
+      'the-dungeon-master:ending-a-session'
     )
+  })
+
+  it('closes the Session last, after the Arc review, lint and goodbye', () => {
+    const body = parse(path.join(plugin, 'skills/ending-a-session/SKILL.md')).body
+    const close = body.lastIndexOf('`close_session')
+    for (const step of ['arc-review', '`lint`', 'goodbye']) {
+      expect(body.indexOf(step)).toBeGreaterThan(-1)
+      expect(body.indexOf(step)).toBeLessThan(close)
+    }
   })
 })
 
 describe('the arc-review skill', () => {
-  it('ships, and the dm prompt and ending a sitting point to it', () => {
+  it('ships, and the dm prompt and ending a Session point to it', () => {
     const skill = parse(path.join(plugin, 'skills/arc-review/SKILL.md'))
     expect(skill.meta.name).toBe('arc-review')
     expect(skill.meta.description).not.toBe('')
-    for (const file of ['agents/dm.md', 'skills/ending-a-sitting/SKILL.md']) {
+    for (const file of ['agents/dm.md', 'skills/ending-a-session/SKILL.md']) {
       expect(parse(path.join(plugin, file)).body).toContain('the-dungeon-master:arc-review')
     }
   })

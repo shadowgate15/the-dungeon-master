@@ -5,7 +5,7 @@ import { readTool, writeTool } from './contract'
 /** The most words a Session summary may have (the target is about 250). */
 const SUMMARY_WORDS = 300
 
-/** Continuity between sittings: Session summaries and the Event log. */
+/** Continuity between Sessions: Session summaries and the Event log. */
 export const sessionTools = [
   writeTool({
     name: 'close_session',
@@ -39,9 +39,9 @@ export const sessionTools = [
   readTool({
     name: 'sessions',
     description:
-      'Session summaries and open threads, newest first (last limits how many). Also says which Session is current, which older ones are unclosed (catch-up close them first) and whether a recap is due this sitting.',
+      'Session summaries and open threads, newest first (last limits how many). Also says which Session is current, which older ones are unclosed (catch-up close them first) and whether a recap is due this Session.',
     input: z.object({ last: z.number().int().positive().optional() }),
-    activity: 'DM remembers earlier sittings',
+    activity: 'DM remembers earlier Sessions',
     run: ({ db }, { last }) => sessionsView(db, last)
   }),
 

@@ -277,8 +277,8 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
         /** The DM's core block. */
         coreBlock: () => coreBlock({ party: createParty(db, now), db }),
         /**
-         * What a sitting's opening injects: the core block, then what changed since the last
-         * sitting (told once) and any turn still awaiting Narration.
+         * What a Session's opening injects: the core block, then what changed since the last
+         * Session (told once) and any turn still awaiting Narration.
          */
         opening: () =>
           db.transaction((tx) => {

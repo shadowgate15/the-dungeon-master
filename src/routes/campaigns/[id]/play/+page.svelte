@@ -93,7 +93,7 @@
   const archived = $derived(data.campaign.status === 'archived')
   const attached = $derived(sessions.data.includes(data.campaign.id))
 
-  // Ending lasts until the DM leaves; the next sitting starts with the button live again.
+  // Ending lasts until the DM leaves; the next Session starts with the button live again.
   let ending = $state(false)
   $effect(() => {
     if (!attached) ending = false

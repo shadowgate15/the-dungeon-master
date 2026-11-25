@@ -195,7 +195,7 @@
       class="flex flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1 text-sm"
     >
       <span class="font-medium">The DM is away.</span>
-      <span class="text-muted">Start a sitting to play on; your drafts wait here.</span>
+      <span class="text-muted">Start a Session to play on; your drafts wait here.</span>
       <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs"
         >{relaunch}</code
       >

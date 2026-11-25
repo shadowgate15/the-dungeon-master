@@ -115,7 +115,7 @@ describe('SessionStart', () => {
     expect(context).toContain('the-dungeon-master:session-opening')
   })
 
-  it('tells the DM what changed since the last sitting, once', async () => {
+  it('tells the DM what changed since the last Session, once', async () => {
     const wren = addCharacter(server.library, campaignId, fighterDraft('Wren'))
     server.library.party(campaignId).updateDetails(wren, { appearance: 'A scar across one brow.' })
     const start = async () =>
@@ -128,7 +128,7 @@ describe('SessionStart', () => {
     const context = await start()
     expect(context).toContain('# Core block')
     expect(context).toMatch(/^- char:wren v2: the Player edited Wren’s appearance$/m)
-    expect(await start()).not.toContain('Changed since last sitting')
+    expect(await start()).not.toContain('Changed since last Session')
   })
 
   it('re-injects the core block after compaction, without reopening the session', async () => {

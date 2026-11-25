@@ -36,11 +36,11 @@ test.afterEach(async () => {
 
 const summary = 'Wren picked the lock of the harbour office and found the ledger.'
 
-test('End Session closes the sitting, and the next one opens on a recap', async ({ page }) => {
-  const { id, folder } = await createCampaign(page, `Sitting Test ${Date.now()}`)
+test('End Session closes the Session, and the next one opens on a recap', async ({ page }) => {
+  const { id, folder } = await createCampaign(page, `Session Test ${Date.now()}`)
   await addFighter(page, id, 'Wren')
 
-  // The first sitting: a Narration, then End Session.
+  // The first Session: a Narration, then End Session.
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await page.goto(`/campaigns/${id}/play`)
   await page.waitForLoadState('networkidle')
@@ -63,7 +63,7 @@ test('End Session closes the sitting, and the next one opens on a recap', async 
   dm = undefined
   await expect(page.getByText('DM away')).toBeVisible()
 
-  // The next sitting: the DM reads the summary and recaps.
+  // The next Session: the DM reads the summary and recaps.
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await expect(page.getByText('DM at the table')).toBeVisible()
   const recall = await dm.call('sessions', { last: 2 })

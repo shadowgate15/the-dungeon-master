@@ -80,9 +80,9 @@ export function closeSession(
 }
 
 /**
- * What the DM recalls of earlier sittings: Session summaries newest first (none for empty
+ * What the DM recalls of earlier Sessions: Session summaries newest first (none for empty
  * Sessions), the current Session, older unclosed ones awaiting a catch-up close, and whether a
- * recap is due (an earlier sitting has a summary, or will once its catch-up close writes one,
+ * recap is due (an earlier Session has a summary, or will once its catch-up close writes one,
  * and no recap was given this one).
  */
 export function sessionsView(db: Queryable, last?: number) {

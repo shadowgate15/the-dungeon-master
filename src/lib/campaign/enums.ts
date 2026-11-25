@@ -4,7 +4,7 @@
 export const TONES = ['heroic', 'lighthearted', 'tense', 'dark', 'mysterious', 'epic'] as const
 
 /**
- * Story scope, not hours. Ordered: one-shot (a single sitting), short (a few sessions),
+ * Story scope, not hours. Ordered: one-shot (a single Session), short (a few sessions),
  * medium (a season of play), long (an open-ended saga).
  */
 export const LENGTHS = ['one-shot', 'short', 'medium', 'long'] as const

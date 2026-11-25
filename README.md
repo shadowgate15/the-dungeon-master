@@ -14,7 +14,7 @@ A complete game-running system. A Player opens a Campaign in the web UI and sees
 - **Deterministic code owns the rules and state.** Dice, HP, initiative, spell slots, inventory and every other mechanic live in code and the database. The database is the single source of truth.
 - **The DM owns narration and judgment.** It writes the story and makes the calls that have no fixed answer: NPC behavior, rulings on improvised actions, pacing. It never invents a number or a state change. It calls tools, and the tools change state.
 - **Visibility is data.** The World layer is the DM-only truth. Each Holder's Beliefs record what they know, and the Player sees only what their Characters believe. Secrecy is never a prompt rule (ADR 0007).
-- **Continuity lives in the server.** Session summaries, the Event log and the World and Knowledge layers carry the story across sittings, not the Claude Code transcript. One play Session is one Claude Code session.
+- **Continuity lives in the server.** Session summaries, the Event log and the World and Knowledge layers carry the story across Sessions, not the Claude Code transcript. One play Session is one Claude Code session.
 - **Rules content is limited to the D&D 5e SRD 5.1** (CC-BY-4.0).
 
 ## How it fits together
@@ -39,7 +39,7 @@ Requirements: [Claude Code](https://claude.com/claude-code) and Node 26 or later
 
 2. Start Claude Code once in any folder. The plugin's SessionStart hook writes the `dm` command to `~/.local/bin/dm`, so make sure `~/.local/bin` is on your PATH. The shim looks up the installed plugin on every run, so it keeps working across plugin updates.
 3. Create a Campaign in the web UI. This creates its folder and registers it with the server.
-4. Start a sitting from the Campaign folder:
+4. Start a Session from the Campaign folder:
 
    ```sh
    cd <campaign folder> && dm
@@ -47,7 +47,7 @@ Requirements: [Claude Code](https://claude.com/claude-code) and Node 26 or later
 
    `dm` starts the game server if it isn't running (or restarts one left over from an older plugin version), registers the folder and starts `claude` with the plugin's `dm` agent. The terminal shows Claude Code's trust, MCP consent and dev-channels prompts. Play happens in the browser. Run outside a Campaign folder, `dm` starts the server and points you to the web UI.
 
-5. End the sitting with End Session in the UI. To stop the game server, run `dm stop` or use the stop control in the UI.
+5. End the Session with End Session in the UI. To stop the game server, run `dm stop` or use the stop control in the UI.
 
 Outside a Campaign folder, the plugin's hooks and bridge do nothing, so ordinary Claude Code sessions are unaffected.
 
@@ -55,7 +55,7 @@ Outside a Campaign folder, the plugin's hooks and bridge do nothing, so ordinary
 
 1. The Player creates a Campaign and fills its Seed (name, premise, Tone, Length and optional World details), then builds the Party. Neither step needs a session.
 2. The Player presses Begin. The DM has `builder` generate the World and the first Arc from the Seed and the Party's backstories, and the Player sees a spoiler-free pitch.
-3. Play is improvised from there. Each sitting opens with a recap, and End Session closes it with a summary. When an Arc ends, a new one can follow.
+3. Play is improvised from there. Each Session opens with a recap, and End Session closes it with a summary. When an Arc ends, a new one can follow.
 
 ## Current focus
 

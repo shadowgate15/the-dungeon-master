@@ -7,7 +7,7 @@ export type TimelineEntry =
   | { type: 'declaration'; id: string; character: string; player: string; text: string }
   /**
    * The DM's Narration; `voice` names the NPC speaking, if any. `recap` marks the opening recap
-   * of a sitting, shown as "Previously".
+   * of a Session, shown as "Previously".
    */
   | { type: 'narration'; id: string; text: string; voice: string | null; recap?: true }
   /**

@@ -28,7 +28,7 @@ export function currentStamp(db: Queryable): Stamp {
 
 /**
  * The current Session: the newest one still open, or undefined offline. An older open one is a
- * sitting that stopped without End Session, waiting for its catch-up close.
+ * Session that stopped without End Session, waiting for its catch-up close.
  */
 export function currentSession(db: Queryable) {
   return db

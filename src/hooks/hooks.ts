@@ -6,7 +6,7 @@ import { readRuntimeFile } from '../lib/server/runtime'
 /** The prefix every game tool has in Claude Code: plugin `the-dungeon-master`, MCP server `dm`. */
 export const GAME_TOOL_PREFIX = 'mcp__plugin_the-dungeon-master_dm__'
 
-/** The skill that opens a sitting. */
+/** The skill that opens a Session. */
 export const SESSION_OPENING_SKILL = 'the-dungeon-master:session-opening'
 
 type Env = Record<string, string | undefined>
@@ -74,7 +74,7 @@ export async function runHook(
     return { decision: 'block', reason: check.reason }
   }
 
-  // A new sitting (or a cleared or resumed one) hears what changed since the last; compaction
+  // A new Session (or a cleared or resumed one) hears what changed since the last; compaction
   // only needs the core block back.
   const block = (
     input.source === 'compact'
@@ -88,6 +88,6 @@ export async function runHook(
   const additionalContext =
     input.source === 'compact'
       ? core
-      : `${core}\n\nThis sitting has just started. Load skill ${SESSION_OPENING_SKILL} now and follow it.`
+      : `${core}\n\nThis Session has just started. Load skill ${SESSION_OPENING_SKILL} now and follow it.`
   return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext } }
 }

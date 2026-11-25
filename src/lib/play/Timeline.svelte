@@ -119,7 +119,7 @@
 </ol>
 {#if awaitingSince !== null && away}
   <Alert variant="warning"
-    >The DM left mid-turn. What was done stays done; the next sitting answers this turn after the
+    >The DM left mid-turn. What was done stays done; the next Session answers this turn after the
     recap.</Alert
   >
 {:else if awaitingSince !== null}

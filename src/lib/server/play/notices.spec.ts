@@ -89,7 +89,7 @@ describe('change notices', () => {
   })
 })
 
-describe('changed since last sitting', () => {
+describe('changed since last Session', () => {
   it('the next opening tells the DM of each offline edit: handle, version and summary', () => {
     const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
     play.openSession(campaignId)
@@ -100,7 +100,7 @@ describe('changed since last sitting', () => {
     const opening = play.sessionStart(campaignId)
 
     expect(opening).toContain('# Core block')
-    expect(opening).toContain('Changed since last sitting:')
+    expect(opening).toContain('Changed since last Session:')
     expect(opening).toMatch(/^- char:wren v2: the Player edited Wren’s notes$/m)
   })
 
@@ -112,13 +112,13 @@ describe('changed since last sitting', () => {
     play.sessionStart(campaignId)
     play.openSession(campaignId)
 
-    expect(play.sessionStart(campaignId)).not.toContain('Changed since last sitting')
+    expect(play.sessionStart(campaignId)).not.toContain('Changed since last Session')
     play.done(campaignId)
     expect(heard[0].content).not.toContain('Changed')
   })
 
   it('says nothing changed when nothing did', () => {
-    expect(play.sessionStart(campaignId)).not.toContain('Changed since last sitting')
+    expect(play.sessionStart(campaignId)).not.toContain('Changed since last Session')
   })
 
   it('asks for a Floor still awaiting Narration to be answered after the recap', () => {

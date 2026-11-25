@@ -6,7 +6,7 @@ import { DmAwayError } from '#lib/server/play/play.ts'
 import type { RequestHandler } from './$types'
 
 /**
- * The Player presses End Session: the DM gets an `end_session` event and closes the sitting.
+ * The Player presses End Session: the DM gets an `end_session` event and closes the Session.
  * 404 `{ error }` for an unknown Campaign; 400 when archived; 409 while the DM is away.
  */
 export const POST: RequestHandler = ({ params }) => {
