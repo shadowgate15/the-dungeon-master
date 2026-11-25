@@ -463,3 +463,41 @@ describe('a reaction', () => {
     expect(call('offer_reaction', { character: 'char:wren', reaction: 'Brace' }).isError).toBe(true)
   })
 })
+
+describe('the core block', () => {
+  const block = () => play.coreBlock(campaignId)
+
+  it("names a Character's concentration and a downed Character's Death saves", () => {
+    addAsh()
+    addWren()
+    ok('cast', { caster: 'char:ash', spell: 'detect-magic', level: 1 })
+    ok('damage', { target: 'char:wren', amount: 12, type: 'slashing' })
+    ok('damage', { target: 'char:wren', amount: 1, type: 'slashing' })
+
+    expect(block()).toContain(
+      '- Ash (char:ash): HP 7/7, conditions none, alive, whereabouts unknown, concentrating on detect-magic'
+    )
+    expect(block()).toContain(
+      '- Wren (char:wren): HP 0/12, conditions unconscious, alive, whereabouts unknown, Death saves 0 successes, 1 failure'
+    )
+  })
+
+  it('marks a stable Character', () => {
+    deathSave(downedOnTheirTurn(), 12)
+    deathSave(ok('next_turn') && ok('next_turn'), 15)
+    deathSave(ok('next_turn') && ok('next_turn'), 11)
+    expect(block()).toContain('whereabouts unknown, stable')
+  })
+
+  it('names what each NPC and Creature in the Combat concentrates on', () => {
+    addWren()
+    const myrrh = addMyrrh()
+    load([20, 15])
+    const { pending_call: id } = ok('start_combat', { combatants: ['char:wren', myrrh] })
+    ok('narrate', { text: 'Roll for initiative!', call: id })
+    rollInitiative(id, 18)
+    ok('cast', { caster: myrrh, spell: 'fly', level: 3 })
+
+    expect(block()).toMatch(/- \d+ Myrrh \(npc:myrrh\): concentrating on fly/)
+  })
+})

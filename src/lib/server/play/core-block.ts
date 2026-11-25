@@ -2,7 +2,7 @@ import { formatClock } from '#lib/play/clock.ts'
 import type { Party } from '../character/party'
 import type { Queryable } from '../db/connect'
 import { eq } from 'drizzle-orm'
-import { session } from '../db/schema'
+import { npcCombat, session } from '../db/schema'
 import { currentArc, driftCount } from '../story/arc'
 import { lastLint } from '../world/lint'
 import { slug } from '../world/names'
@@ -30,7 +30,18 @@ export function scenePart({ db }: CoreBlockSource): string {
     : `Scene: none set yet, ${time}.`
 }
 
-/** The Party: name, handle, HP/max, conditions, status and whereabouts per Character. */
+const plural = (n: number, word: string, many: string) => `${n} ${n === 1 ? word : many}`
+
+/** A downed Character's Death saves: `stable`, or `Death saves 1 success, 2 failures`. */
+function deathSavesText(saves: { successes: number; failures: number; stable: boolean }) {
+  if (saves.stable) return 'stable'
+  return `Death saves ${plural(saves.successes, 'success', 'successes')}, ${plural(saves.failures, 'failure', 'failures')}`
+}
+
+/**
+ * The Party: name, handle, HP/max, conditions, status and whereabouts per Character, then what
+ * they concentrate on and, at 0 HP, their Death saves.
+ */
 export function partyPart({ party, db }: CoreBlockSource): string {
   const status = new Map(
     party.list().flatMap((m) => (m.kind === 'character' ? [[m.id, m.status] as const] : []))
@@ -41,7 +52,14 @@ export function partyPart({ party, db }: CoreBlockSource): string {
   const lines = sheets.map((c) => {
     const hp = `HP ${c.hp.current}/${c.hp.max ?? '?'}${c.hp.temp ? ` (+${c.hp.temp} temp)` : ''}`
     const conditions = c.conditions.length ? c.conditions.join(', ') : 'none'
-    return `- ${c.name} (${handles.get(c.id) ?? characterHandle(c.name)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? 'unknown'}`
+    const extra = [
+      c.concentration && `concentrating on ${c.concentration}`,
+      c.deathSaves && deathSavesText(c.deathSaves)
+    ].filter(Boolean)
+    return [
+      `- ${c.name} (${handles.get(c.id) ?? characterHandle(c.name)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? 'unknown'}`,
+      ...extra
+    ].join(', ')
   })
   return ['Party:', ...lines].join('\n')
 }
@@ -59,7 +77,8 @@ export function npcsPart({ db }: CoreBlockSource): string {
 
 /**
  * The live Combat, or null outside one: the round and whose turn, then the order (initiative,
- * name, handle), with each Creature's stat block, HP state and conditions. This lifts the block
+ * name, handle), with each Creature's stat block, HP state and conditions, and what each NPC or
+ * Creature concentrates on. This lifts the block
  * from ~300 to ~500 tokens while it lasts.
  */
 export function combatPart({ db }: CoreBlockSource): string | null {
@@ -70,12 +89,23 @@ export function combatPart({ db }: CoreBlockSource): string | null {
   const head = current
     ? `Combat: round ${live.round}, turn: ${current.name} (${current.handle}).`
     : 'Combat: waiting on initiative.'
+  const npcConcentration = new Map(
+    db
+      .select({ handle: npcCombat.handle, concentration: npcCombat.concentration })
+      .from(npcCombat)
+      .all()
+      .map((n) => [n.handle, n.concentration])
+  )
   const lines = order.map((c) => {
-    const creature =
-      c.kind === 'creature'
-        ? `: ${c.statBlock}, ${hpState(c.hp!, c.maxHp!)}, conditions ${c.conditions.join(', ') || 'none'}`
-        : ''
-    return `- ${c.initiative} ${c.name} (${c.handle})${creature}${c.id === live.current ? ' ← turn' : ''}`
+    const spell = c.kind === 'npc' ? npcConcentration.get(c.handle) : c.concentration
+    const detail = [
+      ...(c.kind === 'creature'
+        ? [c.statBlock, hpState(c.hp!, c.maxHp!), `conditions ${c.conditions.join(', ') || 'none'}`]
+        : []),
+      ...(c.kind !== 'character' && spell ? [`concentrating on ${spell}`] : [])
+    ]
+    const shown = detail.length ? `: ${detail.join(', ')}` : ''
+    return `- ${c.initiative} ${c.name} (${c.handle})${shown}${c.id === live.current ? ' ← turn' : ''}`
   })
   const waiting = waitingOnInitiative(db, live.id)
   if (waiting.length) {
