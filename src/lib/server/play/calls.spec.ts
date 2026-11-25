@@ -78,6 +78,7 @@ describe('a Check Call', () => {
           label: 'Sleight of Hand check',
           reason: 'The lock is old and stiff',
           mode: 'normal',
+          hitDice: null,
           answered: false,
           next: null
         }

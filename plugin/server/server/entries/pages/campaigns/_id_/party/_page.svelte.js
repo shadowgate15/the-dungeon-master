@@ -1,5 +1,5 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
-import { _ as attr, a as bind_props, c as ensure_array_like, l as head, o as derived, r as attributes, t as attr_class, u as props_id, v as clsx, x as escape_html } from "../../../../../chunks/server2.js";
+import { _ as attr, c as ensure_array_like, l as head, o as derived, t as attr_class, u as props_id, v as clsx, x as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/forms.js";
 import "../../../../../chunks/paths.js";
 import { a as CreationStepper, i as Panel, n as createDraftQuery, t as CreationPage } from "../../../../../chunks/CreationPage.js";
@@ -10,7 +10,8 @@ import { n as beforeNavigate, r as goto } from "../../../../../chunks/navigation
 import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
 import { t as Dialog } from "../../../../../chunks/Dialog.js";
 import { s as ABILITY_KEYS } from "../../../../../chunks/schema.js";
-import { A as rollTotal, C as STANDARD_ARRAY, D as pointCost, E as methodPatch, F as fixedEquipment, I as ownedEquipment, L as resolveFeatures, M as categoryItems, O as pointsSpent, P as equipmentGroups, S as POINT_BUY, T as availableValues, _ as groupIssues, a as cappedScore, b as skillsStepGroups, d as reconcile, f as resolverDraft, g as computeSteps, h as STEPS, i as tryDraftToCharacterInput, j as rollTotals, k as rollAbilityScores, m as spellsView, o as deriveStats, p as spellPickFlags, r as draftToSummaryData, s as LIMITS, t as buildSummary, u as emptyDraft, v as groupLabel, x as ABILITY_LABELS } from "../../../../../chunks/summary.js";
+import { A as rollAbilityScores, C as POINT_BUY, D as methodPatch, E as availableValues, F as equipmentGroups, I as fixedEquipment, L as ownedEquipment, M as rollTotals, N as categoryItems, O as pointCost, R as resolveFeatures, S as ABILITY_LABELS, _ as computeSteps, a as cappedScore, d as reconcile, f as resolverDraft, g as STEPS, h as spellsView, i as tryDraftToCharacterInput, j as rollTotal, k as pointsSpent, m as spellPickFlags, o as deriveStats, r as draftToSummaryData, s as LIMITS, t as buildSummary, u as emptyDraft, v as groupIssues, w as STANDARD_ARRAY, x as skillsStepGroups, y as groupLabel } from "../../../../../chunks/summary.js";
+import { t as Checkbox } from "../../../../../chunks/Checkbox.js";
 import { t as Field } from "../../../../../chunks/Field.js";
 import { t as Select } from "../../../../../chunks/Select.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
@@ -157,24 +158,6 @@ function StepRail($$renderer, $$props) {
 			$$slots: { default: true }
 		});
 		$$renderer.push(`<!----></nav>`);
-	});
-}
-// src/lib/ui/Checkbox.svelte
-function Checkbox($$renderer, $$props) {
-	$$renderer.component(($$renderer) => {
-		let { checked = false, class: className, $$slots, $$events, ...rest } = $$props;
-		$$renderer.push(`<input${attributes({
-			type: "checkbox",
-			checked,
-			class: clsx([
-				"size-4 rounded-sm border border-control-border bg-raised text-primary",
-				"focus:ring-0 focus:ring-offset-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-				"disabled:cursor-not-allowed disabled:opacity-50",
-				className
-			]),
-			...rest
-		}, void 0, void 0, void 0, 4)}/>`);
-		bind_props($$props, { checked });
 	});
 }
 // src/lib/character/AbilitiesStep.svelte

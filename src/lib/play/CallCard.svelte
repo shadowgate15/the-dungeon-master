@@ -6,7 +6,8 @@
    * The open Call at the foot of the timeline: one button group per Character for a Check (the
    * skill or save and the reason, never the DC; advantage marked), or for a roll sequence such as
    * an attack (its next roll: to hit, then damage; never the AC), or a question with its choices
-   * as buttons (free text without). Clicking rolls on the server; nothing is rolled here.
+   * as buttons (free text without), or a short rest's Hit Dice (how many to spend, as buttons up
+   * to what is left). Clicking rolls on the server; nothing is rolled here.
    */
   let {
     call,
@@ -27,7 +28,7 @@
   aria-label="Call"
   class="flex shrink-0 flex-col gap-2 rounded-panel border-2 border-primary bg-raised p-3 text-sm"
 >
-  {#if call.kind === 'question'}
+  {#if call.kind === 'question' || call.kind === 'hit_dice'}
     <p class="font-medium">{call.text}</p>
   {/if}
   {#each call.parts as part (part.id)}
@@ -36,7 +37,7 @@
       aria-label={part.character ?? part.player}
       class="flex flex-wrap items-center gap-2"
     >
-      {#if call.kind !== 'question'}
+      {#if call.kind !== 'question' && call.kind !== 'hit_dice'}
         <span class="font-medium">{part.character}</span>
         <span>{part.label}</span>
         {#if part.mode !== 'normal'}
@@ -60,6 +61,21 @@
         {/if}
       {:else if part.answered}
         <span class="text-xs text-muted">Answered</span>
+      {:else if part.hitDice}
+        {@const { die, available } = part.hitDice}
+        <span class="font-medium">{part.character}</span>
+        <span class="text-muted">{available} d{die} left</span>
+        <span class="ml-auto flex gap-1">
+          {#each Array.from({ length: available + 1 }, (_, n) => n) as n (n)}
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={n === 0 ? 'Spend none' : `Spend ${n}`}
+              {disabled}
+              onclick={() => onanswer(part.id, String(n))}>{n === 0 ? 'None' : n}</Button
+            >
+          {/each}
+        </span>
       {:else if call.choices.length}
         {#each call.choices as choice (choice)}
           <Button size="sm" variant="secondary" {disabled} onclick={() => onanswer(part.id, choice)}

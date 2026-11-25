@@ -4,10 +4,12 @@ import {
   journalQueryKey,
   sessionHistoryQueryKey,
   sceneQueryKey,
+  sheetsQueryKey,
   timelineQueryKey
 } from '#lib/live/messages.ts'
 import type { OpenFloor, PendingDeclaration } from './floor'
 import type { Journal } from './journal'
+import type { PlaySheet } from './sheet'
 import type { SessionHistory } from './sessions'
 import type { SceneView } from './scene'
 import type { Timeline } from './timeline'
@@ -39,6 +41,35 @@ export function createTimelineQuery(campaign: () => string, initial: () => Timel
     },
     initialData: initial()
   }))
+}
+
+/** The Party's play sheets, starting from the server-rendered ones; every DM write refreshes them. */
+export function createSheetsQuery(campaign: () => string, initial: () => PlaySheet[]) {
+  return createQuery(() => ({
+    queryKey: sheetsQueryKey(campaign()),
+    queryFn: async (): Promise<PlaySheet[]> => {
+      const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/sheets`)
+      if (!res.ok) throw new Error('The sheets could not be loaded')
+      return (await res.json()) as PlaySheet[]
+    },
+    initialData: initial()
+  }))
+}
+
+/** Takes the level the DM awarded with the picked spells; throws the server's refusal. */
+export async function levelUp(
+  campaign: string,
+  character: string,
+  picks: { cantrips: string[]; spells: string[] }
+): Promise<void> {
+  const res = await fetch(
+    `/api/campaigns/${encodeURIComponent(campaign)}/characters/${encodeURIComponent(character)}/level-up`,
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(picks) }
+  )
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new FloorChangeError(body.error ?? 'The level-up was refused')
+  }
 }
 
 /** The Campaign's Scene for the rail, starting from the server-rendered one. */

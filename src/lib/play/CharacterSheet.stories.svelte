@@ -1,7 +1,7 @@
 <script module lang="ts">
   import { defineMeta } from '@storybook/addon-svelte-csf'
   import CharacterSheet from './CharacterSheet.svelte'
-  import { sheets } from './play-fixtures'
+  import { levelUpOffer, sheets } from './play-fixtures'
 
   const { Story } = defineMeta({
     title: 'Play/CharacterSheet',
@@ -14,3 +14,10 @@
 <Story name="Wounded caster" />
 <Story name="Character elsewhere" args={{ acting: 'bram' }} />
 <Story name="Empty Party" args={{ sheets: [], acting: null }} />
+<Story
+  name="Level awarded"
+  args={{
+    sheets: sheets.map((s) => (s.id === 'wren' ? { ...s, levelUp: levelUpOffer } : s)),
+    onlevelup: () => {}
+  }}
+/>

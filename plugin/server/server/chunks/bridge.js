@@ -1,8 +1,8 @@
-import { Ct as DUNGEON_MASTER_PORT, D as event, F as belief, G as background, I as entity, J as race, K as classTable, R as fact, St as DUNGEON_MASTER_HOME, V as ENTITY_TYPES, _t as sql, a as userStateDir, ft as isNull, g as character, gt as or, h as campaign, ht as ne, it as asc, l as createRulesRepository, ot as and, rt as SOLO_PLAYER, st as eq, ut as inArray, v as characterDraft, wt as DUNGEON_MASTER_VERSION } from "./seed.js";
-import { $ as applyDamage, A as combatState, At as currentArc, B as DC_BY_TIER, Bt as writeTool, Ct as fieldNames, D as createDmChannels, Dt as charactersInScene, Et as characterHolders, F as spendTurnResource, Ft as PLUGIN_NAME, G as createPendingCall, H as callInput, Ht as parseClock, I as startCombat, It as ToolError, J as attackSequence, K as openCall, L as ABILITY_NAMES, Lt as creationTool, M as nextTurn, Mt as resolveBeat, N as orderText, Nt as retireArc, Ot as CurrentArcError, P as refuseDuringCombat, Pt as reviseArc, Q as sequenceText, Rt as expectVersion, St as createWorld, Tt as resolveLinks, U as callResultEvent, Ut as SESSION_LIVE_MESSAGE, V as TIERS, Vt as formatClock, W as cancelPendingCall, X as rollAll, Y as damageSequence, Z as saveSequence, _ as closeSession, _t as loadWizardRules, at as currentStamp, b as sessionsView, bt as hpState, c as CampaignNotFoundError, ct as nextEventId, et as applyHealing, f as SeedLockedError, ft as advanceClock, g as addConversationLine, gt as scenePlace, h as refuseLockedSeed, ht as present, i as sessions, it as setConditions, j as endCombat, jt as pastArcs, k as addCombatants, kt as createArc, l as NotACampaignFolderError, lt as setAwaitingNarration, m as creationStage, mt as currentMinute, n as library, nt as mustAct, ot as logActivity, pt as characterRefs, q as saveKey, r as live, rt as saveBonus, st as logEvent, tt as combatant, ut as ClockBackwardsError, v as history, w as returnStrandedDrafts, wt as renderLinks, xt as lintWorld, y as indexNarration, zt as readTool } from "./campaign.js";
+import { Ct as DUNGEON_MASTER_PORT, D as event, F as belief, G as background, I as entity, J as race, K as classTable, R as fact, St as DUNGEON_MASTER_HOME, V as ENTITY_TYPES, _t as sql, a as userStateDir, b as characterItem, ft as isNull, g as character, gt as or, h as campaign, ht as ne, it as asc, l as createRulesRepository, ot as and, q as equipment, rt as SOLO_PLAYER, st as eq, ut as inArray, v as characterDraft, wt as DUNGEON_MASTER_VERSION } from "./seed.js";
+import { $ as sequenceText, A as combatState, At as charactersInScene, B as DC_BY_TIER, Bt as creationTool, Ct as hpState, D as createDmChannels, Dt as renderLinks, Et as fieldNames, F as spendTurnResource, Ft as resolveBeat, G as createHitDiceCall, Gt as parseClock, H as callInput, Ht as readTool, I as startCombat, It as retireArc, J as saveKey, K as createPendingCall, Kt as SESSION_LIVE_MESSAGE, L as ABILITY_NAMES, Lt as reviseArc, M as nextTurn, Mt as createArc, N as orderText, Nt as currentArc, Ot as resolveLinks, P as refuseDuringCombat, Pt as pastArcs, Q as saveSequence, Rt as PLUGIN_NAME, Tt as createWorld, U as callResultEvent, Ut as writeTool, V as TIERS, Vt as expectVersion, W as cancelPendingCall, Wt as formatClock, X as damageSequence, Y as attackSequence, Z as rollAll, _ as closeSession, _t as currentMinute, at as setConditions, b as sessionsView, bt as loadWizardRules, c as CampaignNotFoundError, ct as currentStamp, dt as nextEventId, et as applyDamage, f as SeedLockedError, ft as setAwaitingNarration, g as addConversationLine, gt as characterRefs, h as refuseLockedSeed, ht as advanceClock, i as sessions, it as saveBonus, j as endCombat, jt as CurrentArcError, k as addCombatants, kt as characterHolders, l as NotACampaignFolderError, lt as logActivity, m as creationStage, n as library, nt as combatant, ot as equippable, pt as ClockBackwardsError, q as openCall, r as live, rt as mustAct, st as isBodyArmor, tt as applyHealing, ut as logEvent, v as history, vt as present, w as returnStrandedDrafts, wt as lintWorld, y as indexNarration, yt as scenePlace, zt as ToolError } from "./campaign.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
-import { d as reconcile, j as rollTotals, l as changedDraftFields, u as emptyDraft, w as arrangementProblem, y as lengthIssue } from "./summary.js";
+import { M as rollTotals, T as arrangementProblem, b as lengthIssue, d as reconcile, l as changedDraftFields, u as emptyDraft } from "./summary.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
@@ -1246,6 +1246,376 @@ var creationTools = [
 		}
 	})
 ];
+// src/lib/server/tools/rest-tools.ts
+/** The Characters a rest names: Characters only. */
+function restingCharacters(db, who) {
+	return who.map((ref) => {
+		const found = combatant(db, ref);
+		if (found.kind !== "character") throw new ToolError("not_a_character", `${found.name} is not a Character`, "NPCs rest when you say so; name only Characters");
+		return found;
+	});
+}
+/**
+* Features whose uses come back on a short rest (SRD class tables), by slug prefix. Every other
+* feature waits for a long rest. Bardic Inspiration joins them with Font of Inspiration.
+*/
+var SHORT_REST_FEATURES = [
+	"second-wind",
+	"action-surge",
+	"channel-divinity",
+	"wild-shape",
+	"ki"
+];
+function shortRestFeature(c, slug) {
+	if (SHORT_REST_FEATURES.some((p) => slug === p || slug.startsWith(`${p}-`))) return true;
+	return slug.startsWith("bardic-inspiration") && c.features.some((f) => f.slug === "font-of-inspiration");
+}
+/** A Character's Hit Die size, from its class. */
+var hitDieOf = (c) => loadWizardRules().classes.find((k) => k.slug === c.detail.classSlug)?.hitDie ?? 8;
+/**
+* What a short rest returns to one Character: short-rest feature uses and, for a Warlock, Pact
+* Magic slots. Returns the Hit Dice part to ask about, when hurt with Hit Dice left.
+*/
+function shortRest(db, c) {
+	const featureUses = Object.fromEntries(Object.entries(c.detail.featureUses).filter(([slug]) => !shortRestFeature(c, slug)));
+	const spentSlots = c.detail.classSlug === "warlock" ? [
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0
+	] : c.detail.spentSlots;
+	db.update(character).set({
+		featureUses,
+		spentSlots
+	}).where(eq(character.id, c.id)).run();
+	const available = c.detail.level - c.detail.hitDiceSpent;
+	if (available <= 0 || c.hp >= c.maxHp) return null;
+	const con = c.stats.abilities.con;
+	return {
+		characterId: c.id,
+		player: c.player,
+		die: hitDieOf(c),
+		available,
+		conModifier: con.status === "ok" ? con.value.modifier : 0
+	};
+}
+/** What a long rest restores to one Character, applied in the caller's transaction. */
+function longRest(db, c) {
+	if (c.hp === 0) return {
+		character: c.handle,
+		restored: false,
+		reason: "at 0 HP"
+	};
+	const level = c.detail.level;
+	const regained = Math.min(c.detail.hitDiceSpent, Math.max(1, Math.floor(level / 2)));
+	db.update(character).set({
+		currentHp: c.maxHp,
+		tempHp: 0,
+		spentSlots: [
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0
+		],
+		featureUses: {},
+		hitDiceSpent: c.detail.hitDiceSpent - regained
+	}).where(eq(character.id, c.id)).run();
+	return {
+		character: c.handle,
+		restored: true,
+		hp: c.maxHp,
+		hit_dice: level - (c.detail.hitDiceSpent - regained)
+	};
+}
+/** An SRD item by slug or name, or a refusal pointing at lookup. */
+function srdItem(db, name) {
+	const key = name.trim().toLowerCase();
+	const slug = key.replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+	const found = db.select().from(equipment).all().find((e) => e.slug === slug || e.name.toLowerCase() === key);
+	if (!found) throw new ToolError("unknown_item", `No SRD item is called ${name}`, "Find the item with lookup({query}) and use its slug; describe anything else in narration");
+	return found;
+}
+/** One Character's carried stack of an item, or null. */
+var carried = (db, characterId, itemId) => db.select().from(characterItem).where(and(eq(characterItem.characterId, characterId), eq(characterItem.itemId, itemId))).get() ?? null;
+var stack = (characterId, itemId) => and(eq(characterItem.characterId, characterId), eq(characterItem.itemId, itemId));
+function notCarried(who, item) {
+	return new ToolError("not_carried", `${who.name} doesn't carry ${item.name}`, `Check ${who.name}'s inventory with sheet, or give the item first`);
+}
+/** A Character tool's target: one Character. */
+var characterOf = (db, ref) => restingCharacters(db, [ref])[0];
+var itemInput = {
+	character: string().min(1).describe("char:…"),
+	item: string().min(1).describe("An SRD item by slug or name, such as torch or chain-mail")
+};
+var DENOMINATIONS = [
+	"cp",
+	"sp",
+	"ep",
+	"gp",
+	"pp"
+];
+var restTools = [
+	writeTool({
+		name: "rest",
+		description: "Run a rest by the SRD for the named Characters. long: 8 hours; all HP, slots and feature uses, Hit Dice up to half their level, temporary HP end (nothing for a Character at 0 HP). short: 1 hour; short-rest features and Pact Magic return, and a pending Call asks each Player how many Hit Dice to spend: attach it with your closing narrate(text, call: id). The clock moves with the rest.",
+		input: object({
+			kind: _enum(["short", "long"]),
+			who: array(string().min(1)).min(1).describe("The resting Characters: char:…")
+		}),
+		activity: (input) => `DM runs a ${input.kind} rest`,
+		run: ({ db, now }, input) => {
+			const resting = restingCharacters(db, input.who);
+			const from = currentMinute(db);
+			const { to } = advanceClock(db, from + (input.kind === "long" ? 8 : 1) * 60);
+			const clock = {
+				kind: input.kind,
+				clock: formatClock(to),
+				minute: to
+			};
+			let result;
+			if (input.kind === "long") result = {
+				...clock,
+				characters: resting.map((c) => longRest(db, c))
+			};
+			else {
+				const parts = resting.flatMap((c) => shortRest(db, c) ?? []);
+				const id = parts.length ? createHitDiceCall(db, parts, now) : null;
+				result = {
+					...clock,
+					...id && {
+						pending_call: id,
+						next: `Attach it with your closing narrate(text, call: "${id}"): each Player says how many Hit Dice to spend`
+					}
+				};
+			}
+			return {
+				result,
+				event: {
+					kind: "rest",
+					summary: `${resting.map((c) => c.name).join(", ")} finish a ${input.kind} rest`,
+					data: {
+						kind: input.kind,
+						characters: resting.map((c) => c.handle),
+						to
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "give",
+		description: "Give a Character SRD items: loot, a purchase, a gift. No encumbrance. For anything outside the SRD item list, narrate it instead.",
+		input: object({
+			...itemInput,
+			quantity: number().int().min(1).default(1)
+		}),
+		activity: "DM changes an inventory",
+		run: ({ db }, input) => {
+			const who = characterOf(db, input.character);
+			const item = srdItem(db, input.item);
+			const have = carried(db, who.id, item.id);
+			const quantity = (have?.quantity ?? 0) + input.quantity;
+			if (have) db.update(characterItem).set({ quantity }).where(stack(who.id, item.id)).run();
+			else db.insert(characterItem).values({
+				characterId: who.id,
+				itemId: item.id,
+				quantity
+			}).run();
+			return {
+				result: {
+					character: who.handle,
+					item: item.slug,
+					quantity
+				},
+				event: {
+					kind: "item_given",
+					summary: `${who.name} gains ${input.quantity} × ${item.name}`,
+					data: {
+						character: who.handle,
+						item: item.slug,
+						quantity: input.quantity
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "take",
+		description: "Take SRD items from a Character: used up, dropped, sold, stolen. Refused for what the Character doesn't carry.",
+		input: object({
+			...itemInput,
+			quantity: number().int().min(1).default(1)
+		}),
+		activity: "DM changes an inventory",
+		run: ({ db }, input) => {
+			const who = characterOf(db, input.character);
+			const item = srdItem(db, input.item);
+			const have = carried(db, who.id, item.id);
+			if (!have || have.quantity < input.quantity) {
+				if (!have) throw notCarried(who, item);
+				throw new ToolError("not_carried", `${who.name} carries only ${have.quantity} × ${item.name}`, `Take at most ${have.quantity}`);
+			}
+			const quantity = have.quantity - input.quantity;
+			if (quantity === 0) db.delete(characterItem).where(stack(who.id, item.id)).run();
+			else db.update(characterItem).set({ quantity }).where(stack(who.id, item.id)).run();
+			return {
+				result: {
+					character: who.handle,
+					item: item.slug,
+					quantity
+				},
+				event: {
+					kind: "item_taken",
+					summary: `${who.name} loses ${input.quantity} × ${item.name}`,
+					data: {
+						character: who.handle,
+						item: item.slug,
+						quantity: input.quantity
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "equip",
+		description: "Equip armor, a shield or a weapon a Character carries. Equipped armor and shield set AC; a new suit of armor replaces the one worn.",
+		input: object(itemInput),
+		activity: "DM changes what a Character wears",
+		run: ({ db }, input) => {
+			const who = characterOf(db, input.character);
+			const item = srdItem(db, input.item);
+			if (!carried(db, who.id, item.id)) throw notCarried(who, item);
+			if (!equippable(item)) throw new ToolError("not_equippable", `${item.name} isn't armor, a shield or a weapon`, "Only armor, shields and weapons are equipped; the rest is just carried");
+			if (isBodyArmor(item) || item.armorCategory === "Shield") {
+				const same = db.select({
+					itemId: characterItem.itemId,
+					armorCategory: equipment.armorCategory
+				}).from(characterItem).innerJoin(equipment, eq(equipment.id, characterItem.itemId)).where(and(eq(characterItem.characterId, who.id), eq(characterItem.equipped, true))).all().filter((e) => item.armorCategory === "Shield" ? e.armorCategory === "Shield" : isBodyArmor(e));
+				for (const e of same) db.update(characterItem).set({ equipped: false }).where(stack(who.id, e.itemId)).run();
+			}
+			db.update(characterItem).set({ equipped: true }).where(stack(who.id, item.id)).run();
+			return {
+				result: {
+					character: who.handle,
+					equipped: item.slug,
+					ac: characterOf(db, who.id).ac
+				},
+				event: {
+					kind: "item_equipped",
+					summary: `${who.name} equips ${item.name}`,
+					data: {
+						character: who.handle,
+						item: item.slug
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "unequip",
+		description: "Take off or stow armor, a shield or a weapon; the Character keeps carrying it.",
+		input: object(itemInput),
+		activity: "DM changes what a Character wears",
+		run: ({ db }, input) => {
+			const who = characterOf(db, input.character);
+			const item = srdItem(db, input.item);
+			const have = carried(db, who.id, item.id);
+			if (!have) throw notCarried(who, item);
+			if (!have.equipped) throw new ToolError("not_equipped", `${who.name} doesn't have ${item.name} equipped`, "Nothing to do; read the sheet for what is equipped");
+			db.update(characterItem).set({ equipped: false }).where(stack(who.id, item.id)).run();
+			return {
+				result: {
+					character: who.handle,
+					unequipped: item.slug,
+					ac: characterOf(db, who.id).ac
+				},
+				event: {
+					kind: "item_unequipped",
+					summary: `${who.name} unequips ${item.name}`,
+					data: {
+						character: who.handle,
+						item: item.slug
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "coin",
+		description: "Change a Character's coin by denomination: positive to gain, negative to pay, such as {gp: -5, sp: 3}. Refused when a denomination would go below 0; make change yourself with one call that converts.",
+		input: object({
+			character: string().min(1).describe("char:…"),
+			change: object(Object.fromEntries(DENOMINATIONS.map((d) => [d, number().int().optional()]))).refine((c) => Object.values(c).some((v) => v), { message: "Change at least one coin" })
+		}),
+		activity: "DM changes a Character's coin",
+		run: ({ db }, input) => {
+			const who = characterOf(db, input.character);
+			const coin = { ...who.detail.coin };
+			for (const d of DENOMINATIONS) coin[d] += input.change[d] ?? 0;
+			const short = DENOMINATIONS.filter((d) => coin[d] < 0);
+			if (short.length) {
+				const held = DENOMINATIONS.map((d) => `${who.detail.coin[d]} ${d}`).join(", ");
+				throw new ToolError("not_enough_coin", `${who.name} doesn't have enough ${short.join(", ")} (has ${held})`, "Pay in other denominations, converting in the same call (1 gp = 10 sp = 100 cp)");
+			}
+			db.update(character).set({ coin }).where(eq(character.id, who.id)).run();
+			const change = DENOMINATIONS.flatMap((d) => input.change[d] ? [`${input.change[d] > 0 ? "+" : ""}${input.change[d]} ${d}`] : []).join(", ");
+			return {
+				result: {
+					character: who.handle,
+					coin
+				},
+				event: {
+					kind: "coin",
+					summary: `${who.name}: ${change}`,
+					data: {
+						character: who.handle,
+						change: input.change,
+						coin
+					}
+				}
+			};
+		}
+	}),
+	writeTool({
+		name: "award_level",
+		description: "Award a milestone level to Characters. Each Player then takes the level-up in the UI, choosing any new spells; code applies HP, slots and features. You cannot level a Character yourself.",
+		input: object({ characters: array(string().min(1)).min(1).describe("char:… handles") }),
+		activity: "DM awards a level",
+		run: ({ db }, input) => {
+			const awarded = restingCharacters(db, input.characters).map((c) => {
+				const levels = c.detail.levelsAwarded + 1;
+				if (c.detail.level + levels > 20) throw new ToolError("max_level", `${c.name} is already at level 20`, "Leave them out of the award");
+				db.update(character).set({ levelsAwarded: levels }).where(eq(character.id, c.id)).run();
+				return {
+					character: c.handle,
+					to_take: levels,
+					next_level: c.detail.level + 1
+				};
+			});
+			return {
+				result: {
+					awarded,
+					next: "The Player levels up in the UI; you hear of it as a change"
+				},
+				event: {
+					kind: "level_awarded",
+					summary: `Level awarded to ${awarded.map((a) => a.character).join(", ")}`,
+					data: { awarded }
+				}
+			};
+		}
+	})
+];
 // src/lib/server/knowledge/knowledge.ts
 var isCurrentBelief = (b) => b.replacedBy === null && b.retiredAt === null;
 var isCurrentFact = (f) => f.supersededBy === null && f.retiredAt === null;
@@ -2236,7 +2606,8 @@ var gameTools = [
 	...actionTools,
 	...arcTools,
 	...lintTools,
-	...combatTools
+	...combatTools,
+	...restTools
 ];
 // src/lib/server/dice.ts
 var MAX_COUNT = 100;
@@ -2587,10 +2958,13 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 			atTable(campaignId);
 			return answered(campaignId, library.calls(campaignId).roll(callId, partId, dice(campaignId), player));
 		},
-		/** The Player answers a question Call; the last answer wakes the DM like a roll does. */
+		/**
+		* The Player answers a question Call, or says how many Hit Dice to spend (code rolls them);
+		* the last answer wakes the DM like a roll does.
+		*/
 		answer(campaignId, callId, partId, text, player = SOLO_PLAYER) {
 			atTable(campaignId);
-			return answered(campaignId, library.calls(campaignId).answer(callId, partId, text, player));
+			return answered(campaignId, library.calls(campaignId).answer(callId, partId, text, player, dice(campaignId)));
 		},
 		/**
 		* A Player's "Cut to <Name>": one spotlight channel event to the DM. Doesn't await Narration.

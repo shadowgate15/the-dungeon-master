@@ -1,7 +1,7 @@
 <script module lang="ts">
   import { defineMeta } from '@storybook/addon-svelte-csf'
   import CallCard from './CallCard.svelte'
-  import { attackCall, checkCall, questionCall } from './play-fixtures'
+  import { attackCall, checkCall, hitDiceCall, questionCall } from './play-fixtures'
 
   const { Story } = defineMeta({
     title: 'Play/CallCard',
@@ -15,3 +15,4 @@
 <Story name="Question with choices" args={{ call: questionCall }} />
 <Story name="Free-text question" args={{ call: { ...questionCall, choices: [] } }} />
 <Story name="Attack, damage next" args={{ call: attackCall }} />
+<Story name="Short rest Hit Dice" args={{ call: hitDiceCall }} />

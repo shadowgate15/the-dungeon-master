@@ -16,11 +16,13 @@
     callActions,
     createFloorQuery,
     createSceneQuery,
+    createSheetsQuery,
     createJournalQuery,
     createTimelineQuery,
     endSession,
     floorActions,
-    FloorChangeError
+    FloorChangeError,
+    levelUp
   } from '#lib/play/floor-client.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
@@ -40,6 +42,10 @@
   const scene = createSceneQuery(
     () => data.campaign.id,
     () => data.scene
+  )
+  const party = createSheetsQuery(
+    () => data.campaign.id,
+    () => data.sheets
   )
   const journal = createJournalQuery(
     () => data.campaign.id,
@@ -75,7 +81,7 @@
   const inScene = $derived(new Set(scene.data.present.map((c) => c.id)))
   // A tab for a Character elsewhere shows where they are, by Place name.
   const sheets = $derived(
-    data.sheets.map((s) => {
+    party.data.map((s) => {
       const away = scene.data.elsewhere.find((c) => c.id === s.id)
       return { ...s, whereabouts: away ? (away.whereabouts ?? 'elsewhere') : null }
     })
@@ -132,7 +138,14 @@
     class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]"
     aria-label="Play console"
   >
-    <CharacterSheet {sheets} acting={acting?.id ?? null} onselect={(id) => (picked = id)} />
+    <CharacterSheet
+      {sheets}
+      acting={acting?.id ?? null}
+      onselect={(id) => (picked = id)}
+      onlevelup={archived
+        ? undefined
+        : (id, picks) => attempt(() => levelUp(data.campaign.id, id, picks))}
+    />
 
     <section aria-label="Story" class="flex min-h-0 flex-col gap-2">
       <Timeline

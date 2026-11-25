@@ -48,6 +48,9 @@ export const journalQueryKey = (campaign: string) => ['journal', campaign] as co
 /** The query holding the Player's read-only Session history (`close_session` is a DM write). */
 export const sessionHistoryQueryKey = (campaign: string) => ['session-history', campaign] as const
 
+/** The query holding the Party's play sheets: tools change them, so every write stales them. */
+export const sheetsQueryKey = (campaign: string) => ['sheets', campaign] as const
+
 /** The query holding the permission prompt a Campaign's session is waiting on. */
 export const permissionQueryKey = (campaign: string) => ['permission', campaign] as const
 
@@ -64,7 +67,8 @@ export function staleQueries(message: LiveMessage): QueryKey[] {
         sceneQueryKey(message.campaign),
         floorQueryKey(message.campaign),
         journalQueryKey(message.campaign),
-        sessionHistoryQueryKey(message.campaign)
+        sessionHistoryQueryKey(message.campaign),
+        sheetsQueryKey(message.campaign)
       ]
     case 'permission':
       return [permissionQueryKey(message.campaign)]

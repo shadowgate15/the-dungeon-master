@@ -183,6 +183,8 @@ export const character = sqliteTable(
       .notNull()
       .$defaultFn(() => [0, 0, 0, 0, 0, 0, 0, 0, 0]),
     hitDiceSpent: integer('hit_dice_spent').notNull().default(0),
+    /** Milestone levels the DM awarded (`award_level`) that the Player hasn't taken yet. */
+    levelsAwarded: integer('levels_awarded').notNull().default(0),
     /** Spent uses by feature slug. */
     featureUses: text('feature_uses', { mode: 'json' })
       .$type<Record<string, number>>()
@@ -292,7 +294,9 @@ export const characterItem = sqliteTable(
   {
     characterId: owner(),
     itemId: ref('item_id', () => equipment.id),
-    quantity: integer('quantity').notNull()
+    quantity: integer('quantity').notNull(),
+    /** Worn or wielded: equipped armor and a shield set the Character's AC. */
+    equipped: integer('equipped', { mode: 'boolean' }).notNull().default(false)
   },
   (t) => [
     primaryKey({ columns: [t.characterId, t.itemId] }),
@@ -410,14 +414,15 @@ export const activityLine = sqliteTable('activity_line', {
 
 /**
  * What a Call asks for: a Check, a question, an action's roll sequences, Combat initiative (one
- * roll per Character, recorded in the Combat's order), a downed Character's Death save, or a
- * concentrating Character's Constitution save to keep their spell.
+ * roll per Character, recorded in the Combat's order), a short rest's Hit Dice, a downed Character's Death
+ * save, or a concentrating Character's Constitution save to keep their spell.
  */
 export const CALL_KINDS = [
   'check',
   'question',
   'roll_sequence',
   'initiative',
+  'hit_dice',
   'death_save',
   'concentration'
 ] as const
@@ -496,6 +501,17 @@ export type SequenceRoll = {
   calls?: string[]
 }
 
+/** A short rest's Hit Dice for one Character: the die, how many are left, and what was spent. */
+export type HitDiceSpend = {
+  die: number
+  available: number
+  conModifier: number
+  /** Once answered: each die's face, the HP regained and where HP ended. */
+  rolls: number[] | null
+  healed: number | null
+  after: { hp: number; max: number } | null
+}
+
 /**
  * A roll sequence: what is rolled (the label the Player reads), by whom against whom, the steps
  * in order and the rolls so far. Finished when every step is rolled or a miss ends it early.
@@ -542,6 +558,8 @@ export const callPart = sqliteTable(
     result: text('result', { mode: 'json' }).$type<CheckResult>(),
     /** A roll sequence's steps (with the hidden AC or DC) and its rolls so far. */
     sequence: text('sequence', { mode: 'json' }).$type<Sequence>(),
+    /** A short rest's Hit Dice: what the Character can spend and, once answered, what it rolled. */
+    hitDice: text('hit_dice', { mode: 'json' }).$type<HitDiceSpend>(),
     answer: text('answer'),
     answeredAt: integer('answered_at')
   },

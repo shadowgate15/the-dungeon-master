@@ -2,13 +2,14 @@ import { canAct } from '#lib/character/acting.ts'
 import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
 import type { PlaySheet } from '#lib/play/sheet.ts'
 import { ABILITY_KEYS } from '#lib/rules/derive-stats.ts'
+import { characterAc } from '../character/armor'
 import type { Party } from '../character/party'
 import type { CharacterDetail } from '../character/service'
 import { loadWizardRules } from '../character/wizard-rules'
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : `${n}`)
 
-function toPlaySheet(c: CharacterDetail): PlaySheet {
+function toPlaySheet(c: CharacterDetail, levelUp: PlaySheet['levelUp']): PlaySheet {
   const rules = loadWizardRules()
   // The summary's equipment is the starting kit; the sheet shows what the Character carries now.
   const { stats, names, resolved } = buildSummary(rules, {
@@ -26,10 +27,11 @@ function toPlaySheet(c: CharacterDetail): PlaySheet {
     canAct: canAct(c),
     whereabouts: c.whereabouts,
     hp: { current: c.currentHp, max: ok(stats.hitPoints), temp: c.tempHp },
-    ac:
-      stats.unarmoredAc.status === 'ok'
-        ? { value: stats.unarmoredAc.value.value, note: 'unarmored' }
-        : null,
+    hitDice:
+      resolved.hitDie === null
+        ? null
+        : { die: resolved.hitDie, total: c.level, spent: c.hitDiceSpent },
+    ac: characterAc(rules, c, stats),
     conditions: c.conditions,
     concentration: c.concentration,
     deathSaves:
@@ -61,8 +63,11 @@ function toPlaySheet(c: CharacterDetail): PlaySheet {
     })),
     inventory: c.inventory.map((i) => ({
       name: itemName.get(i.item) ?? i.item,
-      quantity: i.quantity
-    }))
+      quantity: i.quantity,
+      equipped: i.equipped ?? false
+    })),
+    coin: c.coin,
+    levelUp
   }
 }
 
@@ -70,5 +75,9 @@ function toPlaySheet(c: CharacterDetail): PlaySheet {
 export function playSheets(party: Party): PlaySheet[] {
   return party
     .list()
-    .flatMap((m) => (m.kind === 'character' ? [toPlaySheet(party.character(m.id).character)] : []))
+    .flatMap((m) =>
+      m.kind === 'character'
+        ? [toPlaySheet(party.character(m.id).character, party.levelUpOffer(m.id))]
+        : []
+    )
 }

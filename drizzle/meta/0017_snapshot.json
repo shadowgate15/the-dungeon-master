@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b88c8bf5-3d56-4354-bc9a-d47ad0ce4143",
+  "id": "04a39b45-48cc-4cb0-9a33-b453738a85d0",
   "prevId": "2d312cad-81e1-4f57-83a3-6cb4809fa305",
   "tables": {
     "activity_line": {
@@ -228,6 +228,13 @@
         },
         "sequence": {
           "name": "sequence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "hit_dice": {
+          "name": "hit_dice",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -722,6 +729,14 @@
           "autoincrement": false,
           "default": 0
         },
+        "levels_awarded": {
+          "name": "levels_awarded",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "feature_uses": {
           "name": "feature_uses",
           "type": "text",
@@ -1167,6 +1182,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "equipped": {
+          "name": "equipped",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         }
       },
       "indexes": {},
@@ -1503,13 +1526,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "concentration": {
-          "name": "concentration",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         }
       },
@@ -1858,13 +1874,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "concentration": {
-          "name": "concentration",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         }
       },
