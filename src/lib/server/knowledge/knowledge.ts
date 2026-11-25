@@ -5,7 +5,8 @@ import { ToolError, type ToolContext } from '../tools/contract'
 import { fieldNames } from '../world/fields'
 import { renderLinks, resolveLinks, type Known } from '../world/links'
 import { createWorld } from '../world/world'
-import { characterHolders, charactersInScene, type CharacterHolder } from './holders'
+import { characterHolders, type CharacterHolder } from './holders'
+import { present } from '../play/scene'
 
 type BeliefRow = typeof belief.$inferSelect
 type FactRow = typeof fact.$inferSelect
@@ -293,7 +294,7 @@ export function createKnowledge(ctx: ToolContext) {
       const characters = characterHolders(db)
       const handles = input.holders?.length
         ? [...new Set(input.holders)]
-        : charactersInScene(db).map((c) => c.handle)
+        : present(db).characters.map((c) => c.handle)
       if (!handles.length) {
         throw new ToolError(
           'no_holders',

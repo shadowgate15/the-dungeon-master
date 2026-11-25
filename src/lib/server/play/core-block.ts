@@ -5,7 +5,6 @@ import { eq } from 'drizzle-orm'
 import { npcCombat, session } from '../db/schema'
 import { currentArc, driftCount } from '../story/arc'
 import { lastLint } from '../world/lint'
-import { slug } from '../world/names'
 import { hpState } from '#lib/play/hp-state.ts'
 import { initiativeOrder, liveCombat, waitingOnInitiative } from './combat'
 import { characterRefs, currentMinute, present } from './scene'
@@ -17,9 +16,6 @@ import { playSheets } from './sheets'
  * whole when it changes; later tickets add the clock and open Call and Combat.
  */
 export type CoreBlockSource = { party: Party; db: Queryable }
-
-/** A Character's handle, from its name. */
-export const characterHandle = (name: string) => `char:${slug(name)}`
 
 /** The Scene: its Place (handle and name) and the in-fiction time. */
 export function scenePart({ db }: CoreBlockSource): string {
@@ -57,7 +53,7 @@ export function partyPart({ party, db }: CoreBlockSource): string {
       c.deathSaves && deathSavesText(c.deathSaves)
     ].filter(Boolean)
     return [
-      `- ${c.name} (${handles.get(c.id) ?? characterHandle(c.name)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? 'unknown'}`,
+      `- ${c.name} (${handles.get(c.id)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? 'unknown'}`,
       ...extra
     ].join(', ')
   })

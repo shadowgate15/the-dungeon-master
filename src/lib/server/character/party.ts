@@ -13,7 +13,7 @@ import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
 import { STEPS, type StepId } from '#lib/character/steps.ts'
 import type { Database } from '../db/connect'
 import { campaign, character, characterDraft, characterSpell, spell } from '../db/schema'
-import { characterHandle } from '../play/core-block'
+import { characterHandleOf } from '../knowledge/holders'
 import { logChange } from '../play/notices'
 import {
   CharacterNotFoundError,
@@ -135,7 +135,7 @@ export function createParty(
   /** Logs a Player edit to a Character, so the DM hears of it on the next channel event. */
   function noteChange(id: string, summary: string) {
     const row = db.select().from(character).where(eq(character.id, id)).get()!
-    const handle = characterHandle(row.name)
+    const handle = characterHandleOf(db, id)!
     logChange(db, { handle, version: row.version, summary }, { at: now(), offline: !attended() })
   }
 

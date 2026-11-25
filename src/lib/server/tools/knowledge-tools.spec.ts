@@ -71,6 +71,22 @@ describe('reveal', () => {
   })
 })
 
+describe('reveal with the Party split', () => {
+  it('gives a Belief only to the Characters in the Scene, not to those elsewhere', () => {
+    const fact = miraWithFact()
+    ok('establish', { type: 'place', name: 'The Docks', fields: {} })
+    ok('establish', { type: 'place', name: 'Cellar', fields: {} })
+    ok('move', { who: ['char:wren'], to: 'place:the-docks' })
+    ok('move', { who: ['char:kael'], to: 'place:cellar' })
+    ok('set_scene', { place: 'place:the-docks' })
+
+    const revealed = ok('reveal', { of: fact })
+
+    expect(revealed.beliefs.map((b: { holder: string }) => b.holder)).toEqual(['char:wren'])
+    expect(ok('beliefs_of', { holder: 'char:kael' }).beliefs).toEqual([])
+  })
+})
+
 describe('reveal to named Holders', () => {
   it('narrows to the named Characters and widens to NPCs', () => {
     const fact = miraWithFact()

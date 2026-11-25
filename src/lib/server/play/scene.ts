@@ -1,11 +1,11 @@
 import { clockParts, formatClock } from '#lib/play/clock.ts'
 import type { SceneView } from '#lib/play/scene.ts'
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import type { Queryable } from '../db/connect'
 import { hpState } from '#lib/play/hp-state.ts'
-import { campaign, character, entity, npcCombat } from '../db/schema'
+import { campaign, entity, npcCombat } from '../db/schema'
 import { playerCombat } from './combat'
-import { slug } from '../world/names'
+import { characterRefs } from '../knowledge/holders'
 
 /** A move of the clock that would take it backwards. */
 export class ClockBackwardsError extends Error {}
@@ -30,32 +30,9 @@ export function advanceClock(db: Queryable, to: number): { from: number; to: num
   return { from, to }
 }
 
-type CharacterRow = typeof character.$inferSelect
 type EntityRow = typeof entity.$inferSelect
 
-/** A Party member, addressed by a readable `char:` handle. */
-export type CharacterRef = { handle: string; row: CharacterRow }
-
-/**
- * Every Character with its handle, in the order they joined the Party. A handle is `char:` and the
- * name's slug, numbered (`char:wren-2`) when two Characters share a name. Characters are not
- * Entities, but Facts, Beliefs and tools link to them by handle.
- */
-export function characterRefs(db: Queryable): CharacterRef[] {
-  const rows = db
-    .select()
-    .from(character)
-    .orderBy(sql`rowid`)
-    .all()
-  const taken = new Set<string>()
-  return rows.map((row) => {
-    const base = `char:${slug(row.name)}`
-    let handle = base
-    for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`
-    taken.add(handle)
-    return { handle, row }
-  })
-}
+export { characterRefs, type CharacterRef } from '../knowledge/holders'
 
 /** The Place the spotlight is on, or null before the DM first sets the Scene. */
 export function scenePlace(db: Queryable): EntityRow | null {

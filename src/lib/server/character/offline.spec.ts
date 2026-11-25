@@ -69,6 +69,16 @@ describe('allowed offline', () => {
     })
   })
 
+  it('names a second Character of the same name by its numbered handle', () => {
+    addCharacter(library, campaignId, fighterDraft('Wren'))
+    const second = addCharacter(library, campaignId, fighterDraft('Wren'))
+    begin()
+
+    library.party(campaignId).updateDetails(second, { notes: 'The younger one.' })
+
+    expect(changes().at(-1)).toMatchObject({ data: { handle: 'char:wren-2' } })
+  })
+
   it('adds a Character after Begin', () => {
     begin()
     const bram = addCharacter(library, campaignId, fighterDraft('Bram'))
