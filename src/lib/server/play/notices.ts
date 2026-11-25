@@ -1,3 +1,4 @@
+import { handleKind } from '#lib/world/entity-types.ts'
 import { and, eq, gt, isNull, max } from 'drizzle-orm'
 import type { CampaignLibrary } from '../campaign/library'
 import type { Queryable } from '../db/connect'
@@ -139,7 +140,7 @@ export function createDmChannels(library: CampaignLibrary) {
       const changes = db.transaction((tx) => takeChanges(tx))
       if (changes.length === 0) return sent
       const parts = ['Changed outside the DM:', ...changeLines(changes)]
-      if (changes.some((c) => c.handle.startsWith('char:'))) {
+      if (changes.some((c) => handleKind(c.handle) === 'char')) {
         parts.push('', partyPart({ party: library.party(entry.id), db }))
       }
       const notice = parts.join('\n')

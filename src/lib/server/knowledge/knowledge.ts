@@ -1,3 +1,4 @@
+import { handleKind } from '#lib/world/entity-types.ts'
 import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import { belief, entity, fact } from '../db/schema'
@@ -188,7 +189,7 @@ export function createKnowledge(ctx: ToolContext) {
   }
 
   function holderFor(handle: string, characters: CharacterHolder[], tool: string): Holder {
-    if (handle.startsWith('char:')) {
+    if (handleKind(handle) === 'char') {
       const found = characters.find((c) => c.handle === handle)
       if (!found) throw ToolError.unknownHandle(handle)
       return { handle, character: found.id, npc: null }

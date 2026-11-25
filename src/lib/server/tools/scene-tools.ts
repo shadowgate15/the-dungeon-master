@@ -1,3 +1,4 @@
+import { handleKind } from '#lib/world/entity-types.ts'
 import { eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { formatClock, parseClock } from '#lib/play/clock.ts'
@@ -117,7 +118,7 @@ export const sceneTools = [
       .refine((m) => m.to !== undefined || m.via !== undefined, { message: 'Pass to or via' }),
     activity: (_, result) => {
       const names = (result.moved as { handle: string; name: string }[])
-        .filter((m) => m.handle.startsWith('char:'))
+        .filter((m) => handleKind(m.handle) === 'char')
         .map((m) => m.name)
       return names.length ? `DM moves ${names.join(', ')}` : null
     },

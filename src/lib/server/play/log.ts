@@ -1,3 +1,4 @@
+import { handleKind } from '#lib/world/entity-types.ts'
 import { believedName, UNKNOWN_NPC } from '../knowledge/player-names'
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 import type { HpState } from '#lib/play/hp-state.ts'
@@ -225,7 +226,7 @@ export function timeline(db: Queryable): Timeline {
   const lines = db.select().from(activityLine).orderBy(asc(activityLine.id)).all()
   // NPCs by the name the Characters know, never the World's (ADR 0007).
   const shown: Shown = (handle, name) =>
-    typeof handle === 'string' && handle.startsWith('npc:')
+    typeof handle === 'string' && handleKind(handle) === 'npc'
       ? (believedName(db, handle) ?? UNKNOWN_NPC)
       : name
   const entries: TimelineEntry[] = []
