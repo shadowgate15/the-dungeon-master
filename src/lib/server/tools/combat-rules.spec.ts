@@ -376,6 +376,32 @@ describe('concentration', () => {
     expect(sheet('Ash').concentration).toBeNull()
   })
 
+  it('keeps a second save pending past the turn, for the next turn to attach', () => {
+    addAsh()
+    ok('cast', { caster: 'char:ash', spell: 'detect-magic', level: 1 })
+    const [first] = ok('damage', {
+      target: 'char:ash',
+      amount: 1,
+      type: 'piercing'
+    }).concentration_calls
+    const [second] = ok('damage', {
+      target: 'char:ash',
+      amount: 1,
+      type: 'fire'
+    }).concentration_calls
+    ok('narrate', { text: 'Two bolts bite.', call: first })
+
+    expect(play.stopCheck(campaignId, false)).toEqual({ block: false })
+    expect(timeline().entries.some((e) => e.type === 'error')).toBe(false)
+
+    const open = timeline().call!
+    load([20, 15])
+    play.roll(campaignId, open.id, open.parts[0].id)
+    expect(heard.at(-1)!.content).toContain(`Pending Calls to attach: ${second}`)
+    ok('narrate', { text: 'Ash holds on.', call: second })
+    expect(timeline().call).toMatchObject({ kind: 'concentration' })
+  })
+
   it('keeps concentration on a successful save', () => {
     addAsh()
     ok('cast', { caster: 'char:ash', spell: 'detect-magic', level: 1 })

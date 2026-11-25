@@ -7,7 +7,7 @@ import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
 import { journal } from '../knowledge/journal'
 import { coreBlock } from '../play/core-block'
-import { cancelPendingCall, createCalls, pendingCalls, type Calls } from '../play/calls'
+import { cancelPendingCall, createCalls, unattachedCalls, type Calls } from '../play/calls'
 import { sessionHistory } from '../play/sessions'
 import { logChange, openingNotice } from '../play/notices'
 import { logEvent, openSession, timeline } from '../play/log'
@@ -287,11 +287,12 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
             return notice ? `${core}\n\n${notice}` : core
           }),
         /** Pending Calls an action tool stored that no narrate has attached yet. */
-        pendingCalls: () => pendingCalls(db),
-        /** Drops the pending Calls a turn ended without attaching. */
+        /** The pending Calls this turn must attach or cancel (rules' Calls can wait). */
+        pendingCalls: () => unattachedCalls(db),
+        /** Drops the pending Calls a turn ended without attaching, leaving those that can wait. */
         dropPendingCalls: () =>
           db.transaction((tx) =>
-            pendingCalls(tx).forEach((id) => cancelPendingCall(tx, id, now()))
+            unattachedCalls(tx).forEach((id) => cancelPendingCall(tx, id, now()))
           ),
         /** Logs a turn that went wrong, as the Player sees it in the timeline. */
         turnError: (text: string) =>

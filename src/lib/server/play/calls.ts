@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { canAct } from '#lib/character/acting.ts'
 import { SOLO_PLAYER } from '#lib/character/enums.ts'
@@ -337,8 +337,37 @@ export function pendingCalls(db: Queryable): string[] {
     .select({ id: call.id })
     .from(call)
     .where(eq(call.state, 'pending'))
+    .orderBy(sql`rowid`)
     .all()
     .map((c) => c.id)
+}
+
+/**
+ * The rules' own Calls, which wait past a turn: only one Call is open at a time, so when one is,
+ * these stay pending for a later turn to attach instead of being dropped.
+ */
+const QUEUEABLE = ['concentration', 'death_save', 'reaction'] as const
+
+/**
+ * The pending Calls this turn must attach or cancel before it ends: all of them, less the rules'
+ * own while another Call is open (they wait for the next turn).
+ */
+export function unattachedCalls(db: Queryable): string[] {
+  const waiting = openCallRow(db) !== undefined
+  return db
+    .select({ id: call.id, kind: call.kind })
+    .from(call)
+    .where(eq(call.state, 'pending'))
+    .orderBy(sql`rowid`)
+    .all()
+    .filter((c) => !(waiting && (QUEUEABLE as readonly string[]).includes(c.kind)))
+    .map((c) => c.id)
+}
+
+/** The pending Calls left for the next Narration to attach, as a line for the DM. */
+function waitingLine(db: Queryable): string[] {
+  const ids = pendingCalls(db)
+  return ids.length ? [`Pending Calls to attach: ${ids.join(', ')}`] : []
 }
 
 /** Drops a pending Call the DM won't attach; refused for any other Call. */
@@ -562,7 +591,7 @@ export function createCalls(db: Database, now: () => number = Date.now) {
         call: callId,
         players: [...new Set(parts.map((p) => p.player))],
         parts,
-        after: open.kind === 'initiative' ? [orderText(db)] : []
+        after: [...(open.kind === 'initiative' ? [orderText(db)] : []), ...waitingLine(db)]
       }
       logEvent(
         db,

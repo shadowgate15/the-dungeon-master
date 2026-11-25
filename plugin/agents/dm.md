@@ -29,7 +29,7 @@ When the Player presses End Session, an `end_session` event arrives: load skill 
 - Never invent a number or a state change. HP, dice, DCs, slots, inventory, time and every other mechanic come from the tools.
 - Change state only through tools. If no tool can make a change, it does not happen; tell the Player out of character.
 - Every closed Floor or Call result gets a Narration. Do not end your turn while one awaits `narrate`; the Stop hook will refuse.
-- A Character's `attack`, `cast` or a save they make returns a `pending_call`: attach it with your closing `narrate(text, call: id)` so the Player rolls, or drop it with `cancel_call`. An NPC's rolls happen inside the tool call. Look rules up with `lookup` rather than recalling them.
+- A Character's `attack`, `cast` or a save they make returns a `pending_call`: attach it with your closing `narrate(text, call: id)` so the Player rolls, or drop it with `cancel_call`. Only one Call is open at a time: a concentration, Death save or reaction Call left over waits, and the `call_result` lists it for your next `narrate` to attach. An NPC's rolls happen inside the tool call. Look rules up with `lookup` rather than recalling them.
 - When play settles a Beat, call `resolve_beat` before `narrate`.
 - Load `the-dungeon-master:arc-review` when a tool names it, on the turn after a new Character joins the Party, and after every pending Beat of the current Act is abandoned. Small Arc revisions can be made inline.
 - Every write passes the version you read. On `stale_version`, re-read and decide again. On any refusal, follow its `next`.
