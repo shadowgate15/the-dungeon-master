@@ -64,6 +64,12 @@ function ok(name: string, args: unknown = {}) {
   return payload
 }
 
+function refused(name: string, args: unknown = {}) {
+  const { isError, payload } = call(name, args)
+  expect(isError, JSON.stringify(payload)).toBe(true)
+  return payload
+}
+
 /** Wren: a Human Fighter, 12 HP, Con 14 with the Human bonus; proficient in Con saves (+4). */
 const addWren = () => addCharacter(library, campaignId, fighterDraft('Wren'))
 
@@ -255,6 +261,33 @@ describe('an NPC or Creature at 0 HP', () => {
     expect(ok('open', { handle: grik }).fields.status).not.toBe('dead')
   })
 
+  it('wakes when healed above 0 after a knock-out', () => {
+    const grik = addGrik()
+    ok('damage', { target: grik, amount: 9, type: 'bludgeoning', knock_out: true })
+    ok('heal', { target: grik, amount: 2 })
+    expect(ok('add_condition', { target: grik, condition: 'prone' }).conditions).toEqual(['prone'])
+  })
+
+  it('cannot be healed once dead', () => {
+    const grik = addGrik()
+    ok('damage', { target: grik, amount: 9, type: 'fire' })
+    expect(refused('heal', { target: grik, amount: 5 })).toMatchObject({ code: 'npc_dead' })
+  })
+
+  it('loses its turns once dead', () => {
+    addWren()
+    load([20, 15], [20, 10])
+    const { pending_call: id } = ok('start_combat', {
+      combatants: ['char:wren', { monster: 'monster:goblin', count: 2 }]
+    })
+    ok('narrate', { text: 'Roll for initiative!', call: id })
+    rollInitiative(id, 18)
+    // Wren 20, Goblin 1 17, Goblin 2 12.
+    ok('damage', { target: 'creature:goblin-1', amount: 7, type: 'piercing' })
+    expect(ok('next_turn')).toMatchObject({ turn: { handle: 'creature:goblin-2' } })
+    expect(ok('next_turn')).toMatchObject({ round: 2, turn: { handle: 'char:wren' } })
+  })
+
   it('dies: a Creature in the Combat too', () => {
     addWren()
     load([20, 15])
@@ -351,6 +384,22 @@ describe('concentration', () => {
     const open = timeline().call!
     load([20, 9])
     play.roll(campaignId, open.id, open.parts[0].id)
+    expect(sheet('Ash').concentration).toBe('detect-magic')
+  })
+
+  it('ends when the caster is incapacitated by a condition', () => {
+    addAsh()
+    ok('cast', { caster: 'char:ash', spell: 'detect-magic', level: 1 })
+    expect(ok('add_condition', { target: 'char:ash', condition: 'stunned' })).toMatchObject({
+      ended_concentration: 'detect-magic'
+    })
+    expect(sheet('Ash').concentration).toBeNull()
+  })
+
+  it('survives a condition that does not incapacitate', () => {
+    addAsh()
+    ok('cast', { caster: 'char:ash', spell: 'detect-magic', level: 1 })
+    ok('add_condition', { target: 'char:ash', condition: 'prone' })
     expect(sheet('Ash').concentration).toBe('detect-magic')
   })
 

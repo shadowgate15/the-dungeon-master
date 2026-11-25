@@ -19,6 +19,7 @@ import {
   applyDamage,
   applyHealing,
   combatant,
+  incapacitates,
   mustAct,
   saveBonus,
   setConditions,
@@ -34,7 +35,7 @@ import {
   type StepRolled
 } from '../play/sequences'
 import { spendTurnResource } from '../play/combat'
-import { concentrate } from '../play/concentration'
+import { concentrate, setConcentration } from '../play/concentration'
 import { createRulesRepository } from '../rules/repository'
 import { ToolError, writeTool, type ToolEvent } from './contract'
 
@@ -817,7 +818,8 @@ export const actionTools = [
 
   writeTool({
     name: 'add_condition',
-    description: 'Give a Character or NPC an SRD condition, such as prone or frightened.',
+    description:
+      'Give a Character or NPC an SRD condition, such as prone or frightened. An incapacitating condition ends concentration.',
     input: z.object({ target: z.string().min(1), condition: z.string().min(1) }),
     activity: 'DM applies a condition',
     run: ({ db }, input) => {
@@ -825,8 +827,14 @@ export const actionTools = [
       const condition = srdCondition(db, input.condition)
       if (!who.conditions.includes(condition))
         setConditions(db, who, [...who.conditions, condition])
+      const ended = incapacitates(condition) ? who.concentration : null
+      if (ended) setConcentration(db, who, null)
       return {
-        result: { target: who.handle, conditions: [...new Set([...who.conditions, condition])] },
+        result: {
+          target: who.handle,
+          conditions: [...new Set([...who.conditions, condition])],
+          ...(ended && { ended_concentration: ended })
+        },
         event: {
           kind: 'condition_added',
           summary: `${who.name} is ${condition}`,

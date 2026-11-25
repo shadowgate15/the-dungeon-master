@@ -297,15 +297,49 @@ export function applyHealing(db: Queryable, who: Combatant, amount: number): HpC
       'Only magic that restores life can; narrate it and leave the HP alone'
     )
   }
+  if (who.kind !== 'character' && isOut(db, who)) {
+    throw new ToolError(
+      'npc_dead',
+      `${who.name} is dead; healing can't bring them back`,
+      'Only magic that restores life can; narrate it and leave the HP alone'
+    )
+  }
   const hp = Math.min(who.maxHp, who.hp + amount)
   if (who.kind === 'character') {
     db.update(character).set({ currentHp: hp }).where(eq(character.id, who.id)).run()
     healedCharacter(db, who.detail, hp)
   } else {
-    writeFoe(db, who, { hp })
+    // A knocked-out foe brought above 0 wakes.
+    const conditions = hp > 0 ? who.conditions.filter((c) => c !== 'unconscious') : who.conditions
+    writeFoe(db, who, { hp, conditions })
   }
   return { dealt: hp - who.hp, hp, max: who.maxHp, notes: [], calls: [] }
 }
+
+/**
+ * Whether a combatant is out of the fight for good: a dead Character, or an NPC or Creature that
+ * is dead or at 0 HP without being knocked out. A Character at 0 HP still rolls Death saves.
+ */
+export function isOut(db: Queryable, who: Combatant): boolean {
+  if (who.kind === 'character') return who.detail.status !== 'alive'
+  if (who.kind === 'npc') {
+    const npc = db.select().from(entity).where(eq(entity.handle, who.handle)).get()
+    if (npc?.fields.status === 'dead') return true
+  }
+  return who.hp === 0 && !who.conditions.includes('unconscious')
+}
+
+/** Conditions that leave a creature incapacitated, which ends its concentration (SRD). */
+const INCAPACITATING = new Set([
+  'incapacitated',
+  'paralyzed',
+  'petrified',
+  'stunned',
+  'unconscious'
+])
+
+/** Whether a condition leaves its bearer incapacitated. */
+export const incapacitates = (condition: string) => INCAPACITATING.has(condition)
 
 /** Replaces a combatant's conditions. */
 export function setConditions(db: Queryable, who: Combatant, conditions: string[]) {

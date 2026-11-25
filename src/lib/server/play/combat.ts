@@ -7,7 +7,7 @@ import type { Dice } from '../dice'
 import { createRulesRepository } from '../rules/repository'
 import { ToolError } from '../tools/contract'
 import { createPendingCall, type PendingPart } from './calls'
-import { combatant, type Combatant, type Monster } from './combatants'
+import { combatant, isOut, type Combatant, type Monster } from './combatants'
 import { advanceClock, currentMinute } from './scene'
 
 /*
@@ -287,8 +287,14 @@ export function addCombatants(
   return join(db, dice, requireCombat(db).id, entries, { at })
 }
 
-/** Whether a combatant acts this round: a surprised one loses its first turn. */
-const acts = (c: CombatantRow, round: number) => !(round === 1 && c.surprised)
+/**
+ * Whether a combatant acts this round: a surprised one loses its first turn, and the dead (or a
+ * foe at 0 HP that wasn't knocked out) lose every turn.
+ */
+function acts(db: Queryable, c: CombatantRow, round: number): boolean {
+  if (round === 1 && c.surprised) return false
+  return !isOut(db, combatant(db, c.handle))
+}
 
 /**
  * Moves the turn pointer to the next combatant who acts, wrapping into the next round, and resets
@@ -305,7 +311,7 @@ function advance(db: Queryable, live: CombatRow): { round: number; current: Comb
       index = 0
       round++
     }
-    if (acts(order[index], round)) {
+    if (acts(db, order[index], round)) {
       next = order[index]
       break
     }
