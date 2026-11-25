@@ -35,4 +35,14 @@ export interface PlaySheet {
   coin: { cp: number; sp: number; ep: number; gp: number; pp: number }
   /** The level-up the DM awarded and the Player has not taken; null hides the control. */
   levelUp: LevelUpOffer | null
+  /**
+   * What the Player writes about the Character. Notes, personality and appearance can be edited in
+   * play with the DM away; the backstory is read-only after Begin.
+   */
+  details: {
+    notes: string | null
+    personality: string | null
+    appearance: string | null
+    backstory: string | null
+  }
 }

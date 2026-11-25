@@ -2,24 +2,28 @@
   import Badge from '#lib/ui/Badge.svelte'
   import Meter from '#lib/ui/Meter.svelte'
   import LevelUp from './LevelUp.svelte'
+  import CharacterDetails, { type EditableDetails } from './CharacterDetails.svelte'
   import type { PlaySheet } from './sheet'
 
   /**
    * The console's left column: one tab per Character, and the selected tab's full sheet. The
    * selected tab is the acting Character; only Characters who can act are selectable. A pure view
    * of the server's `PlaySheet`s. A level the DM awarded shows a Level up control when `onlevelup`
-   * is given.
+   * is given. With `onsavedetails`, the Player edits the Character's notes, personality and
+   * appearance (with the DM away too); the backstory stays read-only.
    */
   let {
     sheets,
     acting,
     onselect = () => {},
-    onlevelup
+    onlevelup,
+    onsavedetails
   }: {
     sheets: PlaySheet[]
     acting: string | null
     onselect?: (id: string) => void
     onlevelup?: (id: string, picks: { cantrips: string[]; spells: string[] }) => void
+    onsavedetails?: (id: string, details: EditableDetails) => Promise<void>
   } = $props()
 
   const shown = $derived(sheets.find((s) => s.id === acting) ?? sheets[0])
@@ -196,6 +200,13 @@
           <span class="text-muted">Coin</span><span>{coinText(shown.coin)}</span>
         </p>
       </section>
+
+      {#key shown.id}
+        <CharacterDetails
+          details={shown.details}
+          onsave={onsavedetails && ((details) => onsavedetails(shown.id, details))}
+        />
+      {/key}
     </div>
   {:else}
     <p class="p-3 text-sm text-muted">No Characters in the Party yet.</p>

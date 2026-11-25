@@ -52,4 +52,22 @@ describe('play sheets', () => {
     expect(sheet.features.map((f) => f.name)).toContain('Second Wind')
     expect(sheet.inventory.length).toBeGreaterThan(0)
   })
+
+  it('carry the details the Player edits in play: notes, personality, appearance and the backstory', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    library.party(campaignId).updateDetails(wren, {
+      notes: 'Owes Tam a favour',
+      personality: 'Wry',
+      appearance: 'A scar over one eye'
+    })
+
+    const [sheet] = playSheets(library.party(campaignId))
+
+    expect(sheet.details).toMatchObject({
+      notes: 'Owes Tam a favour',
+      personality: 'Wry',
+      appearance: 'A scar over one eye'
+    })
+    expect(sheet.details).toHaveProperty('backstory')
+  })
 })

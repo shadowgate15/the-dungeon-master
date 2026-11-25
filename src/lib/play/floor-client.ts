@@ -97,6 +97,23 @@ export async function levelUp(
   if (!res.ok) throw await refusal(res, 'The level-up was refused')
 }
 
+/**
+ * Saves a Character's notes, personality and appearance; works with the DM away. Throws the
+ * server's refusal.
+ */
+export async function saveDetails(
+  campaign: string,
+  character: string,
+  details: { notes: string | null; personality: string | null; appearance: string | null }
+): Promise<void> {
+  const res = await fetch(campaignPath(campaign, `characters/${encodeURIComponent(character)}`), {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(details)
+  })
+  if (!res.ok) throw await refusal(res, 'The details could not be saved')
+}
+
 /** End Session: asks the DM to close the Session. */
 export async function endSession(campaign: string): Promise<void> {
   const res = await fetch(campaignPath(campaign, 'end-session'), {

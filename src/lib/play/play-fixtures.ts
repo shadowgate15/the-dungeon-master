@@ -17,7 +17,13 @@ const base = {
   inventory: [],
   hitDice: null,
   coin: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
-  levelUp: null
+  levelUp: null,
+  details: {
+    notes: null,
+    personality: 'Wry and watchful',
+    appearance: null,
+    backstory: 'Raised on the Ember Road by a caravan guard.'
+  }
 } satisfies Partial<PlaySheet>
 
 /** A level the DM awarded with two spells to pick, as a Wizard's spellbook asks. */

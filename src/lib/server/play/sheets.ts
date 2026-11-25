@@ -67,7 +67,13 @@ function toPlaySheet(c: CharacterDetail, levelUp: PlaySheet['levelUp']): PlayShe
       equipped: i.equipped ?? false
     })),
     coin: c.coin,
-    levelUp
+    levelUp,
+    details: {
+      notes: c.notes,
+      personality: c.personality,
+      appearance: c.appearance,
+      backstory: c.backstory
+    }
   }
 }
 

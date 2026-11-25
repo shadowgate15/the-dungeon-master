@@ -22,7 +22,8 @@
     endSession,
     floorActions,
     PlayRequestError,
-    levelUp
+    levelUp,
+    saveDetails
   } from '#lib/play/floor-client.ts'
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
@@ -145,6 +146,9 @@
       onlevelup={archived
         ? undefined
         : (id, picks) => attempt(() => levelUp(data.campaign.id, id, picks))}
+      onsavedetails={archived
+        ? undefined
+        : (id, details) => saveDetails(data.campaign.id, id, details)}
     />
 
     <section aria-label="Story" class="flex min-h-0 flex-col gap-2">

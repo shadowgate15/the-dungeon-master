@@ -121,4 +121,57 @@ describe('CharacterSheet', () => {
 
     expect(taken).toEqual([{ id: 'wren', picks: { cantrips: [], spells: ['shield', 'sleep'] } }])
   })
+
+  it('edits notes, personality and appearance, and shows the backstory read-only', async () => {
+    const saved: { id: string; details: Record<string, string | null> }[] = []
+    render(CharacterSheet, {
+      sheets,
+      acting: 'wren',
+      onsavedetails: async (id: string, details: Record<string, string | null>) => {
+        saved.push({ id, details })
+      }
+    })
+
+    const details = page.getByRole('region', { name: 'Details' })
+    await expect
+      .element(details.getByText('Raised on the Ember Road by a caravan guard.'))
+      .toBeVisible()
+    await expect
+      .element(details.getByRole('textbox', { name: 'Backstory' }))
+      .not.toBeInTheDocument()
+    await expect
+      .element(details.getByRole('textbox', { name: 'Personality' }))
+      .toHaveValue('Wry and watchful')
+
+    await details.getByRole('textbox', { name: 'Notes' }).fill('Owes Tam a favour')
+    await details.getByRole('textbox', { name: 'Appearance' }).fill('A scar over one eye')
+    await details.getByRole('button', { name: 'Save details' }).click()
+
+    expect(saved).toEqual([
+      {
+        id: 'wren',
+        details: {
+          notes: 'Owes Tam a favour',
+          personality: 'Wry and watchful',
+          appearance: 'A scar over one eye'
+        }
+      }
+    ])
+    await expect.element(details.getByRole('status')).toHaveTextContent('Saved')
+  })
+
+  it("shows the server's refusal of an edit", async () => {
+    render(CharacterSheet, {
+      sheets,
+      acting: 'wren',
+      onsavedetails: async () => {
+        throw new Error('notes must be at most 4000 characters')
+      }
+    })
+    const details = page.getByRole('region', { name: 'Details' })
+    await details.getByRole('button', { name: 'Save details' }).click()
+    await expect
+      .element(details.getByRole('alert'))
+      .toHaveTextContent('notes must be at most 4000 characters')
+  })
 })
