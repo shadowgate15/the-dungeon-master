@@ -22,14 +22,19 @@ export type CallPart = {
   next: 'to hit' | 'damage' | 'save' | null
   /** A short rest's Hit Dice part: the die and how many the Character can spend; null otherwise. */
   hitDice: { die: number; available: number } | null
+  /**
+   * A reaction's buttons until the Player chooses: take it (`Attack`) or `Pass`. Once taken, a
+   * reaction with an attack rolls like any roll sequence. Null otherwise.
+   */
+  offer: string[] | null
 }
 
 /**
  * The open Call, Player-safe: a Check (one part per Character), a question (its text and
  * choices, free text when there are none), an action's roll sequences (one per Character),
  * Combat initiative (one roll per Character), a short rest's Hit Dice (one part per hurt
- * Character, answered with how many to spend), a downed Character's Death save, or a
- * concentration save.
+ * Character, answered with how many to spend), a downed Character's Death save, a
+ * concentration save, or a reaction to take or pass (`text` says what it is).
  */
 export type OpenCall = {
   id: string
@@ -41,6 +46,7 @@ export type OpenCall = {
     | 'hit_dice'
     | 'death_save'
     | 'concentration'
+    | 'reaction'
   text: string | null
   choices: string[]
   parts: CallPart[]

@@ -23,7 +23,7 @@ import {
 } from '../db/schema'
 import type { Dice } from '../dice'
 import { ToolError } from '../tools/contract'
-import { orderText, recordInitiative } from './combat'
+import { orderText, recordInitiative, spendTurnResource } from './combat'
 import { applyDeathSave } from './death'
 import { logEvent, setAwaitingNarration } from './log'
 import { characterRefs } from './scene'
@@ -137,12 +137,14 @@ function labelOf(
     save: string | null
     sequence?: Sequence | null
     hitDice?: HitDiceSpend | null
+    reaction?: string | null
   },
   kind?: CallKind
 ): string | null {
   if (kind === 'initiative') return 'Initiative'
   if (kind === 'death_save') return 'Death save'
   if (part.hitDice) return 'Hit Dice'
+  if (part.reaction) return part.reaction
   if (part.sequence) return part.sequence.label
   if (part.skill) return `${SKILL_NAMES.get(part.skill) ?? part.skill} check`
   if (part.save) return `${ABILITY_NAMES.get(part.save) ?? part.save} save`
@@ -236,6 +238,8 @@ export type PendingPart = {
   /** A saving throw's ability and hidden DC, for a concentration save. */
   save?: AbilityKey
   dc?: number
+  /** A reaction's name, for a reaction Call. */
+  reaction?: string
 }
 
 /**
@@ -246,13 +250,17 @@ export function createPendingCall(
   db: Queryable,
   parts: PendingPart[],
   at: number,
-  kind: 'roll_sequence' | 'initiative' | 'death_save' | 'concentration' = 'roll_sequence'
+  kind:
+    'roll_sequence' | 'initiative' | 'death_save' | 'concentration' | 'reaction' = 'roll_sequence',
+  prompt: { text: string; choices: string[] } | null = null
 ): string {
   const id = db
     .insert(call)
     .values({
       campaignId: db.select({ id: campaign.id }).from(campaign).get()!.id,
       kind,
+      text: prompt?.text ?? null,
+      choices: prompt?.choices ?? [],
       state: 'pending',
       createdAt: at
     })
@@ -269,7 +277,8 @@ export function createPendingCall(
         mode: part.mode ?? 'normal',
         reason: part.reason ?? null,
         save: part.save ?? null,
-        dc: part.dc ?? null
+        dc: part.dc ?? null,
+        reaction: part.reaction ?? null
       })
       .run()
   })
@@ -387,7 +396,8 @@ export function openCallView(db: Queryable): OpenCall | null {
       mode: part.mode,
       answered: part.answeredAt !== null,
       next: part.sequence ? nextStep(part.sequence) : null,
-      hitDice: part.hitDice && { die: part.hitDice.die, available: part.hitDice.available }
+      hitDice: part.hitDice && { die: part.hitDice.die, available: part.hitDice.available },
+      offer: open.kind === 'reaction' && part.answer === null ? open.choices : null
     }))
   }
 }
@@ -417,6 +427,7 @@ export type CallResult = { call: string; players: string[]; parts: Answered[]; a
 
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
 function resultLine(p: Answered): string {
+  if (p.kind === 'reaction') return reactionLine(p)
   if (p.hitDice) return `[${p.characterName} · ${p.player}] Hit Dice: ${hitDiceText(p.hitDice)}`
   if (p.sequence) return `[${p.characterName} · ${p.player}] ${sequenceText(p.sequence, p.mode)}`
   if (p.result === null) return `[${p.player}] ${p.answer}`
@@ -433,6 +444,23 @@ function resultLine(p: Answered): string {
     return `[${p.characterName} · ${p.player}] Initiative: d20 ${dice} ${modifier} = ${r.total}`
   }
   return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? 'success' : 'failure'}`
+}
+
+/** The Player's choice on a reaction Call that passes it. */
+export const PASS = 'Pass'
+
+/**
+ * A reaction as the DM hears it: passed, taken (with its attack's rolls), and any reminder that
+ * the reaction was already spent. The answer is the choice, then `; ` and the reminder.
+ */
+function reactionLine(p: Answered): string {
+  const who = `[${p.characterName} · ${p.player}] ${p.reaction}`
+  if (p.answer === PASS) return `${who}: passes`
+  const [choice, reminder] = (p.answer ?? '').split('; ')
+  const taken = p.sequence
+    ? `${who}, taken: ${sequenceText(p.sequence, p.mode)}`
+    : `${who}: takes it (${choice})`
+  return reminder ? `${taken}\n${reminder}` : taken
 }
 
 /** What a Character's Hit Dice came to: the dice, the Con modifier per die, the HP regained. */
@@ -593,6 +621,30 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     return `concentration on ${spell} ends`
   }
 
+  /**
+   * A reaction offered: `Pass` ends the part; taking it spends the Character's reaction (a
+   * reminder, never a refusal, when it is already spent) and, with an attack, leaves the part open
+   * for its rolls.
+   */
+  function chooseReaction(part: typeof callPart.$inferSelect, choices: string[], choice: string) {
+    if (part.answer !== null) throw new CallRefusedError('That reaction is already taken: roll it')
+    if (!choices.includes(choice)) {
+      throw new CallRefusedError(`Answer with one of: ${choices.join(', ')}`)
+    }
+    const ref = characterRefs(db).find((c) => c.row.id === part.characterId)!
+    const taken = choice !== PASS
+    const reminder = taken && spendTurnResource(db, ref.handle, ref.row.name, 'reaction')
+    return {
+      values: { answer: reminder ? `${choice}; ${reminder}` : choice },
+      finished: !taken || !part.sequence,
+      event: {
+        kind: 'answer',
+        summary: `${ref.row.name} ${taken ? 'takes' : 'passes'} ${part.reaction}`,
+        data: { part: part.id, player: part.player, question: part.reaction, text: choice }
+      }
+    }
+  }
+
   /** A Death save: a d20 with no modifier, its tallies applied by code. */
   function rollDeathSave(part: typeof callPart.$inferSelect, dice: Dice, player: string) {
     const row = db.select().from(character).where(eq(character.id, part.characterId!)).get()!
@@ -694,6 +746,9 @@ export function createCalls(db: Database, now: () => number = Date.now) {
       return answer(callId, partId, player, (part, kind) => {
         if (!part.characterId) throw new CallRefusedError('That part is a question: answer it')
         if (part.hitDice) throw new CallRefusedError('Say how many Hit Dice to spend')
+        if (kind === 'reaction' && part.answer === null) {
+          throw new CallRefusedError(`${part.reaction}: take it or pass first`)
+        }
         if (part.sequence) return rollSequenceStep(part, dice, player)
         if (kind === 'death_save') return rollDeathSave(part, dice, player)
         const modifier = modifierFor(part.characterId, part, kind)
@@ -769,10 +824,11 @@ export function createCalls(db: Database, now: () => number = Date.now) {
       dice?: Dice
     ) {
       const clean = text.trim()
-      return answer(callId, partId, player, (part) => {
+      return answer(callId, partId, player, (part, kind) => {
         if (part.hitDice) return spendHitDice(part, part.hitDice, clean, dice)
-        if (part.characterId) throw new CallRefusedError('That part is a Check: roll it')
         const { choices, text: question } = db.select().from(call).where(eq(call.id, callId)).get()!
+        if (kind === 'reaction') return chooseReaction(part, choices, clean)
+        if (part.characterId) throw new CallRefusedError('That part is a Check: roll it')
         if (!clean) throw new CallRefusedError('Give an answer')
         if (choices.length && !choices.includes(clean)) {
           throw new CallRefusedError(`Answer with one of: ${choices.join(', ')}`)

@@ -162,7 +162,8 @@ export const checkCall: OpenCall = {
       mode: 'normal',
       answered: false,
       next: null,
-      hitDice: null
+      hitDice: null,
+      offer: null
     },
     {
       id: 'p2',
@@ -173,7 +174,8 @@ export const checkCall: OpenCall = {
       mode: 'advantage',
       answered: false,
       next: null,
-      hitDice: null
+      hitDice: null,
+      offer: null
     }
   ]
 }
@@ -194,7 +196,8 @@ export const questionCall: OpenCall = {
       mode: 'normal',
       answered: false,
       next: null,
-      hitDice: null
+      hitDice: null,
+      offer: null
     }
   ]
 }
@@ -230,7 +233,6 @@ export const rollEntries: TimelineEntry[] = [
   { type: 'answer', id: 'e6', player: 'player', question: 'Which door?', text: 'Left' }
 ]
 
-/** An attack Call mid-sequence: Wren has rolled to hit and rolls damage next. */
 /** A short rest's Call: Wren has two of three d10 Hit Dice left to spend. */
 export const hitDiceCall: OpenCall = {
   id: 'call-3',
@@ -247,11 +249,13 @@ export const hitDiceCall: OpenCall = {
       mode: 'normal',
       answered: false,
       next: null,
-      hitDice: { die: 10, available: 2 }
+      hitDice: { die: 10, available: 2 },
+      offer: null
     }
   ]
 }
 
+/** An attack Call mid-sequence: Wren has rolled to hit and rolls damage next. */
 export const attackCall: OpenCall = {
   id: 'c3',
   kind: 'roll_sequence',
@@ -267,7 +271,30 @@ export const attackCall: OpenCall = {
       mode: 'normal',
       answered: false,
       next: 'damage',
-      hitDice: null
+      hitDice: null,
+      offer: null
+    }
+  ]
+}
+
+/** A reaction offered: Wren can take an opportunity attack on the fleeing goblin, or pass. */
+export const reactionCall: OpenCall = {
+  id: 'c4',
+  kind: 'reaction',
+  text: 'Wren can make an opportunity attack on Goblin 1',
+  choices: ['Attack', 'Pass'],
+  parts: [
+    {
+      id: 'p5',
+      character: 'Wren',
+      player: 'player',
+      label: 'Opportunity attack',
+      reason: null,
+      mode: 'normal',
+      answered: false,
+      next: 'to hit',
+      hitDice: null,
+      offer: ['Attack', 'Pass']
     }
   ]
 }

@@ -415,7 +415,8 @@ export const activityLine = sqliteTable('activity_line', {
 /**
  * What a Call asks for: a Check, a question, an action's roll sequences, Combat initiative (one
  * roll per Character, recorded in the Combat's order), a short rest's Hit Dice, a downed Character's Death
- * save, or a concentrating Character's Constitution save to keep their spell.
+ * save, a concentrating Character's Constitution save to keep their spell, or a reaction a
+ * Character can take or pass.
  */
 export const CALL_KINDS = [
   'check',
@@ -424,7 +425,8 @@ export const CALL_KINDS = [
   'initiative',
   'hit_dice',
   'death_save',
-  'concentration'
+  'concentration',
+  'reaction'
 ] as const
 
 /**
@@ -560,6 +562,8 @@ export const callPart = sqliteTable(
     sequence: text('sequence', { mode: 'json' }).$type<Sequence>(),
     /** A short rest's Hit Dice: what the Character can spend and, once answered, what it rolled. */
     hitDice: text('hit_dice', { mode: 'json' }).$type<HitDiceSpend>(),
+    /** A reaction's name, such as `Opportunity attack`; the Call's choices take it or pass. */
+    reaction: text('reaction'),
     answer: text('answer'),
     answeredAt: integer('answered_at')
   },

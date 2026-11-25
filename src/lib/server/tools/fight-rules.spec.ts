@@ -359,3 +359,107 @@ describe('concentration', () => {
     )
   })
 })
+
+describe('a reaction', () => {
+  const addGrik = () =>
+    ok('establish', { type: 'npc', name: 'Grik', fields: { stat_block: 'monster:goblin' } })
+      .handle as string
+
+  /** Offers Wren an opportunity attack on Grik and attaches it; returns the open Call. */
+  function offered() {
+    addWren()
+    const grik = addGrik()
+    const { pending_call: id } = ok('offer_reaction', {
+      character: 'char:wren',
+      reaction: 'opportunity attack',
+      attack: { target: grik, with: 'crossbow' }
+    })
+    ok('narrate', { text: 'Grik bolts past Wren.', call: id })
+    return { grik, open: timeline().call! }
+  }
+
+  it('is a Call the Player can take or pass, out of turn', () => {
+    const { open } = offered()
+    expect(open).toMatchObject({
+      kind: 'reaction',
+      text: 'Wren can make an opportunity attack on Grik',
+      parts: [{ character: 'Wren', label: 'Opportunity attack', offer: ['Attack', 'Pass'] }]
+    })
+  })
+
+  it('is not rolled until it is taken', () => {
+    const { open } = offered()
+    expect(() => play.roll(campaignId, open.id, open.parts[0].id)).toThrow(/take it or pass/)
+  })
+
+  it('once taken, rolls to hit and damage through the normal roll path', () => {
+    const { grik, open } = offered()
+    const part = open.parts[0].id
+    play.answer(campaignId, open.id, part, 'Attack')
+    expect(timeline().call!.parts[0]).toMatchObject({ offer: null, next: 'to hit' })
+    expect(heard).toEqual([])
+
+    load([20, 15])
+    play.roll(campaignId, open.id, part)
+    load([8, 5])
+    play.roll(campaignId, open.id, part)
+
+    expect(heard).toHaveLength(1)
+    expect(heard[0].content).toBe(
+      `[Wren · player] Opportunity attack, taken: Crossbow, light attack on Grik (${grik}): d20 15 + 4 = 19 vs AC 15 → hit; damage 1d8+2: 5 + 2 = 7 piercing → Grik 0/7 HP (down); Grik dies`
+    )
+    expect(timeline().call).toBeNull()
+  })
+
+  it('passed, rolls nothing and the DM hears so', () => {
+    const { open } = offered()
+    play.answer(campaignId, open.id, open.parts[0].id, 'Pass')
+    expect(heard[0].content).toBe('[Wren · player] Opportunity attack: passes')
+    expect(timeline().call).toBeNull()
+  })
+
+  it('without an attack, taking it is the whole answer', () => {
+    addWren()
+    const { pending_call: id } = ok('offer_reaction', {
+      character: 'char:wren',
+      reaction: 'Shield Ally',
+      take: 'Step in'
+    })
+    ok('narrate', { text: 'The arrow flies at Ash.', call: id })
+    const open = timeline().call!
+    expect(open.parts[0].offer).toEqual(['Step in', 'Pass'])
+    play.answer(campaignId, open.id, open.parts[0].id, 'Step in')
+    expect(heard[0].content).toBe('[Wren · player] Shield ally: takes it (Step in)')
+  })
+
+  it("spends the Character's reaction in a Combat", () => {
+    addWren()
+    const grik = addGrik()
+    load([20, 15])
+    const { pending_call: init } = ok('start_combat', { combatants: ['char:wren', grik] })
+    ok('narrate', { text: 'Roll for initiative!', call: init })
+    rollInitiative(init, 18)
+
+    const brace = () => {
+      const { pending_call: id } = ok('offer_reaction', {
+        character: 'char:wren',
+        reaction: 'Brace'
+      })
+      ok('narrate', { text: 'Again!', call: id })
+      const open = timeline().call!
+      heard = []
+      play.answer(campaignId, open.id, open.parts[0].id, 'Take')
+      return heard[0].content
+    }
+    expect(brace()).toBe('[Wren · player] Brace: takes it (Take)')
+    expect(brace()).toBe(
+      '[Wren · player] Brace: takes it (Take)\nWren has already used a reaction this turn (a reminder: go on if the fiction allows it)'
+    )
+  })
+
+  it('is refused for a Character who cannot act', () => {
+    addWren()
+    ok('damage', { target: 'char:wren', amount: 12, type: 'slashing' })
+    expect(call('offer_reaction', { character: 'char:wren', reaction: 'Brace' }).isError).toBe(true)
+  })
+})

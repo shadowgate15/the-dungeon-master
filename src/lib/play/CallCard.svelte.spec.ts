@@ -1,7 +1,7 @@
 import { page } from 'vitest/browser'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-svelte'
-import { attackCall, checkCall, hitDiceCall, questionCall } from './play-fixtures'
+import { attackCall, checkCall, hitDiceCall, questionCall, reactionCall } from './play-fixtures'
 import CallCard from './CallCard.svelte'
 
 describe('CallCard', () => {
@@ -101,5 +101,30 @@ describe('CallCard', () => {
     expect(onanswer).toHaveBeenCalledWith('part-5', '2')
     await wren.getByRole('button', { name: 'Spend none' }).click()
     expect(onanswer).toHaveBeenLastCalledWith('part-5', '0')
+  })
+
+  it('offers a reaction to take or pass, with no roll until it is taken', async () => {
+    const onanswer = vi.fn()
+    render(CallCard, { call: reactionCall, onroll: () => {}, onanswer })
+
+    const wren = page.getByRole('group', { name: 'Wren' })
+    await expect
+      .element(page.getByText('Wren can make an opportunity attack on Goblin 1'))
+      .toBeVisible()
+    await expect.element(wren.getByText('Opportunity attack')).toBeVisible()
+    await expect.element(wren.getByRole('button', { name: /Roll/ })).not.toBeInTheDocument()
+    await wren.getByRole('button', { name: 'Attack' }).click()
+    expect(onanswer).toHaveBeenCalledWith('p5', 'Attack')
+    await wren.getByRole('button', { name: 'Pass' }).click()
+    expect(onanswer).toHaveBeenLastCalledWith('p5', 'Pass')
+  })
+
+  it('rolls a taken reaction like any attack', async () => {
+    const onroll = vi.fn()
+    const call = { ...reactionCall, parts: [{ ...reactionCall.parts[0], offer: null }] }
+    render(CallCard, { call, onroll, onanswer: () => {} })
+
+    await page.getByRole('button', { name: 'Roll to hit for Wren' }).click()
+    expect(onroll).toHaveBeenCalledWith('p5')
   })
 })

@@ -7,7 +7,8 @@
    * skill or save and the reason, never the DC; advantage marked), or for a roll sequence such as
    * an attack (its next roll: to hit, then damage; never the AC), or a question with its choices
    * as buttons (free text without), or a short rest's Hit Dice (how many to spend, as buttons up
-   * to what is left). Clicking rolls on the server; nothing is rolled here.
+   * to what is left), or a reaction (take it or pass; once taken, its attack rolls like any).
+   * Clicking rolls on the server; nothing is rolled here.
    */
   let {
     call,
@@ -28,7 +29,7 @@
   aria-label="Call"
   class="flex shrink-0 flex-col gap-2 rounded-panel border-2 border-primary bg-raised p-3 text-sm"
 >
-  {#if call.kind === 'question' || call.kind === 'hit_dice'}
+  {#if call.kind === 'question' || call.kind === 'hit_dice' || call.kind === 'reaction'}
     <p class="font-medium">{call.text}</p>
   {/if}
   {#each call.parts as part (part.id)}
@@ -49,7 +50,20 @@
           <span class="text-muted">{part.reason}</span>
         {/if}
         {#if part.answered}
-          <span class="ml-auto text-xs text-muted">Rolled</span>
+          <span class="ml-auto text-xs text-muted"
+            >{call.kind === 'reaction' ? 'Answered' : 'Rolled'}</span
+          >
+        {:else if part.offer}
+          <span class="ml-auto flex gap-1">
+            {#each part.offer as choice (choice)}
+              <Button
+                size="sm"
+                variant="secondary"
+                {disabled}
+                onclick={() => onanswer(part.id, choice)}>{choice}</Button
+              >
+            {/each}
+          </span>
         {:else}
           <Button
             size="sm"

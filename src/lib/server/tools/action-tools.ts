@@ -10,6 +10,7 @@ import {
   cancelPendingCall,
   createPendingCall,
   DC_BY_TIER,
+  PASS,
   saveKey,
   TIERS,
   type PendingPart
@@ -406,6 +407,77 @@ export const actionTools = [
           summary: `${actor.name}'s ${sequence.label} on ${target.name}`
         })
       )
+    }
+  }),
+
+  writeTool({
+    name: 'offer_reaction',
+    description:
+      "Offer a Character a reaction out of turn, such as an opportunity attack when a foe leaves their reach: returns a pending Call to attach with your closing narrate(text, call: id). The Player takes it or passes; taking it spends their reaction, and with an attack they then roll to hit and damage. You hear one call_result. An NPC's reaction you resolve yourself, with attack.",
+    input: z.object({
+      character: z.string().min(1).describe('Who can react: char:…'),
+      reaction: z
+        .string()
+        .trim()
+        .min(1)
+        .describe('What the reaction is, such as opportunity attack'),
+      attack: z
+        .object({
+          target: z.string().min(1).describe('Who is attacked: npc:… or creature:…'),
+          with: z.string().trim().min(1).describe('The weapon, such as longsword')
+        })
+        .optional()
+        .describe('The attack the reaction makes, rolled once taken'),
+      take: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe('The take button; Attack with an attack, Take without'),
+      ...adv
+    }),
+    activity: 'DM offers a reaction',
+    run: ({ db, now }, input) => {
+      const who = combatant(db, input.character)
+      if (who.kind !== 'character') {
+        throw new ToolError(
+          'not_a_character',
+          `${who.name} is not a Character`,
+          "Resolve an NPC's or Creature's reaction yourself, with attack"
+        )
+      }
+      mustAct(who)
+      const target = input.attack && combatant(db, input.attack.target)
+      const attack = input.attack && findAttack(who, input.attack.with)
+      const sequence =
+        target && attack ? attackSequence(attack.name, target, attack.bonus, attack.damage) : null
+      const name = input.reaction.toLowerCase()
+      const label = name[0].toUpperCase() + name.slice(1)
+      const take = input.take ?? (sequence ? 'Attack' : 'Take')
+      if (take === PASS) {
+        throw new ToolError('bad_take', `${PASS} is the other button`, 'Name the take button')
+      }
+      const article = /^[aeiou]/.test(name) ? 'an' : 'a'
+      const text = `${who.name} can make ${article} ${name}${target ? ` on ${target.name}` : ''}`
+      const id = createPendingCall(
+        db,
+        [
+          {
+            characterId: who.id,
+            player: who.player,
+            sequence,
+            reaction: label,
+            ...modeOf(input)
+          }
+        ],
+        now,
+        'reaction',
+        { text, choices: [take, PASS] }
+      )
+      return {
+        result: { pending_call: id, next: pendingNext(id) },
+        event: { kind: 'call_pending', summary: text, data: { call: id }, dmOnly: true }
+      }
     }
   }),
 

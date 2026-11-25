@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8105020c-9ea8-40f4-b2ab-071582fbb8fa",
+  "id": "a623d219-1c02-4c57-8aa6-f465fe1df579",
   "prevId": "04a39b45-48cc-4cb0-9a33-b453738a85d0",
   "tables": {
     "activity_line": {
@@ -235,6 +235,13 @@
         },
         "hit_dice": {
           "name": "hit_dice",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reaction": {
+          "name": "reaction",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
