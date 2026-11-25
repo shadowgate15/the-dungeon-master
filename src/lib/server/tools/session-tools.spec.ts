@@ -109,7 +109,8 @@ describe('catch-up close', () => {
     clock += 3_600_000
     play.openSession(campaignId, 'bridge-2')
 
-    expect(ok('sessions')).toMatchObject({ current: 2, unclosed: [1], recap_due: false })
+    // A crashed sitting still gets its recap, once the catch-up close has written the summary.
+    expect(ok('sessions')).toMatchObject({ current: 2, unclosed: [1], recap_due: true })
     expect(ok('history', { session: 1 }).events.map((e: { kind: string }) => e.kind)).toEqual([
       'narration'
     ])

@@ -82,7 +82,8 @@ export function closeSession(
 /**
  * What the DM recalls of earlier sittings: Session summaries newest first (none for empty
  * Sessions), the current Session, older unclosed ones awaiting a catch-up close, and whether a
- * recap is due (a summary exists from an earlier sitting and none was given this one).
+ * recap is due (an earlier sitting has a summary, or will once its catch-up close writes one,
+ * and no recap was given this one).
  */
 export function sessionsView(db: Queryable, last?: number) {
   const all = db.select().from(session).orderBy(desc(session.number)).all()
@@ -110,7 +111,11 @@ export function sessionsView(db: Queryable, last?: number) {
     recap_due:
       current !== undefined &&
       !recapGiven &&
-      all.some((s) => s.number < current.number && s.summary !== null),
+      all.some(
+        (s) =>
+          s.number < current.number &&
+          (s.summary !== null || (s.closedAt === null && hasNarration(db, s.id)))
+      ),
     sessions: listed.slice(0, last).map((s) => ({
       number: s.number,
       closed: s.closedAt !== null,
