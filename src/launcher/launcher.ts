@@ -124,11 +124,41 @@ async function stopServer(ctx: Context, runtime: Runtime) {
   if (readRuntimeFile(ctx.home)?.pid === runtime.pid) fs.rmSync(runtimeFilePath(ctx.home))
 }
 
-/** The server for this plugin version: the running one, or a fresh one replacing a stale one. */
-async function ensureServer(ctx: Context): Promise<Runtime> {
-  const running = readRuntimeFile(ctx.home)
-  if (running && alive(running.pid)) {
+/**
+ * The game server the runtime file names, if it is really running: the pid alone may have been
+ * reused by another process after a crash or reboot, so the server must answer with its token.
+ * A runtime file naming no live server is removed.
+ */
+async function runningServer(ctx: Context): Promise<Runtime | undefined> {
+  const runtime = readRuntimeFile(ctx.home)
+  if (!runtime) return undefined
+  if (alive(runtime.pid)) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${runtime.port}/api/bridge/tools`, {
+        headers: { authorization: `Bearer ${runtime.token}` },
+        signal: AbortSignal.timeout(2_000)
+      })
+      if (res.ok) return runtime
+    } catch {
+      // not our server
+    }
+  }
+  if (readRuntimeFile(ctx.home)?.pid === runtime.pid) fs.rmSync(runtimeFilePath(ctx.home))
+  return undefined
+}
+
+/**
+ * The server for this plugin version: the running one, or a fresh one replacing a stale one.
+ * `beforeRestart` may refuse (by throwing) before a stale server is stopped.
+ */
+async function ensureServer(
+  ctx: Context,
+  beforeRestart?: (stale: Runtime) => Promise<void>
+): Promise<Runtime> {
+  const running = await runningServer(ctx)
+  if (running) {
     if (running.version === ctx.version) return running
+    await beforeRestart?.(running)
     await stopServer(ctx, running)
   }
   return startServer(ctx)
@@ -181,6 +211,15 @@ async function register(runtime: Runtime, folder: string): Promise<RegisteredCam
   return (await response.json()) as RegisteredCampaign
 }
 
+function refuseIfAttached(campaign: RegisteredCampaign) {
+  if (campaign.attached) {
+    throw new LauncherError(
+      `${campaign.name} already has a DM session at the table. ` +
+        `End that session before starting another.`
+    )
+  }
+}
+
 /**
  * Runs the DM's `claude` in this terminal, so its trust, MCP consent and dev-channels prompts
  * show where they work, and resolves to its exit code.
@@ -209,8 +248,10 @@ function runClaude(pluginId: string, folder: string, extra: string[]): Promise<n
  * The `dm` command for the user's terminal. `bin/` is only on Claude's own PATH, and the plugin
  * root changes with every update, so the shim looks up the current install on each run.
  */
+const SHIM_MARKER = "# Written by The Dungeon Master plugin's SessionStart hook."
+
 const SHIM = `#!/bin/sh
-# Written by The Dungeon Master plugin's SessionStart hook. Runs the installed plugin's launcher.
+${SHIM_MARKER} Runs the installed plugin's launcher.
 root=$(claude plugin list --json 2>/dev/null | node -e '
   let s = ""
   process.stdin.on("data", (d) => (s += d)).on("end", () => {
@@ -229,11 +270,21 @@ fi
 exec node "$root/bin/dm.mjs" "$@"
 `
 
-/** Writes the `dm` shim to `~/.local/bin`, quietly: the SessionStart hook runs this every session. */
+/**
+ * Writes the `dm` shim to `~/.local/bin`, quietly: the SessionStart hook runs this every session.
+ * A `dm` that isn't one of the plugin's shims is the user's own and is left alone.
+ */
 function installShim() {
   const dir = path.join(os.homedir(), '.local', 'bin')
   const shim = path.join(dir, 'dm')
-  if (fs.existsSync(shim) && fs.readFileSync(shim, 'utf8') === SHIM) return
+  if (fs.existsSync(shim)) {
+    const existing = fs.readFileSync(shim, 'utf8')
+    if (existing === SHIM) return
+    if (!existing.split('\n', 2)[1]?.startsWith(SHIM_MARKER)) {
+      process.stderr.write(`dm: ${shim} is not The Dungeon Master's shim, so it was not written.\n`)
+      return
+    }
+  }
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(shim, SHIM, { mode: 0o755 })
   fs.chmodSync(shim, 0o755)
@@ -265,8 +316,8 @@ export async function runLauncher(
       return 0
     }
     if (args[0] === 'stop') {
-      const running = readRuntimeFile(ctx.home)
-      if (!running || !alive(running.pid)) {
+      const running = await runningServer(ctx)
+      if (!running) {
         process.stdout.write('dm: the game server is not running.\n')
         return 0
       }
@@ -283,14 +334,13 @@ export async function runLauncher(
       )
     }
     const pluginId = enabledPluginId()
-    const runtime = await ensureServer(ctx)
+    // A stale server may still hold this Campaign's live session: ask it before restarting, since
+    // the session's bridge only reconnects after the restart.
+    const runtime = await ensureServer(ctx, async (stale) =>
+      refuseIfAttached(await register(stale, cwd))
+    )
     const campaign = await register(runtime, cwd)
-    if (campaign.attached) {
-      return fail(
-        `${campaign.name} already has a DM session at the table. ` +
-          `End that session before starting another.`
-      )
-    }
+    refuseIfAttached(campaign)
     process.stdout.write(
       `dm: ${campaign.name} is at ${uiUrl(runtime.port)}/campaigns/${campaign.id}\n`
     )

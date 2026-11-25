@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import net from 'node:net'
@@ -165,6 +165,10 @@ const token = 'fake-' + process.pid
 fs.writeFileSync(path.join(home, 'fake-server-start.json'), JSON.stringify({ cwd: process.cwd(), argv: process.argv, origin: process.env.ORIGIN }))
 const server = http.createServer(async (req, res) => {
   if (req.headers.authorization !== 'Bearer ' + token) return res.writeHead(401).end()
+  if (req.method === 'GET' && req.url === '/api/bridge/tools') {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    return res.end(JSON.stringify({ tools: [] }))
+  }
   if (req.method === 'POST' && req.url === '/api/bridge/register') {
     let body = ''
     for await (const chunk of req) body += chunk
@@ -328,6 +332,46 @@ describe('dm', () => {
     expect(alive(stale)).toBe(false)
   })
 
+  it('refuses before restarting a stale server whose Campaign has a live session', async () => {
+    const f = await setup({ version: '1.0.0' })
+    f.makeCampaign()
+    f.dm()
+    const stale = f.runtime()!.pid
+    f.track(stale)
+    fs.writeFileSync(path.join(f.home, 'attached'), '')
+    f.setVersion('1.1.0')
+    const run = f.dm()
+    expect(run.code).toBe(1)
+    expect(run.stderr).toMatch(/Fixture already has a DM session/)
+    // The live session's server is left running.
+    expect(alive(stale)).toBe(true)
+    expect(f.runtime()!.pid).toBe(stale)
+  })
+
+  it('never signals a process that only reuses a dead server pid', async () => {
+    const f = await setup()
+    const stranger = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' })
+    f.track(stranger.pid!)
+    fs.writeFileSync(
+      path.join(f.home, 'runtime.json'),
+      JSON.stringify({ port: 1, token: 'old', pid: stranger.pid, version: '0.9.0' })
+    )
+    const stop = f.dm(['stop'], { cwd: f.tmp })
+    expect(stop.code).toBe(0)
+    expect(stop.stdout).toMatch(/not running/)
+    expect(alive(stranger.pid!)).toBe(true)
+    expect(f.runtime()).toBeUndefined()
+
+    fs.writeFileSync(
+      path.join(f.home, 'runtime.json'),
+      JSON.stringify({ port: 1, token: 'old', pid: stranger.pid, version: '0.9.0' })
+    )
+    f.makeCampaign()
+    expect(f.dm().code).toBe(0)
+    expect(alive(stranger.pid!)).toBe(true)
+    expect(f.runtime()!.pid).not.toBe(stranger.pid)
+  })
+
   it('leaves the server running after claude exits, until dm stop', async () => {
     const f = await setup()
     f.makeCampaign()
@@ -369,5 +413,31 @@ describe('dm', () => {
     })
     expect(viaShim.stderr).toBe('')
     expect(viaShim.stdout).toMatch(/not running/)
+  })
+
+  it('leaves a dm of the user own on the PATH alone, and says so', async () => {
+    const f = await setup()
+    const user = path.join(f.tmp, 'user')
+    const shim = path.join(user, '.local', 'bin', 'dm')
+    fs.mkdirSync(path.dirname(shim), { recursive: true })
+    fs.writeFileSync(shim, '#!/bin/sh\necho mine\n', { mode: 0o755 })
+    const install = f.dm(['install-shim'], { env: { HOME: user } })
+    expect(install.code).toBe(0)
+    expect(install.stderr).toMatch(/not written/)
+    expect(fs.readFileSync(shim, 'utf8')).toBe('#!/bin/sh\necho mine\n')
+  })
+
+  it('replaces an older shim of its own', async () => {
+    const f = await setup()
+    const user = path.join(f.tmp, 'user')
+    const shim = path.join(user, '.local', 'bin', 'dm')
+    fs.mkdirSync(path.dirname(shim), { recursive: true })
+    fs.writeFileSync(
+      shim,
+      "#!/bin/sh\n# Written by The Dungeon Master plugin's SessionStart hook. old\n",
+      { mode: 0o755 }
+    )
+    expect(f.dm(['install-shim'], { env: { HOME: user } }).code).toBe(0)
+    expect(fs.readFileSync(shim, 'utf8')).toContain('bin/dm.mjs')
   })
 })

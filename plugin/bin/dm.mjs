@@ -114,10 +114,27 @@ async function stopServer(ctx, runtime) {
   while (alive(runtime.pid)) await sleep(20);
   if (readRuntimeFile(ctx.home)?.pid === runtime.pid) fs2.rmSync(runtimeFilePath(ctx.home));
 }
-async function ensureServer(ctx) {
-  const running = readRuntimeFile(ctx.home);
-  if (running && alive(running.pid)) {
+async function runningServer(ctx) {
+  const runtime = readRuntimeFile(ctx.home);
+  if (!runtime) return void 0;
+  if (alive(runtime.pid)) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${runtime.port}/api/bridge/tools`, {
+        headers: { authorization: `Bearer ${runtime.token}` },
+        signal: AbortSignal.timeout(2e3)
+      });
+      if (res.ok) return runtime;
+    } catch {
+    }
+  }
+  if (readRuntimeFile(ctx.home)?.pid === runtime.pid) fs2.rmSync(runtimeFilePath(ctx.home));
+  return void 0;
+}
+async function ensureServer(ctx, beforeRestart) {
+  const running = await runningServer(ctx);
+  if (running) {
     if (running.version === ctx.version) return running;
+    await beforeRestart?.(running);
     await stopServer(ctx, running);
   }
   return startServer(ctx);
@@ -154,6 +171,13 @@ async function register(runtime, folder) {
   }
   return await response.json();
 }
+function refuseIfAttached(campaign) {
+  if (campaign.attached) {
+    throw new LauncherError(
+      `${campaign.name} already has a DM session at the table. End that session before starting another.`
+    );
+  }
+}
 function runClaude(pluginId, folder, extra) {
   const args = [
     "--agent",
@@ -173,8 +197,9 @@ function runClaude(pluginId, folder, extra) {
     })
   );
 }
+var SHIM_MARKER = "# Written by The Dungeon Master plugin's SessionStart hook.";
 var SHIM = `#!/bin/sh
-# Written by The Dungeon Master plugin's SessionStart hook. Runs the installed plugin's launcher.
+${SHIM_MARKER} Runs the installed plugin's launcher.
 root=$(claude plugin list --json 2>/dev/null | node -e '
   let s = ""
   process.stdin.on("data", (d) => (s += d)).on("end", () => {
@@ -195,7 +220,15 @@ exec node "$root/bin/dm.mjs" "$@"
 function installShim() {
   const dir = path3.join(os2.homedir(), ".local", "bin");
   const shim = path3.join(dir, "dm");
-  if (fs2.existsSync(shim) && fs2.readFileSync(shim, "utf8") === SHIM) return;
+  if (fs2.existsSync(shim)) {
+    const existing = fs2.readFileSync(shim, "utf8");
+    if (existing === SHIM) return;
+    if (!existing.split("\n", 2)[1]?.startsWith(SHIM_MARKER)) {
+      process.stderr.write(`dm: ${shim} is not The Dungeon Master's shim, so it was not written.
+`);
+      return;
+    }
+  }
   fs2.mkdirSync(dir, { recursive: true });
   fs2.writeFileSync(shim, SHIM, { mode: 493 });
   fs2.chmodSync(shim, 493);
@@ -222,8 +255,8 @@ async function runLauncher(args, {
       return 0;
     }
     if (args[0] === "stop") {
-      const running = readRuntimeFile(ctx.home);
-      if (!running || !alive(running.pid)) {
+      const running = await runningServer(ctx);
+      if (!running) {
         process.stdout.write("dm: the game server is not running.\n");
         return 0;
       }
@@ -238,13 +271,12 @@ async function runLauncher(args, {
       );
     }
     const pluginId = enabledPluginId();
-    const runtime = await ensureServer(ctx);
+    const runtime = await ensureServer(
+      ctx,
+      async (stale) => refuseIfAttached(await register(stale, cwd))
+    );
     const campaign = await register(runtime, cwd);
-    if (campaign.attached) {
-      return fail(
-        `${campaign.name} already has a DM session at the table. End that session before starting another.`
-      );
-    }
+    refuseIfAttached(campaign);
     process.stdout.write(
       `dm: ${campaign.name} is at ${uiUrl(runtime.port)}/campaigns/${campaign.id}
 `
