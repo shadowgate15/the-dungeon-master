@@ -216,3 +216,31 @@ describe('a Death save', () => {
     expect(heard.at(-1)!.content).toContain('dies')
   })
 })
+
+describe('an NPC or Creature at 0 HP', () => {
+  const addGrik = () =>
+    ok('establish', { type: 'npc', name: 'Grik', fields: { stat_block: 'monster:goblin' } })
+      .handle as string
+
+  it('dies: an NPC is marked dead', () => {
+    const grik = addGrik()
+    expect(ok('damage', { target: grik, amount: 9, type: 'fire' }).notes).toEqual(['Grik dies'])
+    expect(ok('open', { handle: grik }).fields).toMatchObject({ status: 'dead' })
+  })
+
+  it('is knocked out instead when the DM rules it', () => {
+    const grik = addGrik()
+    const hit = ok('damage', { target: grik, amount: 9, type: 'bludgeoning', knock_out: true })
+    expect(hit.notes).toEqual(['Grik is knocked out'])
+    expect(ok('open', { handle: grik }).fields.status).not.toBe('dead')
+  })
+
+  it('dies: a Creature in the Combat too', () => {
+    addWren()
+    load([20, 15])
+    ok('start_combat', { combatants: ['char:wren', { monster: 'monster:goblin' }] })
+    expect(
+      ok('damage', { target: 'creature:goblin-1', amount: 7, type: 'piercing' }).notes
+    ).toEqual(['Goblin 1 dies'])
+  })
+})
