@@ -38,7 +38,7 @@ const changes = () =>
     .filter((e) => e.kind === 'change')
 
 /** A Session that stopped without End Session: its Session stays open after the DM left. */
-function leftSitting() {
+function leftSession() {
   attached = true
   library.record(campaignId).openSession('old-bridge')
   attached = false
@@ -86,7 +86,7 @@ describe('allowed offline', () => {
   })
 
   it('logs offline edits in no Session, even with an earlier Session left open', () => {
-    leftSitting()
+    leftSession()
     const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
     library.party(campaignId).updateDetails(wren, { notes: 'Lost her map.' })
     library.saveSeed(campaignId, { name: 'Ember Road', premise: 'A caravan road' })
@@ -107,7 +107,7 @@ describe('allowed offline', () => {
 
   it('logs an offline Start over in no Session, even with an earlier Session left open', () => {
     begin()
-    leftSitting()
+    leftSession()
     library.startOver(campaignId)
     expect(changes().at(-1)).toMatchObject({
       sessionId: null,
