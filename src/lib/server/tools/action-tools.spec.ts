@@ -483,6 +483,34 @@ describe('the primitives', () => {
     expect(sheet('Wren').hp).toMatchObject({ current: 12 })
   })
 
+  it('damage and heal: roll their dice in code, and take a fixed amount only instead of dice', () => {
+    addWren()
+    const grik = addGrik()
+
+    load([6, 2], [6, 3])
+    expect(ok('damage', { target: grik, dice: '2d6', type: 'fire' })).toMatchObject({
+      rolled: { dice: [2, 3], total: 5 },
+      dealt: 5,
+      hp: 2
+    })
+    ok('damage', { target: 'char:wren', amount: 10, type: 'slashing' })
+    load([4, 3], [4, 4])
+    expect(ok('heal', { target: 'char:wren', dice: '2d4+2' })).toMatchObject({
+      rolled: { dice: [3, 4], total: 9 },
+      healed: 9
+    })
+
+    for (const args of [{ target: 'char:wren' }, { target: 'char:wren', amount: 3, dice: '1d4' }]) {
+      expect(call('heal', args).payload).toMatchObject({ code: 'invalid_input' })
+      expect(call('damage', { ...args, type: 'fire' }).payload).toMatchObject({
+        code: 'invalid_input'
+      })
+    }
+    expect(call('heal', { target: 'char:wren', dice: 'lots' }).payload).toMatchObject({
+      code: 'bad_dice'
+    })
+  })
+
   it('add_condition and remove_condition: only SRD conditions, only ones it has', () => {
     addWren()
     ok('add_condition', { target: 'char:wren', condition: 'Prone' })

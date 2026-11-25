@@ -362,6 +362,40 @@ function spendSlot(db: Queryable, who: Extract<Combatant, { kind: 'character' }>
   return { level, spent: spent + 1, max }
 }
 
+/**
+ * The HP a damage or heal applies: code rolls `dice`, or a fixed `amount` for an effect that
+ * names a number rather than dice (such as a potion's flat bonus or a trap's set damage).
+ */
+const hpChange = {
+  dice: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe('The dice to roll, such as 2d6+1; code rolls them'),
+  amount: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('A fixed number, only for an effect that names one instead of dice')
+}
+const oneHpChange = [
+  (i: { dice?: string; amount?: number }) => (i.dice === undefined) !== (i.amount === undefined),
+  { message: 'Give exactly one of dice and amount' }
+] as const
+
+/** The HP a damage or heal applies, rolling its dice; `rolled` is set when dice were rolled. */
+function hpAmount(dice: Dice, input: { dice?: string; amount?: number }) {
+  if (input.dice === undefined) return { amount: input.amount!, rolled: undefined }
+  const rolled = rollExpressionOrRefuse(dice, input.dice)
+  const amount = Math.max(0, rolled.total)
+  return {
+    amount,
+    rolled: { expr: input.dice, dice: rolled.dice, modifier: rolled.modifier, total: amount }
+  }
+}
+
 /** Rolls a dice expression, or refuses one that isn't. */
 function rollExpressionOrRefuse(dice: Dice, expr: string) {
   try {
@@ -758,25 +792,28 @@ export const actionTools = [
   writeTool({
     name: 'damage',
     description:
-      "Deal damage outside an attack or save, such as a fall. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply. A Character dropped to 0 falls Unconscious (or dies outright); damage at 0 is a Death save failure. An NPC or Creature dropped to 0 dies unless knock_out. notes says what came of it.",
-    input: z.object({
-      target: z.string().min(1).describe('char:… or npc:…'),
-      amount: z.number().int().min(0),
-      type: z.string().min(1).describe('The damage type, such as bludgeoning'),
-      crit: z
-        .boolean()
-        .optional()
-        .describe('A critical hit: at 0 HP a Character takes two Death save failures'),
-      knock_out: z
-        .boolean()
-        .optional()
-        .describe('An NPC or Creature dropped to 0 is knocked out instead of killed')
-    }),
+      "Deal damage outside an attack or save, such as a fall. Pass dice and code rolls them; pass amount only for an effect that names a fixed number. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply. A Character dropped to 0 falls Unconscious (or dies outright); damage at 0 is a Death save failure. An NPC or Creature dropped to 0 dies unless knock_out. notes says what came of it.",
+    input: z
+      .object({
+        target: z.string().min(1).describe('char:… or npc:…'),
+        ...hpChange,
+        type: z.string().min(1).describe('The damage type, such as bludgeoning'),
+        crit: z
+          .boolean()
+          .optional()
+          .describe('A critical hit: at 0 HP a Character takes two Death save failures'),
+        knock_out: z
+          .boolean()
+          .optional()
+          .describe('An NPC or Creature dropped to 0 is knocked out instead of killed')
+      })
+      .refine(...oneHpChange),
     activity: 'DM applies damage',
     run: ({ db, dice, now }, input) => {
       const who = combatant(db, input.target)
       const type = input.type.toLowerCase()
-      const { calls, ...change } = applyDamage(db, who, input.amount, type, {
+      const { amount, rolled } = hpAmount(dice, input)
+      const { calls, ...change } = applyDamage(db, who, amount, type, {
         crit: input.crit,
         knockOut: input.knock_out,
         dice,
@@ -784,6 +821,7 @@ export const actionTools = [
       })
       return {
         result: {
+          ...(rolled ? { rolled } : {}),
           ...change,
           state: hpState(change.hp, change.max),
           ...concentrationCalls(calls)
@@ -805,17 +843,18 @@ export const actionTools = [
   writeTool({
     name: 'heal',
     description:
-      'Restore HP, never above the maximum. Roll a healing spell or potion with roll first.',
-    input: z.object({
-      target: z.string().min(1).describe('char:… or npc:…'),
-      amount: z.number().int().min(0)
-    }),
+      "Restore HP, never above the maximum. Pass a healing spell or potion's dice and code rolls them; pass amount only for an effect that names a fixed number.",
+    input: z
+      .object({ target: z.string().min(1).describe('char:… or npc:…'), ...hpChange })
+      .refine(...oneHpChange),
     activity: 'DM applies healing',
-    run: ({ db }, input) => {
+    run: ({ db, dice }, input) => {
       const who = combatant(db, input.target)
-      const change = applyHealing(db, who, input.amount)
+      const { amount, rolled } = hpAmount(dice, input)
+      const change = applyHealing(db, who, amount)
       return {
         result: {
+          ...(rolled ? { rolled } : {}),
           healed: change.dealt,
           hp: change.hp,
           max: change.max,
