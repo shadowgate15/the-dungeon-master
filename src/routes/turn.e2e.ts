@@ -95,6 +95,7 @@ test('a two-Character Floor arrives as one event and gets one Narration', async 
         '[d1 Wren · player] I pick the lock.\n[d2 Bram · player] I watch the street.'
       )
       const npc = await dm!.call('establish', { type: 'npc', name: 'Old Tam' })
+      await dm!.call('reveal', { of: npc.payload.handle, holders: ['char:wren'] })
       await dm!.call('narrate', {
         text: '"Quick now," Tam hisses as the lock gives.',
         voice: npc.payload.handle

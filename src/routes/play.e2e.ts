@@ -61,7 +61,7 @@ test('Declarations wait in the pending tray, editable and withdrawable, across a
 
   await page.getByRole('button', { name: 'Edit Wren: I pick the lock.' }).click()
   await page.getByRole('textbox', { name: 'Edit Declaration' }).fill('I pick the lock quietly.')
-  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
   await page.getByRole('button', { name: 'Withdraw Bram: I watch the street.' }).click()
   await expect(tray.getByRole('listitem')).toHaveText([/Wren\s*I pick the lock quietly\./])
 
