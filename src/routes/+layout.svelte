@@ -8,6 +8,7 @@
   import type { LayoutProps } from './$types'
 
   import ThemeToggle from '#lib/theme/ThemeToggle.svelte'
+  import StopServer from '#lib/server-control/StopServer.svelte'
   import { page } from '$app/state'
   import { resolve } from '$app/paths'
 
@@ -24,6 +25,7 @@
 </svelte:head>
 
 <header class="flex h-12 items-center justify-end gap-4 border-b border-border px-4">
+  <StopServer />
   <a href={resolve('/credits')} class="text-sm underline">Credits</a>
   <ThemeToggle theme={data.theme} redirectTo={page.url.pathname + page.url.search} />
 </header>

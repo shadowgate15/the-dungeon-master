@@ -29,3 +29,13 @@ export function readRuntimeFile(home: string): Runtime | undefined {
     return undefined
   }
 }
+
+/**
+ * Stops this game server from the UI, as `dm stop` does from the terminal: its runtime file goes
+ * first (only if it still names this server), so neither the bridge nor the launcher finds a
+ * stopped server, then `exit` ends the process.
+ */
+export function stopServer({ home, pid, exit }: { home: string; pid: number; exit: () => void }) {
+  if (readRuntimeFile(home)?.pid === pid) fs.rmSync(runtimeFilePath(home), { force: true })
+  exit()
+}

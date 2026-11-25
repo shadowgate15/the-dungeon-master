@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { DUNGEON_MASTER_HOME, DUNGEON_MASTER_PORT, DUNGEON_MASTER_VERSION } from '$app/env/private'
 import { library, live, sessions } from '../campaign'
 import { userStateDir } from '../campaign/paths'
-import { writeRuntimeFile } from '../runtime'
+import { stopServer, writeRuntimeFile } from '../runtime'
 import { gameTools } from '../tools'
 import { createToolHost } from '../tools/host'
 import { createDmChannels } from '../play/notices'
@@ -46,5 +46,17 @@ export function announceServer() {
     token,
     pid: process.pid,
     version: DUNGEON_MASTER_VERSION || undefined
+  })
+}
+
+/**
+ * The UI's stop control: like `dm stop`, it ends this server. The process exits just after the
+ * response goes out, through the same SIGTERM `dm stop` sends.
+ */
+export function stop() {
+  stopServer({
+    home: userStateDir({ DUNGEON_MASTER_HOME }),
+    pid: process.pid,
+    exit: () => setTimeout(() => process.kill(process.pid, 'SIGTERM'), 100)
   })
 }

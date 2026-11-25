@@ -47,7 +47,7 @@ Requirements: [Claude Code](https://claude.com/claude-code) and Node 26 or later
 
    `dm` starts the game server if it isn't running (or restarts one left over from an older plugin version), registers the folder and starts `claude` with the plugin's `dm` agent. The terminal shows Claude Code's trust, MCP consent and dev-channels prompts. Play happens in the browser. Run outside a Campaign folder, `dm` starts the server and points you to the web UI.
 
-5. End the Session with End Session in the UI. To stop the game server, run `dm stop` or use the stop control in the UI.
+5. End the Session with End Session in the UI. To stop the game server, run `dm stop` or press Stop server in the UI's header.
 
 Outside a Campaign folder, the plugin's hooks and bridge do nothing, so ordinary Claude Code sessions are unaffected.
 
