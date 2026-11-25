@@ -1,11 +1,12 @@
 import { formatClock } from '#lib/play/clock.ts'
 import type { Party } from '../character/party'
 import type { Queryable } from '../db/connect'
-import { eq } from 'drizzle-orm'
-import { npcCombat, session } from '../db/schema'
+import { and, asc, eq, isNull } from 'drizzle-orm'
+import { call, callPart, npcCombat, session } from '../db/schema'
 import { currentArc, driftCount } from '../story/arc'
 import { lastLint } from '../world/lint'
 import { hpState } from '#lib/play/hp-state.ts'
+import { pendingCalls } from './calls'
 import { initiativeOrder, liveCombat, waitingOnInitiative } from './combat'
 import { characterRefs, currentMinute, present } from './scene'
 import { playSheets } from './sheets'
@@ -17,13 +18,36 @@ import { playSheets } from './sheets'
  */
 export type CoreBlockSource = { party: Party; db: Queryable }
 
-/** The Scene: its Place (handle and name) and the in-fiction time. */
+/**
+ * The Scene: its Place (handle and name) and the in-fiction time, then the open Call (id, kind and
+ * the Characters yet to answer) and the ids of pending Calls no Narration has attached.
+ */
 export function scenePart({ db }: CoreBlockSource): string {
   const place = present(db).place
   const time = formatClock(currentMinute(db))
-  return place
-    ? `Scene: ${place.name} (${place.handle}), ${time}.`
-    : `Scene: none set yet, ${time}.`
+  const lines = [
+    place ? `Scene: ${place.name} (${place.handle}), ${time}.` : `Scene: none set yet, ${time}.`
+  ]
+  const open = db.select().from(call).where(eq(call.state, 'open')).get()
+  if (open) {
+    const refs = new Map(characterRefs(db).map((c) => [c.row.id, c]))
+    const waiting = db
+      .select({ characterId: callPart.characterId })
+      .from(callPart)
+      .where(and(eq(callPart.callId, open.id), isNull(callPart.answeredAt)))
+      .orderBy(asc(callPart.position))
+      .all()
+      .map(({ characterId }) => {
+        const ref = characterId ? refs.get(characterId) : undefined
+        return ref ? `${ref.row.name} (${ref.handle})` : 'the Player'
+      })
+    lines.push(
+      `Open Call: ${open.id}, ${open.kind}, waiting on ${[...new Set(waiting)].join(', ') || 'no one'}.`
+    )
+  }
+  const pending = pendingCalls(db)
+  if (pending.length) lines.push(`Pending Calls: ${pending.join(', ')}.`)
+  return lines.join('\n')
 }
 
 const plural = (n: number, word: string, many: string) => `${n} ${n === 1 ? word : many}`

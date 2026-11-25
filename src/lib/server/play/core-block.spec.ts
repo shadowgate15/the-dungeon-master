@@ -66,6 +66,47 @@ describe('the core block', () => {
     expect(block).toContain('whereabouts place:drowned-lantern')
   })
 
+  it('names the open Call with who has yet to answer, and the pending Calls', () => {
+    addCharacter(library, campaignId, fighterDraft('Wren'))
+    addCharacter(library, campaignId, fighterDraft('Bram'))
+    const host = createToolHost({ library, tools: gameTools })
+    const ok = (name: string, args: Record<string, unknown>) => {
+      const result = host.call(folder, name, args)
+      expect(result.isError ?? false).toBe(false)
+      return JSON.parse(result.content[0].text)
+    }
+    const grik = ok('establish', {
+      type: 'npc',
+      name: 'Grik',
+      fields: { stat_block: 'monster:goblin' }
+    }).handle
+    const { pending_call: pending } = ok('attack', {
+      actor: 'char:wren',
+      target: grik,
+      with: 'crossbow'
+    })
+    const { call: open } = ok('narrate', {
+      text: 'The door groans.',
+      call: [
+        {
+          kind: 'check',
+          character: 'char:wren',
+          skill: 'athletics',
+          tier: 'easy',
+          reason: 'Shove'
+        },
+        { kind: 'check', character: 'char:bram', skill: 'athletics', tier: 'easy', reason: 'Shove' }
+      ]
+    })
+
+    const block = library.record(campaignId).coreBlock()
+
+    expect(block).toContain(
+      `Open Call: ${open}, check, waiting on Wren (char:wren), Bram (char:bram).`
+    )
+    expect(block).toContain(`Pending Calls: ${pending}.`)
+  })
+
   it('says when lint last ran', () => {
     const host = createToolHost({ library, tools: gameTools })
     host.call(folder, 'advance_time', { hours: 2 })
