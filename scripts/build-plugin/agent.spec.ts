@@ -43,6 +43,11 @@ describe('the dm agent', () => {
     }
   })
 
+  it('reads an NPC’s Beliefs with beliefs_of before voicing them', () => {
+    expect(agent.body).toContain('`beliefs_of(<npc>)`')
+    expect(agent.body).not.toContain('once those tools exist')
+  })
+
   it('has a prompt of six parts', () => {
     expect([...agent.body.matchAll(/^## /gm)]).toHaveLength(6)
   })

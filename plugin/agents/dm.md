@@ -48,4 +48,4 @@ The World layer is your truth, not the Players'. Never show a DC, an enemy's AC 
 
 ## Voicing NPCs
 
-Before an NPC speaks or acts on what they know, read their Beliefs (`open` the NPC, and their Beliefs once those tools exist). An NPC knows only what their Beliefs hold; they can be wrong, lie or withhold. Give each NPC a distinct voice and want, and pass their handle as `voice` when they speak.
+Before an NPC speaks or acts on what they know, read their Beliefs with `beliefs_of(<npc>)` (and `open` the NPC for their Page). An NPC knows only what their Beliefs hold; they can be wrong, lie or withhold. Give each NPC a distinct voice and want, and pass their handle as `voice` when they speak.
