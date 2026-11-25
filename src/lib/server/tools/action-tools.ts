@@ -125,6 +125,8 @@ function findAttack(who: Combatant, name: string): Attack {
 /** One roll in the dice log, Player-safe: no AC, DC or NPC HP number. */
 type DiceLogRoll = {
   characterName: string
+  /** The roller's handle, so the timeline can show an NPC by the name the Characters know. */
+  characterHandle: string | null
   what: string
   dice: number[]
   modifier: number
@@ -135,10 +137,15 @@ type DiceLogRoll = {
   target: StepRolled['targetState']
 }
 
-function diceLogRoll(roller: string, rolled: StepRolled, mode: Mode): DiceLogRoll {
+function diceLogRoll(
+  roller: { name: string; handle: string },
+  rolled: StepRolled,
+  mode: Mode
+): DiceLogRoll {
   const d20 = rolled.roll.kept !== null
   return {
-    characterName: roller,
+    characterName: roller.name,
+    characterHandle: roller.handle,
     what: rolled.what,
     dice: rolled.roll.dice,
     modifier: rolled.roll.modifier,
@@ -184,7 +191,7 @@ function resolve(
   const concentration = outcomes.flatMap((o) => o.sequence.rolls.flatMap((r) => r.calls ?? []))
   const log = [
     ...pre.map((p) => p.log),
-    ...outcomes.flatMap((o) => o.steps.map((s) => diceLogRoll(o.roller.name, s, o.mode)))
+    ...outcomes.flatMap((o) => o.steps.map((s) => diceLogRoll(o.roller, s, o.mode)))
   ]
   const text = [
     ...pre.map((p) => p.text),
@@ -242,7 +249,7 @@ const abilityName = (ability: AbilityKey) => ABILITY_NAMES.get(ability) ?? abili
 /** Rolls an effect's damage once, for every target's save. */
 function preRollDamage(
   dice: Dice,
-  by: string,
+  by: { name: string; handle: string | null },
   what: string,
   expression: string,
   damageType: string | null
@@ -257,7 +264,8 @@ function preRollDamage(
     pre: {
       text: `${what}: ${rolled.dice.join(' + ')}${modifier} = ${total}${damageType ? ` ${damageType}` : ''}`,
       log: {
-        characterName: by,
+        characterName: by.name,
+        characterHandle: by.handle,
         what,
         dice: rolled.dice,
         modifier: rolled.modifier,
@@ -575,7 +583,7 @@ export const actionTools = [
         const ability = spell.dcAbility as AbilityKey
         const rolled =
           damage &&
-          preRollDamage(dice, caster.name, `${spell.name} damage`, damage.dice, damage.damageType)
+          preRollDamage(dice, caster, `${spell.name} damage`, damage.dice, damage.damageType)
         return resolve(
           db,
           dice,
@@ -657,7 +665,13 @@ export const actionTools = [
       const source = input.source ?? 'Effect'
       const damageType = input.on_fail.type?.toLowerCase() ?? null
       const rolled = input.on_fail.damage
-        ? preRollDamage(dice, source, `${source} damage`, input.on_fail.damage, damageType)
+        ? preRollDamage(
+            dice,
+            { name: source, handle: null },
+            `${source} damage`,
+            input.on_fail.damage,
+            damageType
+          )
         : null
       return resolve(
         db,

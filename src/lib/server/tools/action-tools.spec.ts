@@ -67,9 +67,15 @@ function ok(name: string, args: unknown = {}) {
 const addWren = () => addCharacter(library, campaignId, fighterDraft('Wren'))
 
 /** Grik: a goblin NPC (AC 15, 7 HP; scimitar +4, 1d6+2 slashing). Returns the handle. */
-const addGrik = () =>
-  ok('establish', { type: 'npc', name: 'Grik', fields: { stat_block: 'monster:goblin' } })
+const addGrik = () => addGoblin('Grik')
+
+/** A goblin NPC the Party knows by name, so the Player sees it named. Returns the handle. */
+function addGoblin(name: string): string {
+  const handle = ok('establish', { type: 'npc', name, fields: { stat_block: 'monster:goblin' } })
     .handle as string
+  if (library.party(campaignId).list().length) ok('reveal', { of: handle })
+  return handle
+}
 
 const timeline = () => play.timeline(campaignId)
 const openCall = () => timeline().call!
@@ -223,12 +229,9 @@ describe('an NPC attack', () => {
   })
 
   it("shows an NPC target's HP as a state, never as numbers", () => {
+    addWren()
     const grik = addGrik()
-    const snag = ok('establish', {
-      type: 'npc',
-      name: 'Snag',
-      fields: { stat_block: 'monster:goblin' }
-    }).handle as string
+    const snag = addGoblin('Snag')
 
     load([20, 18], [6, 4])
     ok('attack', { actor: snag, target: grik, with: 'scimitar' })
@@ -357,11 +360,7 @@ describe('cast', () => {
   it("rolls an NPC target's save at once against the caster's DC, damage rolled once", () => {
     addIlyra()
     const grik = addGrik()
-    const snag = ok('establish', {
-      type: 'npc',
-      name: 'Snag',
-      fields: { stat_block: 'monster:goblin' }
-    }).handle as string
+    const snag = addGoblin('Snag')
 
     load([6, 2], [6, 2], [6, 2], [20, 15], [20, 4])
     const result = ok('cast', {

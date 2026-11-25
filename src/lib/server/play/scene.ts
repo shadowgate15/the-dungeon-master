@@ -5,6 +5,7 @@ import type { Queryable } from '../db/connect'
 import { hpState } from '#lib/play/hp-state.ts'
 import { campaign, entity, npcCombat } from '../db/schema'
 import { playerCombat } from './combat'
+import { believedName, UNKNOWN_PLACE } from '../knowledge/player-names'
 import { characterRefs } from '../knowledge/holders'
 
 /** A move of the clock that would take it backwards. */
@@ -79,14 +80,12 @@ export class SpotlightRefusedError extends Error {}
 export function playerScene(db: Queryable): SceneView {
   const { place, characters, elsewhere } = present(db)
   const minute = currentMinute(db)
+  // Place names as the Characters know them, never the World's (ADR 0007).
   const placeName = (handle: string | null) =>
-    handle === null
-      ? null
-      : (db.select({ name: entity.name }).from(entity).where(eq(entity.handle, handle)).get()
-          ?.name ?? null)
+    handle === null ? null : (believedName(db, handle) ?? UNKNOWN_PLACE)
   return {
     clock: { minute, ...clockParts(minute) },
-    place: place && { name: place.name },
+    place: place && { name: placeName(place.handle)! },
     present: characters.map((c) => ({ id: c.row.id, name: c.row.name })),
     elsewhere: elsewhere.map((c) => ({
       id: c.row.id,

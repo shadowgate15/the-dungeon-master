@@ -6,6 +6,7 @@ import { call, combat, combatant as combatantTable, type TurnResources } from '.
 import type { Dice } from '../dice'
 import { createRulesRepository } from '../rules/repository'
 import { ToolError } from '../tools/contract'
+import { believedName, UNKNOWN_NPC } from '../knowledge/player-names'
 import { createPendingCall, type PendingPart } from './calls'
 import { combatant, isOut, type Combatant, type Monster } from './combatants'
 import { advanceClock, currentMinute } from './scene'
@@ -26,6 +27,7 @@ export type CombatantEntry = string | { monster: string; count?: number }
 /** One NPC or Creature initiative roll, for the dice log (Player-safe). */
 export type InitiativeRoll = {
   characterName: string
+  characterHandle: string | null
   what: 'Initiative'
   dice: number[]
   modifier: number
@@ -225,6 +227,7 @@ function join(
       rolled.push(`${row.name} initiative: d20 ${d20.kept} ${sign} = ${initiative}`)
       rolls.push({
         characterName: row.name,
+        characterHandle: row.handle,
         what: 'Initiative',
         dice: d20.dice,
         modifier,
@@ -468,18 +471,21 @@ export function playerCombat(
   if (!live) return null
   const order = initiativeOrder(db, live.id)
   const waiting = waitingOnInitiative(db, live.id)
+  // An NPC's name as the Characters know it, never the World's (ADR 0007).
+  const shown = (c: { kind: string; handle: string; name: string }) =>
+    c.kind === 'npc' ? (believedName(db, c.handle) ?? UNKNOWN_NPC) : c.name
   return {
     round: live.round,
     order: order.map((c, i) => ({
       key: `${i}`,
-      name: c.name,
+      name: shown(c),
       kind: c.kind,
       characterId: characterIds.get(c.handle) ?? null,
       initiative: c.initiative!,
       current: c.id === live.current,
       state: c.kind === 'npc' ? npcState(c.handle) : stateOf(c)
     })),
-    waiting: waiting.map((c) => c.name)
+    waiting: waiting.map(shown)
   }
 }
 

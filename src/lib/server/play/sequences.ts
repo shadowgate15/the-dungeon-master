@@ -85,7 +85,7 @@ export type StepRolled = {
   what: string
   roll: SequenceRoll
   /** The target's state after damage, when it is an NPC or Creature (never its HP numbers). */
-  targetState: { name: string; state: HpState } | null
+  targetState: { handle: string; name: string; state: HpState } | null
 }
 
 /**
@@ -182,7 +182,11 @@ export function rollStep(
     roll,
     targetState:
       target.kind !== 'character' && roll.after && step.kind !== 'to_hit'
-        ? { name: target.name, state: hpState(roll.after.hp, roll.after.max) }
+        ? {
+            handle: target.handle,
+            name: target.name,
+            state: hpState(roll.after.hp, roll.after.max)
+          }
         : null
   }
 }

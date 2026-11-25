@@ -194,7 +194,7 @@ export const sceneTools = [
     description:
       'Move the spotlight to a Place. Refused unless a Character is there (move them first), and while a Combat is live. Who is present follows from whereabouts. On a cut, Declarations for Characters no longer in the Scene go back to their Player as unsent text and the Floor reopens. Honour a spotlight request within a Floor or two, at a natural break.',
     input: z.strictObject({ place: z.string().min(1).describe('Place handle') }),
-    activity: (_, result) => `DM sets the Scene: ${(result.scene as { name: string }).name}`,
+    activity: 'DM sets the Scene',
     run: ({ db, now }, { place: handle }) => {
       refuseDuringCombat(db, 'moving the spotlight')
       const place = placeAt(db, handle)

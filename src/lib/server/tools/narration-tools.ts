@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { entity } from '../db/schema'
+import { believedName } from '../knowledge/player-names'
 import { callInput, openCall } from '../play/calls'
 import { setAwaitingNarration } from '../play/log'
 import { indexNarration } from '../play/sessions'
@@ -20,10 +21,18 @@ export const narrationTools = [
   writeTool({
     name: 'narrate',
     description:
-      'Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine. Pass recap: true for the opening recap of a Session: it shows as "Previously", answers nothing and is left out of later summaries.',
+      'Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks: the Players see the name their Characters know, or voice_label if they know none. The first Narration after a closed Floor answers it; later ones in the same turn are fine. Pass recap: true for the opening recap of a Session: it shows as "Previously", answers nothing and is left out of later summaries.',
     input: z.object({
       text: z.string().trim().min(1),
       voice: z.string().min(1).optional().describe('NPC handle, when an NPC speaks'),
+      voice_label: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe(
+          'What the Players see for a speaker their Characters do not know by name, such as "the hooded man"'
+        ),
       call: callInput
         .optional()
         .describe(
@@ -32,7 +41,7 @@ export const narrationTools = [
       recap: z.boolean().optional().describe('The opening recap of a Session')
     }),
     activity: null,
-    run: (ctx, { text, voice, call, recap = false }) => {
+    run: (ctx, { text, voice, voice_label, call, recap = false }) => {
       if (recap && call !== undefined) {
         throw new ToolError(
           'invalid_input',
@@ -59,7 +68,8 @@ export const narrationTools = [
           data: {
             text,
             voice: npc?.handle ?? null,
-            voiceName: npc?.name ?? null,
+            // The name the Characters know the NPC by, never the World's (ADR 0007).
+            voiceName: npc ? (believedName(ctx.db, npc.handle) ?? voice_label ?? null) : null,
             call: callId,
             ...(recap ? { recap: true } : {})
           }

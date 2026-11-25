@@ -161,8 +161,10 @@ describe('narrate', () => {
     expect(play.timeline(campaignId).entries).toHaveLength(2)
   })
 
-  it('shows the NPC a Narration is voiced by, by name', () => {
+  it('shows the NPC a Narration is voiced by, by the name the Characters know', () => {
+    addCharacter(library, campaignId, fighterDraft('Wren'))
     const npc = call('establish', { type: 'npc', name: 'Mira Voss' }).payload.handle
+    call('reveal', { of: npc })
 
     call('narrate', { text: '"You are late," she says.', voice: npc })
 
