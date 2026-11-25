@@ -11,6 +11,8 @@ import { createRulesRepository } from '../rules/repository'
 import { ToolError } from '../tools/contract'
 import { liveCreature } from './combat'
 import { damagedCharacter, healedCharacter } from './death'
+import { concentrationCheck } from './concentration'
+import type { Dice } from '../dice'
 
 /** A monster stat block, as the rules repository returns it. */
 export type Monster = NonNullable<
@@ -38,6 +40,8 @@ export type Combatant =
       hp: number
       maxHp: number
       conditions: string[]
+      /** The spell it is concentrating on. */
+      concentration: string | null
     }
   | {
       kind: 'npc' | 'creature'
@@ -48,6 +52,7 @@ export type Combatant =
       hp: number
       maxHp: number
       conditions: string[]
+      concentration: string | null
     }
 
 const ok = <T>(s: { status: 'ok'; value: T } | { status: 'pending' }): T | null =>
@@ -85,7 +90,8 @@ function characterCombatant(db: Queryable, ref: string): Combatant | null {
     ac: ok(stats.unarmoredAc)?.value ?? 10,
     hp: detail.currentHp,
     maxHp: ok(stats.hitPoints) ?? detail.currentHp,
-    conditions: detail.conditions
+    conditions: detail.conditions,
+    concentration: detail.concentration
   }
 }
 
@@ -122,7 +128,8 @@ function npcCombatant(db: Queryable, handle: string): Combatant | null {
     ac: monsterAc(monster),
     hp: state.hp,
     maxHp: state.maxHp,
-    conditions: state.conditions
+    conditions: state.conditions,
+    concentration: state.concentration
   }
 }
 
@@ -141,7 +148,8 @@ function creatureCombatant(db: Queryable, handle: string): Combatant | null {
     ac: monsterAc(monster),
     hp: row.hp!,
     maxHp: row.maxHp!,
-    conditions: row.conditions
+    conditions: row.conditions,
+    concentration: row.concentration
   }
 }
 
@@ -199,24 +207,39 @@ function damageFactor(who: Combatant, damageType: string | null): number {
 }
 
 /** Where a combatant was left by damage or healing, with the DM's notes on what came of it. */
-export type HpChange = { dealt: number; hp: number; max: number; notes: string[] }
+export type HpChange = {
+  dealt: number
+  hp: number
+  max: number
+  notes: string[]
+  /** Pending concentration save Calls the damage made, for the closing narrate to attach. */
+  calls: string[]
+}
 
-/** How damage lands: a critical hit (two Death save failures at 0 HP), a knockout blow. */
-export type DamageOptions = { crit?: boolean; knockOut?: boolean }
+/**
+ * How damage lands: a critical hit (two Death save failures at 0 HP), a knockout blow. With `dice`
+ * and `at`, a concentrating target saves to keep its spell.
+ */
+export type DamageOptions = { crit?: boolean; knockOut?: boolean; dice?: Dice; at?: number }
 
 /**
  * The one way HP goes down. Temporary HP absorbs damage first; HP never drops below 0. Monster
  * resistances apply. A Character at 0 HP falls Unconscious (or dies outright) and takes Death save
- * failures from more damage; an NPC or Creature dies at 0 HP unless knocked out.
+ * failures from more damage; an NPC or Creature dies at 0 HP unless knocked out. A concentrating
+ * target still standing saves to keep its spell.
  */
 export function applyDamage(
   db: Queryable,
   who: Combatant,
   amount: number,
   damageType: string | null,
-  { crit = false, knockOut = false }: DamageOptions = {}
+  { crit = false, knockOut = false, dice, at = Date.now() }: DamageOptions = {}
 ): HpChange {
   const dealt = Math.floor(amount * damageFactor(who, damageType))
+  const saving = (hp: number) =>
+    dice && hp > 0
+      ? concentrationCheck(db, who, dealt, { dice, at, bonus: saveBonus(who, 'con') })
+      : { notes: [], calls: [] }
   if (who.kind === 'character') {
     const absorbed = Math.min(who.detail.tempHp, dealt)
     const taken = dealt - absorbed
@@ -231,12 +254,14 @@ export function applyDamage(
       maxHp: who.maxHp,
       crit
     })
-    return { dealt, hp, max: who.maxHp, notes }
+    const save = saving(hp)
+    return { dealt, hp, max: who.maxHp, notes: [...notes, ...save.notes], calls: save.calls }
   }
   const hp = Math.max(0, who.hp - dealt)
   writeFoe(db, who, { hp })
   const notes = who.hp > 0 && hp === 0 ? foeDown(db, who, knockOut) : []
-  return { dealt, hp, max: who.maxHp, notes }
+  const save = saving(hp)
+  return { dealt, hp, max: who.maxHp, notes: [...notes, ...save.notes], calls: save.calls }
 }
 
 /**
@@ -244,11 +269,13 @@ export function applyDamage(
  * NPC's `status` field becomes `dead`.
  */
 function foeDown(db: Queryable, who: Combatant & { kind: 'npc' | 'creature' }, knockOut: boolean) {
+  const ended = who.concentration ? [`concentration on ${who.concentration} ends`] : []
+  if (who.concentration) writeFoe(db, who, { concentration: null })
   if (knockOut) {
     if (!who.conditions.includes('unconscious')) {
       writeFoe(db, who, { conditions: [...who.conditions, 'unconscious'] })
     }
-    return [`${who.name} is knocked out`]
+    return [[`${who.name} is knocked out`, ...ended].join('; ')]
   }
   if (who.kind === 'npc') {
     const npc = db.select().from(entity).where(eq(entity.handle, who.handle)).get()!
@@ -257,7 +284,7 @@ function foeDown(db: Queryable, who: Combatant & { kind: 'npc' | 'creature' }, k
       .where(eq(entity.handle, who.handle))
       .run()
   }
-  return [`${who.name} dies`]
+  return [[`${who.name} dies`, ...ended].join('; ')]
 }
 
 /** Restores HP, never above the maximum. A Character at 0 HP wakes; the dead stay dead. */
@@ -276,7 +303,7 @@ export function applyHealing(db: Queryable, who: Combatant, amount: number): HpC
   } else {
     writeFoe(db, who, { hp })
   }
-  return { dealt: hp - who.hp, hp, max: who.maxHp, notes: [] }
+  return { dealt: hp - who.hp, hp, max: who.maxHp, notes: [], calls: [] }
 }
 
 /** Replaces a combatant's conditions. */
@@ -289,7 +316,11 @@ export function setConditions(db: Queryable, who: Combatant, conditions: string[
 }
 
 /** Writes an NPC's or Creature's own HP or conditions. */
-function writeFoe(db: Queryable, who: Combatant, set: { hp?: number; conditions?: string[] }) {
+function writeFoe(
+  db: Queryable,
+  who: Combatant,
+  set: { hp?: number; conditions?: string[]; concentration?: string | null }
+) {
   if (who.kind === 'creature') {
     const row = liveCreature(db, who.handle)!
     db.update(combatantTable).set(set).where(eq(combatantTable.id, row.id)).run()

@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createChannels, type ChannelEvent } from '../bridge/channels'
 import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
-import { addCharacter, fighterDraft } from '../character/test-characters'
+import { addCharacter, fighterDraft, wizardDraft } from '../character/test-characters'
 import { createDice } from '../dice'
 import { createPlay, type Play } from '../play/play'
 import { playSheets } from '../play/sheets'
@@ -242,5 +242,120 @@ describe('an NPC or Creature at 0 HP', () => {
     expect(
       ok('damage', { target: 'creature:goblin-1', amount: 7, type: 'piercing' }).notes
     ).toEqual(['Goblin 1 dies'])
+  })
+})
+
+/**
+ * Ash: a High Elf Wizard, 7 HP, Con 13 (Con save +1), knowing detect magic and fog cloud, both
+ * concentration spells, with two 1st-level slots.
+ */
+const addAsh = () => {
+  const draft = wizardDraft('Ash')
+  draft.classSpells = draft.classSpells.map((s) => (s === 'alarm' ? 'fog-cloud' : s))
+  return addCharacter(library, campaignId, draft)
+}
+
+/** Myrrh: a mage NPC (40 HP, Con save +0) who casts fly and greater invisibility. */
+const addMyrrh = () =>
+  ok('establish', { type: 'npc', name: 'Myrrh', fields: { stat_block: 'monster:mage' } })
+    .handle as string
+
+describe('concentration', () => {
+  it('links the caster to the spell, and a second concentration spell ends the first', () => {
+    addAsh()
+    expect(ok('cast', { caster: 'char:ash', spell: 'detect-magic', level: 1 })).toMatchObject({
+      concentration: 'detect-magic'
+    })
+    expect(sheet('Ash').concentration).toBe('detect-magic')
+
+    const second = ok('cast', { caster: 'char:ash', spell: 'fog-cloud', level: 1 })
+    expect(second).toMatchObject({
+      concentration: 'fog-cloud',
+      ended_concentration: 'detect-magic'
+    })
+    expect(sheet('Ash').concentration).toBe('fog-cloud')
+  })
+
+  it('does the same for an NPC caster', () => {
+    const myrrh = addMyrrh()
+    ok('cast', { caster: myrrh, spell: 'fly', level: 3 })
+    expect(ok('cast', { caster: myrrh, spell: 'greater-invisibility', level: 4 })).toMatchObject({
+      concentration: 'greater-invisibility',
+      ended_concentration: 'fly'
+    })
+  })
+
+  it("rolls an NPC's Constitution save at once: DC 10, or half the damage when that is higher", () => {
+    const myrrh = addMyrrh()
+    ok('cast', { caster: myrrh, spell: 'fly', level: 3 })
+
+    load([20, 10])
+    expect(ok('damage', { target: myrrh, amount: 6, type: 'fire' }).notes).toEqual([
+      'Myrrh Constitution save to keep concentration: d20 10 + 0 = 10 vs DC 10 → success'
+    ])
+
+    load([20, 11])
+    expect(ok('damage', { target: myrrh, amount: 24, type: 'fire' }).notes).toEqual([
+      'Myrrh Constitution save to keep concentration: d20 11 + 0 = 11 vs DC 12 → failure; concentration on fly ends'
+    ])
+    expect(
+      ok('cast', { caster: myrrh, spell: 'fly', level: 3 }).ended_concentration
+    ).toBeUndefined()
+  })
+
+  it("gives a Character's Player the Constitution save as a Call", () => {
+    addAsh()
+    ok('cast', { caster: 'char:ash', spell: 'detect-magic', level: 1 })
+    const hit = ok('damage', { target: 'char:ash', amount: 3, type: 'piercing' })
+    expect(hit.concentration_calls).toHaveLength(1)
+
+    ok('narrate', { text: 'The bolt bites.', call: hit.concentration_calls[0] })
+    const open = timeline().call!
+    expect(open).toMatchObject({
+      kind: 'concentration',
+      parts: [{ character: 'Ash', label: 'Constitution save' }]
+    })
+    load([20, 8])
+    play.roll(campaignId, open.id, open.parts[0].id)
+    expect(heard[0].content).toContain(
+      '[Ash · player] Constitution save: d20 8 + 1 = 9 vs DC 10 → failure; concentration on detect-magic ends'
+    )
+    expect(sheet('Ash').concentration).toBeNull()
+  })
+
+  it('keeps concentration on a successful save', () => {
+    addAsh()
+    ok('cast', { caster: 'char:ash', spell: 'detect-magic', level: 1 })
+    const hit = ok('damage', { target: 'char:ash', amount: 3, type: 'piercing' })
+    ok('narrate', { text: 'The bolt bites.', call: hit.concentration_calls[0] })
+    const open = timeline().call!
+    load([20, 9])
+    play.roll(campaignId, open.id, open.parts[0].id)
+    expect(sheet('Ash').concentration).toBe('detect-magic')
+  })
+
+  it('ends when the caster falls Unconscious, with no save', () => {
+    addAsh()
+    ok('cast', { caster: 'char:ash', spell: 'detect-magic', level: 1 })
+    const hit = ok('damage', { target: 'char:ash', amount: 7, type: 'piercing' })
+    expect(hit.concentration_calls).toBeUndefined()
+    expect(sheet('Ash').concentration).toBeNull()
+  })
+
+  it("asks for the save when an NPC's attack hits a concentrating Character", () => {
+    addAsh()
+    const grik = ok('establish', {
+      type: 'npc',
+      name: 'Grik',
+      fields: { stat_block: 'monster:goblin' }
+    }).handle as string
+    ok('cast', { caster: 'char:ash', spell: 'detect-magic', level: 1 })
+
+    load([20, 15], [6, 2])
+    const attack = ok('attack', { actor: grik, target: 'char:ash', with: 'scimitar' })
+    expect(attack.concentration_calls).toHaveLength(1)
+    expect(attack.rolled).toContain(
+      'Ash must make a Constitution save (DC 10) to keep concentration on detect-magic'
+    )
   })
 })

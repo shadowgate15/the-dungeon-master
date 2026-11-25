@@ -410,14 +410,16 @@ export const activityLine = sqliteTable('activity_line', {
 
 /**
  * What a Call asks for: a Check, a question, an action's roll sequences, Combat initiative (one
- * roll per Character, recorded in the Combat's order), or a downed Character's Death save.
+ * roll per Character, recorded in the Combat's order), a downed Character's Death save, or a
+ * concentrating Character's Constitution save to keep their spell.
  */
 export const CALL_KINDS = [
   'check',
   'question',
   'roll_sequence',
   'initiative',
-  'death_save'
+  'death_save',
+  'concentration'
 ] as const
 
 /**
@@ -488,6 +490,10 @@ export type SequenceRoll = {
   applied: { dealt: number; damageType: string | null; condition: string | null } | null
   /** The target's HP after the step, for the DM: `{hp, max}`. */
   after: { hp: number; max: number } | null
+  /** The DM's notes on what the damage did: falling Unconscious, death, a concentration save. */
+  notes?: string[]
+  /** Pending concentration save Calls the damage made. */
+  calls?: string[]
 }
 
 /**
@@ -553,7 +559,9 @@ export const npcCombat = sqliteTable('npc_combat', {
   conditions: text('conditions', { mode: 'json' })
     .$type<string[]>()
     .notNull()
-    .$defaultFn(() => [])
+    .$defaultFn(() => []),
+  /** The spell slug the NPC is concentrating on. */
+  concentration: text('concentration')
 })
 
 /**
@@ -611,7 +619,9 @@ export const combatant = sqliteTable(
     conditions: text('conditions', { mode: 'json' })
       .$type<string[]>()
       .notNull()
-      .$defaultFn(() => [])
+      .$defaultFn(() => []),
+    /** The spell slug a Creature is concentrating on. */
+    concentration: text('concentration')
   },
   (t) => [index('combatant_combat_idx').on(t.combatId)]
 )

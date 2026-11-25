@@ -96,7 +96,11 @@ export function rollStep(
   db: Queryable,
   sequence: Sequence,
   dice: Dice,
-  { mode = 'normal', reason = '' }: { mode?: RollMode; reason?: string | null } = {}
+  {
+    mode = 'normal',
+    reason = '',
+    at = Date.now()
+  }: { mode?: RollMode; reason?: string | null; at?: number } = {}
 ): StepRolled {
   const step = sequence.steps[sequence.rolls.length]
   const target = combatant(db, sequence.target.handle)
@@ -124,7 +128,7 @@ export function rollStep(
     const crit = sequence.rolls.at(-1)?.outcome === 'critical hit'
     const rolled = dice.rollExpression(step.dice, { crit })
     const total = Math.max(0, rolled.total)
-    const change = applyDamage(db, target, total, step.damageType, { crit })
+    const change = applyDamage(db, target, total, step.damageType, { crit, dice, at })
     roll = {
       dice: rolled.dice,
       kept: null,
@@ -132,7 +136,9 @@ export function rollStep(
       total,
       outcome: null,
       applied: { dealt: change.dealt, damageType: step.damageType, condition: null },
-      after: { hp: change.hp, max: change.max }
+      after: { hp: change.hp, max: change.max },
+      notes: change.notes,
+      calls: change.calls
     }
   } else {
     const rolled = d20()
@@ -146,7 +152,7 @@ export function rollStep(
             ? Math.floor(step.damage / 2)
             : 0
           : step.damage
-    const change = dealt > 0 ? applyDamage(db, target, dealt, step.damageType) : null
+    const change = dealt > 0 ? applyDamage(db, target, dealt, step.damageType, { dice, at }) : null
     const condition = !success && step.condition ? step.condition : null
     if (condition && !target.conditions.includes(condition)) {
       setConditions(db, target, [...target.conditions, condition])
@@ -158,7 +164,9 @@ export function rollStep(
       total,
       outcome: success ? 'success' : 'failure',
       applied: { dealt: change?.dealt ?? 0, damageType: step.damageType, condition },
-      after: { hp: change?.hp ?? target.hp, max: target.maxHp }
+      after: { hp: change?.hp ?? target.hp, max: target.maxHp },
+      notes: change?.notes ?? [],
+      calls: change?.calls ?? []
     }
   }
 
@@ -184,7 +192,7 @@ export function rollAll(
   db: Queryable,
   sequence: Sequence,
   dice: Dice,
-  options: { mode?: RollMode; reason?: string | null } = {}
+  options: { mode?: RollMode; reason?: string | null; at?: number } = {}
 ): { sequence: Sequence; steps: StepRolled[] } {
   const steps: StepRolled[] = []
   let current = sequence
@@ -219,6 +227,10 @@ function damageText(roll: SequenceRoll): string {
 export function sequenceText(sequence: Sequence, mode: RollMode = 'normal'): string {
   const { target } = sequence
   const parts = sequence.rolls.map((roll, i) => {
+    const notes = roll.notes?.length ? `; ${roll.notes.join('; ')}` : ''
+    return stepText(roll, i) + notes
+  })
+  function stepText(roll: SequenceRoll, i: number): string {
     const step = sequence.steps[i]
     const after = roll.after
       ? ` → ${target.name} ${roll.after.hp}/${roll.after.max} HP (${hpState(roll.after.hp, roll.after.max)})`
@@ -234,7 +246,7 @@ export function sequenceText(sequence: Sequence, mode: RollMode = 'normal'): str
       roll.applied?.condition ? `is ${roll.applied.condition}` : null
     ].filter(Boolean)
     return `${d20Text(roll, mode)} vs DC ${step.dc} → ${roll.outcome}${effect.length ? `; ${effect.join(', ')}` : ''}${roll.applied?.dealt ? after : ''}`
-  })
+  }
   const on =
     sequence.steps[0].kind === 'save' ? sequence.label : `${sequence.label} on ${target.name}`
   return `${on} (${target.handle}): ${parts.join('; ')}`

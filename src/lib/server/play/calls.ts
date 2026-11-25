@@ -230,6 +230,9 @@ export type PendingPart = {
   sequence: Sequence | null
   mode?: RollMode
   reason?: string | null
+  /** A saving throw's ability and hidden DC, for a concentration save. */
+  save?: AbilityKey
+  dc?: number
 }
 
 /**
@@ -240,7 +243,7 @@ export function createPendingCall(
   db: Queryable,
   parts: PendingPart[],
   at: number,
-  kind: 'roll_sequence' | 'initiative' | 'death_save' = 'roll_sequence'
+  kind: 'roll_sequence' | 'initiative' | 'death_save' | 'concentration' = 'roll_sequence'
 ): string {
   const id = db
     .insert(call)
@@ -261,7 +264,9 @@ export function createPendingCall(
         player: part.player,
         sequence: part.sequence,
         mode: part.mode ?? 'normal',
-        reason: part.reason ?? null
+        reason: part.reason ?? null,
+        save: part.save ?? null,
+        dc: part.dc ?? null
       })
       .run()
   })
@@ -369,6 +374,9 @@ function resultLine(p: Answered): string {
   const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`
   if (p.kind === 'death_save') {
     return `[${p.characterName} · ${p.player}] Death save: d20 ${r.kept} → ${p.answer}`
+  }
+  if (p.kind === 'concentration') {
+    return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? 'success' : 'failure'}; ${p.answer}`
   }
   if (p.kind === 'initiative') {
     return `[${p.characterName} · ${p.player}] Initiative: d20 ${dice} ${modifier} = ${r.total}`
@@ -480,7 +488,11 @@ export function createCalls(db: Database, now: () => number = Date.now) {
 
   /** One click of a roll sequence: code rolls the next step against the hidden number. */
   function rollSequenceStep(part: typeof callPart.$inferSelect, dice: Dice, player: string) {
-    const rolled = rollStep(db, part.sequence!, dice, { mode: part.mode, reason: part.reason })
+    const rolled = rollStep(db, part.sequence!, dice, {
+      mode: part.mode,
+      reason: part.reason,
+      at: now()
+    })
     const name =
       db
         .select({ name: character.name })
@@ -509,6 +521,16 @@ export function createCalls(db: Database, now: () => number = Date.now) {
         }
       }
     }
+  }
+
+  /** A concentration save's outcome: on a failure the spell ends. Returns the DM's note. */
+  function keepConcentration(characterId: string, success: boolean): string {
+    const row = db.select().from(character).where(eq(character.id, characterId)).get()!
+    const spell = row.concentration
+    if (!spell) return 'no longer concentrating'
+    if (success) return `keeps concentration on ${spell}`
+    db.update(character).set({ concentration: null }).where(eq(character.id, characterId)).run()
+    return `concentration on ${spell} ends`
   }
 
   /** A Death save: a d20 with no modifier, its tallies applied by code. */
@@ -596,8 +618,9 @@ export function createCalls(db: Database, now: () => number = Date.now) {
             }
           }
         }
+        const kept = kind === 'concentration' && keepConcentration(part.characterId, result.success)
         return {
-          values: { result },
+          values: { result, ...(kept && { answer: kept }) },
           event: {
             kind: 'roll',
             summary: `${name} ${what}: ${total} (${result.success ? 'success' : 'failure'})`,
