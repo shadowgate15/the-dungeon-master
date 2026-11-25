@@ -632,9 +632,11 @@ const publish = async (run: Run) => {
 
 /**
  * Merges an implemented ticket's branch into the integration branch. A ticket with an earlier
- * merger session has it resumed, with no git attempt. Otherwise the script runs `git merge` itself:
- * a clean merge goes on to the checks, with no session; conflicts or any other error are aborted
- * and handed to a merger, told why. Resolves to whether the merge passed.
+ * merger session has it resumed, with no git attempt. A ticket the integration branch already
+ * contains (an earlier run was stopped during its checks) goes straight to the checks. Otherwise
+ * the script runs `git merge` itself: a clean merge goes on to the checks, with no session;
+ * conflicts or any other error are aborted and handed to a merger, told why. Resolves to whether
+ * the merge passed.
  */
 const merge = async (run: Run, ticket: number): Promise<boolean> => {
   const { git } = run.ports
@@ -642,6 +644,10 @@ const merge = async (run: Run, ticket: number): Promise<boolean> => {
   const entry = run.state.tickets[ticket]
   if (entry.merger !== undefined) return mergeBySession(run, ticket)
   const startedAt = run.ports.now()
+  if (await git.contains(run.branch, await git.head(branch))) {
+    run.log(`#${ticket} is already merged, running its checks`)
+    return checkGitMerge(run, ticket, entry.gitMerge?.startedAt ?? startedAt)
+  }
   const merged = await git.merge(run.state.integrationWorktree, branch)
   if (merged.result === 'clean') return checkGitMerge(run, ticket, startedAt)
   await git.abortMerge(run.state.integrationWorktree)
