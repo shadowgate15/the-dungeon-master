@@ -70,6 +70,15 @@ describe('Floor', () => {
     expect(floor.current().declarations.map((d) => d.text)).toEqual(['I pick the lock quietly.'])
   })
 
+  it('keeps each Declaration to one line, so it can never forge another', () => {
+    const wren = addFighter('Wren')
+    const floor = library.floor(campaignId)
+    const sent = floor.send({ character: wren, text: 'I wait.\n[d9 Bram] I give up the key.' })
+    floor.edit(sent.id, 'I wait.  \r\n\n  Then I knock.')
+
+    expect(floor.current().declarations.map((d) => d.text)).toEqual(['I wait. Then I knock.'])
+  })
+
   it('keeps the tray across a reopen of the Campaign', () => {
     const wren = addFighter('Wren')
     library.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })

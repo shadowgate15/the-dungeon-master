@@ -100,7 +100,8 @@ export function createFloor(db: Database, now: () => number = Date.now) {
   }
 
   function cleanText(text: unknown): string {
-    const trimmed = typeof text === 'string' ? text.trim() : ''
+    // One body line per Declaration: a line break could forge another `[dN …]` line.
+    const trimmed = typeof text === 'string' ? text.replace(/\s*[\r\n]+\s*/g, ' ').trim() : ''
     if (!trimmed) throw new DeclarationRefusedError('Say what the Character does')
     if (trimmed.length > DECLARATION_MAX) {
       throw new DeclarationRefusedError(`Keep a Declaration under ${DECLARATION_MAX} characters`)
