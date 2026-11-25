@@ -105,6 +105,24 @@ describe('allowed offline', () => {
     expect(db().select().from(campaign).get()!.begunAt).toBeNull()
   })
 
+  it('logs an offline Start over in no Session, even with an earlier sitting left open', () => {
+    begin()
+    leftSitting()
+    library.startOver(campaignId)
+    expect(changes().at(-1)).toMatchObject({
+      sessionId: null,
+      summary: expect.stringMatching(/Start over/)
+    })
+  })
+
+  it('clears every Character’s whereabouts on Start over, as their Places are gone', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    begin()
+    db().update(character).set({ whereabouts: 'place:the-docks' }).run()
+    library.startOver(campaignId)
+    expect(row(wren).whereabouts).toBeNull()
+  })
+
   it('rewrites a Character in the wizard before Begin, during creation', () => {
     const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
     library
@@ -134,6 +152,19 @@ describe('DM-only, refused offline', () => {
         .updateCharacter(wren, { ...fighterDraft('Wren'), personality: 'Grim.' })
     ).toThrow(DmOnlyEditError)
     expect(row(wren)).toMatchObject({ currentHp: 3, personality: null })
+  })
+
+  it('refuses the wizard rewrite after Begin even with the DM at the table', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    begin()
+    attached = true
+    db().update(character).set({ currentHp: 3 }).run()
+    expect(() =>
+      library
+        .party(campaignId)
+        .updateCharacter(wren, { ...fighterDraft('Wren'), personality: 'Grim.' })
+    ).toThrow(DmOnlyEditError)
+    expect(row(wren)).toMatchObject({ currentHp: 3 })
   })
 
   it('takes a backstory edit after Begin while the DM is at the table', () => {

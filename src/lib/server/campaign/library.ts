@@ -237,7 +237,7 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
         throw new CampaignArchivedError('An archived Campaign cannot be changed')
       }
       const db = database(folder)
-      db.transaction((tx) => startOver(tx, now()))
+      db.transaction((tx) => startOver(tx, now(), { offline: !live(id) }))
     },
 
     /** The creation conversation in the DM pane. It is out of fiction and never logged. */

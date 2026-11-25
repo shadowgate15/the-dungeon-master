@@ -85,9 +85,11 @@ export class StartOverRefusedError extends Error {}
 /**
  * Start over: discards the World (Entities, Pages, Facts, links), every Belief and the Arc, and
  * clears `begunAt` so the Seed unlocks. Allowed only after Begin and until the first Narration.
- * It needs no DM. The Scene and the clock go back to the start with the World they pointed into.
+ * It needs no DM. The Scene, the clock and the Characters' whereabouts go back to the start with
+ * the World they pointed into. `offline` (the DM away) logs it in no Session, so the next
+ * opening tells the DM.
  */
-export function startOver(db: Queryable, at: number) {
+export function startOver(db: Queryable, at: number, { offline = false } = {}) {
   const found = db.select().from(campaign).get()
   if (!found) throw new Error('The Campaign database has no Campaign')
   if (found.begunAt === null) {
@@ -109,6 +111,8 @@ export function startOver(db: Queryable, at: number) {
   db.run(sql`DELETE FROM world_search`)
   db.delete(entity).run()
   discardArcs(db)
+  // Their Places are gone with the World.
+  db.update(character).set({ whereabouts: null }).run()
   const row = db
     .update(campaign)
     .set({ begunAt: null, scene: null, clockMinute: 0, updatedAt: at })
@@ -122,6 +126,6 @@ export function startOver(db: Queryable, at: number) {
       summary:
         'the Player chose Start over: the World and the Arc are gone and the Seed is unlocked'
     },
-    { at }
+    { at, offline }
   )
 }

@@ -260,10 +260,15 @@ export function createParty(
 
     /**
      * Replaces a saved Character's choices from the edit wizard's draft. It resets play state (HP,
-     * slots, coin, inventory), so once the Campaign has begun it is the DM's while the DM is away.
+     * slots, coin, inventory), so once the Campaign has begun it is refused: play state changes only
+     * through the DM's tools.
      */
     updateCharacter(id: string, draft: CharacterDraft): Character {
-      dmOnly('Rewriting a Character in the wizard')
+      if (begun()) {
+        throw new DmOnlyEditError(
+          'Rewriting a Character in the wizard resets their play state, so once the Campaign has begun only their notes, personality and appearance can be edited. Ask the DM at the table for anything else.'
+        )
+      }
       return db.transaction(() => {
         const updated = characters.update(id, input(draft))
         db.update(character)
