@@ -24,7 +24,7 @@ import {
 import type { Dice } from '../dice'
 import { ToolError } from '../tools/contract'
 import { orderText, recordInitiative, spendTurnResource } from './combat'
-import { applyDeathSave } from './death'
+import { applyDeathSave, rollsDeathSaves } from './death'
 import { logEvent, setAwaitingNarration } from './log'
 import { characterRefs } from './scene'
 import { nextStep, rollStep, sequenceText } from './sequences'
@@ -654,6 +654,17 @@ export function createCalls(db: Database, now: () => number = Date.now) {
   /** A Death save: a d20 with no modifier, its tallies applied by code. */
   function rollDeathSave(part: typeof callPart.$inferSelect, dice: Dice, player: string) {
     const row = db.select().from(character).where(eq(character.id, part.characterId!)).get()!
+    // Healed, stabilized or killed since the Call opened: nothing to roll, nothing changes.
+    if (!rollsDeathSaves(row)) {
+      return {
+        values: { answer: 'no longer dying' },
+        event: {
+          kind: 'answer',
+          summary: `${row.name} is no longer dying`,
+          data: { part: part.id, player, question: 'Death save', text: 'no longer dying' }
+        }
+      }
+    }
     const d20 = dice.rollD20()
     const saved = applyDeathSave(db, row, d20.kept)
     const result: CheckResult = {

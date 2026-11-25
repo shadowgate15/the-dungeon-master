@@ -36,7 +36,7 @@ const load = (...queue: [number, number][]) => faces.push(...queue)
 
 beforeEach(() => {
   faces = []
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-fight-'))
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-combat-rules-'))
   library = createCampaignLibrary({ home: path.join(tmp, 'home') })
   folder = path.join(tmp, 'campaigns', 'ember-road')
   campaignId = library.create({ name: 'Ember Road', folder }).id
@@ -155,11 +155,11 @@ function downedOnTheirTurn() {
   return ok('next_turn')
 }
 
-/** Attaches and rolls the Death save Call `next_turn` returned, with one d20 face. */
-function deathSave(turn: { pending_call: string }, face: number) {
+/** Attaches and rolls the Death save Call `next_turn` returned, with one d20 face (none: no roll). */
+function deathSave(turn: { pending_call: string }, face?: number) {
   ok('narrate', { text: 'Wren lies still.', call: turn.pending_call })
   const open = timeline().call!
-  load([20, face])
+  if (face !== undefined) load([20, face])
   play.roll(campaignId, open.id, open.parts[0].id)
 }
 
@@ -207,6 +207,26 @@ describe('a Death save', () => {
 
     ok('next_turn')
     expect(ok('next_turn').pending_call).toBeUndefined()
+  })
+
+  it('changes nothing once the Character was healed after the Call opened', () => {
+    const turn = downedOnTheirTurn()
+    ok('heal', { target: 'char:wren', amount: 6 })
+    deathSave(turn)
+    expect(sheet('Wren')).toMatchObject({ hp: { current: 6 }, deathSaves: null })
+    expect(timeline().call).toBeNull()
+    expect(heard.at(-1)!.content).toContain('no longer dying')
+  })
+
+  it('changes nothing once the Character died after the Call opened', () => {
+    const turn = downedOnTheirTurn()
+    ok('damage', { target: 'char:wren', amount: 12, type: 'slashing' })
+    ok('damage', { target: 'char:wren', amount: 12, type: 'slashing' })
+    expect(status('Wren')).toBe('dead')
+    deathSave(turn)
+    expect(status('Wren')).toBe('dead')
+    expect(sheet('Wren').deathSaves).toBeNull()
+    expect(heard.at(-1)!.content).toContain('no longer dying')
   })
 
   it('kills on three failures', () => {
