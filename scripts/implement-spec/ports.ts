@@ -1,10 +1,19 @@
-// The real tracker, git and claude ports: thin, untested wrappers over the `gh`, `git` and `claude` CLIs.
+// The real tracker, git, claude and checks ports: thin, untested wrappers over the `gh`, `git`,
+// `claude` and `pnpm` CLIs.
 import { execFile, spawn } from 'node:child_process'
-import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync, writeSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { promisify } from 'node:util'
 import { usageLimitReset } from './usage-limit.ts'
-import type { Blocker, ClaudePort, GitPort, Ticket, TrackerPort } from './run-spec.ts'
+import type {
+  Blocker,
+  ChecksPort,
+  ChecksStep,
+  ClaudePort,
+  GitPort,
+  Ticket,
+  TrackerPort
+} from './run-spec.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -94,9 +103,68 @@ export const createGit = (cwd: string): GitPort => {
     },
     push: async (branch) => {
       await git(['push', '--set-upstream', 'origin', branch])
+    },
+    merge: async (worktree, branch) => {
+      try {
+        await run('git', ['merge', '--no-ff', '--no-edit', branch], worktree)
+        return { result: 'clean' }
+      } catch (error) {
+        const unmerged = await run(
+          'git',
+          ['diff', '--name-only', '--diff-filter=U'],
+          worktree
+        ).then(
+          (out) => out.split('\n').filter(Boolean),
+          () => []
+        )
+        if (unmerged.length > 0) return { result: 'conflicts', paths: unmerged }
+        const { stderr, stdout, message } = error as { stderr?: string; stdout?: string } & Error
+        return { result: 'error', message: (stderr || stdout || message).trim() }
+      }
+    },
+    abortMerge: async (worktree) => {
+      const merging = await run(
+        'git',
+        ['rev-parse', '-q', '--verify', 'MERGE_HEAD'],
+        worktree
+      ).then(
+        () => true,
+        () => false
+      )
+      if (merging) await run('git', ['merge', '--abort'], worktree)
     }
   }
 }
+
+/** The checks after a clean git merge, in order, each a `pnpm` command. */
+const CHECKS: [ChecksStep, string[]][] = [
+  ['install', ['install', '--frozen-lockfile']],
+  ['lint', ['lint']],
+  ['check', ['check']],
+  ['test', ['test:unit', '--run', '--project', 'client', '--project', 'server']]
+]
+
+/**
+ * Runs each check with `pnpm` in `cwd`, stopping at the first that fails (or can't be started),
+ * with every command and its output appended to the log file.
+ */
+export const createChecks = (): ChecksPort => ({
+  run: async ({ cwd, logFile }) => {
+    mkdirSync(dirname(logFile), { recursive: true })
+    for (const [step, args] of CHECKS) {
+      const out = openSync(logFile, 'a')
+      writeSync(out, `$ pnpm ${args.join(' ')}\n`)
+      const code = await new Promise<number>((resolve) => {
+        const child = spawn('pnpm', args, { cwd, stdio: ['ignore', out, out] })
+        child.on('error', () => resolve(127))
+        child.on('close', (exit) => resolve(exit ?? 1))
+      })
+      closeSync(out)
+      if (code !== 0) return { passed: false, step }
+    }
+    return { passed: true }
+  }
+})
 
 /** What `claude --resume` prints when it has no saved conversation with the ID. */
 const NO_CONVERSATION = /No conversation found with session ID/i

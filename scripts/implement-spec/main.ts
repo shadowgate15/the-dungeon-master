@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { createLogUpdate } from 'log-update'
 import { render } from './chart.ts'
-import { createClaude, createGit, createTracker } from './ports.ts'
+import { createChecks, createClaude, createGit, createTracker } from './ports.ts'
 import { runPaths, runSpec, type RunState } from './run-spec.ts'
 
 const USAGE = 'usage: pnpm implement-spec <spec#> [--explore | --status]'
@@ -113,6 +113,7 @@ try {
       tracker,
       git: createGit(root),
       claude: createClaude(),
+      checks: createChecks(),
       log: (line) => {
         if (!chart || !latest) console.log(line)
       },
