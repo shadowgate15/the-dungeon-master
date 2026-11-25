@@ -1,10 +1,11 @@
 import path from 'node:path'
+import { unique } from '../testing/unique'
 import { expect, test } from '@playwright/test'
 import { startFakeDm } from '../testing/fake-dm'
 import { E2E_CAMPAIGNS, E2E_HOME } from '../../playwright.config'
 
 test('a fake DM reaches the game server through the real bridge', async ({ page }) => {
-  const name = `Bridge Hold ${Date.now()}`
+  const name = unique('Bridge Hold')
   await page.goto('/campaigns')
   await page.waitForLoadState('networkidle')
   await page.getByRole('link', { name: 'New Campaign' }).click()

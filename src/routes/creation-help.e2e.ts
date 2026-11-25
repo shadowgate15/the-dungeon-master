@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { unique } from '../testing/unique'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { E2E_HOME } from '../../playwright.config'
 
@@ -22,7 +23,7 @@ test.afterEach(async () => {
 })
 
 test('with no DM the pane says the forms work and how to start one', async ({ page }) => {
-  const { folder } = await createCampaign(page, `Away Test ${Date.now()}`)
+  const { folder } = await createCampaign(page, unique('Away Test'))
   const pane = page.getByRole('region', { name: 'Ask the DM' })
   await expect(pane).toContainText('The forms work without the DM')
   await expect(pane.getByText(`cd ${folder} && dm`)).toBeVisible()
@@ -36,7 +37,7 @@ test('with no DM the pane says the forms work and how to start one', async ({ pa
 })
 
 test('the DM answers in the pane and fills a Seed field, marked ✎ DM', async ({ page }) => {
-  const { id, folder } = await createCampaign(page, `Help Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Help Test'))
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await expect
     .poll(async () => (await (await page.request.get('/api/sessions')).json()).attached)
@@ -84,7 +85,7 @@ test('the DM answers in the pane and fills a Seed field, marked ✎ DM', async (
 })
 
 test('the DM fills a draft field in the open wizard, marked ✎ DM', async ({ page }) => {
-  const { id, folder } = await createCampaign(page, `Draft Help ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Draft Help'))
   await page.goto(`/campaigns/${id}/party`)
   await page.getByRole('button', { name: 'New Character' }).click()
   await expect(page).toHaveURL(/\/party\?draft=/)

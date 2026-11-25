@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { unique } from '../testing/unique'
 import { fighterDraft } from '../lib/server/character/test-characters'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { E2E_HOME } from '../../playwright.config'
@@ -37,7 +38,7 @@ test.afterEach(async () => {
 test('Declarations wait in the pending tray, editable and withdrawable, across a reload', async ({
   page
 }) => {
-  const { id: campaign, folder } = await createCampaign(page, `Tray Test ${Date.now()}`)
+  const { id: campaign, folder } = await createCampaign(page, unique('Tray Test'))
   await addFighter(page, campaign, 'Wren')
   await addFighter(page, campaign, 'Bram')
   dm = await startFakeDm({ folder, home: E2E_HOME })
@@ -70,7 +71,7 @@ test('Declarations wait in the pending tray, editable and withdrawable, across a
 
 test('the console is bound to the viewport and the composer stays pinned', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 })
-  const { id: campaign, folder } = await createCampaign(page, `Viewport Test ${Date.now()}`)
+  const { id: campaign, folder } = await createCampaign(page, unique('Viewport Test'))
   await addFighter(page, campaign, 'Wren')
   dm = await startFakeDm({ folder, home: E2E_HOME })
 

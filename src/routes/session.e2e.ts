@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { unique } from '../testing/unique'
 import { startFakeDm } from '../testing/fake-dm'
 import { E2E_HOME } from '../../playwright.config'
 
@@ -15,7 +16,7 @@ async function createCampaign(page: Page, name: string): Promise<string> {
 }
 
 test('the DM badge flips live as a session attaches and leaves', async ({ page, context }) => {
-  const name = `Badge Watch ${Date.now()}`
+  const name = unique('Badge Watch')
   const folder = await createCampaign(page, name)
   const header = page.locator('header').filter({ has: page.getByRole('heading', { name }) })
   await expect(header.getByText('DM away')).toBeVisible()
@@ -38,7 +39,7 @@ test('the DM badge flips live as a session attaches and leaves', async ({ page, 
 })
 
 test('a second session is refused for the same Campaign', async ({ page }) => {
-  const name = `Second Seat ${Date.now()}`
+  const name = unique('Second Seat')
   const folder = await createCampaign(page, name)
 
   const first = await startFakeDm({ folder, home: E2E_HOME })

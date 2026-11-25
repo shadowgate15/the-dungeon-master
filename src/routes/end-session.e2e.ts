@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { unique } from '../testing/unique'
 import { fighterDraft } from '../lib/server/character/test-characters'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { E2E_HOME } from '../../playwright.config'
@@ -37,7 +38,7 @@ test.afterEach(async () => {
 const summary = 'Wren picked the lock of the harbour office and found the ledger.'
 
 test('End Session closes the Session, and the next one opens on a recap', async ({ page }) => {
-  const { id, folder } = await createCampaign(page, `Session Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Session Test'))
   await addFighter(page, id, 'Wren')
 
   // The first Session: a Narration, then End Session.

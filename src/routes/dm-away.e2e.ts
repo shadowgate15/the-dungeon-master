@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { unique } from '../testing/unique'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { fighterDraft } from '../lib/server/character/test-characters'
@@ -61,7 +62,7 @@ test.afterEach(async () => {
 test('with the DM away, play waits and an offline edit reaches the next Session as a change notice', async ({
   page
 }) => {
-  const { id, folder } = await createCampaign(page, `Away Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Away Test'))
   const wren = await addFighter(page, id, 'Wren')
   await sessionStart(folder) // an earlier Session heard of Wren's arrival
 
@@ -90,7 +91,7 @@ test('with the DM away, play waits and an offline edit reaches the next Session 
 test('a turn the DM left mid-way is answered after the recap at the next opening', async ({
   page
 }) => {
-  const { id, folder } = await createCampaign(page, `Dropped Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Dropped Test'))
   await addFighter(page, id, 'Wren')
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await page.goto(`/campaigns/${id}/play`)

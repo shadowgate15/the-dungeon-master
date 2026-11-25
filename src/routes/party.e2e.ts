@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { unique } from '../testing/unique'
 import {
   draftSaved,
   fillConcept,
@@ -27,7 +28,7 @@ async function openParty(page: Page, name: string) {
 test('builds a Character in a Campaign, survives a reload mid-draft and saves it into the Party', async ({
   page
 }) => {
-  await openParty(page, `Party Road ${Date.now()}`)
+  await openParty(page, unique('Party Road'))
   await newCharacter(page)
 
   await fillConcept(page)
@@ -67,7 +68,7 @@ test('builds a Character in a Campaign, survives a reload mid-draft and saves it
 })
 
 test('later steps stay locked until Concept is valid', async ({ page }) => {
-  await openParty(page, `Locked Road ${Date.now()}`)
+  await openParty(page, unique('Locked Road'))
   await newCharacter(page)
   await expect(step(page, /Ability scores/)).toBeDisabled()
 
@@ -78,7 +79,7 @@ test('later steps stay locked until Concept is valid', async ({ page }) => {
 })
 
 test('abandoning a draft asks first, then discards it', async ({ page }) => {
-  await openParty(page, `Abandon Road ${Date.now()}`)
+  await openParty(page, unique('Abandon Road'))
   await newCharacter(page)
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Wren')
   await draftSaved(page)

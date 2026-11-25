@@ -8,8 +8,6 @@ export const E2E_HOME = path.join(E2E_DIR, 'home')
 export const E2E_CAMPAIGNS = path.join(E2E_DIR, 'campaigns')
 
 export default defineConfig({
-  // Every spec shares the one SQLite file the preview server runs on.
-  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   webServer: {

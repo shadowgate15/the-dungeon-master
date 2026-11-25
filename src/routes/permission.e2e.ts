@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { unique } from '../testing/unique'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { E2E_HOME } from '../../playwright.config'
 
@@ -36,7 +37,7 @@ const request = {
 }
 
 test('a permission prompt is relayed to the browser and approved', async ({ page }) => {
-  const { id, folder } = await createCampaign(page, `Permission Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Permission Test'))
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await openConsole(page, id)
 
@@ -55,7 +56,7 @@ test('a permission prompt is relayed to the browser and approved', async ({ page
 })
 
 test('a reload still shows the open prompt, and Deny answers it', async ({ page }) => {
-  const { id, folder } = await createCampaign(page, `Deny Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Deny Test'))
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await openConsole(page, id)
 
@@ -73,7 +74,7 @@ test('a reload still shows the open prompt, and Deny answers it', async ({ page 
 })
 
 test('the card clears when the prompt is answered in the terminal', async ({ page }) => {
-  const { id, folder } = await createCampaign(page, `Terminal Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Terminal Test'))
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await openConsole(page, id)
 

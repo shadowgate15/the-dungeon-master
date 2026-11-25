@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { unique } from '../testing/unique'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { saveFighter } from '../testing/wizard-e2e'
 import { E2E_HOME } from '../../playwright.config'
@@ -12,7 +13,7 @@ test.afterEach(async () => {
 test('creation offline (Seed → Party), then Begin with a live DM shows only the pitch', async ({
   page
 }) => {
-  const name = `Begin Road ${Date.now()}`
+  const name = unique('Begin Road')
   await page.goto('/campaigns')
   await page.waitForLoadState('networkidle')
   await page.getByRole('link', { name: 'New Campaign' }).click()

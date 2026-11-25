@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { unique } from '../testing/unique'
 import { fighterDraft } from '../lib/server/character/test-characters'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { E2E_HOME } from '../../playwright.config'
@@ -42,7 +43,7 @@ test.afterEach(async () => {
 })
 
 test('a play turn: a Declaration, Done, and the DM’s Narration', async ({ page }) => {
-  const { id, folder } = await createCampaign(page, `Turn Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Turn Test'))
   await addFighter(page, id, 'Wren')
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await openConsole(page, id)
@@ -81,7 +82,7 @@ test('a play turn: a Declaration, Done, and the DM’s Narration', async ({ page
 })
 
 test('a two-Character Floor arrives as one event and gets one Narration', async ({ page }) => {
-  const { id, folder } = await createCampaign(page, `Two Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Two Test'))
   await addFighter(page, id, 'Wren')
   await addFighter(page, id, 'Bram')
   dm = await startFakeDm({ folder, home: E2E_HOME })
@@ -120,7 +121,7 @@ test('a two-Character Floor arrives as one event and gets one Narration', async 
 test('a Check Call: Declaration, Done, the roll clicked in the browser, and Narration', async ({
   page
 }) => {
-  const { id, folder } = await createCampaign(page, `Call Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Call Test'))
   await addFighter(page, id, 'Wren')
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await openConsole(page, id)
@@ -180,7 +181,7 @@ test('a Check Call: Declaration, Done, the roll clicked in the browser, and Narr
 test('an attack: the DM attacks with Wren, the Player rolls to hit and damage, and the DM hears one result', async ({
   page
 }) => {
-  const { id, folder } = await createCampaign(page, `Attack Test ${Date.now()}`)
+  const { id, folder } = await createCampaign(page, unique('Attack Test'))
   await addFighter(page, id, 'Wren')
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await openConsole(page, id)

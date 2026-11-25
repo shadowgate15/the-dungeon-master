@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { unique } from '../testing/unique'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { E2E_CAMPAIGNS } from '../../playwright.config'
@@ -29,7 +30,7 @@ test('the home page is the Campaign library', async ({ page }) => {
 })
 
 test('creates a Campaign in its own folder and fills its Seed', async ({ page }) => {
-  const name = `Ember Road ${Date.now()}`
+  const name = unique('Ember Road')
   const folder = path.join(E2E_CAMPAIGNS, slug(name))
 
   const dialog = await openNewCampaign(page)
@@ -71,7 +72,7 @@ test('creates a Campaign in its own folder and fills its Seed', async ({ page })
 })
 
 test('archives a Campaign, lists it as archived, and restores it', async ({ page }) => {
-  const name = `Archive ${Date.now()}`
+  const name = unique('Archive')
   await createCampaign(page, name)
   await page.goto('/campaigns')
 
@@ -89,7 +90,7 @@ test('archives a Campaign, lists it as archived, and restores it', async ({ page
 })
 
 test('deleting needs confirmation and removes the folder', async ({ page }) => {
-  const name = `Delete ${Date.now()}`
+  const name = unique('Delete')
   await createCampaign(page, name)
   await page.goto('/campaigns')
 
@@ -105,7 +106,7 @@ test('deleting needs confirmation and removes the folder', async ({ page }) => {
 })
 
 test('a moved folder shows as Missing until it is re-added', async ({ page }) => {
-  const name = `Moved ${Date.now()}`
+  const name = unique('Moved')
   await createCampaign(page, name)
   const moved = path.join(E2E_CAMPAIGNS, `${slug(name)}-moved`)
   fs.renameSync(path.join(E2E_CAMPAIGNS, slug(name)), moved)
@@ -122,7 +123,7 @@ test('a moved folder shows as Missing until it is re-added', async ({ page }) =>
 })
 
 test('removing a Campaign from the library keeps its folder', async ({ page }) => {
-  const name = `Remove ${Date.now()}`
+  const name = unique('Remove')
   await createCampaign(page, name)
   await page.goto('/campaigns')
 
