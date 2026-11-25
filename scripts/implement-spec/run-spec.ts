@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import {
+  checksFailedMergerPrompt,
   continuePrompt,
   explorerPrompt,
   fixerPrompt,
@@ -673,7 +674,7 @@ const merged = async (run: Run, ticket: number, how: string) => {
 /**
  * Records a clean git merge of the ticket (saved before the checks start), then runs the checks in
  * the integration worktree. Passing checks mark the ticket `done`, with no session; failing ones
- * leave it `implemented` and fail the merge. Resolves to whether the merge passed.
+ * keep the merge commit and hand the fix to a merger. Resolves to whether the merge passed.
  */
 const checkGitMerge = async (run: Run, ticket: number, startedAt: number): Promise<boolean> => {
   const entry = run.state.tickets[ticket]
@@ -686,11 +687,27 @@ const checkGitMerge = async (run: Run, ticket: number, startedAt: number): Promi
   record.checks = checks
   run.save()
   if (!checks.passed) {
-    run.log(`failed #${ticket} checks after its git merge: ${checks.step} (log ${logFile})`)
-    return false
+    run.log(
+      `failed #${ticket} checks after its git merge: ${checks.step} (log ${logFile}), handing it to a merger`
+    )
+    return mergeBySession(run, ticket)
   }
   await merged(run, ticket, ' by git, checks passed')
   return true
+}
+
+/**
+ * The merger's prompt: the checks-failed variant when the ticket's git merge failed its checks
+ * (so a resume after it gets the same one), otherwise the merge prompt told `reason`.
+ */
+const mergerPromptFor = (run: Run, ticket: number, reason?: MergeReason) => {
+  const branch = ticketBranch(run.spec, ticket)
+  const checks = run.state.tickets[ticket].gitMerge?.checks
+  if (checks !== undefined && !checks.passed) {
+    const checksLog = checksLogPath(run.paths.logs, ticket)
+    return checksFailedMergerPrompt(pointers(run), { ticket, branch, step: checks.step, checksLog })
+  }
+  return mergerPrompt(pointers(run), { ticket, branch, reason })
 }
 
 /**
@@ -710,7 +727,7 @@ const mergeBySession = async (run: Run, ticket: number, reason?: MergeReason): P
     role: 'merger',
     ticket,
     cwd: run.state.integrationWorktree,
-    prompt: mergerPrompt(pointers(run), { ticket, branch, reason }),
+    prompt: mergerPromptFor(run, ticket, reason),
     previous: entry.merger,
     record: (session) => {
       entry.merger = session
@@ -888,7 +905,8 @@ const drive = async (run: Run, tickets: Ticket[]): Promise<boolean> => {
 /**
  * Prints every failed ticket, ascending, with the session that failed, its check and its log: a
  * `failed` ticket's implementer, or the merger of an `implemented` ticket whose merge failed, or
- * the failed checks step and checks log of one whose git merge failed its checks.
+ * the failed checks step and checks log of one whose git merge failed its checks before a merger
+ * launched for them.
  */
 const reportFailures = (run: Run) => {
   const failures = Object.entries(run.state.tickets).flatMap(([key, entry]) => {

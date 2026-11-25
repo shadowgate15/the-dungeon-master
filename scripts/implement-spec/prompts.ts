@@ -69,6 +69,35 @@ export const mergerPrompt = (
     'Do not push, open pull requests, or change anything on GitHub.'
   ].join('\n')
 
+/**
+ * The merger prompt after the script's clean `git merge` failed its checks: the merge is already
+ * committed, so the merger fixes what `step` broke (its output in `checksLog`) rather than merging.
+ */
+export const checksFailedMergerPrompt = (
+  pointers: Pointers,
+  {
+    ticket,
+    branch,
+    step,
+    checksLog
+  }: { ticket: number; branch: string; step: string; checksLog: string }
+) =>
+  [
+    `You are the merger for ticket #${ticket} of spec #${pointers.spec}.`,
+    ...pointerLines(pointers),
+    `Ticket: #${ticket} (read it with \`gh issue view ${ticket}\`).`,
+    `Ticket branch: ${branch}. Its implementer has finished and passed its done check.`,
+    `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`,
+    '',
+    `The script has already merged ${branch} into ${pointers.integrationBranch} cleanly, and the merge is already committed. Do not merge again or undo the merge.`,
+    `The script then ran the install, lint, type-check and unit tests, and the \`${step}\` step failed. Its output is in ${checksLog}.`,
+    '',
+    `1. Read ${checksLog} to see what failed.`,
+    '2. Fix what the merge broke, keeping the intent of both sides, and commit the fix.',
+    '3. Run the lint, type-check and unit tests again, and fix anything that still fails.',
+    'Do not push, open pull requests, or change anything on GitHub.'
+  ].join('\n')
+
 export const explorerPrompt = (pointers: Pointers) =>
   [
     `You are the explorer for spec #${pointers.spec}. Implementers start after you finish, one per ticket.`,
