@@ -21,6 +21,15 @@ A Combat is stored: code keeps the initiative order, whose turn it is and the ro
 - `next_turn` freshens the new combatant's action, bonus action and reaction. If a tool reminds you something was already spent, decide whether the fiction allows it. It is a reminder, not a rule code enforces.
 - A late arrival joins with `add_combatant`. A Character gets an initiative Call; attach it like the first one.
 
+## Dropping, concentration and reactions
+
+Code applies these rules. Your part is to attach the Calls the tools return and to narrate what their notes say.
+
+- **A Character at 0 HP** falls Unconscious and can't act. Damage at 0 adds Death save failures, two on a critical hit: pass `crit: true` to `damage`. On their turn, `next_turn` returns a Death save `pending_call`. Attach it with a short Narration of the downed Character. Code tallies the saves, and its `call_result` says whether they are stable, dead or back up on a natural 20. Healing wakes them. A dead Character can't be healed.
+- **An NPC or Creature at 0 HP** dies. If the attacker means to spare it, pass `knock_out: true` to `damage`.
+- **Concentration.** Casting a concentration spell links the caster to it and ends any spell they were already concentrating on. The result names the ended spell in `ended_concentration`, so narrate its end. When a concentrating caster takes damage, an NPC or Creature saves at once and the notes say whether it holds. A Character gets a Constitution save Call instead, in `concentration_calls` (or in the notes of a `call_result`). Attach it with your next closing Narration, one Call per turn. Falling Unconscious ends concentration.
+- **Reactions.** When a Character gets a reaction out of turn, call `offer_reaction` and attach its Call. An opportunity attack happens when a foe leaves their reach: pass `attack: {target, with}`. The Player takes it or passes. A taken attack rolls to hit and damage like any attack, and you hear one `call_result`. Taking a reaction spends it. An NPC's or Creature's reaction is yours: resolve it with `attack` or `cast`.
+
 ## Pacing and judgment
 
 - Keep each beat short: what happened, what changed, whose turn it is. Players see enemy health only as unhurt, bloodied, near death or down. Describe wounds in those terms, never with numbers.
