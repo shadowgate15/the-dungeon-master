@@ -21,7 +21,7 @@
     createTimelineQuery,
     endSession,
     floorActions,
-    FloorChangeError,
+    PlayRequestError,
     levelUp
   } from '#lib/play/floor-client.ts'
   import Alert from '#lib/ui/Alert.svelte'
@@ -111,7 +111,7 @@
     try {
       await change()
     } catch (e) {
-      if (e instanceof FloorChangeError) problem = e.message
+      if (e instanceof PlayRequestError) problem = e.message
       else throw e
     }
   }
