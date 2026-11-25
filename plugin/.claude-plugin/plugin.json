@@ -1,0 +1,14 @@
+{
+  "name": "the-dungeon-master",
+  "version": "0.1.0",
+  "description": "An AI Dungeon Master for Dungeons & Dragons. Claude runs the game, so players can just play.",
+  "author": { "name": "shadowgate15" },
+  "repository": "https://github.com/shadowgate15/the-dungeon-master",
+  "mcpServers": {
+    "dm": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/dm-bridge.mjs"],
+      "env": { "MCP_PROTOCOL_NEGOTIATION": "legacy" }
+    }
+  }
+}

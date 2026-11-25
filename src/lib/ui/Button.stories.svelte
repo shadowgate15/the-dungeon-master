@@ -24,4 +24,4 @@
 <Story name="Ghost" args={{ variant: 'ghost' }} {template} />
 <Story name="Small" args={{ size: 'sm' }} {template} />
 <Story name="Disabled" args={{ disabled: true }} {template} />
-<Story name="As link" args={{ href: '/worlds' }} {template} />
+<Story name="As link" args={{ href: '/campaigns' }} {template} />

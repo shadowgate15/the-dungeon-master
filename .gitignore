@@ -1,4 +1,6 @@
 node_modules
+# The plugin's vendored better-sqlite3 is committed (pnpm build:plugin)
+!/plugin/server/node_modules
 
 # Output
 .output
@@ -33,3 +35,9 @@ storybook-static
 # Claude Code agent worktrees
 .claude/worktrees/
 e2e.db
+
+# implement-spec run state
+/.implement-spec/
+
+# e2e Campaign folders and user-level state
+/.e2e/

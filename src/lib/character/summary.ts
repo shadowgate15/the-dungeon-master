@@ -96,7 +96,8 @@ export function buildSummary(rules: WizardRules, data: SummaryData): SummaryMode
     class: data.class,
     subclass: data.subclass,
     background: data.background,
-    picks: data.picks
+    picks: data.picks,
+    level: data.level
   })
   // Picked rows plus the fixed class items and background package, which are not stored.
   const owned = [

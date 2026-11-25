@@ -19,6 +19,10 @@ import subclasses from '../../rules/data/subclasses.json'
 import subclassLevels from '../../rules/data/subclassLevels.json'
 import features from '../../rules/data/features.json'
 import spells from '../../rules/data/spells.json'
+import monsters from '../../rules/data/monsters.json'
+import conditions from '../../rules/data/conditions.json'
+import magicItems from '../../rules/data/magicItems.json'
+import ruleSections from '../../rules/data/ruleSections.json'
 import backgrounds from '../../rules/data/backgrounds.json'
 import abilityScoreMethods from '../../rules/data/abilityScoreMethods.json'
 
@@ -45,6 +49,10 @@ export function loadRulesDataset(): RulesDataset {
     subclassLevels,
     features,
     spells,
+    monsters,
+    conditions,
+    magicItems,
+    ruleSections,
     backgrounds,
     abilityScoreMethods
   })

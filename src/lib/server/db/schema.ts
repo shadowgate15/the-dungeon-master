@@ -6,12 +6,24 @@ import {
   integer,
   primaryKey,
   sqliteTable,
-  text,
-  uniqueIndex
+  text
 } from 'drizzle-orm/sqlite-core'
-import { LENGTHS, TONES } from '../../campaign/enums'
+import {
+  GENRE_FLAVORS,
+  LENGTHS,
+  MAGIC_LEVELS,
+  SCALES,
+  TECH_LEVELS,
+  TONES
+} from '../../campaign/enums'
 import { ABILITY_KEYS } from '../../rules/registry'
-import { ABILITY_METHODS, ALIGNMENTS, PICK_SOURCES } from '../../character/enums'
+import {
+  ABILITY_METHODS,
+  ALIGNMENTS,
+  CHARACTER_STATUSES,
+  PICK_SOURCES
+} from '../../character/enums'
+import type { StepId } from '../../character/steps'
 import {
   background,
   classTable,
@@ -22,54 +34,16 @@ import {
   subclass,
   subrace
 } from './rules-schema'
-import {
-  BEAT_STATES,
-  MEMORY_RUN_KINDS,
-  MEMORY_RUN_OUTCOMES,
-  NPC_STATUSES,
-  STANCES,
-  type DroppedItem
-} from '../../memory/enums'
-import { GENRE_FLAVORS, MAGIC_LEVELS, SCALES, TECH_LEVELS } from '../../world/enums'
-import { EVENT_KINDS, MODES, ROLES, type SceneExit } from '../../session/enums'
-import type { Call } from '../../session/call'
-
-export const task = sqliteTable('task', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  title: text('title').notNull(),
-  priority: integer('priority').notNull().default(1)
-})
 
 // NULL in an enum column means "unspecified". No user or auth columns yet.
 const oneOf = (column: string, values: readonly string[]) =>
   sql.raw(`${column} IS NULL OR ${column} IN (${values.map((v) => `'${v}'`).join(', ')})`)
 
-export const world = sqliteTable(
-  'world',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    name: text('name').notNull(),
-    premise: text('premise'),
-    genreFlavor: text('genre_flavor', { enum: GENRE_FLAVORS }),
-    scale: text('scale', { enum: SCALES }),
-    magicLevel: text('magic_level', { enum: MAGIC_LEVELS }),
-    techLevel: text('tech_level', { enum: TECH_LEVELS }),
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-    archivedAt: integer('archived_at')
-  },
-  () => [
-    check('world_genre_flavor_check', oneOf('genre_flavor', GENRE_FLAVORS)),
-    check('world_scale_check', oneOf('scale', SCALES)),
-    check('world_magic_level_check', oneOf('magic_level', MAGIC_LEVELS)),
-    check('world_tech_level_check', oneOf('tech_level', TECH_LEVELS))
-  ]
-)
-
+/**
+ * The Campaign this database belongs to: one row, in the `.dm/campaign.db` of its Campaign
+ * folder. It holds the Campaign Seed. Only the name is required to exist; the Seed is complete
+ * once premise, tone and length are set too (see `#lib/campaign/seed.ts`).
+ */
 export const campaign = sqliteTable(
   'campaign',
   {
@@ -77,31 +51,65 @@ export const campaign = sqliteTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     name: text('name').notNull(),
-    premise: text('premise').notNull(),
-    tone: text('tone', { enum: TONES }).notNull(),
-    length: text('length', { enum: LENGTHS }).notNull(),
+    premise: text('premise'),
+    tone: text('tone', { enum: TONES }),
+    length: text('length', { enum: LENGTHS }),
+    worldName: text('world_name'),
+    genreFlavor: text('genre_flavor', { enum: GENRE_FLAVORS }),
+    scale: text('scale', { enum: SCALES }),
+    magicLevel: text('magic_level', { enum: MAGIC_LEVELS }),
+    techLevel: text('tech_level', { enum: TECH_LEVELS }),
+    /** The Seed's Entity version: every write to the Seed passes it and bumps it. */
+    version: integer('version').notNull().default(1),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
-    archivedAt: integer('archived_at')
+    archivedAt: integer('archived_at'),
+    /** When the open turn started waiting on the DM (a closed Floor); null when nothing awaits Narration. */
+    awaitingNarrationSince: integer('awaiting_narration_since'),
+    /** The Seed fields the DM set last ("✎ DM" on the card); a Player edit of a field drops it. */
+    dmSeedFields: text('dm_seed_fields', { mode: 'json' }).$type<string[]>().notNull().default([]),
+    /** When the Player pressed Begin (#335); null while the Campaign is still being created. */
+    begunAt: integer('begun_at'),
+    /** The last Event the DM has heard about: change notices cover the Player's edits after it. */
+    noticedThrough: integer('noticed_through').notNull().default(0),
+    /** The last offline edit a Session's opening has told the DM about ("changed since last Session"). */
+    offlineNoticedThrough: integer('offline_noticed_through').notNull().default(0),
+    /** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
+    clockMinute: integer('clock_minute').notNull().default(0),
+    /** The Scene: the handle of the Place the spotlight is on, or null before it is first set. */
+    scene: text('scene')
   },
   () => [
     check('campaign_tone_check', oneOf('tone', TONES)),
-    check('campaign_length_check', oneOf('length', LENGTHS))
+    check('campaign_length_check', oneOf('length', LENGTHS)),
+    check('campaign_genre_flavor_check', oneOf('genre_flavor', GENRE_FLAVORS)),
+    check('campaign_scale_check', oneOf('scale', SCALES)),
+    check('campaign_magic_level_check', oneOf('magic_level', MAGIC_LEVELS)),
+    check('campaign_tech_level_check', oneOf('tech_level', TECH_LEVELS))
   ]
 )
 
-export const worldCampaign = sqliteTable(
-  'world_campaign',
-  {
-    worldId: text('world_id')
-      .notNull()
-      .references(() => world.id, { onDelete: 'restrict' }),
-    campaignId: text('campaign_id')
-      .notNull()
-      .references(() => campaign.id, { onDelete: 'cascade' })
-  },
-  (t) => [primaryKey({ columns: [t.worldId, t.campaignId] })]
-)
+/**
+ * The Event log: append-only, one event per mutating game-tool call, written in the call's
+ * transaction. The Session and in-fiction minute are stamped by code, never taken from input.
+ * Corrections are new events.
+ */
+export const event = sqliteTable('event', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** The Session the event belongs to; null for offline edits (no Session yet). */
+  sessionId: text('session_id'),
+  /** In-fiction minutes since the Campaign started. */
+  minute: integer('minute').notNull(),
+  /** The game tool that logged it. */
+  tool: text('tool').notNull(),
+  kind: text('kind').notNull(),
+  summary: text('summary').notNull(),
+  data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
+  /** DM-only events (Arc and Beat changes) never reach the Player. */
+  dmOnly: integer('dm_only', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at').notNull()
+})
+
 const ref = (name: string, target: () => AnySQLiteColumn) =>
   integer(name).notNull().references(target, { onDelete: 'restrict' })
 const optionalRef = (name: string, target: () => AnySQLiteColumn) =>
@@ -109,10 +117,22 @@ const optionalRef = (name: string, target: () => AnySQLiteColumn) =>
 const between = (column: string, min: number, max: number) =>
   sql.raw(`${column} BETWEEN ${min} AND ${max}`)
 
+const campaignOwner = () =>
+  text('campaign_id')
+    .notNull()
+    .references(() => campaign.id, { onDelete: 'cascade' })
+
+/** Coin by denomination. */
+export type Coin = { cp: number; sp: number; ep: number; gp: number; pp: number }
+
+/** A Character's Death save tallies; reset when it regains HP or becomes stable. */
+export type DeathSaves = { successes: number; failures: number; stable?: boolean }
+
 /**
- * A player's hero: the player's choices only. Everything computed from them is derived and never
- * stored. Rules references are integer FKs (RESTRICT). Nothing references a Character except its
- * own child rows, which cascade on delete.
+ * A Player's hero in one Campaign: the Player's choices plus play state. Everything computed from
+ * the choices (max HP, AC, modifiers, slots) is derived and never stored. Rules references are
+ * integer FKs (RESTRICT). Nothing references a Character except its own child rows, which cascade
+ * on delete.
  */
 export const character = sqliteTable(
   'character',
@@ -120,6 +140,12 @@ export const character = sqliteTable(
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    campaignId: campaignOwner(),
+    /** The Player who controls this Character; exactly one, transferable. */
+    controllingPlayer: text('controlling_player').notNull(),
+    status: text('status', { enum: CHARACTER_STATUSES }).notNull().default('alive'),
+    /** The Character's Entity version: bumped by every edit, named in change notices. */
+    version: integer('version').notNull().default(1),
     name: text('name').notNull(),
     alignment: text('alignment', { enum: ALIGNMENTS }),
     appearance: text('appearance'),
@@ -128,6 +154,8 @@ export const character = sqliteTable(
     bond: text('bond'),
     flaw: text('flaw'),
     backstory: text('backstory'),
+    /** The Player's own notes on the Character; editable any time, with or without the DM. */
+    notes: text('notes'),
     level: integer('level').notNull().default(1),
     raceId: ref('race_id', () => race.id),
     subraceId: optionalRef('subrace_id', () => subrace.id),
@@ -146,12 +174,48 @@ export const character = sqliteTable(
     cha: integer('cha').notNull(),
     /** Raw dice of the six 4d6 rolls; only when abilityMethod is roll. */
     abilityRolls: text('ability_rolls', { mode: 'json' }).$type<number[][]>(),
+    // Play state: current values only; history is the Event log.
+    currentHp: integer('current_hp').notNull(),
+    tempHp: integer('temp_hp').notNull().default(0),
+    /** Spent spell slots by slot level 1 to 9. */
+    spentSlots: text('spent_slots', { mode: 'json' })
+      .$type<number[]>()
+      .notNull()
+      .$defaultFn(() => [0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    hitDiceSpent: integer('hit_dice_spent').notNull().default(0),
+    /** Milestone levels the DM awarded (`award_level`) that the Player hasn't taken yet. */
+    levelsAwarded: integer('levels_awarded').notNull().default(0),
+    /** Spent uses by feature slug. */
+    featureUses: text('feature_uses', { mode: 'json' })
+      .$type<Record<string, number>>()
+      .notNull()
+      .$defaultFn(() => ({})),
+    /** Condition slugs. */
+    conditions: text('conditions', { mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .$defaultFn(() => []),
+    coin: text('coin', { mode: 'json' })
+      .$type<Coin>()
+      .notNull()
+      .$defaultFn(() => ({ cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 })),
+    /** The spell slug being concentrated on. */
+    concentration: text('concentration'),
+    /** Death save tallies at 0 HP; `stable` after three successes (absent on older rows). */
+    deathSaves: text('death_saves', { mode: 'json' })
+      .$type<DeathSaves>()
+      .notNull()
+      .$defaultFn(() => ({ successes: 0, failures: 0 })),
+    /** Where the Character is; presence in a Scene is computed from it. */
+    whereabouts: text('whereabouts'),
     createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-    archivedAt: integer('archived_at')
+    updatedAt: integer('updated_at').notNull()
   },
   () => [
     check('character_level_check', between('level', 1, 20)),
+    check('character_status_check', oneOf('status', CHARACTER_STATUSES)),
+    check('character_temp_hp_check', sql.raw('temp_hp >= 0')),
+    check('character_hit_dice_spent_check', sql.raw('hit_dice_spent >= 0')),
     check('character_alignment_check', oneOf('alignment', ALIGNMENTS)),
     check('character_ability_method_check', oneOf('ability_method', ABILITY_METHODS)),
     ...ABILITY_KEYS.map((a) => check(`character_${a}_check`, between(`"${a}"`, 1, 30)))
@@ -224,360 +288,383 @@ export const characterChoice = sqliteTable(
   ]
 )
 
-/**
- * A Campaign's linked Character. The app allows one Character per Campaign; the schema does not,
- * so a later multiplayer Campaign needs no migration.
- */
-export const campaignCharacter = sqliteTable(
-  'campaign_character',
+/** What the Character carries: item and count. Starts as the starting equipment on save. */
+export const characterItem = sqliteTable(
+  'character_item',
   {
-    campaignId: text('campaign_id')
-      .notNull()
-      .references(() => campaign.id, { onDelete: 'cascade' }),
-    characterId: text('character_id')
-      .notNull()
-      .references(() => character.id, { onDelete: 'cascade' })
-  },
-  (t) => [primaryKey({ columns: [t.campaignId, t.characterId] })]
-)
-
-/**
- * One sitting of play, by one Character. Open while `ended_at` is null; the partial unique index
- * allows at most one open Session per Campaign. It owns one Scene and an Event log.
- */
-export const session = sqliteTable(
-  'session',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    campaignId: text('campaign_id')
-      .notNull()
-      .references(() => campaign.id, { onDelete: 'cascade' }),
-    // Restrict: a Character that played is never deleted, since that would erase the Event log.
-    characterId: text('character_id')
-      .notNull()
-      .references(() => character.id, { onDelete: 'restrict' }),
-    startedAt: integer('started_at').notNull(),
-    endedAt: integer('ended_at'),
-    /** The last Event seq memory extraction covers; moves only when an extraction succeeds. */
-    memoryThroughSeq: integer('memory_through_seq').notNull().default(0),
-    /** The Rolling summary: prose over the Events up to `summaryThroughSeq`; null until one finishes. */
-    summary: text('summary'),
-    /** The last Event seq the Rolling summary covers; moves only when a summary call succeeds. */
-    summaryThroughSeq: integer('summary_through_seq').notNull().default(0)
+    characterId: owner(),
+    itemId: ref('item_id', () => equipment.id),
+    quantity: integer('quantity').notNull(),
+    /** Worn or wielded: equipped armor and a shield set the Character's AC. */
+    equipped: integer('equipped', { mode: 'boolean' }).notNull().default(false)
   },
   (t) => [
-    uniqueIndex('session_one_open_per_campaign')
-      .on(t.campaignId)
-      .where(sql`ended_at IS NULL`)
+    primaryKey({ columns: [t.characterId, t.itemId] }),
+    check('character_item_quantity_check', sql.raw('quantity >= 1'))
   ]
 )
 
-/** A Session's Scene: where and how play stands now. One row per Session; only code writes it. */
-export const sessionScene = sqliteTable(
-  'session_scene',
-  {
-    sessionId: text('session_id')
-      .primaryKey()
-      .references(() => session.id, { onDelete: 'cascade' }),
-    locationName: text('location_name').notNull(),
-    locationDescription: text('location_description').notNull(),
-    exits: text('exits', { mode: 'json' }).$type<SceneExit[]>().notNull(),
-    objects: text('objects', { mode: 'json' }).$type<string[]>().notNull(),
-    /** NPC row ids; name, attitude and knowledge resolve live from World memory. */
-    npcs: text('npcs', { mode: 'json' }).$type<string[]>().notNull(),
-    mode: text('mode', { enum: MODES }).notNull(),
-    dialogueNpcId: text('dialogue_npc_id'),
-    /** The Call the Exchange is waiting on (with its DC, never sent to the client). */
-    openCall: text('open_call', { mode: 'json' }).$type<Call>(),
-    updatedAt: integer('updated_at').notNull()
-  },
-  () => [check('session_scene_mode_check', oneOf('mode', MODES))]
-)
-
 /**
- * A Session's Event log, append-only: the service has no update or delete. `seq` is monotonic per
- * Session. Every event records the role that produced it.
+ * A Character draft: the unsaved state of a new Character while the wizard is open, stored with
+ * the Campaign so a reload loses nothing. `data` is the wizard's draft as is; it joins the Party
+ * only when saved, which turns it into a `character` row and removes the draft.
  */
-export const sessionEvent = sqliteTable(
-  'session_event',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    sessionId: text('session_id')
-      .notNull()
-      .references(() => session.id, { onDelete: 'cascade' }),
-    seq: integer('seq').notNull(),
-    role: text('role', { enum: ROLES }).notNull(),
-    kind: text('kind', { enum: EVENT_KINDS }).notNull(),
-    text: text('text'),
-    npcId: text('npc_id'),
-    data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
-    createdAt: integer('created_at').notNull()
-  },
-  (t) => [
-    uniqueIndex('session_event_session_seq').on(t.sessionId, t.seq),
-    check('session_event_role_check', oneOf('role', ROLES)),
-    check('session_event_kind_check', oneOf('kind', EVENT_KINDS))
-  ]
-)
-
-export const ARC_STATUSES = ['draft', 'accepted'] as const
-
-/**
- * A Campaign's Arc: at most one (unique `campaign_id`), no versions; regenerating replaces it.
- * Only an `accepted` Arc steers the DM.
- */
-export const arc = sqliteTable(
-  'arc',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    campaignId: text('campaign_id')
-      .notNull()
-      .unique()
-      .references(() => campaign.id, { onDelete: 'cascade' }),
-    status: text('status', { enum: ARC_STATUSES }).notNull().default('draft'),
-    title: text('title').notNull(),
-    premise: text('premise').notNull(),
-    stakes: text('stakes').notNull(),
-    resolution: text('resolution').notNull(),
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull()
-  },
-  () => [check('arc_status_check', oneOf('status', ARC_STATUSES))]
-)
-
-/** An ordered phase of an Arc. `position` is 0-based and dense. */
-export const arcAct = sqliteTable(
-  'arc_act',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    arcId: text('arc_id')
-      .notNull()
-      .references(() => arc.id, { onDelete: 'cascade' }),
-    position: integer('position').notNull(),
-    name: text('name').notNull(),
-    purpose: text('purpose').notNull()
-  },
-  (t) => [index('arc_act_arc').on(t.arcId, t.position)]
-)
-
-/**
- * A turning point. The id is stable across edits.
- */
-export const arcBeat = sqliteTable(
-  'arc_beat',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    actId: text('act_id')
-      .notNull()
-      .references(() => arcAct.id, { onDelete: 'cascade' }),
-    position: integer('position').notNull(),
-    title: text('title').notNull(),
-    description: text('description').notNull(),
-    // Beat state: leaves `pending` once. The stamps record the Session and the last Event id the
-    // transition covered; all null while pending.
-    state: text('state', { enum: BEAT_STATES }).notNull().default('pending'),
-    stateSessionId: text('state_session_id').references(() => session.id, {
-      onDelete: 'set null'
-    }),
-    stateEventId: text('state_event_id').references(() => sessionEvent.id, {
-      onDelete: 'set null'
-    }),
-    stateChangedAt: integer('state_changed_at')
-  },
-  (t) => [
-    index('arc_beat_act').on(t.actId, t.position),
-    check('arc_beat_state_check', oneOf('state', BEAT_STATES))
-  ]
-)
-
-// World memory. Every record is Campaign-scoped and cascades with its Campaign. Provenance: the
-// Session and Event seq a record was created and last changed in; seq is null only for first-Session
-// seeding. Records are retired (a timestamp and a reason), never deleted. See GLOSSARY.md.
-const campaignRef = () =>
-  text('campaign_id')
-    .notNull()
-    .references(() => campaign.id, { onDelete: 'cascade' })
-const sessionRef = (name: string) =>
-  text(name)
-    .notNull()
-    .references(() => session.id, { onDelete: 'cascade' })
-const provenance = () => ({
-  createdSessionId: sessionRef('created_session_id'),
-  createdSeq: integer('created_seq'),
-  changedSessionId: sessionRef('changed_session_id'),
-  changedSeq: integer('changed_seq')
+export const characterDraft = sqliteTable('character_draft', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  campaignId: campaignOwner(),
+  controllingPlayer: text('controlling_player').notNull(),
+  data: text('data', { mode: 'json' }).$type<unknown>().notNull(),
+  /** The wizard step the draft was last on. */
+  step: text('step').$type<StepId>().notNull(),
+  /** The draft's Entity version: bumped by every write that changes it, from the wizard or the DM. */
+  version: integer('version').notNull().default(1),
+  /** The draft fields the DM set last ("✎ DM" in the wizard); a Player edit of a field drops it. */
+  dmFields: text('dm_fields', { mode: 'json' }).$type<string[]>().notNull().default([]),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull()
 })
-const retirement = () => ({
-  retiredAt: integer('retired_at'),
-  retiredReason: text('retired_reason')
+
+/**
+ * The creation conversation in the DM pane: the Player's messages, the DM's replies and muted lines
+ * for the DM's field writes. Out of fiction, so it is never part of the Event log.
+ */
+export const conversationMessage = sqliteTable('conversation_message', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  author: text('author', { enum: ['player', 'dm', 'dm_write'] }).notNull(),
+  /** The Player who wrote it; null for the DM's lines. */
+  player: text('player'),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull()
 })
-const retiredCheck = (table: string) =>
-  check(`${table}_retired_check`, sql.raw('(retired_at IS NULL) = (retired_reason IS NULL)'))
-
-/** A location the story established, hosted by one of the Campaign's Worlds. */
-export const place = sqliteTable(
-  'place',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    campaignId: campaignRef(),
-    worldId: text('world_id')
-      .notNull()
-      .references(() => world.id, { onDelete: 'restrict' }),
-    name: text('name').notNull(),
-    description: text('description').notNull(),
-    ...provenance(),
-    ...retirement()
-  },
-  (t) => [index('place_campaign').on(t.campaignId), retiredCheck('place')]
-)
 
 /**
- * An exit, an edge owned by its place. `targetPlaceId` is null until the exit is first used, then
- * fixed, so going back through it leads to the same place.
+ * A Floor: the DM waiting on the Players' Declarations. At most one is open per Campaign; until it
+ * closes its Declarations can be added, edited or withdrawn and the DM hears none of them.
  */
-export const placeExit = sqliteTable(
-  'place_exit',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    placeId: text('place_id')
-      .notNull()
-      .references(() => place.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    targetPlaceId: text('target_place_id').references(() => place.id, { onDelete: 'set null' })
-  },
-  (t) => [uniqueIndex('place_exit_place_name').on(t.placeId, t.name)]
-)
+export const floor = sqliteTable('floor', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  campaignId: campaignOwner(),
+  state: text('state', { enum: ['open', 'closed'] })
+    .notNull()
+    .default('open'),
+  /** The Players who have pressed Done on it; it closes once every Player at the table has. */
+  done: text('done', { mode: 'json' }).$type<string[]>().notNull().default([]),
+  createdAt: integer('created_at').notNull(),
+  closedAt: integer('closed_at')
+})
 
 /**
- * An NPC. `nameKey` is the normalized name, unique per Campaign. `status` and retirement are
- * separate: a dead NPC is not retired. `placeId` is where code last placed them.
+ * A Declaration on a Floor: what a Player says one Character does. It names exactly one Character
+ * and the Player who declared it. Withdrawing one deletes it; the DM never heard it.
  */
-export const npc = sqliteTable(
-  'npc',
+export const declaration = sqliteTable(
+  'declaration',
   {
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    campaignId: campaignRef(),
-    name: text('name').notNull(),
-    nameKey: text('name_key').notNull(),
-    description: text('description').notNull(),
-    role: text('role').notNull(),
-    status: text('status', { enum: NPC_STATUSES }).notNull().default('alive'),
-    placeId: text('place_id').references(() => place.id, { onDelete: 'set null' }),
-    ...provenance(),
-    ...retirement()
-  },
-  (t) => [
-    uniqueIndex('npc_campaign_name_key').on(t.campaignId, t.nameKey),
-    check('npc_status_check', oneOf('status', NPC_STATUSES)),
-    retiredCheck('npc')
-  ]
-)
-
-/** NPC memory: how an NPC regards a Character. Knowledge is `npcFact` links, never copied text. */
-export const disposition = sqliteTable(
-  'disposition',
-  {
-    npcId: text('npc_id')
+    floorId: text('floor_id')
       .notNull()
-      .references(() => npc.id, { onDelete: 'cascade' }),
+      .references(() => floor.id, { onDelete: 'cascade' }),
     characterId: text('character_id')
       .notNull()
       .references(() => character.id, { onDelete: 'cascade' }),
-    stance: text('stance', { enum: STANCES }).notNull().default('neutral'),
-    note: text('note').notNull().default(''),
-    changedSessionId: sessionRef('changed_session_id'),
-    changedSeq: integer('changed_seq')
+    player: text('player').notNull(),
+    text: text('text').notNull(),
+    /** Send order on its Floor. */
+    position: integer('position').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
   },
-  (t) => [
-    primaryKey({ columns: [t.npcId, t.characterId] }),
-    check('disposition_stance_check', oneOf('stance', STANCES))
-  ]
+  (t) => [index('declaration_floor_idx').on(t.floorId)]
 )
 
 /**
- * A claim the story established. Immutable: it changes only by being superseded (`supersededById`)
- * or retired; a trigger rejects edits to its text or flag.
+ * A Session: one stretch of play, begun when a DM attaches. At most one is open. Summary and threads are
+ * written when it closes.
  */
-export const fact = sqliteTable(
-  'fact',
+export const session = sqliteTable('session', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  number: integer('number').notNull().unique(),
+  /** The bridge (one per Claude Code session) whose attach opened it; a reconnect reuses it. */
+  bridge: text('bridge'),
+  startedAt: integer('started_at').notNull(),
+  closedAt: integer('closed_at'),
+  summary: text('summary'),
+  threads: text('threads', { mode: 'json' }).$type<string[]>()
+})
+
+/**
+ * A Player-safe `⚙ DM …` line in the timeline: what the DM did with one tool call, written by the
+ * server from the call (never the raw result). It sits after the Event `afterEvent` in the timeline.
+ */
+export const activityLine = sqliteTable('activity_line', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionId: text('session_id'),
+  afterEvent: integer('after_event').notNull(),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull()
+})
+
+/**
+ * What a Call asks for: a Check, a question, an action's roll sequences, Combat initiative (one
+ * roll per Character, recorded in the Combat's order), a short rest's Hit Dice, a downed Character's Death
+ * save, a concentrating Character's Constitution save to keep their spell, or a reaction a
+ * Character can take or pass.
+ */
+export const CALL_KINDS = [
+  'check',
+  'question',
+  'roll_sequence',
+  'initiative',
+  'hit_dice',
+  'death_save',
+  'concentration',
+  'reaction'
+] as const
+
+/**
+ * A Call: the DM's open request to the Players, a Check to roll or a question to answer. At most
+ * one is open per Campaign; it is kept with the Scene until every part is answered or a closed
+ * Floor with Declarations withdraws it. `pending` (an action tool's Call not yet attached by
+ * `narrate`) and `cancelled` are for the action tools.
+ */
+export const call = sqliteTable('call', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  campaignId: campaignOwner(),
+  /** `roll_sequence`: an action tool's Call, each part a chain of rolls code resolves click by click. */
+  kind: text('kind', { enum: CALL_KINDS }).notNull(),
+  state: text('state', { enum: ['pending', 'open', 'answered', 'withdrawn', 'cancelled'] })
+    .notNull()
+    .default('open'),
+  /** A question's text; null for a Check. */
+  text: text('text'),
+  /** A question's choices; empty for free text (and for a Check). */
+  choices: text('choices', { mode: 'json' }).$type<string[]>().notNull().default([]),
+  /** The Event (a Narration) that opened it. */
+  openedBy: integer('opened_by'),
+  createdAt: integer('created_at').notNull(),
+  closedAt: integer('closed_at')
+})
+
+/** One roll of a Check, after the dice: both d20s on advantage, the one kept and the total. */
+export type CheckResult = {
+  dice: number[]
+  kept: number
+  modifier: number
+  total: number
+  success: boolean
+}
+
+/** One step of a roll sequence, with the hidden numbers it is rolled against. */
+export type SequenceStep =
+  /** A d20 attack roll against the target's AC: a miss ends the sequence, a 20 is a critical hit. */
+  | { kind: 'to_hit'; bonus: number; ac: number }
+  /** A damage roll applied to the target; dice doubled after a critical hit. */
+  | { kind: 'damage'; dice: string; damageType: string }
+  /**
+   * A saving throw against a DC. On a failure the effect applies in full (damage already rolled by
+   * code, a condition); on a success, half the damage or nothing.
+   */
+  | {
+      kind: 'save'
+      ability: string
+      bonus: number
+      dc: number
+      damage: number | null
+      damageType: string | null
+      condition: string | null
+      onSuccess: 'half' | 'none'
+    }
+
+/** One rolled step of a sequence: the dice, the total and what came of it. */
+export type SequenceRoll = {
+  dice: number[]
+  kept: number | null
+  modifier: number
+  total: number
+  /** `hit`, `miss`, `critical hit`, `success` or `failure`; null for damage. */
+  outcome: string | null
+  /** For damage, and a save's effect: what the target took and where it was left. */
+  applied: { dealt: number; damageType: string | null; condition: string | null } | null
+  /** The target's HP after the step, for the DM: `{hp, max}`. */
+  after: { hp: number; max: number } | null
+  /** The DM's notes on what the damage did: falling Unconscious, death, a concentration save. */
+  notes?: string[]
+  /** Pending concentration save Calls the damage made. */
+  calls?: string[]
+}
+
+/** A short rest's Hit Dice for one Character: the die, how many are left, and what was spent. */
+export type HitDiceSpend = {
+  die: number
+  available: number
+  conModifier: number
+  /** Once answered: each die's face, the HP regained and where HP ended. */
+  rolls: number[] | null
+  healed: number | null
+  after: { hp: number; max: number } | null
+}
+
+/**
+ * A roll sequence: what is rolled (the label the Player reads), by whom against whom, the steps
+ * in order and the rolls so far. Finished when every step is rolled or a miss ends it early.
+ */
+export type Sequence = {
+  label: string
+  /** The thing rolled, as the Player reads it per step: `Crossbow, light` → "… attack", "… damage". */
+  source: string
+  target: { handle: string; name: string }
+  steps: SequenceStep[]
+  rolls: SequenceRoll[]
+  done: boolean
+}
+
+/**
+ * One part of a Call, addressed to one Player: a Check for one Character (its skill or save, the
+ * hidden DC from the tier), or a question's answer. It holds the result once answered.
+ */
+export const callPart = sqliteTable(
+  'call_part',
   {
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    campaignId: campaignRef(),
-    title: text('title').notNull(),
-    detail: text('detail').notNull(),
-    worldChanging: integer('world_changing', { mode: 'boolean' }).notNull().default(false),
-    supersededById: text('superseded_by_id').references((): AnySQLiteColumn => fact.id, {
-      onDelete: 'set null'
-    }),
-    ...provenance(),
-    ...retirement()
-  },
-  (t) => [index('fact_campaign').on(t.campaignId), retiredCheck('fact')]
-)
-
-/** What an NPC knows: a link to a fact, never a copy of its text. */
-export const npcFact = sqliteTable(
-  'npc_fact',
-  {
-    npcId: text('npc_id')
+    callId: text('call_id')
       .notNull()
-      .references(() => npc.id, { onDelete: 'cascade' }),
-    factId: text('fact_id')
+      .references(() => call.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    /** The Character rolling; null for a question, which goes to the Player. */
+    characterId: text('character_id').references(() => character.id, { onDelete: 'cascade' }),
+    /** The Controlling Player the part is addressed to. */
+    player: text('player').notNull(),
+    /** Skill slug, for a skill Check. */
+    skill: text('skill'),
+    /** Ability key, for a saving throw. */
+    save: text('save', { enum: ABILITY_KEYS }),
+    tier: text('tier'),
+    /** The DM-only DC; never in a Player payload. */
+    dc: integer('dc'),
+    mode: text('mode', { enum: ['normal', 'advantage', 'disadvantage'] })
       .notNull()
-      .references(() => fact.id, { onDelete: 'cascade' })
+      .default('normal'),
+    reason: text('reason'),
+    result: text('result', { mode: 'json' }).$type<CheckResult>(),
+    /** A roll sequence's steps (with the hidden AC or DC) and its rolls so far. */
+    sequence: text('sequence', { mode: 'json' }).$type<Sequence>(),
+    /** A short rest's Hit Dice: what the Character can spend and, once answered, what it rolled. */
+    hitDice: text('hit_dice', { mode: 'json' }).$type<HitDiceSpend>(),
+    /** A reaction's name, such as `Opportunity attack`; the Call's choices take it or pass. */
+    reaction: text('reaction'),
+    answer: text('answer'),
+    answeredAt: integer('answered_at')
   },
-  (t) => [primaryKey({ columns: [t.npcId, t.factId] })]
+  (t) => [index('call_part_call_idx').on(t.callId)]
 )
 
 /**
- * One row per memory extraction or summary attempt, append-only and never pruned. Records counts
- * and why items were dropped (`{kind, reason}`, never item text).
+ * An NPC's own combat state, once its stat block is first used: current HP (starting at the stat
+ * block's average), the stat block's max and conditions. Never shown to the Player as numbers.
  */
-export const memoryRun = sqliteTable(
-  'memory_run',
+export const npcCombat = sqliteTable('npc_combat', {
+  handle: text('handle').primaryKey(),
+  hp: integer('hp').notNull(),
+  maxHp: integer('max_hp').notNull(),
+  conditions: text('conditions', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .$defaultFn(() => []),
+  /** The spell slug the NPC is concentrating on. */
+  concentration: text('concentration')
+})
+
+/**
+ * A fight in the Scene, run in initiative order. At most one is live (`endedAt` null). `round` is 0
+ * until every combatant has initiative, then counts from 1; `current` is the combatant whose turn
+ * it is (null until the order is known).
+ */
+export const combat = sqliteTable('combat', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  round: integer('round').notNull().default(0),
+  current: text('current'),
+  startedAt: integer('started_at').notNull(),
+  endedAt: integer('ended_at')
+})
+
+/** The per-turn resources a combatant spends: a reminder for the DM, never a refusal. */
+export type TurnResources = { action: boolean; bonusAction: boolean; reaction: boolean }
+
+/**
+ * One combatant in a Combat: a Character, an NPC (both by handle), or a Creature — a faceless foe
+ * spawned for this Combat from a stat block (`creature:goblin-2`), which keeps its HP and
+ * conditions here and vanishes with the Combat. `initiative` is null until rolled.
+ */
+export const combatant = sqliteTable(
+  'combatant',
   {
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    sessionId: text('session_id')
+    combatId: text('combat_id')
       .notNull()
-      .references(() => session.id, { onDelete: 'cascade' }),
-    kind: text('kind', { enum: MEMORY_RUN_KINDS }).notNull(),
-    fromSeq: integer('from_seq').notNull(),
-    toSeq: integer('to_seq').notNull(),
-    outcome: text('outcome', { enum: MEMORY_RUN_OUTCOMES }).notNull(),
-    accepted: integer('accepted').notNull().default(0),
-    dropped: integer('dropped').notNull().default(0),
-    droppedItems: text('dropped_items', { mode: 'json' })
-      .$type<DroppedItem[]>()
+      .references(() => combat.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['character', 'npc', 'creature'] }).notNull(),
+    handle: text('handle').notNull(),
+    name: text('name').notNull(),
+    /** The order combatants joined in, the last tie-break. */
+    joined: integer('joined').notNull(),
+    initiative: integer('initiative'),
+    /** The Dexterity score, the first tie-break. */
+    dex: integer('dex').notNull(),
+    /** Surprised: loses its first turn. */
+    surprised: integer('surprised', { mode: 'boolean' }).notNull().default(false),
+    /** What it has spent this turn. */
+    used: text('used', { mode: 'json' })
+      .$type<TurnResources>()
       .notNull()
-      .default(sql`'[]'`),
-    durationMs: integer('duration_ms').notNull(),
-    createdAt: integer('created_at').notNull()
+      .$defaultFn(() => ({ action: false, bonusAction: false, reaction: false })),
+    /** A Creature's stat block (`monster:goblin`); null for a Character or NPC. */
+    statBlock: text('stat_block'),
+    /** A Creature's HP (starting at the stat block's average), max and conditions. */
+    hp: integer('hp'),
+    maxHp: integer('max_hp'),
+    conditions: text('conditions', { mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .$defaultFn(() => []),
+    /** The spell slug a Creature is concentrating on. */
+    concentration: text('concentration')
   },
-  (t) => [
-    index('memory_run_session').on(t.sessionId, t.createdAt),
-    check('memory_run_kind_check', oneOf('kind', MEMORY_RUN_KINDS)),
-    check('memory_run_outcome_check', oneOf('outcome', MEMORY_RUN_OUTCOMES))
-  ]
+  (t) => [index('combatant_combat_idx').on(t.combatId)]
 )
+
+/**
+ * A Declaration sent back to its Player's composer as unsent text: its Character left the Scene
+ * when the spotlight cut away before the Floor closed. The console loads it, then clears it.
+ */
+export const returnedDraft = sqliteTable('returned_draft', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id')
+    .notNull()
+    .references(() => character.id, { onDelete: 'cascade' }),
+  player: text('player').notNull(),
+  text: text('text').notNull(),
+  createdAt: integer('created_at').notNull()
+})
 
 export * from './rules-schema'
+export * from './world-schema'
+export * from './knowledge-schema'
+export * from './arc-schema'

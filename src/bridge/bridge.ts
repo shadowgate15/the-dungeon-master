@@ -1,0 +1,222 @@
+import { randomUUID } from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+import { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  type CallToolResult,
+  type JSONRPCMessage
+} from '@modelcontextprotocol/sdk/types.js'
+import { z } from 'zod'
+import { campaignDatabasePath, userStateDir } from '../lib/server/campaign/paths'
+import { readRuntimeFile } from '../lib/server/runtime'
+
+/**
+ * The newest MCP protocol revision channels register on. A client asking for anything newer is
+ * answered with this one.
+ */
+export const CHANNEL_PROTOCOL_VERSION = '2025-06-18'
+
+const API = '/api/bridge'
+
+const NOT_RUNNING: CallToolResult = {
+  content: [
+    {
+      type: 'text',
+      text: JSON.stringify({
+        code: 'server_not_running',
+        message: 'game server not running',
+        next: 'Tell the Player to start it by running dm in the Campaign folder, then call again'
+      })
+    }
+  ],
+  isError: true
+}
+
+class ServerDown extends Error {}
+
+/** Claude Code asking the channel server to relay a permission prompt (`claude/channel/permission`). */
+const PermissionRequestNotification = z.object({
+  method: z.literal('notifications/claude/channel/permission_request'),
+  params: z.object({
+    request_id: z.string(),
+    tool_name: z.string(),
+    description: z.string().optional(),
+    input_preview: z.string().optional()
+  })
+})
+
+type Env = Record<string, string | undefined>
+
+/** The Campaign folder Claude Code started in, or undefined outside a Campaign folder. */
+function campaignFolder(env: Env, cwd: string): string | undefined {
+  const folder = path.resolve(env.CLAUDE_PROJECT_DIR || cwd)
+  return fs.existsSync(campaignDatabasePath(folder)) ? folder : undefined
+}
+
+/**
+ * The stateless stdio MCP and channel server Claude Code spawns. It owns nothing: it finds its
+ * Campaign by folder, fetches the tool list from the game server, proxies tool calls, and relays
+ * the server's channel events into the session. Outside a Campaign folder it exposes nothing.
+ */
+export async function startBridge({ env = process.env, cwd = process.cwd() } = {}) {
+  const folder = campaignFolder(env, cwd)
+  const home = userStateDir(env)
+  // Names this bridge to the server, which holds one live session per Campaign.
+  const session = randomUUID()
+  const log = (...parts: unknown[]) => process.stderr.write(`[dm-bridge] ${parts.join(' ')}\n`)
+
+  async function api(route: string, init?: RequestInit): Promise<Response> {
+    const runtime = readRuntimeFile(home)
+    if (!runtime) throw new ServerDown()
+    try {
+      return await fetch(`http://localhost:${runtime.port}${API}/${route}`, {
+        ...init,
+        headers: {
+          authorization: `Bearer ${runtime.token}`,
+          'content-type': 'application/json',
+          'x-dm-session': session
+        }
+      })
+    } catch {
+      throw new ServerDown()
+    }
+  }
+
+  // Set once the server refuses this bridge because another session holds its Campaign. The
+  // refusal stands for the bridge's life: it never takes the table, even after a restart.
+  let refusal: CallToolResult | undefined
+
+  const server = new Server(
+    { name: 'the-dungeon-master', version: '0.0.1' },
+    {
+      capabilities: folder
+        ? {
+            tools: { listChanged: true },
+            experimental: { 'claude/channel': {}, 'claude/channel/permission': {} }
+          }
+        : { tools: {} }
+    }
+  )
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    if (!folder) return { tools: [] }
+    try {
+      const res = await api('tools')
+      if (!res.ok) throw new ServerDown()
+      return (await res.json()) as { tools: [] }
+    } catch {
+      return { tools: [] }
+    }
+  })
+
+  server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
+    if (!folder) {
+      return {
+        content: [{ type: 'text', text: 'Not a Campaign folder: the game has no tools here.' }],
+        isError: true
+      }
+    }
+    if (refusal) return refusal
+    try {
+      const res = await api('call', {
+        method: 'POST',
+        body: JSON.stringify({
+          campaign: folder,
+          name: request.params.name,
+          arguments: request.params.arguments ?? {}
+        })
+      })
+      if (!res.ok) throw new ServerDown()
+      return (await res.json()) as CallToolResult
+    } catch (e) {
+      if (e instanceof ServerDown) return NOT_RUNNING
+      throw e
+    }
+  })
+
+  // Permission prompts go to the Player's console in the order raised (the newest one shows); the
+  // verdict comes back on the event stream.
+  let prompts = Promise.resolve()
+  server.setNotificationHandler(PermissionRequestNotification, ({ params }) => {
+    if (!folder) return
+    prompts = prompts.then(async () => {
+      try {
+        await api('permission_request', {
+          method: 'POST',
+          body: JSON.stringify({ campaign: folder, ...params })
+        })
+      } catch (e) {
+        // The terminal's dialog still stands; the Player answers there.
+        if (!(e instanceof ServerDown)) log('permission request:', e)
+      }
+    })
+  })
+
+  /**
+   * Relays the Campaign's channel events and the Player's permission verdicts, reconnecting while
+   * the server is away.
+   */
+  async function relayChannel(campaign: string) {
+    for (;;) {
+      try {
+        const res = await api(`events?campaign=${encodeURIComponent(campaign)}`)
+        if (res.status === 409) {
+          // Another session holds this Campaign: this bridge stays refused and stops trying.
+          const body = (await res.json()) as { message?: string }
+          log(body.message)
+          refusal = { content: [{ type: 'text', text: JSON.stringify(body) }], isError: true }
+          return
+        }
+        if (!res.ok || !res.body) throw new ServerDown()
+        // The server may be new, or was down when Claude Code listed the tools.
+        void server.sendToolListChanged().catch(() => {})
+        const decoder = new TextDecoder()
+        let buffer = ''
+        for await (const chunk of res.body) {
+          buffer += decoder.decode(chunk, { stream: true })
+          let end: number
+          while ((end = buffer.indexOf('\n\n')) >= 0) {
+            const block = buffer.slice(0, end)
+            buffer = buffer.slice(end + 2)
+            const data = /^data: (.*)$/m.exec(block)?.[1]
+            if (/^event: channel$/m.test(block) && data) {
+              await server.notification({
+                method: 'notifications/claude/channel',
+                params: JSON.parse(data)
+              })
+            } else if (/^event: permission$/m.test(block) && data) {
+              await server.notification({
+                method: 'notifications/claude/channel/permission',
+                params: JSON.parse(data)
+              })
+            }
+          }
+        }
+      } catch (e) {
+        if (!(e instanceof ServerDown)) log('channel stream:', e)
+      }
+      await new Promise((r) => setTimeout(r, 1000))
+    }
+  }
+
+  if (folder) server.oninitialized = () => void relayChannel(folder)
+
+  const transport = new StdioServerTransport()
+  await server.connect(transport)
+
+  // Pin the protocol revision: channels only register on CHANNEL_PROTOCOL_VERSION or older.
+  const receive = transport.onmessage
+  transport.onmessage = (message: JSONRPCMessage) => {
+    if ('method' in message && message.method === 'initialize' && message.params) {
+      const asked = String(message.params.protocolVersion)
+      if (asked > CHANNEL_PROTOCOL_VERSION)
+        message.params.protocolVersion = CHANNEL_PROTOCOL_VERSION
+    }
+    receive?.(message)
+  }
+
+  process.stdin.on('end', () => process.exit(0))
+}

@@ -38,6 +38,48 @@ function need(ids: Ids, slug: string, what: string): number {
   return id
 }
 
+/** Names and descriptions of entries like a stat block's traits and actions. */
+const entryText = (entries: unknown[]) =>
+  entries.map((e) => {
+    const { name, desc } = e as { name?: string; desc?: string }
+    return [name, desc].filter(Boolean).join(': ')
+  })
+
+/** Markdown down to the words. */
+const plain = (text: string) =>
+  text
+    .replace(/[#*|_>`]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/** One search row per entry a rules handle can name: `kind:slug`, its name and its text. */
+function searchRows(d: RulesDataset) {
+  const row = (kind: string, e: { slug: string; name: string }, ...body: (string | null)[]) => ({
+    handle: `${kind}:${e.slug}`,
+    kind,
+    name: e.name,
+    body: plain(body.filter(Boolean).join('\n'))
+  })
+  return [
+    ...d.spells.map((s) => row('spell', s, s.school, ...s.description, ...s.higherLevel)),
+    ...d.monsters.map((m) =>
+      row(
+        'monster',
+        m,
+        `${m.size} ${m.type}${m.subtype ? ` (${m.subtype})` : ''}, ${m.alignment}`,
+        m.description,
+        ...entryText(m.specialAbilities),
+        ...entryText(m.actions),
+        ...entryText(m.legendaryActions),
+        ...entryText(m.reactions)
+      )
+    ),
+    ...d.conditions.map((c) => row('condition', c, ...c.description)),
+    ...d.magicItems.map((i) => row('magic-item', i, ...i.description)),
+    ...d.ruleSections.map((r) => row('rule', r, r.description))
+  ]
+}
+
 /**
  * Seeds the Rules Data tables from the committed dataset, in one transaction.
  *
@@ -76,6 +118,8 @@ export function seedRulesData(
 
     // Join and choice tables are rebuilt; clear them children-first.
     for (const table of [
+      t.monsterConditionImmunity,
+      t.monsterProficiency,
       t.choiceOptionItem,
       t.choiceOption,
       t.choiceGroup,
@@ -446,6 +490,50 @@ export function seedRulesData(
       )
     )
 
+    // --- Monsters, conditions, magic items, rules sections
+    const condition = upsert(t.condition, dataset.conditions)
+    const monster = upsert(
+      t.monster,
+      dataset.monsters.map(({ abilityScores, ...m }) => ({
+        ...omit(m, 'proficiencies', 'conditionImmunities'),
+        ...abilityScores
+      }))
+    )
+    insert(
+      t.monsterProficiency,
+      dataset.monsters.flatMap((m) =>
+        m.proficiencies.map((p, position) => ({
+          monsterId: need(monster, m.slug, 'monster'),
+          proficiencyId: need(proficiency, p.proficiency, 'proficiency'),
+          position,
+          value: p.value
+        }))
+      )
+    )
+    insert(
+      t.monsterConditionImmunity,
+      dataset.monsters.flatMap((m) =>
+        m.conditionImmunities.map((c) => ({
+          monsterId: need(monster, m.slug, 'monster'),
+          conditionId: need(condition, c, 'condition')
+        }))
+      )
+    )
+    const magicItem = upsert(
+      t.magicItem,
+      dataset.magicItems.map((i) => ({
+        ...omit(i, 'category', 'variants', 'variantOf'),
+        categoryId: need(equipmentCategory, i.category, 'equipment category')
+      }))
+    )
+    for (const i of dataset.magicItems) {
+      tx.update(t.magicItem)
+        .set({ variantOfId: i.variantOf ? need(magicItem, i.variantOf, 'magic item') : null })
+        .where(sql`${t.magicItem.id} = ${need(magicItem, i.slug, 'magic item')}`)
+        .run()
+    }
+    upsert(t.ruleSection, dataset.ruleSections)
+
     // --- Backgrounds and app-authored rules
     const background = upsert(
       t.background,
@@ -567,6 +655,14 @@ export function seedRulesData(
           )
         })
       }
+    }
+
+    // --- Full-text search over the rules kinds a handle can name
+    tx.run(sql`DELETE FROM rules_search`)
+    for (const row of searchRows(dataset)) {
+      tx.run(
+        sql`INSERT INTO rules_search (handle, kind, name, body) VALUES (${row.handle}, ${row.kind}, ${row.name}, ${row.body})`
+      )
     }
 
     // --- Dataset version

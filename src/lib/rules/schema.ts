@@ -295,6 +295,77 @@ export const spell = z.strictObject({
   classes: z.array(slug)
 })
 
+// --- Monsters, conditions, magic items, rules sections -----------------------------------------
+
+const abilityScores = z.strictObject({
+  str: int,
+  dex: int,
+  con: int,
+  int: int,
+  wis: int,
+  cha: int
+})
+
+/** A full SRD stat block. Attack, trait and action entries keep the upstream shape as JSON. */
+export const monster = z.strictObject({
+  slug,
+  name: text,
+  size: text,
+  type: text,
+  subtype: nullableText,
+  alignment: text,
+  /** Each way the AC is worked out (natural, armor, spell...), upstream shape kept as JSON. */
+  armorClass: z.array(jsonValue),
+  hitPoints: int,
+  hitDice: text,
+  hitPointsRoll: text,
+  /** Movement modes to distances (`{ walk: "30 ft." }`); `hover` is a boolean. */
+  speed: z.record(z.string(), z.union([z.string(), z.boolean()])),
+  abilityScores,
+  /** Saving throw and skill bonuses. */
+  proficiencies: z.array(z.strictObject({ proficiency: slug, value: int })),
+  damageVulnerabilities: z.array(text),
+  damageResistances: z.array(text),
+  damageImmunities: z.array(text),
+  conditionImmunities: z.array(slug),
+  senses: z.record(z.string(), z.union([z.string(), z.number()])),
+  languages: text,
+  challengeRating: z.number(),
+  proficiencyBonus: int,
+  xp: int,
+  specialAbilities: z.array(jsonValue),
+  actions: z.array(jsonValue),
+  legendaryActions: z.array(jsonValue),
+  reactions: z.array(jsonValue),
+  /** Other stat blocks the same creature can take (a vampire's bat and mist forms). */
+  forms: z.array(slug),
+  description: nullableText
+})
+
+export const condition = z.strictObject({ slug, name: text, description: lines })
+
+export const magicItem = z.strictObject({
+  slug,
+  name: text,
+  category: slug,
+  rarity: text,
+  /** Specific versions of a generic item ("Ammunition, +1"), each its own magic item. */
+  variants: z.array(slug),
+  /** The generic item this one is a version of. */
+  variantOf: slug.nullable(),
+  description: lines
+})
+
+/** One section of the SRD rules text, under its top-level rule (Combat, Spellcasting...). */
+export const ruleSection = z.strictObject({
+  slug,
+  name: text,
+  rule: slug,
+  ruleName: text,
+  /** The section's text, in Markdown. */
+  description: text
+})
+
 // --- Backgrounds --------------------------------------------------------------------------------
 
 export const BACKGROUND_OPTION_KINDS = ['personalityTrait', 'ideal', 'bond', 'flaw'] as const
@@ -386,6 +457,10 @@ export const rulesDataset = z.strictObject({
   subclassLevels: z.array(subclassLevel),
   features: z.array(feature),
   spells: z.array(spell),
+  monsters: z.array(monster),
+  conditions: z.array(condition),
+  magicItems: z.array(magicItem),
+  ruleSections: z.array(ruleSection),
   backgrounds: z.array(background),
   abilityScoreMethods: z.array(abilityScoreMethod)
 })
@@ -408,6 +483,10 @@ export type Subclass = z.infer<typeof subclass>
 export type SubclassLevel = z.infer<typeof subclassLevel>
 export type Feature = z.infer<typeof feature>
 export type Spell = z.infer<typeof spell>
+export type Monster = z.infer<typeof monster>
+export type Condition = z.infer<typeof condition>
+export type MagicItem = z.infer<typeof magicItem>
+export type RuleSection = z.infer<typeof ruleSection>
 export type Background = z.infer<typeof background>
 export type AbilityScoreMethod = z.infer<typeof abilityScoreMethod>
 
@@ -432,6 +511,10 @@ export const COLLECTIONS = [
   'subclassLevels',
   'features',
   'spells',
+  'monsters',
+  'conditions',
+  'magicItems',
+  'ruleSections',
   'backgrounds',
   'abilityScoreMethods'
 ] as const satisfies readonly (keyof RulesDataset)[]

@@ -11,38 +11,40 @@ import { rollAbilityScores } from './ability-scores.ts'
 import { ownedEquipment } from './equipment.ts'
 import type { CharacterInput } from '#lib/server/character/service.ts'
 import { tryDraftToCharacterInput } from './save.ts'
-import { inertFieldAi } from '#lib/ai/field-ai.svelte.ts'
-import { currentGroupValue, describeGroupValue, groupDefinition } from './ai-groups.ts'
-import type { CharacterFieldAi } from './field-ai.svelte.ts'
 import { computeSteps, STEPS, type StepDefinition, type StepId, type StepState } from './steps.ts'
 
 /**
- * The wizard's reactive state: the browser-only Character draft, the derived resolved features and
+ * Where the wizard keeps its work: a Character draft stored with a Campaign (a new Character), or
+ * a saved Character of a Campaign being edited.
+ */
+export type WizardTarget =
+  { campaign: string; draft: string } | { campaign: string; character: string }
+
+/**
+ * The wizard's reactive state: the Character draft, the derived resolved features and
  * stats, and the step rail. One instance per open wizard. Steps read it
  * and call `update`; they never write `draft` directly, so change rules always run.
  */
 export class CharacterWizard {
   readonly rules: WizardRules
   readonly #defs: readonly StepDefinition[]
-  /** The saved Character being edited (review saves with PUT), or null for a new one. */
-  readonly characterId: string | null
+  /** Where the draft is written and saved; null keeps it in memory only (tests, stories). */
+  readonly target: WizardTarget | null
 
   draft = $state<CharacterDraft>(emptyDraft())
   /** Messages about choices cleared by the last changes; shown above the stats strip. */
   notices = $state<string[]>([])
   current = $state<StepId>('concept')
-  /** Pending (un-accepted) AI suggestions per step, for the rail's dot (#116 maintains it). */
-  suggestions = $state<Partial<Record<StepId, number>>>({})
-  /** Bumped by every edit (and every AI write); a field's AI Undo expires when it changes. */
-  revision = $state(0)
-  /** The per-field AI controller; set by the shell during init. Without it the controls are inert. */
-  ai: CharacterFieldAi | undefined
   /** True once the player has changed anything; guards leaving the page. */
   dirty = $state(false)
   /** True while the draft is being saved; the footer's Save button and Back are disabled. */
   saving = $state(false)
   /** Why the last save failed, shown on the Review step; null when none has failed. */
   saveError = $state<string | null>(null)
+  /** The draft fields the DM set and the Player has not changed since, each marked "✎ DM". */
+  dmFields = $state<string[]>([])
+  /** The stored draft last taken in, so a DM write applies only the fields it changed. */
+  #stored: CharacterDraft | null = null
 
   /** Resolver output for the draft: choice groups, grants, structural issues. */
   resolved: ResolvedFeatures
@@ -54,19 +56,22 @@ export class CharacterWizard {
   characterInput: CharacterInput | null
 
   /**
-   * @param initial a saved Character's draft (edit page): the wizard opens on it with nothing
-   *   unsaved. Omit for a new Character.
-   * @param characterId the id of the Character `initial` came from.
+   * @param initial a stored draft or a saved Character's draft: the wizard opens on it with
+   *   nothing unsaved. Omit for an empty one.
+   * @param target where `initial` came from and where the wizard writes.
+   * @param step the step a stored draft was last on.
    */
   constructor(
     rules: WizardRules,
     defs: readonly StepDefinition[] = STEPS,
     initial?: CharacterDraft,
-    characterId: string | null = null
+    target: WizardTarget | null = null,
+    step: StepId = 'concept'
   ) {
     this.rules = rules
-    this.characterId = characterId
+    this.target = target
     if (initial) this.draft = initial
+    this.current = step
     this.#defs = defs
     this.resolved = $derived(resolveFeatures(rules, resolverDraft(this.draft)))
     this.stats = $derived(
@@ -86,13 +91,48 @@ export class CharacterWizard {
     )
   }
 
+  /** The saved Character being edited, or null for a new one. */
+  get characterId(): string | null {
+    return this.target && 'character' in this.target ? this.target.character : null
+  }
+
   /** Applies a change to the draft, then the keep/clear rules; cleared choices become notices. */
   update(patch: Partial<CharacterDraft>) {
     const { draft, notices } = reconcile(this.rules, { ...this.draft, ...patch })
     this.draft = draft
     this.notices.push(...notices)
     this.dirty = true
-    this.revision++
+    this.dmFields = this.dmFields.filter((f) => !(f in patch))
+  }
+
+  /**
+   * Takes in the stored draft after the DM wrote to it: the fields the DM changed land in the
+   * open draft without marking it unsaved, and its "✎ DM" marks show. The Player's other unsaved
+   * changes stay.
+   */
+  adopt(stored: { draft: CharacterDraft; dmFields: string[] }) {
+    const previous = this.#stored
+    this.#stored = stored.draft
+    if (previous) {
+      const changed = stored.dmFields.filter(
+        (f) =>
+          JSON.stringify(stored.draft[f as keyof CharacterDraft]) !==
+          JSON.stringify(previous[f as keyof CharacterDraft])
+      )
+      if (changed.length > 0) {
+        const patch = Object.fromEntries(
+          changed.map((f) => [f, stored.draft[f as keyof CharacterDraft]])
+        )
+        const { draft, notices } = reconcile(this.rules, { ...this.draft, ...patch })
+        this.draft = draft
+        this.notices.push(...notices)
+      }
+    }
+    this.dmFields = stored.dmFields.filter(
+      (f) =>
+        JSON.stringify(this.draft[f as keyof CharacterDraft]) ===
+        JSON.stringify(stored.draft[f as keyof CharacterDraft])
+    )
   }
 
   /** Rolls a new ability set in code; a reroll replaces the whole set, so assignments reset. */
@@ -101,39 +141,6 @@ export class CharacterWizard {
       abilityRolls: rollAbilityScores(),
       baseScores: { str: null, dex: null, con: null, int: null, wis: null, cha: null }
     })
-  }
-
-  /** The props for one field's `FieldAi`; inert and disabled when no controller is attached. */
-  aiField(field: string) {
-    return this.ai?.field(field) ?? inertFieldAi('AI is not available here')
-  }
-
-  /** A pick group's current value as names ("Athletics, History"); empty when unset or missing. */
-  groupText(field: string): string {
-    const def = groupDefinition(this.rules, this.draft, field)
-    return def ? describeGroupValue(def, currentGroupValue(def)) : ''
-  }
-
-  /** A pick group's accessible label, e.g. "Skills (Fighter)". */
-  groupLabel(field: string): string {
-    return groupDefinition(this.rules, this.draft, field)?.label ?? ''
-  }
-
-  /** A plain field's current value as text; empty when unset. */
-  fieldText(field: string): string {
-    return ((this.draft as unknown as Record<string, string | null>)[field] as string | null) ?? ''
-  }
-
-  /** Everything an AI write may change (the draft and the notices it adds), for Field Undo. */
-  snapshot() {
-    return { draft: $state.snapshot(this.draft) as CharacterDraft, notices: [...this.notices] }
-  }
-
-  /** Puts a snapshot back as one edit: restores the field and everything cleared with it. */
-  restore(snapshot: ReturnType<CharacterWizard['snapshot']>) {
-    this.draft = snapshot.draft
-    this.notices = [...snapshot.notices]
-    this.revision++
   }
 
   dismissNotice(index: number) {
