@@ -17,17 +17,18 @@ function CallCard($$renderer, $$props) {
 		* skill or save and the reason, never the DC; advantage marked), or for a roll sequence such as
 		* an attack (its next roll: to hit, then damage; never the AC), or a question with its choices
 		* as buttons (free text without), or a short rest's Hit Dice (how many to spend, as buttons up
-		* to what is left). Clicking rolls on the server; nothing is rolled here.
+		* to what is left), or a reaction (take it or pass; once taken, its attack rolls like any).
+		* Clicking rolls on the server; nothing is rolled here.
 		*/
 		let { call, onroll, onanswer, disabled = false } = $$props;
 		let drafts = {};
 		$$renderer.push(`<section aria-label="Call" class="flex shrink-0 flex-col gap-2 rounded-panel border-2 border-primary bg-raised p-3 text-sm">`);
-		if (call.kind === "question" || call.kind === "hit_dice") $$renderer.push(`<!--[0--><p class="font-medium">${escape_html(call.text)}</p>`);
+		if (call.kind === "question" || call.kind === "hit_dice" || call.kind === "reaction") $$renderer.push(`<!--[0--><p class="font-medium">${escape_html(call.text)}</p>`);
 		else $$renderer.push("<!--[-1-->");
 		$$renderer.push(`<!--]--> <!--[-->`);
 		const each_array = ensure_array_like(call.parts);
-		for (let $$index_2 = 0, $$length = each_array.length; $$index_2 < $$length; $$index_2++) {
-			let part = each_array[$$index_2];
+		for (let $$index_3 = 0, $$length = each_array.length; $$index_3 < $$length; $$index_3++) {
+			let part = each_array[$$index_3];
 			$$renderer.push(`<div role="group"${attr("aria-label", part.character ?? part.player)} class="flex flex-wrap items-center gap-2">`);
 			if (call.kind !== "question" && call.kind !== "hit_dice") {
 				$$renderer.push(`<!--[0--><span class="font-medium">${escape_html(part.character)}</span> <span>${escape_html(part.label)}</span> `);
@@ -37,8 +38,25 @@ function CallCard($$renderer, $$props) {
 				if (part.reason) $$renderer.push(`<!--[0--><span class="text-muted">${escape_html(part.reason)}</span>`);
 				else $$renderer.push("<!--[-1-->");
 				$$renderer.push(`<!--]--> `);
-				if (part.answered) $$renderer.push(`<!--[0--><span class="ml-auto text-xs text-muted">Rolled</span>`);
-				else {
+				if (part.answered) $$renderer.push(`<!--[0--><span class="ml-auto text-xs text-muted">${escape_html(call.kind === "reaction" ? "Answered" : "Rolled")}</span>`);
+				else if (part.offer) {
+					$$renderer.push(`<!--[1--><span class="ml-auto flex gap-1"><!--[-->`);
+					const each_array_1 = ensure_array_like(part.offer);
+					for (let $$index = 0, $$length = each_array_1.length; $$index < $$length; $$index++) {
+						let choice = each_array_1[$$index];
+						Button($$renderer, {
+							size: "sm",
+							variant: "secondary",
+							disabled,
+							onclick: () => onanswer(part.id, choice),
+							children: ($$renderer) => {
+								$$renderer.push(`<!---->${escape_html(choice)}`);
+							},
+							$$slots: { default: true }
+						});
+					}
+					$$renderer.push(`<!--]--></span>`);
+				} else {
 					$$renderer.push("<!--[-1-->");
 					Button($$renderer, {
 						size: "sm",
@@ -58,9 +76,9 @@ function CallCard($$renderer, $$props) {
 				$$renderer.push("<!--[2-->");
 				const { die, available } = part.hitDice;
 				$$renderer.push(`<span class="font-medium">${escape_html(part.character)}</span> <span class="text-muted">${escape_html(available)} d${escape_html(die)} left</span> <span class="ml-auto flex gap-1"><!--[-->`);
-				const each_array_1 = ensure_array_like(Array.from({ length: available + 1 }, (_, n) => n));
-				for (let $$index = 0, $$length = each_array_1.length; $$index < $$length; $$index++) {
-					let n = each_array_1[$$index];
+				const each_array_2 = ensure_array_like(Array.from({ length: available + 1 }, (_, n) => n));
+				for (let $$index_1 = 0, $$length = each_array_2.length; $$index_1 < $$length; $$index_1++) {
+					let n = each_array_2[$$index_1];
 					Button($$renderer, {
 						size: "sm",
 						variant: "secondary",
@@ -76,9 +94,9 @@ function CallCard($$renderer, $$props) {
 				$$renderer.push(`<!--]--></span>`);
 			} else if (call.choices.length) {
 				$$renderer.push(`<!--[3--><!--[-->`);
-				const each_array_2 = ensure_array_like(call.choices);
-				for (let $$index_1 = 0, $$length = each_array_2.length; $$index_1 < $$length; $$index_1++) {
-					let choice = each_array_2[$$index_1];
+				const each_array_3 = ensure_array_like(call.choices);
+				for (let $$index_2 = 0, $$length = each_array_3.length; $$index_2 < $$length; $$index_2++) {
+					let choice = each_array_3[$$index_2];
 					Button($$renderer, {
 						size: "sm",
 						variant: "secondary",
@@ -275,6 +293,15 @@ function CharacterSheet($$renderer, $$props) {
 			$$renderer.push(`<!--]--></div> <div role="group" aria-label="AC"${attr("title", shown().ac ? `AC (${shown().ac.note})` : "AC pending")} class="rounded-control border border-border bg-raised px-2 py-1 text-center"><div class="text-[10px] text-muted">AC</div> <div class="text-lg font-semibold">${escape_html(shown().ac?.value ?? "—")}</div></div></div> `);
 			if (shown().hitDice) $$renderer.push(`<!--[0--><p role="group" aria-label="Hit Dice" class="flex justify-between"><span>Hit Dice</span><span>${escape_html(shown().hitDice.total - shown().hitDice.spent)} / ${escape_html(shown().hitDice.total)} d${escape_html(shown().hitDice.die)}</span></p>`);
 			else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> `);
+			if (shown().deathSaves) {
+				$$renderer.push("<!--[0-->");
+				const { successes, failures, stable } = shown().deathSaves;
+				$$renderer.push(`<div role="group" aria-label="Death saves" class="flex justify-between text-xs"><span class="font-medium">Death saves</span> `);
+				if (stable) $$renderer.push(`<!--[0--><span>Stable</span>`);
+				else $$renderer.push(`<!--[-1--><span>Successes ${escape_html(successes)} / 3</span> <span class="text-danger">Failures ${escape_html(failures)} / 3</span>`);
+				$$renderer.push(`<!--]--></div>`);
+			} else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--> `);
 			if (shown().conditions.length || shown().concentration) {
 				$$renderer.push(`<!--[0--><div class="flex flex-wrap gap-1"><!--[-->`);

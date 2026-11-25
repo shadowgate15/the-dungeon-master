@@ -1412,11 +1412,11 @@ function hpState(hp, max) {
 // src/lib/character/acting.ts
 /**
 * Whether a Character can act: put a Declaration on the Floor or be picked as the acting
-* Character. Dead and departed Characters can't. The one rule the sheet tabs, the composer and the
-* server all use; presence in the Scene (#328) and Unconscious (#332) join it later.
+* Character. Dead, departed and Unconscious Characters can't; an Unconscious one only answers
+* their own Death save Call. The one rule the sheet tabs, the composer and the server all use.
 */
 function canAct(character) {
-	return character.status === "alive";
+	return character.status === "alive" && !character.conditions?.includes("unconscious");
 }
 // src/lib/server/character/service.ts
 /** The input breaks a Character rule (required or conditional field, bad score, unknown key or slug). */
@@ -1983,6 +1983,135 @@ function spotlightRequest(db, characterId, player) {
 		}
 	};
 }
+// src/lib/server/play/death.ts
+var FRESH$1 = {
+	successes: 0,
+	failures: 0
+};
+/** Successes or failures that end the Death saves. */
+var THREE = 3;
+/** The roll a Death save needs to succeed (SRD: 10 or higher). */
+var DEATH_SAVE_DC = 10;
+var without = (list, item) => list.filter((c) => c !== item);
+var withCondition = (list, item) => list.includes(item) ? list : [...list, item];
+function write(db, id, set) {
+	db.update(character).set(set).where(eq(character.id, id)).run();
+}
+/** The Character dies: no Death saves, no concentration. */
+function die(db, row) {
+	write(db, row.id, {
+		status: "dead",
+		deathSaves: FRESH$1,
+		concentration: null
+	});
+}
+/**
+* What damage that got past temporary HP does to a Character's life: falling Unconscious at 0,
+* Death save failures at 0, or death. `before` is the HP before the damage, `taken` what got
+* through. Returns the DM's notes; the HP itself is already written.
+*/
+function damagedCharacter(db, row, { before, taken, maxHp, crit = false }) {
+	if (row.status !== "alive" || taken <= 0) return [];
+	if (before > 0) {
+		if (taken < before) return [];
+		if (taken - before >= maxHp) {
+			die(db, row);
+			return [`${row.name} dies outright (instant death)`];
+		}
+		write(db, row.id, {
+			conditions: withCondition(row.conditions, "unconscious"),
+			deathSaves: FRESH$1,
+			concentration: null
+		});
+		return [`${row.name} drops to 0 HP and falls unconscious${row.concentration ? `; concentration on ${row.concentration} ends` : ""}`];
+	}
+	if (taken >= maxHp) {
+		die(db, row);
+		return [`${row.name} dies outright (instant death)`];
+	}
+	const failures = row.deathSaves.failures + (crit ? 2 : 1);
+	if (failures >= THREE) {
+		die(db, row);
+		return [`${row.name} takes damage at 0 HP: a third Death save failure, and dies`];
+	}
+	write(db, row.id, { deathSaves: {
+		successes: row.deathSaves.successes,
+		failures
+	} });
+	return [`${row.name} takes damage at 0 HP: ${crit ? "two Death save failures" : "a Death save failure"} (${failures} of ${THREE})`];
+}
+/** Healing at 0 HP wakes a Character and clears the tallies. */
+function healedCharacter(db, row, hp) {
+	if (row.currentHp > 0 || hp === 0) return;
+	write(db, row.id, {
+		conditions: without(row.conditions, "unconscious"),
+		deathSaves: FRESH$1
+	});
+}
+/** Whether a Character at 0 HP still rolls Death saves: alive, not stable. */
+var rollsDeathSaves = (row) => row.status === "alive" && row.currentHp === 0 && !row.deathSaves.stable;
+var tally = (s) => `${s.successes} success${s.successes === 1 ? "" : "es"}, ${s.failures} failure${s.failures === 1 ? "" : "s"}`;
+/**
+* Applies one Death save roll (the kept d20, no modifier). A natural 20 regains 1 HP; a natural 1
+* is two failures; 10 or higher succeeds. Three successes stabilize, three failures kill.
+*/
+function applyDeathSave(db, row, d20) {
+	if (d20 === 20) {
+		write(db, row.id, {
+			currentHp: 1,
+			conditions: without(row.conditions, "unconscious"),
+			deathSaves: FRESH$1
+		});
+		return {
+			success: true,
+			outcome: "regains 1 HP",
+			text: "natural 20: regains 1 HP and wakes"
+		};
+	}
+	const success = d20 >= DEATH_SAVE_DC;
+	const next = {
+		successes: row.deathSaves.successes + (success ? 1 : 0),
+		failures: row.deathSaves.failures + (success ? 0 : d20 === 1 ? 2 : 1)
+	};
+	if (next.failures >= THREE) {
+		die(db, row);
+		return {
+			success,
+			outcome: "dead",
+			text: `failure: a third failure, ${row.name} dies`
+		};
+	}
+	if (next.successes >= THREE) {
+		write(db, row.id, { deathSaves: {
+			...FRESH$1,
+			stable: true
+		} });
+		return {
+			success,
+			outcome: "stable",
+			text: `success: a third success, ${row.name} is stable`
+		};
+	}
+	write(db, row.id, { deathSaves: next });
+	return {
+		success,
+		outcome: success ? "success" : "failure",
+		text: `${success ? "success" : d20 === 1 ? "natural 1: two failures" : "failure"} (${tally(next)})`
+	};
+}
+/**
+* On a Combat turn, a Character at 0 HP who still rolls Death saves gets a pending Death save
+* Call. Returns its id, or null for anyone else.
+*/
+function deathSaveCall(db, handle, at) {
+	const ref = characterRefs(db).find((c) => c.handle === handle);
+	if (!ref || !rollsDeathSaves(ref.row)) return null;
+	return createPendingCall(db, [{
+		characterId: ref.row.id,
+		player: ref.row.controllingPlayer,
+		sequence: null
+	}], at, "death_save");
+}
 // src/lib/server/play/log.ts
 /**
 * The Campaign's current stamp: the open Session (null offline) and the Campaign clock's minute.
@@ -2206,6 +2335,61 @@ function characterAc(rules, detail, stats) {
 		defense: detail.choices.some((c) => c.optionSlug.endsWith("fighting-style-defense"))
 	});
 }
+// src/lib/server/play/concentration.ts
+/** The lowest DC a concentration save has. */
+var MIN_DC = 10;
+/** The DC to keep concentration after taking this much damage. */
+var concentrationDc = (damage) => Math.max(MIN_DC, Math.floor(damage / 2));
+/** Writes the caster's concentration link: a spell slug, or null to end it. */
+function setConcentration(db, who, spell) {
+	if (who.kind === "character") db.update(character).set({ concentration: spell }).where(eq(character.id, who.id)).run();
+	else if (who.kind === "npc") db.update(npcCombat).set({ concentration: spell }).where(eq(npcCombat.handle, who.handle)).run();
+	else {
+		const live = liveCombat(db);
+		if (!live) return;
+		db.update(combatant$1).set({ concentration: spell }).where(and(eq(combatant$1.combatId, live.id), eq(combatant$1.handle, who.handle))).run();
+	}
+}
+/** Starts concentrating on a spell; returns the spell it ended, if any. */
+function concentrate(db, who, spell) {
+	setConcentration(db, who, spell);
+	return who.concentration && who.concentration !== spell ? who.concentration : null;
+}
+/**
+* Damage to a concentrating caster: a Character gets a pending Constitution save Call; an NPC or
+* Creature rolls it now (`bonus` is its Con save) and loses the spell on a failure.
+*/
+function concentrationCheck(db, who, damage, { dice, at, bonus }) {
+	const spell = who.concentration;
+	if (!spell || damage <= 0) return {
+		notes: [],
+		calls: []
+	};
+	const dc = concentrationDc(damage);
+	if (who.kind === "character") {
+		const id = createPendingCall(db, [{
+			characterId: who.id,
+			player: who.player,
+			sequence: null,
+			save: "con",
+			dc,
+			reason: `To keep concentration on ${spell}`
+		}], at, "concentration");
+		return {
+			notes: [`${who.name} must make a Constitution save (DC ${dc}) to keep concentration on ${spell}: attach pending Call ${id} with narrate`],
+			calls: [id]
+		};
+	}
+	const d20 = dice.rollD20();
+	const total = d20.kept + bonus;
+	const kept = total >= dc;
+	if (!kept) setConcentration(db, who, null);
+	const sign = bonus >= 0 ? `+ ${bonus}` : `- ${-bonus}`;
+	return {
+		notes: [`${who.name} Constitution save to keep concentration: d20 ${d20.kept} ${sign} = ${total} vs DC ${dc} → ${kept ? "success" : `failure; concentration on ${spell} ends`}`],
+		calls: []
+	};
+}
 // src/lib/server/play/combatants.ts
 var ok = (s) => s.status === "ok" ? s.value : null;
 /** A Character's derived stats, from its stored choices and what it carries now. */
@@ -2243,7 +2427,8 @@ function characterCombatant(db, ref) {
 		ac,
 		hp: detail.currentHp,
 		maxHp: ok(stats.hitPoints) ?? detail.currentHp,
-		conditions: detail.conditions
+		conditions: detail.conditions,
+		concentration: detail.concentration
 	};
 }
 /** The stat block's AC: its first listed armor class. */
@@ -2271,7 +2456,8 @@ function npcCombatant(db, handle) {
 		ac: monsterAc(monster),
 		hp: state.hp,
 		maxHp: state.maxHp,
-		conditions: state.conditions
+		conditions: state.conditions,
+		concentration: state.concentration
 	};
 }
 /** A Creature in the live Combat; gone once the Combat ends. */
@@ -2289,7 +2475,8 @@ function creatureCombatant(db, handle) {
 		ac: monsterAc(monster),
 		hp: row.hp,
 		maxHp: row.maxHp,
-		conditions: row.conditions
+		conditions: row.conditions,
+		concentration: row.concentration
 	};
 }
 /**
@@ -2325,40 +2512,92 @@ function damageFactor(who, damageType) {
 }
 /**
 * The one way HP goes down. Temporary HP absorbs damage first; HP never drops below 0. Monster
-* resistances apply. Concentration saves (#332) and Death at 0 HP (#332) hook in here.
+* resistances apply. A Character at 0 HP falls Unconscious (or dies outright) and takes Death save
+* failures from more damage; an NPC or Creature dies at 0 HP unless knocked out. A concentrating
+* target still standing saves to keep its spell.
 */
-function applyDamage(db, who, amount, damageType) {
+function applyDamage(db, who, amount, damageType, { crit = false, knockOut = false, dice, at = Date.now() } = {}) {
 	const dealt = Math.floor(amount * damageFactor(who, damageType));
+	const saving = (hp) => dice && hp > 0 ? concentrationCheck(db, who, dealt, {
+		dice,
+		at,
+		bonus: saveBonus(who, "con")
+	}) : {
+		notes: [],
+		calls: []
+	};
 	if (who.kind === "character") {
 		const absorbed = Math.min(who.detail.tempHp, dealt);
-		const hp = Math.max(0, who.hp - (dealt - absorbed));
+		const taken = dealt - absorbed;
+		const hp = Math.max(0, who.hp - taken);
 		db.update(character).set({
 			currentHp: hp,
 			tempHp: who.detail.tempHp - absorbed
 		}).where(eq(character.id, who.id)).run();
+		const notes = damagedCharacter(db, who.detail, {
+			before: who.hp,
+			taken,
+			maxHp: who.maxHp,
+			crit
+		});
+		const save = saving(hp);
 		return {
 			dealt,
 			hp,
-			max: who.maxHp
+			max: who.maxHp,
+			notes: [...notes, ...save.notes],
+			calls: save.calls
 		};
 	}
 	const hp = Math.max(0, who.hp - dealt);
 	writeFoe(db, who, { hp });
+	const notes = who.hp > 0 && hp === 0 ? foeDown(db, who, knockOut) : [];
+	const save = saving(hp);
 	return {
 		dealt,
 		hp,
-		max: who.maxHp
+		max: who.maxHp,
+		notes: [...notes, ...save.notes],
+		calls: save.calls
 	};
 }
-/** Restores HP, never above the maximum. */
+/**
+* An NPC or Creature at 0 HP: knocked out (Unconscious) when the DM rules it, else dead. A dead
+* NPC's `status` field becomes `dead`.
+*/
+function foeDown(db, who, knockOut) {
+	const ended = who.concentration ? [`concentration on ${who.concentration} ends`] : [];
+	if (who.concentration) writeFoe(db, who, { concentration: null });
+	if (knockOut) {
+		if (!who.conditions.includes("unconscious")) writeFoe(db, who, { conditions: [...who.conditions, "unconscious"] });
+		return [[`${who.name} is knocked out`, ...ended].join("; ")];
+	}
+	if (who.kind === "npc") {
+		const npc = db.select().from(entity).where(eq(entity.handle, who.handle)).get();
+		db.update(entity).set({
+			fields: {
+				...npc.fields,
+				status: "dead"
+			},
+			version: npc.version + 1
+		}).where(eq(entity.handle, who.handle)).run();
+	}
+	return [[`${who.name} dies`, ...ended].join("; ")];
+}
+/** Restores HP, never above the maximum. A Character at 0 HP wakes; the dead stay dead. */
 function applyHealing(db, who, amount) {
+	if (who.kind === "character" && who.detail.status !== "alive") throw new ToolError("character_dead", `${who.name} is ${who.detail.status}; healing can't bring them back`, "Only magic that restores life can; narrate it and leave the HP alone");
 	const hp = Math.min(who.maxHp, who.hp + amount);
-	if (who.kind === "character") db.update(character).set({ currentHp: hp }).where(eq(character.id, who.id)).run();
-	else writeFoe(db, who, { hp });
+	if (who.kind === "character") {
+		db.update(character).set({ currentHp: hp }).where(eq(character.id, who.id)).run();
+		healedCharacter(db, who.detail, hp);
+	} else writeFoe(db, who, { hp });
 	return {
 		dealt: hp - who.hp,
 		hp,
-		max: who.maxHp
+		max: who.maxHp,
+		notes: [],
+		calls: []
 	};
 }
 /** Replaces a combatant's conditions. */
@@ -2447,7 +2686,7 @@ function stepLabel$1(sequence, step) {
 * Rolls the sequence's next step in code against the hidden number and applies its effect: the
 * target takes the damage, or the save's effect lands. A miss ends the sequence.
 */
-function rollStep(db, sequence, dice, { mode = "normal", reason = "" } = {}) {
+function rollStep(db, sequence, dice, { mode = "normal", reason = "", at = Date.now() } = {}) {
 	const step = sequence.steps[sequence.rolls.length];
 	const target = combatant(db, sequence.target.handle);
 	const d20 = () => mode === "normal" ? dice.rollD20() : dice.rollD20({
@@ -2474,7 +2713,11 @@ function rollStep(db, sequence, dice, { mode = "normal", reason = "" } = {}) {
 		const crit = sequence.rolls.at(-1)?.outcome === "critical hit";
 		const rolled = dice.rollExpression(step.dice, { crit });
 		const total = Math.max(0, rolled.total);
-		const change = applyDamage(db, target, total, step.damageType);
+		const change = applyDamage(db, target, total, step.damageType, {
+			crit,
+			dice,
+			at
+		});
 		roll = {
 			dice: rolled.dice,
 			kept: null,
@@ -2489,14 +2732,19 @@ function rollStep(db, sequence, dice, { mode = "normal", reason = "" } = {}) {
 			after: {
 				hp: change.hp,
 				max: change.max
-			}
+			},
+			notes: change.notes,
+			calls: change.calls
 		};
 	} else {
 		const rolled = d20();
 		const total = rolled.kept + step.bonus;
 		const success = total >= step.dc;
 		const dealt = step.damage === null ? 0 : success ? step.onSuccess === "half" ? Math.floor(step.damage / 2) : 0 : step.damage;
-		const change = dealt > 0 ? applyDamage(db, target, dealt, step.damageType) : null;
+		const change = dealt > 0 ? applyDamage(db, target, dealt, step.damageType, {
+			dice,
+			at
+		}) : null;
 		const condition = !success && step.condition ? step.condition : null;
 		if (condition && !target.conditions.includes(condition)) setConditions(db, target, [...target.conditions, condition]);
 		roll = {
@@ -2513,7 +2761,9 @@ function rollStep(db, sequence, dice, { mode = "normal", reason = "" } = {}) {
 			after: {
 				hp: change?.hp ?? target.hp,
 				max: target.maxHp
-			}
+			},
+			notes: change?.notes ?? [],
+			calls: change?.calls ?? []
 		};
 	}
 	const rolls = [...sequence.rolls, roll];
@@ -2561,6 +2811,10 @@ function damageText(roll) {
 function sequenceText(sequence, mode = "normal") {
 	const { target } = sequence;
 	const parts = sequence.rolls.map((roll, i) => {
+		const notes = roll.notes?.length ? `; ${roll.notes.join("; ")}` : "";
+		return stepText(roll, i) + notes;
+	});
+	function stepText(roll, i) {
 		const step = sequence.steps[i];
 		const after = roll.after ? ` → ${target.name} ${roll.after.hp}/${roll.after.max} HP (${hpState(roll.after.hp, roll.after.max)})` : "";
 		if (step.kind === "to_hit") return `${d20Text(roll, mode)} vs AC ${step.ac} → ${roll.outcome}`;
@@ -2570,7 +2824,7 @@ function sequenceText(sequence, mode = "normal") {
 		}
 		const effect = [roll.applied?.dealt ? `takes ${roll.applied.dealt} ${step.damageType ?? ""}`.trim() : null, roll.applied?.condition ? `is ${roll.applied.condition}` : null].filter(Boolean);
 		return `${d20Text(roll, mode)} vs DC ${step.dc} → ${roll.outcome}${effect.length ? `; ${effect.join(", ")}` : ""}${roll.applied?.dealt ? after : ""}`;
-	});
+	}
 	return `${sequence.steps[0].kind === "save" ? sequence.label : `${sequence.label} on ${target.name}`} (${target.handle}): ${parts.join("; ")}`;
 }
 // src/lib/server/play/calls.ts
@@ -2632,7 +2886,9 @@ function openCallRow(db) {
 /** What a part rolls, as the Player reads it. */
 function labelOf(part, kind) {
 	if (kind === "initiative") return "Initiative";
+	if (kind === "death_save") return "Death save";
 	if (part.hitDice) return "Hit Dice";
+	if (part.reaction) return part.reaction;
 	if (part.sequence) return part.sequence.label;
 	if (part.skill) return `${SKILL_NAMES.get(part.skill) ?? part.skill} check`;
 	if (part.save) return `${ABILITY_NAMES.get(part.save) ?? part.save} save`;
@@ -2687,10 +2943,12 @@ function attachPending(db, id, openedBy) {
 * Stores an action tool's roll sequences as a pending Call, hidden from the Players until the
 * closing `narrate(..., call: id)` attaches it. Returns its id.
 */
-function createPendingCall(db, parts, at, kind = "roll_sequence") {
+function createPendingCall(db, parts, at, kind = "roll_sequence", prompt = null) {
 	const id = db.insert(call).values({
 		campaignId: db.select({ id: campaign.id }).from(campaign).get().id,
 		kind,
+		text: prompt?.text ?? null,
+		choices: prompt?.choices ?? [],
 		state: "pending",
 		createdAt: at
 	}).returning({ id: call.id }).get().id;
@@ -2702,7 +2960,10 @@ function createPendingCall(db, parts, at, kind = "roll_sequence") {
 			player: part.player,
 			sequence: part.sequence,
 			mode: part.mode ?? "normal",
-			reason: part.reason ?? null
+			reason: part.reason ?? null,
+			save: part.save ?? null,
+			dc: part.dc ?? null,
+			reaction: part.reaction ?? null
 		}).run();
 	});
 	return id;
@@ -2778,7 +3039,8 @@ function openCallView(db) {
 			hitDice: part.hitDice && {
 				die: part.hitDice.die,
 				available: part.hitDice.available
-			}
+			},
+			offer: open.kind === "reaction" && part.answer === null ? open.choices : null
 		}))
 	};
 }
@@ -2795,14 +3057,30 @@ var CallClosedError = class extends Error {};
 var CallRefusedError = class extends Error {};
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
 function resultLine(p) {
+	if (p.kind === "reaction") return reactionLine(p);
 	if (p.hitDice) return `[${p.characterName} · ${p.player}] Hit Dice: ${hitDiceText(p.hitDice)}`;
 	if (p.sequence) return `[${p.characterName} · ${p.player}] ${sequenceText(p.sequence, p.mode)}`;
 	if (p.result === null) return `[${p.player}] ${p.answer}`;
 	const r = p.result;
 	const dice = r.dice.length > 1 ? `${r.dice.join("/")} (${p.mode}) kept ${r.kept}` : `${r.kept}`;
 	const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`;
+	if (p.kind === "death_save") return `[${p.characterName} · ${p.player}] Death save: d20 ${r.kept} → ${p.answer}`;
+	if (p.kind === "concentration") return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? "success" : "failure"}; ${p.answer}`;
 	if (p.kind === "initiative") return `[${p.characterName} · ${p.player}] Initiative: d20 ${dice} ${modifier} = ${r.total}`;
 	return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? "success" : "failure"}`;
+}
+/** The Player's choice on a reaction Call that passes it. */
+var PASS = "Pass";
+/**
+* A reaction as the DM hears it: passed, taken (with its attack's rolls), and any reminder that
+* the reaction was already spent. The answer is the choice, then `; ` and the reminder.
+*/
+function reactionLine(p) {
+	const who = `[${p.characterName} · ${p.player}] ${p.reaction}`;
+	if (p.answer === "Pass") return `${who}: passes`;
+	const [choice, reminder] = (p.answer ?? "").split("; ");
+	const taken = p.sequence ? `${who}, taken: ${sequenceText(p.sequence, p.mode)}` : `${who}: takes it (${choice})`;
+	return reminder ? `${taken}\n${reminder}` : taken;
 }
 /** What a Character's Hit Dice came to: the dice, the Con modifier per die, the HP regained. */
 function hitDiceText(spend) {
@@ -2893,7 +3171,8 @@ function createCalls(db, now = Date.now) {
 	function rollSequenceStep(part, dice, player) {
 		const rolled = rollStep(db, part.sequence, dice, {
 			mode: part.mode,
-			reason: part.reason
+			reason: part.reason,
+			at: now()
 		});
 		const name = db.select({ name: character.name }).from(character).where(eq(character.id, part.characterId)).get()?.name ?? "";
 		const mode = rolled.roll.kept === null ? "normal" : part.mode;
@@ -2915,6 +3194,73 @@ function createCalls(db, now = Date.now) {
 					total: rolled.roll.total,
 					outcome: rolled.roll.outcome,
 					target: rolled.targetState
+				}
+			}
+		};
+	}
+	/** A concentration save's outcome: on a failure the spell ends. Returns the DM's note. */
+	function keepConcentration(characterId, success) {
+		const spell = db.select().from(character).where(eq(character.id, characterId)).get().concentration;
+		if (!spell) return "no longer concentrating";
+		if (success) return `keeps concentration on ${spell}`;
+		db.update(character).set({ concentration: null }).where(eq(character.id, characterId)).run();
+		return `concentration on ${spell} ends`;
+	}
+	/**
+	* A reaction offered: `Pass` ends the part; taking it spends the Character's reaction (a
+	* reminder, never a refusal, when it is already spent) and, with an attack, leaves the part open
+	* for its rolls.
+	*/
+	function chooseReaction(part, choices, choice) {
+		if (part.answer !== null) throw new CallRefusedError("That reaction is already taken: roll it");
+		if (!choices.includes(choice)) throw new CallRefusedError(`Answer with one of: ${choices.join(", ")}`);
+		const ref = characterRefs(db).find((c) => c.row.id === part.characterId);
+		const taken = choice !== PASS;
+		const reminder = taken && spendTurnResource(db, ref.handle, ref.row.name, "reaction");
+		return {
+			values: { answer: reminder ? `${choice}; ${reminder}` : choice },
+			finished: !taken || !part.sequence,
+			event: {
+				kind: "answer",
+				summary: `${ref.row.name} ${taken ? "takes" : "passes"} ${part.reaction}`,
+				data: {
+					part: part.id,
+					player: part.player,
+					question: part.reaction,
+					text: choice
+				}
+			}
+		};
+	}
+	/** A Death save: a d20 with no modifier, its tallies applied by code. */
+	function rollDeathSave(part, dice, player) {
+		const row = db.select().from(character).where(eq(character.id, part.characterId)).get();
+		const d20 = dice.rollD20();
+		const saved = applyDeathSave(db, row, d20.kept);
+		const result = {
+			dice: d20.dice,
+			kept: d20.kept,
+			modifier: 0,
+			total: d20.kept,
+			success: saved.success
+		};
+		return {
+			values: {
+				result,
+				answer: saved.text
+			},
+			event: {
+				kind: "roll",
+				summary: `${row.name} Death save: ${d20.kept} (${saved.outcome})`,
+				data: {
+					part: part.id,
+					characterName: row.name,
+					player,
+					what: "Death save",
+					mode: "normal",
+					reason: null,
+					...result,
+					outcome: saved.outcome
 				}
 			}
 		};
@@ -2990,7 +3336,9 @@ function createCalls(db, now = Date.now) {
 			return answer(callId, partId, player, (part, kind) => {
 				if (!part.characterId) throw new CallRefusedError("That part is a question: answer it");
 				if (part.hitDice) throw new CallRefusedError("Say how many Hit Dice to spend");
+				if (kind === "reaction" && part.answer === null) throw new CallRefusedError(`${part.reaction}: take it or pass first`);
 				if (part.sequence) return rollSequenceStep(part, dice, player);
+				if (kind === "death_save") return rollDeathSave(part, dice, player);
 				const modifier = modifierFor(part.characterId, part, kind);
 				const d20 = part.mode === "normal" ? dice.rollD20() : dice.rollD20({
 					mode: part.mode,
@@ -3027,8 +3375,12 @@ function createCalls(db, now = Date.now) {
 						}
 					};
 				}
+				const kept = kind === "concentration" && keepConcentration(part.characterId, result.success);
 				return {
-					values: { result },
+					values: {
+						result,
+						...kept && { answer: kept }
+					},
 					event: {
 						kind: "roll",
 						summary: `${name} ${what}: ${total} (${result.success ? "success" : "failure"})`,
@@ -3051,10 +3403,11 @@ function createCalls(db, now = Date.now) {
 		*/
 		answer(callId, partId, text, player = SOLO_PLAYER, dice) {
 			const clean = text.trim();
-			return answer(callId, partId, player, (part) => {
+			return answer(callId, partId, player, (part, kind) => {
 				if (part.hitDice) return spendHitDice(part, part.hitDice, clean, dice);
-				if (part.characterId) throw new CallRefusedError("That part is a Check: roll it");
 				const { choices, text: question } = db.select().from(call).where(eq(call.id, callId)).get();
+				if (kind === "reaction") return chooseReaction(part, choices, clean);
+				if (part.characterId) throw new CallRefusedError("That part is a Check: roll it");
 				if (!clean) throw new CallRefusedError("Give an answer");
 				if (choices.length && !choices.includes(clean)) throw new CallRefusedError(`Answer with one of: ${choices.join(", ")}`);
 				return {
@@ -3433,6 +3786,11 @@ function toPlaySheet(c, levelUp) {
 		ac: characterAc(rules, c, stats),
 		conditions: c.conditions,
 		concentration: c.concentration,
+		deathSaves: c.status === "alive" && c.currentHp === 0 ? {
+			successes: c.deathSaves.successes,
+			failures: c.deathSaves.failures,
+			stable: c.deathSaves.stable ?? false
+		} : null,
 		abilities: ABILITY_KEYS.flatMap((key) => {
 			const a = ok(stats.abilities[key]);
 			return a ? [{
@@ -3478,7 +3836,16 @@ function scenePart({ db }) {
 	const time = formatClock(currentMinute(db));
 	return place ? `Scene: ${place.name} (${place.handle}), ${time}.` : `Scene: none set yet, ${time}.`;
 }
-/** The Party: name, handle, HP/max, conditions, status and whereabouts per Character. */
+var plural = (n, word, many) => `${n} ${n === 1 ? word : many}`;
+/** A downed Character's Death saves: `stable`, or `Death saves 1 success, 2 failures`. */
+function deathSavesText(saves) {
+	if (saves.stable) return "stable";
+	return `Death saves ${plural(saves.successes, "success", "successes")}, ${plural(saves.failures, "failure", "failures")}`;
+}
+/**
+* The Party: name, handle, HP/max, conditions, status and whereabouts per Character, then what
+* they concentrate on and, at 0 HP, their Death saves.
+*/
 function partyPart({ party, db }) {
 	const status = new Map(party.list().flatMap((m) => m.kind === "character" ? [[m.id, m.status]] : []));
 	const handles = new Map(characterRefs(db).map((c) => [c.row.id, c.handle]));
@@ -3487,7 +3854,8 @@ function partyPart({ party, db }) {
 	return ["Party:", ...sheets.map((c) => {
 		const hp = `HP ${c.hp.current}/${c.hp.max ?? "?"}${c.hp.temp ? ` (+${c.hp.temp} temp)` : ""}`;
 		const conditions = c.conditions.length ? c.conditions.join(", ") : "none";
-		return `- ${c.name} (${handles.get(c.id) ?? characterHandle(c.name)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? "unknown"}`;
+		const extra = [c.concentration && `concentrating on ${c.concentration}`, c.deathSaves && deathSavesText(c.deathSaves)].filter(Boolean);
+		return [`- ${c.name} (${handles.get(c.id) ?? characterHandle(c.name)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? "unknown"}`, ...extra].join(", ");
 	})].join("\n");
 }
 /** The NPCs at the Scene's Place: handle, name, role and one-line description. */
@@ -3501,7 +3869,8 @@ function npcsPart({ db }) {
 }
 /**
 * The live Combat, or null outside one: the round and whose turn, then the order (initiative,
-* name, handle), with each Creature's stat block, HP state and conditions. This lifts the block
+* name, handle), with each Creature's stat block, HP state and conditions, and what each NPC or
+* Creature concentrates on. This lifts the block
 * from ~300 to ~500 tokens while it lasts.
 */
 function combatPart({ db }) {
@@ -3510,9 +3879,19 @@ function combatPart({ db }) {
 	const order = initiativeOrder(db, live.id);
 	const current = order.find((c) => c.id === live.current);
 	const head = current ? `Combat: round ${live.round}, turn: ${current.name} (${current.handle}).` : "Combat: waiting on initiative.";
+	const npcConcentration = new Map(db.select({
+		handle: npcCombat.handle,
+		concentration: npcCombat.concentration
+	}).from(npcCombat).all().map((n) => [n.handle, n.concentration]));
 	const lines = order.map((c) => {
-		const creature = c.kind === "creature" ? `: ${c.statBlock}, ${hpState(c.hp, c.maxHp)}, conditions ${c.conditions.join(", ") || "none"}` : "";
-		return `- ${c.initiative} ${c.name} (${c.handle})${creature}${c.id === live.current ? " ← turn" : ""}`;
+		const spell = c.kind === "npc" ? npcConcentration.get(c.handle) : c.concentration;
+		const detail = [...c.kind === "creature" ? [
+			c.statBlock,
+			hpState(c.hp, c.maxHp),
+			`conditions ${c.conditions.join(", ") || "none"}`
+		] : [], ...c.kind !== "character" && spell ? [`concentrating on ${spell}`] : []];
+		const shown = detail.length ? `: ${detail.join(", ")}` : "";
+		return `- ${c.initiative} ${c.name} (${c.handle})${shown}${c.id === live.current ? " ← turn" : ""}`;
 	});
 	const waiting = waitingOnInitiative(db, live.id);
 	if (waiting.length) lines.push(`- waiting on initiative: ${waiting.map((c) => `${c.name} (${c.handle})`).join(", ")}`);
@@ -4717,6 +5096,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { sequenceText as $, combatState as A, charactersInScene as At, DC_BY_TIER as B, creationTool as Bt, DmBusyError as C, hpState as Ct, createDmChannels as D, renderLinks as Dt, DraftNotFoundError as E, fieldNames as Et, spendTurnResource as F, resolveBeat as Ft, createHitDiceCall as G, parseClock as Gt, callInput as H, readTool as Ht, startCombat as I, retireArc as It, saveKey as J, createPendingCall as K, SESSION_LIVE_MESSAGE as Kt, ABILITY_NAMES as L, reviseArc as Lt, nextTurn as M, createArc as Mt, orderText as N, currentArc as Nt, playSheets as O, resolveLinks as Ot, refuseDuringCombat as P, pastArcs as Pt, saveSequence as Q, CallClosedError as R, PLUGIN_NAME as Rt, DeclarationRefusedError as S, CharacterValidationError as St, DmOnlyEditError as T, createWorld as Tt, callResultEvent as U, writeTool as Ut, TIERS as V, expectVersion as Vt, cancelPendingCall as W, formatClock as Wt, damageSequence as X, attackSequence as Y, rollAll as Z, closeSession as _, currentMinute as _t, CampaignArchivedError as a, setConditions as at, sessionsView as b, loadWizardRules as bt, CampaignNotFoundError as c, currentStamp as ct, BeginRefusedError as d, nextEventId as dt, applyDamage as et, SeedLockedError as f, setAwaitingNarration as ft, addConversationLine as g, characterRefs as gt, refuseLockedSeed as h, advanceClock as ht, sessions as i, saveBonus as it, endCombat as j, CurrentArcError as jt, addCombatants as k, characterHolders as kt, NotACampaignFolderError as l, logActivity as lt, creationStage as m, SpotlightRefusedError as mt, library as n, combatant as nt, CampaignExistsError as o, equippable as ot, StartOverRefusedError as p, ClockBackwardsError as pt, openCall as q, live as r, mustAct as rt, CampaignMissingError as s, isBodyArmor as st, campaignRoot as t, applyHealing as tt, SessionLiveError as u, logEvent as ut, history as v, present as vt, returnStrandedDrafts as w, lintWorld as wt, DeclarationNotFoundError as x, CharacterNotFoundError as xt, indexNarration as y, scenePlace as yt, CallRefusedError as z, ToolError as zt };
+export { saveSequence as $, combatState as A, renderLinks as At, DC_BY_TIER as B, reviseArc as Bt, DmBusyError as C, loadWizardRules as Ct, createDmChannels as D, lintWorld as Dt, DraftNotFoundError as E, hpState as Et, spendTurnResource as F, createArc as Ft, cancelPendingCall as G, readTool as Gt, TIERS as H, ToolError as Ht, startCombat as I, currentArc as It, openCall as J, parseClock as Jt, createHitDiceCall as K, writeTool as Kt, ABILITY_NAMES as L, pastArcs as Lt, nextTurn as M, characterHolders as Mt, orderText as N, charactersInScene as Nt, playSheets as O, createWorld as Ot, refuseDuringCombat as P, CurrentArcError as Pt, rollAll as Q, CallClosedError as R, resolveBeat as Rt, DeclarationRefusedError as S, scenePlace as St, DmOnlyEditError as T, CharacterValidationError as Tt, callInput as U, creationTool as Ut, PASS as V, PLUGIN_NAME as Vt, callResultEvent as W, expectVersion as Wt, attackSequence as X, saveKey as Y, SESSION_LIVE_MESSAGE as Yt, damageSequence as Z, closeSession as _, SpotlightRefusedError as _t, CampaignArchivedError as a, saveBonus as at, sessionsView as b, currentMinute as bt, CampaignNotFoundError as c, equippable as ct, BeginRefusedError as d, logActivity as dt, sequenceText as et, SeedLockedError as f, logEvent as ft, addConversationLine as g, ClockBackwardsError as gt, refuseLockedSeed as h, deathSaveCall as ht, sessions as i, mustAct as it, endCombat as j, resolveLinks as jt, addCombatants as k, fieldNames as kt, NotACampaignFolderError as l, isBodyArmor as lt, creationStage as m, setAwaitingNarration as mt, library as n, applyHealing as nt, CampaignExistsError as o, setConditions as ot, StartOverRefusedError as p, nextEventId as pt, createPendingCall as q, formatClock as qt, live as r, combatant as rt, CampaignMissingError as s, concentrate as st, campaignRoot as t, applyDamage as tt, SessionLiveError as u, currentStamp as ut, history as v, advanceClock as vt, returnStrandedDrafts as w, CharacterNotFoundError as wt, DeclarationNotFoundError as x, present as xt, indexNarration as y, characterRefs as yt, CallRefusedError as z, retireArc as zt };
 
 //# sourceMappingURL=campaign.js.map

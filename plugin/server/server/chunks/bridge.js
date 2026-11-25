@@ -1,5 +1,5 @@
 import { Ct as DUNGEON_MASTER_PORT, D as event, F as belief, G as background, I as entity, J as race, K as classTable, R as fact, St as DUNGEON_MASTER_HOME, V as ENTITY_TYPES, _t as sql, a as userStateDir, b as characterItem, ft as isNull, g as character, gt as or, h as campaign, ht as ne, it as asc, l as createRulesRepository, ot as and, q as equipment, rt as SOLO_PLAYER, st as eq, ut as inArray, v as characterDraft, wt as DUNGEON_MASTER_VERSION } from "./seed.js";
-import { $ as sequenceText, A as combatState, At as charactersInScene, B as DC_BY_TIER, Bt as creationTool, Ct as hpState, D as createDmChannels, Dt as renderLinks, Et as fieldNames, F as spendTurnResource, Ft as resolveBeat, G as createHitDiceCall, Gt as parseClock, H as callInput, Ht as readTool, I as startCombat, It as retireArc, J as saveKey, K as createPendingCall, Kt as SESSION_LIVE_MESSAGE, L as ABILITY_NAMES, Lt as reviseArc, M as nextTurn, Mt as createArc, N as orderText, Nt as currentArc, Ot as resolveLinks, P as refuseDuringCombat, Pt as pastArcs, Q as saveSequence, Rt as PLUGIN_NAME, Tt as createWorld, U as callResultEvent, Ut as writeTool, V as TIERS, Vt as expectVersion, W as cancelPendingCall, Wt as formatClock, X as damageSequence, Y as attackSequence, Z as rollAll, _ as closeSession, _t as currentMinute, at as setConditions, b as sessionsView, bt as loadWizardRules, c as CampaignNotFoundError, ct as currentStamp, dt as nextEventId, et as applyDamage, f as SeedLockedError, ft as setAwaitingNarration, g as addConversationLine, gt as characterRefs, h as refuseLockedSeed, ht as advanceClock, i as sessions, it as saveBonus, j as endCombat, jt as CurrentArcError, k as addCombatants, kt as characterHolders, l as NotACampaignFolderError, lt as logActivity, m as creationStage, n as library, nt as combatant, ot as equippable, pt as ClockBackwardsError, q as openCall, r as live, rt as mustAct, st as isBodyArmor, tt as applyHealing, ut as logEvent, v as history, vt as present, w as returnStrandedDrafts, wt as lintWorld, y as indexNarration, yt as scenePlace, zt as ToolError } from "./campaign.js";
+import { $ as saveSequence, A as combatState, At as renderLinks, B as DC_BY_TIER, Bt as reviseArc, Ct as loadWizardRules, D as createDmChannels, Dt as lintWorld, Et as hpState, F as spendTurnResource, Ft as createArc, G as cancelPendingCall, Gt as readTool, H as TIERS, Ht as ToolError, I as startCombat, It as currentArc, J as openCall, Jt as parseClock, K as createHitDiceCall, Kt as writeTool, L as ABILITY_NAMES, Lt as pastArcs, M as nextTurn, Mt as characterHolders, N as orderText, Nt as charactersInScene, Ot as createWorld, P as refuseDuringCombat, Pt as CurrentArcError, Q as rollAll, Rt as resolveBeat, St as scenePlace, U as callInput, Ut as creationTool, V as PASS, Vt as PLUGIN_NAME, W as callResultEvent, Wt as expectVersion, X as attackSequence, Y as saveKey, Yt as SESSION_LIVE_MESSAGE, Z as damageSequence, _ as closeSession, at as saveBonus, b as sessionsView, bt as currentMinute, c as CampaignNotFoundError, ct as equippable, dt as logActivity, et as sequenceText, f as SeedLockedError, ft as logEvent, g as addConversationLine, gt as ClockBackwardsError, h as refuseLockedSeed, ht as deathSaveCall, i as sessions, it as mustAct, j as endCombat, jt as resolveLinks, k as addCombatants, kt as fieldNames, l as NotACampaignFolderError, lt as isBodyArmor, m as creationStage, mt as setAwaitingNarration, n as library, nt as applyHealing, ot as setConditions, pt as nextEventId, q as createPendingCall, qt as formatClock, r as live, rt as combatant, st as concentrate, tt as applyDamage, ut as currentStamp, v as history, vt as advanceClock, w as returnStrandedDrafts, xt as present, y as indexNarration, yt as characterRefs, zt as retireArc } from "./campaign.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { M as rollTotals, T as arrangementProblem, b as lengthIssue, d as reconcile, l as changedDraftFields, u as emptyDraft } from "./summary.js";
@@ -90,8 +90,12 @@ function resolve(db, dice, now, rolls, { summary, pre = [], result = {} }) {
 	const id = parts.length ? createPendingCall(db, parts, now) : null;
 	const outcomes = rolls.filter((r) => r.roller.kind !== "character").map((r) => ({
 		...r,
-		...rollAll(db, r.sequence, dice, r.mode)
+		...rollAll(db, r.sequence, dice, {
+			...r.mode,
+			at: now
+		})
 	}));
+	const concentration = outcomes.flatMap((o) => o.sequence.rolls.flatMap((r) => r.calls ?? []));
 	const log = [...pre.map((p) => p.log), ...outcomes.flatMap((o) => o.steps.map((s) => diceLogRoll(o.roller.name, s, o.mode)))];
 	const text = [...pre.map((p) => p.text), ...outcomes.map((o) => sequenceText(o.sequence, o.mode.mode))];
 	const full = {
@@ -109,7 +113,8 @@ function resolve(db, dice, now, rolls, { summary, pre = [], result = {} }) {
 		...id && {
 			pending_call: id,
 			next: pendingNext(id)
-		}
+		},
+		...concentrationCalls(concentration)
 	};
 	if (!log.length) return {
 		result: full,
@@ -132,6 +137,11 @@ function resolve(db, dice, now, rolls, { summary, pre = [], result = {} }) {
 		}
 	};
 }
+/** Pending concentration saves damage made, each for a closing narrate to attach. */
+var concentrationCalls = (ids) => ids.length ? {
+	concentration_calls: ids,
+	concentration_next: `Attach each with a closing narrate(text, call: id), one per turn`
+} : {};
 /** Adds an action-economy reminder to a tool's result. */
 function withReminder(reminder, out) {
 	return reminder ? {
@@ -262,8 +272,59 @@ var actionTools = [
 		}
 	}),
 	writeTool({
+		name: "offer_reaction",
+		description: "Offer a Character a reaction out of turn, such as an opportunity attack when a foe leaves their reach: returns a pending Call to attach with your closing narrate(text, call: id). The Player takes it or passes; taking it spends their reaction, and with an attack they then roll to hit and damage. You hear one call_result. An NPC's reaction you resolve yourself, with attack.",
+		input: object({
+			character: string().min(1).describe("Who can react: char:…"),
+			reaction: string().trim().min(1).describe("What the reaction is, such as opportunity attack"),
+			attack: object({
+				target: string().min(1).describe("Who is attacked: npc:… or creature:…"),
+				with: string().trim().min(1).describe("The weapon, such as longsword")
+			}).optional().describe("The attack the reaction makes, rolled once taken"),
+			take: string().trim().min(1).optional().describe("The take button; Attack with an attack, Take without"),
+			...adv
+		}),
+		activity: "DM offers a reaction",
+		run: ({ db, now }, input) => {
+			const who = combatant(db, input.character);
+			if (who.kind !== "character") throw new ToolError("not_a_character", `${who.name} is not a Character`, "Resolve an NPC's or Creature's reaction yourself, with attack");
+			mustAct(who);
+			const target = input.attack && combatant(db, input.attack.target);
+			const attack = input.attack && findAttack(who, input.attack.with);
+			const sequence = target && attack ? attackSequence(attack.name, target, attack.bonus, attack.damage) : null;
+			const name = input.reaction.toLowerCase();
+			const label = name[0].toUpperCase() + name.slice(1);
+			const take = input.take ?? (sequence ? "Attack" : "Take");
+			if (take === "Pass") throw new ToolError("bad_take", `${PASS} is the other button`, "Name the take button");
+			const article = /^[aeiou]/.test(name) ? "an" : "a";
+			const text = `${who.name} can make ${article} ${name}${target ? ` on ${target.name}` : ""}`;
+			const id = createPendingCall(db, [{
+				characterId: who.id,
+				player: who.player,
+				sequence,
+				reaction: label,
+				...modeOf(input)
+			}], now, "reaction", {
+				text,
+				choices: [take, PASS]
+			});
+			return {
+				result: {
+					pending_call: id,
+					next: pendingNext(id)
+				},
+				event: {
+					kind: "call_pending",
+					summary: text,
+					data: { call: id },
+					dmOnly: true
+				}
+			};
+		}
+	}),
+	writeTool({
 		name: "cast",
-		description: "Cast a spell: checks the caster has it and a free slot of the level, and spends the slot (cantrips are level 0). A spell attack from a Character returns a pending Call (to hit, then damage) to attach with narrate; an NPC's rolls at once. A save spell rolls its damage once; NPC targets save at once against the caster's DC, Character targets get a pending Call. Healing and other effects: apply them with heal, add_condition and the like.",
+		description: "Cast a spell: checks the caster has it and a free slot of the level, and spends the slot (cantrips are level 0). A spell attack from a Character returns a pending Call (to hit, then damage) to attach with narrate; an NPC's rolls at once. A save spell rolls its damage once; NPC targets save at once against the caster's DC, Character targets get a pending Call. Healing and other effects: apply them with heal, add_condition and the like. A concentration spell links the caster to it and ends the one they concentrated on before.",
 		input: object({
 			caster: string().min(1).describe("Who casts: char:… or npc:…"),
 			spell: string().min(1).describe("The spell: spell:fire-bolt, fire-bolt or Fire Bolt"),
@@ -286,11 +347,14 @@ var actionTools = [
 			const slot = caster.kind === "character" && input.level > 0 ? spendSlot(db, caster, input.level) : null;
 			const damage = spellDamage(spell, input.level, powers.level);
 			const reminder = spendTurnResource(db, caster.handle, caster.name, /bonus action/i.test(String(spell.castingTime ?? "")) ? "bonusAction" : "action");
+			const ended = spell.concentration ? concentrate(db, caster, spell.slug) : null;
 			const result = {
 				cast: spell.name,
 				level: input.level,
 				slot,
-				...reminder && { reminder }
+				...reminder && { reminder },
+				...spell.concentration && { concentration: spell.slug },
+				...ended && { ended_concentration: ended }
 			};
 			const summary = `${caster.name} casts ${spell.name}${targets.length ? ` on ${targets.map((t) => t.name).join(", ")}` : ""}`;
 			if (spell.attackType) {
@@ -457,21 +521,29 @@ var actionTools = [
 	}),
 	writeTool({
 		name: "damage",
-		description: "Deal damage outside an attack or save, such as a fall. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply.",
+		description: "Deal damage outside an attack or save, such as a fall. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply. A Character dropped to 0 falls Unconscious (or dies outright); damage at 0 is a Death save failure. An NPC or Creature dropped to 0 dies unless knock_out. notes says what came of it.",
 		input: object({
 			target: string().min(1).describe("char:… or npc:…"),
 			amount: number().int().min(0),
-			type: string().min(1).describe("The damage type, such as bludgeoning")
+			type: string().min(1).describe("The damage type, such as bludgeoning"),
+			crit: boolean().optional().describe("A critical hit: at 0 HP a Character takes two Death save failures"),
+			knock_out: boolean().optional().describe("An NPC or Creature dropped to 0 is knocked out instead of killed")
 		}),
 		activity: "DM applies damage",
-		run: ({ db }, input) => {
+		run: ({ db, dice, now }, input) => {
 			const who = combatant(db, input.target);
 			const type = input.type.toLowerCase();
-			const change = applyDamage(db, who, input.amount, type);
+			const { calls, ...change } = applyDamage(db, who, input.amount, type, {
+				crit: input.crit,
+				knockOut: input.knock_out,
+				dice,
+				at: now
+			});
 			return {
 				result: {
 					...change,
-					state: hpState(change.hp, change.max)
+					state: hpState(change.hp, change.max),
+					...concentrationCalls(calls)
 				},
 				event: {
 					kind: "damage",
@@ -699,12 +771,13 @@ var combatTools = [
 	}),
 	writeTool({
 		name: "next_turn",
-		description: "Move to the next turn in initiative order, into the next round after the last. The new combatant's action, bonus action and reaction are fresh. Run NPC and Creature turns yourself; on a Character's turn the Player's composer is locked to them.",
+		description: "Move to the next turn in initiative order, into the next round after the last. The new combatant's action, bonus action and reaction are fresh. Run NPC and Creature turns yourself; on a Character's turn the Player's composer is locked to them. A Character at 0 HP rolls a Death save instead: the result carries its pending_call for your closing narrate.",
 		input: strictObject({}),
 		activity: null,
-		run: ({ db }) => {
+		run: ({ db, now }) => {
 			const { round, current } = nextTurn(db);
 			const state = combatState(db);
+			const deathSave = current && deathSaveCall(db, current.handle, now);
 			return {
 				result: {
 					round,
@@ -713,7 +786,11 @@ var combatTools = [
 						name: current.name
 					},
 					resources: "action, bonus action and reaction are fresh (a reminder, not a rule code enforces)",
-					order: state.order
+					order: state.order,
+					...deathSave && {
+						pending_call: deathSave,
+						death_save: `${current.name} is at 0 HP and rolls a Death save this turn: attach the Call with your closing narrate(text, call: "${deathSave}")`
+					}
 				},
 				event: {
 					kind: "turn",
