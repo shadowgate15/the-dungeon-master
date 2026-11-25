@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { render, type ChartOptions } from './chart.ts'
-import type { RunState, SessionState, Ticket } from './run-spec.ts'
+import type { GitMergeState, RunState, SessionState, Ticket } from './run-spec.ts'
 
 const START = Date.parse('2026-11-23T14:00:00Z')
 const MINUTE = 60 * 1000
@@ -149,6 +149,66 @@ describe('render', () => {
       '  · ready',
       '✗ 3 interrupted — re-run to resume · 20m'
     ])
+  })
+
+  it('shows tickets merged by git: the checks duration, running, failed with the checks log, then a merger', () => {
+    const tickets = [1, 2, 3, 4, 5].map((number) => ticket(number))
+    const gitMerge = (from: number, to?: number, checks?: GitMergeState['checks']) => ({
+      startedAt: START + from * MINUTE,
+      ...(to === undefined ? {} : { endedAt: START + to * MINUTE }),
+      ...(checks === undefined ? {} : { checks })
+    })
+    const lintFailed = { passed: false, step: 'lint' } as const
+    const implemented = (finishOrder: number) =>
+      ({ status: 'implemented', session: ran(0, 8, { outcome: passed }), finishOrder }) as const
+    const state = stateWith({
+      1: {
+        status: 'done',
+        session: ran(0, 12, { outcome: passed }),
+        gitMerge: gitMerge(12, 16, { passed: true })
+      },
+      2: { ...implemented(1), gitMerge: gitMerge(20) },
+      3: { ...implemented(2), gitMerge: gitMerge(12, 15, lintFailed) },
+      4: {
+        status: 'done',
+        session: ran(0, 8, { outcome: passed }),
+        gitMerge: gitMerge(10, 13, lintFailed),
+        merger: ran(13, 18, { outcome: passed })
+      },
+      5: implemented(3)
+    })
+
+    expect(render(state, tickets, options({ width: 120 }))).toMatchInlineSnapshot(`
+      "spec #100 · 30m
+      layer 0
+        ✓ #1 Ticket 1  impl 12m · merge (git) 4m
+        ◐ #2 Ticket 2  impl 8m · merge (git) 10m
+        ✗ #3 Ticket 3  checks lint · impl 8m · merge (git) 3m · .implement-spec/100/logs/checks-3.log
+        ✓ #4 Ticket 4  impl 8m · merge 5m
+        ● #5 Ticket 5  queued 1 · impl 8m
+      finish
+        · review
+        · fix
+        · pr-description
+        · ready"
+    `)
+  })
+
+  it('shows checks a stopped run left running as interrupted', () => {
+    const state = stateWith(
+      {
+        1: {
+          status: 'implemented',
+          session: ran(0, 8, { outcome: passed }),
+          gitMerge: { startedAt: START + 10 * MINUTE }
+        }
+      },
+      { runs: [{ startedAt: START, endedAt: START + 20 * MINUTE }] }
+    )
+
+    const [, , row] = render(state, [ticket(1)], options({ live: false })).split('\n')
+
+    expect(row).toBe('  ✗ #1 Ticket 1  merge interrupted · impl 8m · merge (git) 10m')
   })
 
   it('shows a dash for the total time of a run from before times were recorded', () => {

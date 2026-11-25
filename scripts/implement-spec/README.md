@@ -10,7 +10,7 @@ pnpm implement-spec <spec#> --status
 On a terminal, the run draws a live progress chart in place of console lines. The chart shows:
 
 - a header with the spec, PR and total time
-- each ticket by dependency layer, with its status glyph (`·` pending, `◐` running, `⏸` waiting out a usage limit, `●` implemented and queued, `✓` done, `✗` failed), its open blockers, its `impl`/`merge` times and attempt count, its queue place, its failed check and its log
+- each ticket by dependency layer, with its status glyph (`·` pending, `◐` running, `⏸` waiting out a usage limit, `●` implemented and queued, `✓` done, `✗` failed), its open blockers, its `impl`/`merge` times and attempt count (`merge (git)` and the checks' time for a ticket merged by git), its queue place, its failed check and its log (the checks log when the checks after a git merge failed)
 - the end-of-run steps
 
 When the frame is taller than the terminal, finished layers collapse. The final frame ends with a one-line verdict: `✓ PR #… ready`, or how many rows failed or were interrupted and how many tickets are stuck behind an open blocker or not started, `— re-run to resume`. On Ctrl-C, sessions still running show as interrupted. `NO_COLOR` turns off color. When output isn't a terminal, lines print as before.
