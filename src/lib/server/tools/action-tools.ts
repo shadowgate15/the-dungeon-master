@@ -88,7 +88,7 @@ function attacksOf(who: Combatant): Attack[] {
     attack_bonus?: number
     damage?: { damage_dice?: string; damage_type?: string }[]
   }
-  return (who.monster.actions as Action[]).flatMap((a) => {
+  return (who.statBlock.actions as Action[]).flatMap((a) => {
     if (a.attack_bonus === undefined) return []
     const first = a.damage?.find((d) => d.damage_dice && d.damage_type)
     return [
@@ -313,7 +313,7 @@ function casting(
   type Casting = {
     spellcasting?: { level?: number; dc?: number; modifier?: number; spells?: { url: string }[] }
   }
-  const block = (who.monster.specialAbilities as Casting[] | null)?.find(
+  const block = (who.statBlock.specialAbilities as Casting[] | null)?.find(
     (a) => a.spellcasting
   )?.spellcasting
   if (!block) return null

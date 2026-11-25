@@ -4,11 +4,10 @@ import type { CombatView } from '#lib/play/scene.ts'
 import type { Queryable } from '../db/connect'
 import { call, combat, combatant as combatantTable, type TurnResources } from '../db/schema'
 import type { Dice } from '../dice'
-import { createRulesRepository } from '../rules/repository'
 import { ToolError } from '../tools/contract'
 import { believedName, UNKNOWN_NPC } from '../knowledge/player-names'
 import { createPendingCall, type PendingPart } from './calls'
-import { combatant, isOut, type Combatant, type Monster } from './combatants'
+import { combatant, isOut, type Combatant, type StatBlock, statBlockFor } from './combatants'
 import { advanceClock, currentMinute } from './scene'
 
 /*
@@ -114,20 +113,7 @@ export function liveCreature(db: Queryable, handle: string): CombatantRow | null
   )
 }
 
-function monsterFor(db: Queryable, block: string): Monster {
-  const ref = block.startsWith('monster:') ? block : `monster:${block}`
-  const found = createRulesRepository(db).entry(ref)
-  if (!found || found.kind !== 'monster') {
-    throw new ToolError(
-      'unknown_stat_block',
-      `No SRD stat block is ${ref}`,
-      'Find the monster: slug with lookup and call again'
-    )
-  }
-  return found.entry as Monster
-}
-
-const monsterDex = (m: Monster) => (m.abilityScores as Record<string, number>).dex ?? 10
+const statBlockDex = (m: StatBlock) => (m.abilityScores as Record<string, number>).dex ?? 10
 
 /** What joins: resolved Characters and NPCs, and Creatures spawned (numbered per stat block). */
 type Joining = {
@@ -143,22 +129,22 @@ function joining(db: Queryable, combatId: string, entries: CombatantEntry[]): Jo
     const spec =
       typeof entry === 'string' && entry.startsWith('monster:') ? { monster: entry } : entry
     if (typeof spec !== 'string') {
-      const monster = monsterFor(db, spec.monster)
+      const statBlock = statBlockFor(db, spec.monster)
       for (let i = 0; i < (spec.count ?? 1); i++) {
         let n = 1
-        while (taken.has(`creature:${monster.slug}-${n}`)) n++
-        const handle = `creature:${monster.slug}-${n}`
+        while (taken.has(`creature:${statBlock.slug}-${n}`)) n++
+        const handle = `creature:${statBlock.slug}-${n}`
         taken.add(handle)
         out.push({
           row: {
             kind: 'creature',
             handle,
-            name: `${monster.name} ${n}`,
-            dex: monsterDex(monster),
-            statBlock: `monster:${monster.slug}`,
+            name: `${statBlock.name} ${n}`,
+            dex: statBlockDex(statBlock),
+            statBlock: `monster:${statBlock.slug}`,
             // A Creature starts at its stat block's average HP, like an NPC.
-            hp: monster.hitPoints,
-            maxHp: monster.hitPoints
+            hp: statBlock.hitPoints,
+            maxHp: statBlock.hitPoints
           }
         })
       }
@@ -177,7 +163,7 @@ function joining(db: Queryable, combatId: string, entries: CombatantEntry[]): Jo
         ? who.stats.abilities.dex.status === 'ok'
           ? who.stats.abilities.dex.value.score
           : 10
-        : monsterDex(who.monster)
+        : statBlockDex(who.statBlock)
     out.push({ row: { kind: who.kind, handle: who.handle, name: who.name, dex }, who })
   }
   return out

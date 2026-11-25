@@ -545,6 +545,23 @@ describe('the primitives', () => {
   })
 })
 
+describe('a stat block', () => {
+  it('is refused the same way for an NPC and a Creature when the SRD has no such stat block', () => {
+    addWren()
+    const bad = ok('establish', {
+      type: 'npc',
+      name: 'Odd',
+      fields: { stat_block: 'monster:nope' }
+    }).handle as string
+    expect(call('damage', { target: bad, amount: 1, type: 'fire' }).payload).toMatchObject({
+      code: 'unknown_stat_block'
+    })
+    expect(call('start_combat', { combatants: [{ monster: 'nope' }] }).payload).toMatchObject({
+      code: 'unknown_stat_block'
+    })
+  })
+})
+
 describe('what the Player sees', () => {
   it("never carries an enemy's AC, DC or HP numbers", () => {
     addWren()

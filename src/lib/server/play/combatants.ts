@@ -15,10 +15,27 @@ import { damagedCharacter, healedCharacter } from './death'
 import { concentrationCheck } from './concentration'
 import type { Dice } from '../dice'
 
-/** A monster stat block, as the rules repository returns it. */
-export type Monster = NonNullable<
+/** An SRD stat block, as the rules repository returns it. */
+export type StatBlock = NonNullable<
   ReturnType<ReturnType<typeof createRulesRepository>['monsters']>[number]
 >
+
+/**
+ * The SRD stat block a ref names, with or without its `monster:` prefix. The one lookup NPCs,
+ * Creatures and start_combat share, refused alike when the SRD has no such stat block.
+ */
+export function statBlockFor(db: Queryable, block: string): StatBlock {
+  const ref = block.startsWith('monster:') ? block : `monster:${block}`
+  const found = createRulesRepository(db).entry(ref)
+  if (!found || found.kind !== 'monster') {
+    throw new ToolError(
+      'unknown_stat_block',
+      `No SRD stat block is ${ref}`,
+      'Find the monster: slug with lookup and call again'
+    )
+  }
+  return found.entry as StatBlock
+}
 
 /**
  * Someone who can attack, be attacked, save or take damage. Characters keep their numbers in the
@@ -48,7 +65,7 @@ export type Combatant =
       kind: 'npc' | 'creature'
       handle: string
       name: string
-      monster: Monster
+      statBlock: StatBlock
       ac: number
       hp: number
       maxHp: number
@@ -97,36 +114,42 @@ function characterCombatant(db: Queryable, ref: string): Combatant | null {
 }
 
 /** The stat block's AC: its first listed armor class. */
-const monsterAc = (m: Monster) => (m.armorClass as { value: number }[])[0]?.value ?? 10
+const statBlockAc = (m: StatBlock) => (m.armorClass as { value: number }[])[0]?.value ?? 10
+
+/**
+ * An NPC's HP and conditions, kept apart from its World page. The first time an NPC is drawn into
+ * the rules it starts at its stat block's full HP.
+ */
+function npcCombatState(db: Queryable, handle: string, block: StatBlock) {
+  return (
+    db.select().from(npcCombat).where(eq(npcCombat.handle, handle)).get() ??
+    db
+      .insert(npcCombat)
+      .values({ handle, hp: block.hitPoints, maxHp: block.hitPoints, conditions: [] })
+      .returning()
+      .get()
+  )
+}
 
 function npcCombatant(db: Queryable, handle: string): Combatant | null {
   const npc = db.select().from(entity).where(eq(entity.handle, handle)).get()
   if (!npc || npc.type !== 'npc' || npc.retiredAt !== null) return null
-  const block = npc.fields.stat_block
-  if (typeof block !== 'string') {
+  const ref = npc.fields.stat_block
+  if (typeof ref !== 'string') {
     throw new ToolError(
       'no_stat_block',
       `${npc.name} (${handle}) has no stat block`,
       `Give it one with set_field(${handle}, stat_block, monster:<slug>) — find the slug with lookup — and call again`
     )
   }
-  const found = createRulesRepository(db).entry(block)
-  if (!found || found.kind !== 'monster') throw ToolError.unknownHandle(block)
-  const monster = found.entry as Monster
-  let state = db.select().from(npcCombat).where(eq(npcCombat.handle, handle)).get()
-  if (!state) {
-    state = db
-      .insert(npcCombat)
-      .values({ handle, hp: monster.hitPoints, maxHp: monster.hitPoints, conditions: [] })
-      .returning()
-      .get()
-  }
+  const statBlock = statBlockFor(db, ref)
+  const state = npcCombatState(db, handle, statBlock)
   return {
     kind: 'npc',
     handle,
     name: npc.name,
-    monster,
-    ac: monsterAc(monster),
+    statBlock,
+    ac: statBlockAc(statBlock),
     hp: state.hp,
     maxHp: state.maxHp,
     conditions: state.conditions,
@@ -138,15 +161,13 @@ function npcCombatant(db: Queryable, handle: string): Combatant | null {
 function creatureCombatant(db: Queryable, handle: string): Combatant | null {
   const row = liveCreature(db, handle)
   if (!row) return null
-  const found = createRulesRepository(db).entry(row.statBlock!)
-  if (!found || found.kind !== 'monster') return null
-  const monster = found.entry as Monster
+  const statBlock = statBlockFor(db, row.statBlock!)
   return {
     kind: 'creature',
     handle,
     name: row.name,
-    monster,
-    ac: monsterAc(monster),
+    statBlock,
+    ac: statBlockAc(statBlock),
     hp: row.hp!,
     maxHp: row.maxHp!,
     conditions: row.conditions,
@@ -172,11 +193,11 @@ export function combatant(db: Queryable, ref: string): Combatant {
 /** A combatant's saving throw bonus: a Character's derived save, a stat block's proficiency or ability. */
 export function saveBonus(who: Combatant, ability: AbilityKey): number {
   if (who.kind === 'character') return ok(who.stats.savingThrows[ability])?.modifier ?? 0
-  const proficient = (who.monster.proficiencies as { proficiency: string; value: number }[]).find(
+  const proficient = (who.statBlock.proficiencies as { proficiency: string; value: number }[]).find(
     (p) => p.proficiency === `saving-throw-${ability}`
   )
   if (proficient) return proficient.value
-  const score = (who.monster.abilityScores as Record<AbilityKey, number>)[ability] ?? 10
+  const score = (who.statBlock.abilityScores as Record<AbilityKey, number>)[ability] ?? 10
   return Math.floor((score - 10) / 2)
 }
 
@@ -191,7 +212,7 @@ export function mustAct(who: Combatant) {
   }
 }
 
-/** How a monster's resistances, immunities and vulnerabilities scale damage of one type. */
+/** How a stat block's resistances, immunities and vulnerabilities scale damage of one type. */
 function damageFactor(who: Combatant, damageType: string | null): number {
   if (who.kind === 'character' || !damageType) return 1
   const has = (list: unknown) =>
@@ -201,9 +222,9 @@ function damageFactor(who: Combatant, damageType: string | null): number {
         .split(/[,;]\s*|\s+and\s+/)
         .includes(damageType)
     )
-  if (has(who.monster.damageImmunities)) return 0
-  if (has(who.monster.damageResistances)) return 0.5
-  if (has(who.monster.damageVulnerabilities)) return 2
+  if (has(who.statBlock.damageImmunities)) return 0
+  if (has(who.statBlock.damageResistances)) return 0.5
+  if (has(who.statBlock.damageVulnerabilities)) return 2
   return 1
 }
 
@@ -224,7 +245,7 @@ export type HpChange = {
 export type DamageOptions = { crit?: boolean; knockOut?: boolean; dice?: Dice; at?: number }
 
 /**
- * The one way HP goes down. Temporary HP absorbs damage first; HP never drops below 0. Monster
+ * The one way HP goes down. Temporary HP absorbs damage first; HP never drops below 0. Stat block
  * resistances apply. A Character at 0 HP falls Unconscious (or dies outright) and takes Death save
  * failures from more damage; an NPC or Creature dies at 0 HP unless knocked out. A concentrating
  * target still standing saves to keep its spell.
