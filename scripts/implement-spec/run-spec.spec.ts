@@ -1636,7 +1636,7 @@ describe('runSpec', () => {
       expect(lines).toContain('merged #1 by git, checks passed')
     })
 
-    it('fails the merge as after a fresh clean merge when the re-run checks fail', async () => {
+    it('hands the fix to a merger, as after a fresh clean merge, when the re-run checks fail', async () => {
       const { ports, git, claude, tracker } = await interruptedDuringChecks(
         [ticket(1), ticket(2, [{ number: 1, open: true }])],
         () => ({ passed: false, step: 'test' })
@@ -1644,21 +1644,24 @@ describe('runSpec', () => {
 
       const result = await runSpec(100, {}, ports)
 
-      expect(result.ok).toBe(false)
-      expect(git.merges).toEqual([])
-      expect(claude.sessions).toEqual([])
+      expect(git.merges).not.toContain('implement-spec/100-1')
+      expect(git.aborts).toEqual([])
+      const merger = claude.sessions.find(({ role }) => role === 'merger')
+      expect(merger?.logFile).toBe(join(root, '.implement-spec', '100', 'logs', 'merger-1.log'))
+      expect(merger?.prompt).toMatch(/already committed/)
+      expect(merger?.prompt).toContain('test')
+      expect(merger?.prompt).toContain(join(root, '.implement-spec', '100', 'logs', 'checks-1.log'))
+      expect(merger?.prompt).not.toMatch(/git merge --no-ff/)
       const state = readState(100)
       expect(state.tickets[1]).toMatchObject({
-        status: 'implemented',
-        gitMerge: { checks: { passed: false, step: 'test' } }
+        status: 'done',
+        gitMerge: { checks: { passed: false, step: 'test' } },
+        merger: { outcome: { check: 'passed' } }
       })
-      expect(state.tickets[1].merger).toBeUndefined()
-      expect(state.tickets[2].status).toBe('pending')
-      expect(tracker.prs).toEqual([])
-      const log = join(root, '.implement-spec', '100', 'logs', 'checks-1.log')
-      expect(lines.slice(lines.indexOf('failed tickets:') + 1)).toEqual([
-        `  #1 checks test (log ${log})`
-      ])
+      expect(lines.join('\n')).toMatch(/#1 checks.*test.*handing it to a merger/)
+      expect(result.ok).toBe(true)
+      expect(state.tickets[2].status).toBe('done')
+      expect(tracker.prs).toHaveLength(1)
     })
 
     it('still git merges a ticket left implemented that the integration branch does not contain', async () => {
