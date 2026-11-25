@@ -1,10 +1,28 @@
-// The real tracker, git and claude ports: thin, untested wrappers over the `gh`, `git` and `claude` CLIs.
+// The real tracker, git, claude and checks ports: thin, untested wrappers over the `gh`, `git`,
+// `claude` and `pnpm` CLIs.
 import { execFile, spawn } from 'node:child_process'
-import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  statSync,
+  writeFileSync,
+  writeSync
+} from 'node:fs'
 import { dirname } from 'node:path'
 import { promisify } from 'node:util'
 import { usageLimitReset } from './usage-limit.ts'
-import type { Blocker, ClaudePort, GitPort, Ticket, TrackerPort } from './run-spec.ts'
+import {
+  CHECKS,
+  type Blocker,
+  type ChecksPort,
+  type ClaudePort,
+  type GitPort,
+  type Ticket,
+  type TrackerPort
+} from './run-spec.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -94,9 +112,62 @@ export const createGit = (cwd: string): GitPort => {
     },
     push: async (branch) => {
       await git(['push', '--set-upstream', 'origin', branch])
+    },
+    merge: async (worktree, branch) => {
+      try {
+        await run('git', ['merge', '--no-ff', '--no-edit', branch], worktree)
+        return { result: 'clean' }
+      } catch (error) {
+        const unmerged = await run(
+          'git',
+          ['diff', '--name-only', '--diff-filter=U'],
+          worktree
+        ).then(
+          (out) => out.split('\n').filter(Boolean),
+          () => []
+        )
+        if (unmerged.length > 0) return { result: 'conflicts', paths: unmerged }
+        const { stderr, stdout, message } = error as { stderr?: string; stdout?: string } & Error
+        return { result: 'error', message: (stderr || stdout || message).trim() }
+      }
+    },
+    abortMerge: async (worktree) => {
+      const merging = await run(
+        'git',
+        ['rev-parse', '-q', '--verify', 'MERGE_HEAD'],
+        worktree
+      ).then(
+        () => true,
+        () => false
+      )
+      if (merging) await run('git', ['merge', '--abort'], worktree)
     }
   }
 }
+
+/**
+ * Runs each check with `pnpm` in `cwd`, stopping at the first that fails (or can't be started).
+ * The log file holds only this run: it is emptied first, then every command and its output is
+ * appended.
+ */
+export const createChecks = (): ChecksPort => ({
+  run: async ({ cwd, logFile }) => {
+    mkdirSync(dirname(logFile), { recursive: true })
+    writeFileSync(logFile, '')
+    for (const [step, args] of CHECKS) {
+      const out = openSync(logFile, 'a')
+      writeSync(out, `$ pnpm ${args.join(' ')}\n`)
+      const code = await new Promise<number>((resolve) => {
+        const child = spawn('pnpm', args, { cwd, stdio: ['ignore', out, out] })
+        child.on('error', () => resolve(127))
+        child.on('close', (exit) => resolve(exit ?? 1))
+      })
+      closeSync(out)
+      if (code !== 0) return { passed: false, step }
+    }
+    return { passed: true }
+  }
+})
 
 /** What `claude --resume` prints when it has no saved conversation with the ID. */
 const NO_CONVERSATION = /No conversation found with session ID/i
@@ -114,14 +185,14 @@ const readFrom = (file: string, from: number) => {
 }
 
 /**
- * Runs `claude -p` unattended (permission checks bypassed, default model, session saved so it can
- * be resumed), with the prompt on stdin and all output appended to the session's log file.
+ * Runs `claude -p` unattended (permission checks bypassed, on the session's model, session saved so
+ * it can be resumed), with the prompt on stdin and all output appended to the session's log file.
  * Resolves to the exit code; a `claude` that can't be started resolves to 127, a resume that
  * finds no saved conversation resolves to `no-session`, and a session stopped by a usage limit
  * resolves to when that limit resets.
  */
 export const createClaude = (): ClaudePort => ({
-  run: ({ cwd, prompt, sessionId, resume, logFile }) =>
+  run: ({ model, cwd, prompt, sessionId, resume, logFile }) =>
     new Promise((resolve) => {
       mkdirSync(dirname(logFile), { recursive: true })
       const start = existsSync(logFile) ? statSync(logFile).size : 0
@@ -132,6 +203,8 @@ export const createClaude = (): ClaudePort => ({
           '-p',
           resume ? '--resume' : '--session-id',
           sessionId,
+          '--model',
+          model,
           '--dangerously-skip-permissions',
           '--output-format',
           'text'

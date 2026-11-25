@@ -6,8 +6,11 @@ import {
   runSpec,
   USAGE_LIMIT_GRACE_MS,
   type ClaudeExit,
+  type ChecksPort,
+  type ChecksResult,
   type ClaudePort,
   type GitPort,
+  type MergeResult,
   type Ports,
   type RunState,
   type Ticket,
@@ -48,11 +51,22 @@ const fakeTracker = (tickets: Ticket[]) => {
   return { tracker, reads, prs, bodies, ready }
 }
 
+/** What a fake `git merge` does with a branch: merge it cleanly, or report a conflict or error. */
+type MergeScript = (branch: string) => MergeResult
+
+/**
+ * The fake git's default merge: every merge conflicts, so a merger session resolves it, as the
+ * tests written before git merges came first expect.
+ */
+const conflicts: MergeScript = () => ({ result: 'conflicts', paths: ['conflicted.ts'] })
+
 /**
  * A fake git holding branches, worktrees and a commit graph in memory, with `main` already present.
  * Each commit records its parents, so ancestry answers come from the graph the way real git's do.
+ * `merge` answers from `mergeScript` (a clean merge commits on the branch checked out in the
+ * worktree), and every merge attempt and abort is recorded.
  */
-const fakeGit = (root: string) => {
+const fakeGit = (root: string, mergeScript: MergeScript = conflicts) => {
   const parents = new Map<string, string[]>([['main-tip', []]])
   const branches = new Map<string, string>([['main', 'main-tip']])
   const worktrees = new Map<string, string>()
@@ -60,6 +74,10 @@ const fakeGit = (root: string) => {
   const removed: string[] = []
   /** Every push, with the commit the branch pointed at when it was pushed. */
   const pushed: { branch: string; commit: string }[] = []
+  /** Every branch `merge` was asked to merge, in order. */
+  const merges: string[] = []
+  /** The worktree of every `abortMerge` call, in order. */
+  const aborts: string[] = []
   let made = 0
   const ancestry = (commit: string) => {
     const seen = new Set<string>()
@@ -109,9 +127,20 @@ const fakeGit = (root: string) => {
     },
     push: async (branch) => {
       pushed.push({ branch, commit: tip(branch) })
+    },
+    merge: async (worktree, branch) => {
+      const into = worktrees.get(worktree)
+      if (into === undefined) throw new Error(`no worktree at ${worktree}`)
+      merges.push(branch)
+      const result = mergeScript(branch)
+      if (result.result === 'clean') commit(into, branch)
+      return result
+    },
+    abortMerge: async (worktree) => {
+      aborts.push(worktree)
     }
   }
-  return { git, branches, worktrees, added, removed, pushed, commit }
+  return { git, branches, worktrees, added, removed, pushed, merges, aborts, commit }
 }
 
 type FakeGit = ReturnType<typeof fakeGit>
@@ -195,10 +224,30 @@ beforeEach(() => {
 
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
-const portsFor = (tickets: Ticket[], behave: Behave = succeeds) => {
+/** A fake checks port answering each run with `answer` (passing by default), recording each call. */
+const fakeChecks = (
+  answer: (run: Parameters<ChecksPort['run']>[0]) => ChecksResult | Promise<ChecksResult>
+) => {
+  const runs: Parameters<ChecksPort['run']>[0][] = []
+  const checks: ChecksPort = {
+    run: async (run) => {
+      runs.push(run)
+      return answer(run)
+    }
+  }
+  return { checks, runs }
+}
+
+type Scripts = {
+  merge?: MergeScript
+  checks?: (run: Parameters<ChecksPort['run']>[0]) => ChecksResult | Promise<ChecksResult>
+}
+
+const portsFor = (tickets: Ticket[], behave: Behave = succeeds, scripts: Scripts = {}) => {
   const tracker = fakeTracker(tickets)
-  const git = fakeGit(root)
+  const git = fakeGit(root, scripts.merge)
   const claude = fakeClaude(git, behave)
+  const checks = fakeChecks(scripts.checks ?? (() => ({ passed: true })))
   const waits: number[] = []
   /** Every state the run handed the progress port, copied as it was then. */
   const shown: RunState[] = []
@@ -209,12 +258,13 @@ const portsFor = (tickets: Ticket[], behave: Behave = succeeds) => {
     tracker: tracker.tracker,
     git: git.git,
     claude: claude.claude,
+    checks: checks.checks,
     log: (line) => lines.push(line),
     waitUntil: async (time) => {
       waits.push(time)
     }
   }
-  return { ports, tracker, git, claude, waits, shown }
+  return { ports, tracker, git, claude, checks, waits, shown }
 }
 
 const integrationWorktrees = (git: FakeGit) =>
@@ -395,6 +445,7 @@ describe('runSpec', () => {
         expect.stringMatching(/ready/),
         expect.stringMatching(/launched.*implementer/),
         expect.stringMatching(/implemented/),
+        expect.stringMatching(/git merge.*conflicted.*handing it to a merger/),
         expect.stringMatching(/launched.*merger/),
         expect.stringMatching(/merged/)
       ])
@@ -560,6 +611,270 @@ describe('runSpec', () => {
       const state = readState(100)
       expect([1, 2, 3].map((n) => state.tickets[n].status)).toEqual(['failed', 'pending', 'done'])
       expect(claude.sessions.some(({ cwd }) => cwd.endsWith('-2'))).toBe(false)
+    })
+  })
+
+  describe('merging with git first', () => {
+    const clean: MergeScript = () => ({ result: 'clean' })
+    const logs = () => join(root, '.implement-spec', '100', 'logs')
+    const ticketWorktree = (n: number) =>
+      join(root, '.claude', 'worktrees', `implement-spec-100-${n}`)
+
+    it('marks a ticket done with no merger when git merges it cleanly and the checks pass, then removes its worktree and publishes', async () => {
+      const { ports, claude, git, checks, tracker } = portsFor([ticket(1)], succeeds, {
+        merge: clean
+      })
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(claude.sessions.map(({ role }) => role)).toEqual([
+        'implementer',
+        'reviewer',
+        'fixer',
+        'pr-writer'
+      ])
+      expect(git.merges).toEqual(['implement-spec/100-1'])
+      const [integration] = integrationWorktrees(git)
+      expect(checks.runs).toEqual([
+        { cwd: integration.path, logFile: join(logs(), 'checks-1.log') }
+      ])
+      const state = readState(100)
+      expect(state.tickets[1].status).toBe('done')
+      expect(state.tickets[1].merger).toBeUndefined()
+      expect(git.removed[0]).toBe(ticketWorktree(1))
+      expect(
+        await git.git.contains('implement-spec/100', git.branches.get('implement-spec/100-1') ?? '')
+      ).toBe(true)
+      expect(git.pushed[0].branch).toBe('implement-spec/100')
+      expect(tracker.prs).toHaveLength(1)
+      expect(lines).toContain('merged #1 by git, checks passed')
+    })
+
+    it('saves the git merge in the run state before the checks run, then records their timing and outcome', async () => {
+      let atChecks: ReturnType<typeof readState> | undefined
+      const { ports } = portsFor([ticket(1)], succeeds, {
+        merge: clean,
+        checks: () => {
+          atChecks = readState(100)
+          clock.at += 3 * MINUTE
+          return { passed: true }
+        }
+      })
+
+      await runSpec(100, {}, ports)
+
+      expect(atChecks?.tickets[1]).toMatchObject({
+        status: 'implemented',
+        gitMerge: { startedAt: START }
+      })
+      expect(atChecks?.tickets[1].gitMerge.endedAt).toBeUndefined()
+      expect(readState(100).tickets[1].gitMerge).toEqual({
+        startedAt: START,
+        endedAt: START + 3 * MINUTE,
+        checks: { passed: true }
+      })
+    })
+
+    it('keeps the merge commit when the checks fail and hands the fix to a merger told what failed and where', async () => {
+      let mergedAtMerger: boolean | undefined
+      const { ports, claude, git, tracker } = portsFor(
+        [ticket(1), ticket(2, [{ number: 1, open: true }])],
+        async (session, fake) => {
+          if (session.role === 'merger') {
+            const head = fake.branches.get('implement-spec/100-1') ?? ''
+            mergedAtMerger = await fake.git.contains('implement-spec/100', head)
+            // A fixing merger commits its fix on the integration branch.
+            fake.commit(checkedOut(session, fake))
+            return 0
+          }
+          return succeeds(session, fake)
+        },
+        {
+          merge: clean,
+          checks: ({ logFile }) =>
+            logFile.endsWith('checks-1.log') ? { passed: false, step: 'lint' } : { passed: true }
+        }
+      )
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(git.merges).toEqual(['implement-spec/100-1', 'implement-spec/100-2'])
+      expect(git.aborts).toEqual([])
+      expect(mergedAtMerger).toBe(true)
+      const merger = claude.sessions.find(({ role }) => role === 'merger')
+      expect(merger?.model).toBe('opus')
+      expect(merger?.cwd).toBe(integrationWorktrees(git)[0].path)
+      expect(merger?.prompt).toMatch(/already committed/)
+      expect(merger?.prompt).toContain('lint')
+      expect(merger?.prompt).toContain(join(logs(), 'checks-1.log'))
+      expect(merger?.prompt).not.toMatch(/git merge --no-ff/)
+      expect(merger?.prompt).not.toMatch(/^1\. Merge /m)
+      const state = readState(100)
+      expect(state.tickets[1]).toMatchObject({
+        status: 'done',
+        gitMerge: { checks: { passed: false, step: 'lint' } },
+        merger: { outcome: { check: 'passed' } }
+      })
+      expect(state.tickets[2].status).toBe('done')
+      expect(git.removed.slice(0, 1)).toEqual([ticketWorktree(1)])
+      expect(git.pushed[0].branch).toBe('implement-spec/100')
+      expect(tracker.prs).toHaveLength(1)
+      expect(lines.join('\n')).toMatch(/#1 checks.*lint.*handing it to a merger/)
+    })
+
+    it('leaves the ticket implemented when the merger after failed checks fails, then resumes that merger on a re-run', async () => {
+      let mergerFails = true
+      const { ports, claude, git, checks, tracker } = portsFor(
+        [ticket(1), ticket(2, [{ number: 1, open: true }])],
+        (session, fake) => (session.role === 'merger' && mergerFails ? 1 : succeeds(session, fake)),
+        { merge: clean, checks: () => ({ passed: false, step: 'test' }) }
+      )
+
+      expect((await runSpec(100, {}, ports)).ok).toBe(false)
+      let state = readState(100)
+      expect(state.tickets[1]).toMatchObject({
+        status: 'implemented',
+        gitMerge: { checks: { passed: false, step: 'test' } },
+        merger: { outcome: { exitCode: 1, check: 'nonzero-exit' } }
+      })
+      expect(state.tickets[2].status).toBe('pending')
+      expect(git.removed).toEqual([])
+      expect(tracker.prs).toEqual([])
+      expect(lines.slice(lines.indexOf('failed tickets:') + 1)).toEqual([
+        `  #1 merger nonzero-exit (log ${join(logs(), 'merger-1.log')})`
+      ])
+      mergerFails = false
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(git.merges).toEqual(['implement-spec/100-1', 'implement-spec/100-2'])
+      expect(checks.runs.map(({ logFile }) => logFile.slice(-12))).toEqual([
+        'checks-1.log',
+        'checks-2.log'
+      ])
+      const mergers = claude.sessions.filter(({ role }) => role === 'merger')
+      expect(mergers[1]).toMatchObject({ resume: true, sessionId: mergers[0].sessionId })
+      expect(mergers[1].prompt).toMatch(/exited with code 1/)
+      expect(mergers[1].prompt).toMatch(/already committed/)
+      expect(mergers[1].prompt).toContain(join(logs(), 'checks-1.log'))
+      state = readState(100)
+      expect(state.tickets[1].status).toBe('done')
+    })
+
+    it('aborts a conflicted merge and launches a merger whose prompt lists the conflicting files', async () => {
+      const { ports, claude, git, checks } = portsFor([ticket(1)], succeeds, {
+        merge: () => ({ result: 'conflicts', paths: ['src/a.ts', 'src/b.ts'] })
+      })
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(git.merges).toEqual(['implement-spec/100-1'])
+      expect(git.aborts).toEqual([integrationWorktrees(git)[0].path])
+      const merger = claude.sessions.find(({ role }) => role === 'merger')
+      expect(merger?.model).toBe('opus')
+      expect(merger?.prompt).toContain('src/a.ts')
+      expect(merger?.prompt).toContain('src/b.ts')
+      expect(merger?.prompt).toMatch(/conflict/i)
+      expect(checks.runs).toEqual([])
+      const state = readState(100)
+      expect(state.tickets[1]).toMatchObject({
+        status: 'done',
+        merger: { outcome: { check: 'passed' } }
+      })
+      expect(state.tickets[1].gitMerge).toBeUndefined()
+      expect(lines.join('\n')).toMatch(/#1.*conflict/)
+    })
+
+    it("aborts after any other git error and launches a merger whose prompt includes git's error", async () => {
+      const { ports, claude, git, checks } = portsFor([ticket(1)], succeeds, {
+        merge: () => ({
+          result: 'error',
+          message: 'fatal: your local changes would be overwritten'
+        })
+      })
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(git.aborts).toHaveLength(1)
+      const merger = claude.sessions.find(({ role }) => role === 'merger')
+      expect(merger?.prompt).toContain('fatal: your local changes would be overwritten')
+      expect(checks.runs).toEqual([])
+      expect(readState(100).tickets[1].status).toBe('done')
+    })
+
+    it.each(['failed', 'interrupted'])(
+      'resumes a %s merger on a re-run with no git merge attempt',
+      async (how) => {
+        let mergerFails = true
+        const { ports, claude, git } = portsFor(
+          [ticket(1)],
+          (session, fake) =>
+            session.role === 'merger' && mergerFails ? 1 : succeeds(session, fake),
+          { merge: () => ({ result: 'conflicts', paths: ['src/a.ts'] }) }
+        )
+        await runSpec(100, {}, ports)
+        if (how === 'interrupted') {
+          const path = join(root, '.implement-spec', '100', 'state.json')
+          const state = readState(100)
+          delete state.tickets[1].merger.outcome
+          writeFileSync(path, JSON.stringify(state))
+        }
+        mergerFails = false
+
+        const result = await runSpec(100, {}, ports)
+
+        expect(result.ok).toBe(true)
+        expect(git.merges).toEqual(['implement-spec/100-1'])
+        expect(git.aborts).toHaveLength(1)
+        const mergers = claude.sessions.filter(({ role }) => role === 'merger')
+        expect(mergers).toHaveLength(2)
+        expect(mergers[1]).toMatchObject({ resume: true, sessionId: mergers[0].sessionId })
+        expect(readState(100).tickets[1].status).toBe('done')
+      }
+    )
+
+    it('merges and checks one ticket at a time, in the order their implementers finished', async () => {
+      const events: string[] = []
+      const { ports, git } = portsFor(
+        [ticket(1), ticket(2)],
+        async (session, fake) => {
+          if (session.role === 'implementer' && session.cwd.endsWith('-1')) {
+            await new Promise((resolve) => setTimeout(resolve, 10))
+          }
+          return succeeds(session, fake)
+        },
+        {
+          merge: (branch) => {
+            events.push(`merge ${branch.slice(-1)}`)
+            return { result: 'clean' }
+          },
+          checks: async ({ logFile }) => {
+            const n = logFile.match(/checks-(\d+)\.log$/)?.[1]
+            events.push(`checks ${n}`)
+            // Ticket 1's implementer finishes while ticket 2's checks are still running.
+            await new Promise((resolve) => setTimeout(resolve, 30))
+            events.push(`checked ${n}`)
+            return { passed: true }
+          }
+        }
+      )
+
+      await runSpec(100, {}, ports)
+
+      expect(events).toEqual([
+        'merge 2',
+        'checks 2',
+        'checked 2',
+        'merge 1',
+        'checks 1',
+        'checked 1'
+      ])
+      expect(git.merges).toEqual(['implement-spec/100-2', 'implement-spec/100-1'])
     })
   })
 
@@ -841,6 +1156,21 @@ describe('runSpec', () => {
       expect(fixer.prompt).toMatch(/\btdd\b/)
       expect(prWriter.prompt).toContain(join(runDir(), 'pr-body.md'))
       expect(new Set(claude.sessions.map(({ sessionId }) => sessionId)).size).toBe(7)
+    })
+
+    it('runs every role session on its model: sonnet for exploring, implementing and the PR, opus for merging, review and fixing', async () => {
+      const { ports, claude } = portsFor([ticket(1)])
+
+      await runSpec(100, { explore: true }, ports)
+
+      expect(claude.sessions.map(({ role, model }) => [role, model])).toEqual([
+        ['explorer', 'sonnet'],
+        ['implementer', 'sonnet'],
+        ['merger', 'opus'],
+        ['reviewer', 'opus'],
+        ['fixer', 'opus'],
+        ['pr-writer', 'sonnet']
+      ])
     })
 
     it('appends the Closes lines the description is missing, replaces the PR body, marks the PR ready and removes the integration worktree', async () => {
@@ -1244,6 +1574,133 @@ describe('runSpec', () => {
       expect(lines).not.toContain('failed tickets:')
     })
 
+    /**
+     * A run of `tickets` whose git merges are clean and whose first checks run is killed after the
+     * merge committed, leaving a ticket `implemented` with no merger. Later checks runs answer from
+     * `rerun`.
+     */
+    const interruptedDuringChecks = async (
+      tickets: Ticket[],
+      rerun: () => ChecksResult = () => ({ passed: true })
+    ) => {
+      let crash = true
+      const point = crashPoint()
+      const run = portsFor(tickets, succeeds, {
+        merge: () => ({ result: 'clean' }),
+        checks: () => {
+          if (crash) {
+            crash = false
+            point.kill()
+          }
+          clock.at += 2 * MINUTE
+          return rerun()
+        }
+      })
+      await runSpec(100, {}, run.ports)
+      point.restore()
+      expect(readState(100).tickets[1]).toMatchObject({
+        status: 'implemented',
+        gitMerge: { startedAt: START }
+      })
+      expect(readState(100).tickets[1].merger).toBeUndefined()
+      run.git.merges.length = 0
+      run.checks.runs.length = 0
+      run.claude.sessions.length = 0
+      lines.length = 0
+      return run
+    }
+
+    it('runs the checks with no git merge for a ticket the integration branch already contains, then marks it done and publishes', async () => {
+      const { ports, git, checks, claude, tracker } = await interruptedDuringChecks([ticket(1)])
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(git.merges).toEqual([])
+      expect(git.aborts).toEqual([])
+      const [integration] = integrationWorktrees(git)
+      expect(checks.runs).toEqual([
+        {
+          cwd: integration.path,
+          logFile: join(root, '.implement-spec', '100', 'logs', 'checks-1.log')
+        }
+      ])
+      expect(claude.sessions.map(({ role }) => role)).not.toContain('merger')
+      const state = readState(100)
+      expect(state.tickets[1].status).toBe('done')
+      expect(state.tickets[1].merger).toBeUndefined()
+      expect(state.tickets[1].gitMerge.checks).toEqual({ passed: true })
+      expect(git.removed).toContain(join(root, '.claude', 'worktrees', 'implement-spec-100-1'))
+      expect(git.pushed.map(({ branch }) => branch)).toContain('implement-spec/100')
+      expect(tracker.prs).toHaveLength(1)
+      expect(lines).toContain('merged #1 by git, checks passed')
+    })
+
+    it('times the re-run checks from when they started again, not from the interrupted run', async () => {
+      const { ports } = await interruptedDuringChecks([ticket(1)])
+      clock.at = START + 3 * 60 * MINUTE
+
+      await runSpec(100, {}, ports)
+
+      expect(readState(100).tickets[1].gitMerge).toMatchObject({
+        startedAt: START + 3 * 60 * MINUTE,
+        endedAt: START + 3 * 60 * MINUTE + 2 * MINUTE
+      })
+    })
+
+    it('hands the fix to a merger, as after a fresh clean merge, when the re-run checks fail', async () => {
+      const { ports, git, claude, tracker } = await interruptedDuringChecks(
+        [ticket(1), ticket(2, [{ number: 1, open: true }])],
+        () => ({ passed: false, step: 'test' })
+      )
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(git.merges).not.toContain('implement-spec/100-1')
+      expect(git.aborts).toEqual([])
+      const merger = claude.sessions.find(({ role }) => role === 'merger')
+      expect(merger?.logFile).toBe(join(root, '.implement-spec', '100', 'logs', 'merger-1.log'))
+      expect(merger?.prompt).toMatch(/already committed/)
+      expect(merger?.prompt).toContain('test')
+      expect(merger?.prompt).toContain(join(root, '.implement-spec', '100', 'logs', 'checks-1.log'))
+      expect(merger?.prompt).not.toMatch(/git merge --no-ff/)
+      const state = readState(100)
+      expect(state.tickets[1]).toMatchObject({
+        status: 'done',
+        gitMerge: { checks: { passed: false, step: 'test' } },
+        merger: { outcome: { check: 'passed' } }
+      })
+      expect(lines.join('\n')).toMatch(/#1 checks.*test.*handing it to a merger/)
+      expect(result.ok).toBe(true)
+      expect(state.tickets[2].status).toBe('done')
+      expect(tracker.prs).toHaveLength(1)
+    })
+
+    it('still git merges a ticket left implemented that the integration branch does not contain', async () => {
+      let crash = true
+      const point = crashPoint()
+      const { ports, git, checks } = portsFor([ticket(1)], succeeds, {
+        merge: () => {
+          if (crash) {
+            crash = false
+            point.kill()
+          }
+          return { result: 'clean' }
+        }
+      })
+      await runSpec(100, {}, ports)
+      point.restore()
+      expect(readState(100).tickets[1].status).toBe('implemented')
+      git.merges.length = 0
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(git.merges).toEqual(['implement-spec/100-1'])
+      expect(checks.runs).toHaveLength(1)
+      expect(readState(100).tickets[1].status).toBe('done')
+    })
+
     it('resumes a failed merger before launching anything, then merges tickets left implemented', async () => {
       let mergerFails = true
       const events: string[] = []
@@ -1280,10 +1737,14 @@ describe('runSpec', () => {
       expect(resumed).toMatchObject({
         sessionId: failedMerger?.sessionId,
         cwd: failedMerger?.cwd,
-        resume: true
+        resume: true,
+        model: 'opus'
       })
       expect(resumed?.prompt).toMatch(/exited with code 1/)
+      // The resume makes no git attempt, but its prompt still says why the first git merge didn't land.
       expect(resumed?.prompt).toContain(failedMerger?.prompt)
+      expect(resumed?.prompt).toContain('1. Merge implement-spec/100-1 into implement-spec/100')
+      expect(resumed?.prompt).toMatch(/aborted it on conflicts in:\n- conflicted.ts/)
       expect(events.filter((event) => event.startsWith('start merger'))).toEqual([
         'start merger-1',
         'start merger-3',
@@ -1326,7 +1787,13 @@ describe('runSpec', () => {
       expect(result.ok).toBe(true)
       const [first, resumed, fresh] = claude.sessions
       expect(resumed).toMatchObject({ sessionId: first.sessionId, resume: true })
-      expect(fresh).toMatchObject({ role: 'implementer', cwd: first.cwd, resume: false })
+      expect(resumed.model).toBe('sonnet')
+      expect(fresh).toMatchObject({
+        role: 'implementer',
+        model: 'sonnet',
+        cwd: first.cwd,
+        resume: false
+      })
       expect(fresh.sessionId).not.toBe(first.sessionId)
       expect(fresh.prompt).toContain(first.prompt)
       expect(savedAtLaunch.every(Boolean)).toBe(true)
@@ -1353,7 +1820,12 @@ describe('runSpec', () => {
       expect(result.ok).toBe(true)
       expect(waits).toEqual([resetsAt + USAGE_LIMIT_GRACE_MS])
       const [first, resumed] = claude.sessions.filter(({ role }) => role === 'implementer')
-      expect(resumed).toMatchObject({ sessionId: first.sessionId, resume: true, cwd: first.cwd })
+      expect(resumed).toMatchObject({
+        sessionId: first.sessionId,
+        resume: true,
+        cwd: first.cwd,
+        model: 'sonnet'
+      })
       expect(resumed.prompt).toContain('usage limit')
       expect(resumed.prompt).toContain(first.prompt)
       expect(readState(100).tickets[1].status).toBe('done')
@@ -1377,7 +1849,7 @@ describe('runSpec', () => {
       expect(result.ok).toBe(true)
       const [first, resumed, fresh] = claude.sessions.filter(({ role }) => role === 'implementer')
       expect(resumed).toMatchObject({ sessionId: first.sessionId, resume: true })
-      expect(fresh.resume).toBe(false)
+      expect(fresh).toMatchObject({ resume: false, model: 'sonnet' })
       expect(fresh.sessionId).not.toBe(first.sessionId)
       expect(fresh.prompt).toContain('usage limit')
     })
@@ -1578,8 +2050,12 @@ describe('runSpec', () => {
       ])
     })
 
-    it('treats a git call that throws while merging as a failed merger', async () => {
-      const { ports, git, claude } = portsFor([ticket(1), ticket(2, [{ number: 1, open: true }])])
+    it('records a git call that throws before any merger as a merge error, and retries git on a re-run with no merger', async () => {
+      const { ports, git, claude } = portsFor(
+        [ticket(1), ticket(2, [{ number: 1, open: true }])],
+        succeeds,
+        { merge: () => ({ result: 'clean' }) }
+      )
       const head = git.git.head
       let broken = true
       git.git.head = async (branch) => {
@@ -1592,14 +2068,44 @@ describe('runSpec', () => {
       expect(result.ok).toBe(false)
       expect(claude.sessions.map(({ role }) => role)).toEqual(['implementer'])
       const state = readState(100)
+      expect(state.tickets[1]).toMatchObject({ status: 'implemented', mergeError: 'bad ref' })
+      expect(state.tickets[1].merger).toBeUndefined()
+      expect(lines).toContainEqual('  #1 merge error: bad ref')
+
+      broken = false
+      claude.sessions.length = 0
+      expect((await runSpec(100, {}, ports)).ok).toBe(true)
+      expect(git.merges).toEqual(['implement-spec/100-1', 'implement-spec/100-2'])
+      expect(claude.sessions.map(({ role }) => role)).not.toContain('merger')
+      expect(readState(100).tickets[1].mergeError).toBeUndefined()
+    })
+
+    it('records checks that throw as a merge error with the checks ended, and runs them again on a re-run with no merger', async () => {
+      let broken = true
+      const { ports, git, claude, checks } = portsFor([ticket(1)], succeeds, {
+        merge: () => ({ result: 'clean' }),
+        checks: () => {
+          clock.at += 2 * MINUTE
+          if (broken) throw new Error('pnpm vanished')
+          return { passed: true }
+        }
+      })
+
+      expect((await runSpec(100, {}, ports)).ok).toBe(false)
+      const state = readState(100)
       expect(state.tickets[1]).toMatchObject({
         status: 'implemented',
-        merger: { outcome: { check: 'error', error: 'bad ref' } }
+        mergeError: 'pnpm vanished',
+        gitMerge: { startedAt: START, endedAt: START + 2 * MINUTE }
       })
-      expect(lines).toContainEqual(expect.stringMatching(/^ {2}#1 merger error \(log /))
+      expect(state.tickets[1].merger).toBeUndefined()
 
       broken = false
       expect((await runSpec(100, {}, ports)).ok).toBe(true)
+      expect(git.merges).toEqual(['implement-spec/100-1'])
+      expect(checks.runs).toHaveLength(2)
+      expect(claude.sessions.map(({ role }) => role)).not.toContain('merger')
+      expect(readState(100).tickets[1].status).toBe('done')
     })
 
     it('fails a run that stalls with no failure, naming each ticket left stuck and its open blockers', async () => {

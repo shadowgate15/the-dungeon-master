@@ -27,20 +27,79 @@ export const implementerPrompt = (
     'Do not push, open pull requests, or change anything on GitHub.'
   ].join('\n')
 
-export const mergerPrompt = (
+/**
+ * Why the script's own `git merge` couldn't land the ticket, which it aborted before the merger:
+ * the files it conflicted on, or git's error.
+ */
+export type MergeReason = { conflicts: string[] } | { error: string }
+
+/** The merger prompt's section on why the script's git merge didn't land; none without a reason. */
+const reasonLines = (reason: MergeReason | undefined) => {
+  if (reason === undefined) return []
+  if ('conflicts' in reason) {
+    return [
+      '',
+      'The script tried `git merge --no-ff` first and aborted it on conflicts in:',
+      ...reason.conflicts.map((path) => `- ${path}`)
+    ]
+  }
+  return [
+    '',
+    "The script tried `git merge --no-ff` first, and aborted it after git's error:",
+    '```',
+    reason.error,
+    '```'
+  ]
+}
+
+/** Every merger prompt's opening: the role, the pointers, the ticket, its branch and the worktree. */
+const mergerHeader = (
   pointers: Pointers,
   { ticket, branch }: { ticket: number; branch: string }
+) => [
+  `You are the merger for ticket #${ticket} of spec #${pointers.spec}.`,
+  ...pointerLines(pointers),
+  `Ticket: #${ticket} (read it with \`gh issue view ${ticket}\`).`,
+  `Ticket branch: ${branch}. Its implementer has finished and passed its done check.`,
+  `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`
+]
+
+export const mergerPrompt = (
+  pointers: Pointers,
+  { ticket, branch, reason }: { ticket: number; branch: string; reason?: MergeReason }
 ) =>
   [
-    `You are the merger for ticket #${ticket} of spec #${pointers.spec}.`,
-    ...pointerLines(pointers),
-    `Ticket: #${ticket} (read it with \`gh issue view ${ticket}\`).`,
-    `Ticket branch: ${branch}. Its implementer has finished and passed its done check.`,
-    `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`,
+    ...mergerHeader(pointers, { ticket, branch }),
+    ...reasonLines(reason),
     '',
     `1. Merge ${branch} into ${pointers.integrationBranch} here (\`git merge --no-ff ${branch}\`).`,
     '2. If there are conflicts, resolve them with judgment, keeping the intent of both sides, and commit the merge.',
     '3. Run the lint, type-check and unit tests. Fix anything the merge broke and commit the fix.',
+    'Do not push, open pull requests, or change anything on GitHub.'
+  ].join('\n')
+
+/**
+ * The merger prompt after the script's clean `git merge` failed its checks: the merge is already
+ * committed, so the merger fixes what `step` broke (its output in `checksLog`) rather than merging.
+ */
+export const checksFailedMergerPrompt = (
+  pointers: Pointers,
+  {
+    ticket,
+    branch,
+    step,
+    checksLog
+  }: { ticket: number; branch: string; step: string; checksLog: string }
+) =>
+  [
+    ...mergerHeader(pointers, { ticket, branch }),
+    '',
+    `The script has already merged ${branch} into ${pointers.integrationBranch} cleanly, and the merge is already committed. Do not merge again or undo the merge.`,
+    `The script then ran the install, lint, type-check and unit tests, and the \`${step}\` step failed. Its output is in ${checksLog}.`,
+    '',
+    `1. Read ${checksLog} to see what failed.`,
+    '2. Fix what the merge broke, keeping the intent of both sides, and commit the fix.',
+    '3. Run the lint, type-check and unit tests again, and fix anything that still fails.',
     'Do not push, open pull requests, or change anything on GitHub.'
   ].join('\n')
 
