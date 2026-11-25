@@ -79,6 +79,7 @@ describe('a Check Call', () => {
           reason: 'The lock is old and stiff',
           mode: 'normal',
           hitDice: null,
+          offer: null,
           answered: false,
           next: null
         }
