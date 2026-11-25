@@ -12,5 +12,5 @@
 </script>
 
 <Story name="The Party's Journal" />
-<Story name="One Character" args={{ holders: false }} />
+<Story name="One Character" args={{ actor: 'kael' }} />
 <Story name="Nothing yet" args={{ entries: [] }} />

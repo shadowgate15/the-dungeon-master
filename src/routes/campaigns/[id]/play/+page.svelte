@@ -202,7 +202,7 @@
         </h2>
         <Journal
           entries={acting ? knownBy(journal.data, acting.id) : journal.data.entries}
-          holders={!acting}
+          actor={acting?.id}
         />
       </section>
     </aside>

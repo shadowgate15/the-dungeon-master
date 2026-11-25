@@ -73,6 +73,22 @@ describe('the Journal', () => {
     ])
   })
 
+  it('never shows a raw handle: a link reads as the name the Party knows, else "someone"', () => {
+    ok('establish', { type: 'npc', name: 'Tam', fields: {} })
+    ok('establish', { type: 'npc', name: 'Tam', fields: {}, distinct_from: ['npc:tam'] })
+    ok('establish', { type: 'place', name: 'Saltgate', fields: {} })
+    ok('reveal', { of: 'npc:tam', holders: ['char:wren'] })
+    ok('reveal', {
+      claim: '[[npc:tam]] and [[npc:tam-2]] met at [[place:saltgate]]',
+      about: 'place:saltgate',
+      holders: ['char:wren']
+    })
+
+    const texts = journal().entries.map((e) => e.text)
+    expect(texts.join(' ')).not.toMatch(/npc:|place:/)
+    expect(texts).toContain('Tam and someone met at Saltgate')
+  })
+
   it('never shows NPC Beliefs or the World layer', () => {
     const fact = ok('establish', {
       type: 'npc',

@@ -18,6 +18,15 @@ export type JournalEntry = {
 /** The Player's Journal: the union of their Characters' Beliefs. */
 export type Journal = { entries: JournalEntry[] }
 
-/** The entries a Character holds: "What <Character> knows". */
-export const knownBy = (journal: Journal, character: string): JournalEntry[] =>
-  journal.entries.filter((e) => e.holders.some((h) => h.id === character))
+/** Whether a Character holds an entry themselves. */
+export const holds = (entry: JournalEntry, character: string) =>
+  entry.holders.some((h) => h.id === character)
+
+/**
+ * "What <Character> knows": the entries they hold, then the rest of the Party's, which the
+ * Character can be told about at the table.
+ */
+export const knownBy = (journal: Journal, character: string): JournalEntry[] => [
+  ...journal.entries.filter((e) => holds(e, character)),
+  ...journal.entries.filter((e) => !holds(e, character))
+]

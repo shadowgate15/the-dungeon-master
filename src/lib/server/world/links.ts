@@ -3,7 +3,8 @@ import { isNearName, normalizeName } from './names'
 
 /** `[[Name]]`, `[[alias]]` or `[[npc:handle]]`; text after a `|` is a label and ignored. */
 const LINK = /\[\[([^[\]]+?)\]\]/g
-const HANDLE = new RegExp(`^(${ENTITY_TYPES.join('|')}):[a-z0-9-]+$`)
+/** An Entity handle, such as `npc:mira-voss`. */
+export const HANDLE = new RegExp(`^(${ENTITY_TYPES.join('|')}):[a-z0-9-]+$`)
 
 /** What link resolution needs to know about one Entity. */
 export type Known = {

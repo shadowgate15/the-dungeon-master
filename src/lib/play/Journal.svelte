@@ -1,7 +1,7 @@
 <script lang="ts">
   import { SvelteMap } from 'svelte/reactivity'
   import type { EntityType } from '#lib/world/entity-types.ts'
-  import type { JournalEntry } from './journal'
+  import { holds, type JournalEntry } from './journal'
 
   /**
    * What the Player's Characters believe, grouped by who or what it is about, each entry marked
@@ -9,11 +9,14 @@
    */
   let {
     entries,
-    holders = true
+    actor
   }: {
     entries: JournalEntry[]
-    /** Whether to mark each entry with who holds it; off for one Character's view. */
-    holders?: boolean
+    /**
+     * The acting Character's id, for their view: their own entries go unmarked and the rest of
+     * the Party's are marked with who holds them. Without it, every entry is marked.
+     */
+    actor?: string
   } = $props()
 
   const typeLabel: Record<EntityType, string> = {
@@ -54,7 +57,7 @@
             <li>
               <span>{entry.text === group.name ? 'Heard of' : entry.text}</span>
               {#if entry.source}<span class="text-muted"> (from {entry.source})</span>{/if}
-              {#if holders}
+              {#if actor === undefined || !holds(entry, actor)}
                 <span class="block text-xs text-muted"
                   >{entry.holders.map((h) => h.name).join(', ')}</span
                 >
