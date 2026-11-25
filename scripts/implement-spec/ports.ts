@@ -114,14 +114,14 @@ const readFrom = (file: string, from: number) => {
 }
 
 /**
- * Runs `claude -p` unattended (permission checks bypassed, default model, session saved so it can
- * be resumed), with the prompt on stdin and all output appended to the session's log file.
+ * Runs `claude -p` unattended (permission checks bypassed, on the session's model, session saved so
+ * it can be resumed), with the prompt on stdin and all output appended to the session's log file.
  * Resolves to the exit code; a `claude` that can't be started resolves to 127, a resume that
  * finds no saved conversation resolves to `no-session`, and a session stopped by a usage limit
  * resolves to when that limit resets.
  */
 export const createClaude = (): ClaudePort => ({
-  run: ({ cwd, prompt, sessionId, resume, logFile }) =>
+  run: ({ model, cwd, prompt, sessionId, resume, logFile }) =>
     new Promise((resolve) => {
       mkdirSync(dirname(logFile), { recursive: true })
       const start = existsSync(logFile) ? statSync(logFile).size : 0
@@ -132,6 +132,8 @@ export const createClaude = (): ClaudePort => ({
           '-p',
           resume ? '--resume' : '--session-id',
           sessionId,
+          '--model',
+          model,
           '--dangerously-skip-permissions',
           '--output-format',
           'text'
