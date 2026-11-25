@@ -29,7 +29,7 @@ function CallCard($$renderer, $$props) {
 		for (let $$index_2 = 0, $$length = each_array.length; $$index_2 < $$length; $$index_2++) {
 			let part = each_array[$$index_2];
 			$$renderer.push(`<div role="group"${attr("aria-label", part.character ?? part.player)} class="flex flex-wrap items-center gap-2">`);
-			if (call.kind !== "question") {
+			if (call.kind !== "question" && call.kind !== "hit_dice") {
 				$$renderer.push(`<!--[0--><span class="font-medium">${escape_html(part.character)}</span> <span>${escape_html(part.label)}</span> `);
 				if (part.mode !== "normal") $$renderer.push(`<!--[0--><span class="text-xs font-semibold text-accent uppercase">${escape_html(part.mode === "advantage" ? "Advantage" : "Disadvantage")}</span>`);
 				else $$renderer.push("<!--[-1-->");
