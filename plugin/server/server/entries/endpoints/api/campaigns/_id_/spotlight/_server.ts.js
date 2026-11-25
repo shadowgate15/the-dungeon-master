@@ -1,6 +1,7 @@
 import { i as json } from "../../../../../../chunks/exports.js";
-import { c as DmAwayError, o as play } from "../../../../../../chunks/bridge.js";
-import { _t as SpotlightRefusedError, c as CampaignNotFoundError, s as CampaignMissingError } from "../../../../../../chunks/campaign.js";
+import { _t as SpotlightRefusedError } from "../../../../../../chunks/campaign.js";
+import { l as DmAwayError, o as play } from "../../../../../../chunks/bridge.js";
+import { n as withCampaign } from "../../../../../../chunks/http.js";
 import { n as readJson } from "../../../../../../chunks/respond.js";
 // src/routes/api/campaigns/[id]/spotlight/+server.ts
 /**
@@ -11,15 +12,10 @@ import { n as readJson } from "../../../../../../chunks/respond.js";
 var POST = async ({ params, request }) => {
 	const body = await readJson(request);
 	if (typeof body?.character !== "string") return json({ error: "Name the Character to cut to" }, { status: 400 });
-	try {
+	return withCampaign(() => {
 		play.spotlight(params.id, body.character);
 		return new Response(null, { status: 204 });
-	} catch (e) {
-		if (e instanceof DmAwayError) return json({ error: e.message }, { status: 409 });
-		if (e instanceof SpotlightRefusedError) return json({ error: e.message }, { status: 400 });
-		if (e instanceof CampaignNotFoundError || e instanceof CampaignMissingError) return json({ error: e.message }, { status: 404 });
-		throw e;
-	}
+	}, [[DmAwayError, 409], [SpotlightRefusedError, 400]]);
 };
 export { POST };
 

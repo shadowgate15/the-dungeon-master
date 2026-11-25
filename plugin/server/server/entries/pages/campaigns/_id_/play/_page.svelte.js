@@ -2,10 +2,12 @@ import { ft as resolve } from "../../../../../chunks/internal.js";
 import { _ as attr, c as ensure_array_like, l as head, n as attr_style, o as derived, p as stringify, r as attributes, t as attr_class, v as clsx, x as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/paths.js";
 import { n as Badge, r as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
-import { n as Alert, t as Button } from "../../../../../chunks/Button.js";
+import { t as Button } from "../../../../../chunks/Button.js";
 import { t as Checkbox } from "../../../../../chunks/Checkbox.js";
+import { t as Field } from "../../../../../chunks/Field.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
-import { a as createSceneQuery, c as createTimelineQuery, d as levelUp, f as Journal, i as createJournalQuery, l as endSession, n as callActions, r as createFloorQuery, s as createSheetsQuery, t as FloorChangeError, u as floorActions } from "../../../../../chunks/floor-client.js";
+import { a as createSceneQuery, c as createTimelineQuery, d as levelUp, f as saveDetails, i as createJournalQuery, l as endSession, m as knownBy, n as callActions, p as Journal, r as createFloorQuery, s as createSheetsQuery, t as PlayRequestError, u as floorActions } from "../../../../../chunks/floor-client.js";
+import { t as Alert } from "../../../../../chunks/Alert.js";
 import { f as createQuery, o as permissionQueryKey } from "../../../../../chunks/messages.js";
 import { t as useQueryClient } from "../../../../../chunks/useQueryClient.js";
 import { t as Link } from "../../../../../chunks/Link.js";
@@ -232,6 +234,136 @@ function LevelUp($$renderer, $$props) {
 		$$renderer.push(`<!--]--></section>`);
 	});
 }
+// src/lib/play/CharacterDetails.svelte
+function CharacterDetails($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		/** The details the Player may edit in play, the DM at the table or away. */
+		/**
+		* What the Player writes about a Character, on its play sheet. Notes, personality and appearance
+		* are editable in play (with the DM away too) when `onsave` is given; the backstory is read-only
+		* once play has begun. `onsave` throws the server's refusal.
+		*/
+		let { details, onsave } = $$props;
+		let notes = details.notes ?? "";
+		let personality = details.personality ?? "";
+		let appearance = details.appearance ?? "";
+		let saving = false;
+		let $$settled = true;
+		let $$inner_renderer;
+		function $$render_inner($$renderer) {
+			$$renderer.push(`<section aria-labelledby="details-heading" class="flex flex-col gap-2"><h3 id="details-heading" class="text-xs font-semibold text-muted uppercase">Details</h3> `);
+			if (onsave) {
+				$$renderer.push(`<!--[0--><form class="flex flex-col gap-2">`);
+				{
+					function children($$renderer, id, describedby) {
+						Textarea($$renderer, {
+							id,
+							"aria-describedby": describedby,
+							size: "sm",
+							rows: 3,
+							get value() {
+								return notes;
+							},
+							set value($$value) {
+								notes = $$value;
+								$$settled = false;
+							}
+						});
+					}
+					Field($$renderer, {
+						label: "Notes",
+						children,
+						$$slots: { default: true }
+					});
+				}
+				$$renderer.push(`<!----> `);
+				{
+					function children($$renderer, id, describedby) {
+						Textarea($$renderer, {
+							id,
+							"aria-describedby": describedby,
+							size: "sm",
+							rows: 2,
+							get value() {
+								return personality;
+							},
+							set value($$value) {
+								personality = $$value;
+								$$settled = false;
+							}
+						});
+					}
+					Field($$renderer, {
+						label: "Personality",
+						children,
+						$$slots: { default: true }
+					});
+				}
+				$$renderer.push(`<!----> `);
+				{
+					function children($$renderer, id, describedby) {
+						Textarea($$renderer, {
+							id,
+							"aria-describedby": describedby,
+							size: "sm",
+							rows: 2,
+							get value() {
+								return appearance;
+							},
+							set value($$value) {
+								appearance = $$value;
+								$$settled = false;
+							}
+						});
+					}
+					Field($$renderer, {
+						label: "Appearance",
+						children,
+						$$slots: { default: true }
+					});
+				}
+				$$renderer.push(`<!----> <div class="flex items-center gap-2">`);
+				Button($$renderer, {
+					type: "submit",
+					variant: "secondary",
+					size: "sm",
+					disabled: saving,
+					children: ($$renderer) => {
+						$$renderer.push(`<!---->Save details`);
+					},
+					$$slots: { default: true }
+				});
+				$$renderer.push(`<!----> `);
+				$$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--></div></form>`);
+			} else {
+				$$renderer.push(`<!--[-1--><!--[-->`);
+				const each_array = ensure_array_like([
+					["Notes", details.notes],
+					["Personality", details.personality],
+					["Appearance", details.appearance]
+				]);
+				for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
+					let [label, text] = each_array[$$index];
+					if (text) $$renderer.push(`<!--[0--><p><span class="text-muted">${escape_html(label)}:</span> ${escape_html(text)}</p>`);
+					else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]-->`);
+				}
+				$$renderer.push(`<!--]-->`);
+			}
+			$$renderer.push(`<!--]--> `);
+			if (details.backstory) $$renderer.push(`<!--[0--><div><p class="text-xs text-muted">Backstory</p> <p class="whitespace-pre-line">${escape_html(details.backstory)}</p></div>`);
+			else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--></section>`);
+		}
+		do {
+			$$settled = true;
+			$$inner_renderer = $$renderer.copy();
+			$$render_inner($$inner_renderer);
+		} while (!$$settled);
+		$$renderer.subsume($$inner_renderer);
+	});
+}
 // src/lib/play/CharacterSheet.svelte
 function CharacterSheet($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -239,9 +371,10 @@ function CharacterSheet($$renderer, $$props) {
 		* The console's left column: one tab per Character, and the selected tab's full sheet. The
 		* selected tab is the acting Character; only Characters who can act are selectable. A pure view
 		* of the server's `PlaySheet`s. A level the DM awarded shows a Level up control when `onlevelup`
-		* is given.
+		* is given. With `onsavedetails`, the Player edits the Character's notes, personality and
+		* appearance (with the DM away too); the backstory stays read-only.
 		*/
-		let { sheets, acting, onselect = () => {}, onlevelup } = $$props;
+		let { sheets, acting, onselect = () => {}, onlevelup, onsavedetails } = $$props;
 		const shown = derived(() => sheets.find((s) => s.id === acting) ?? sheets[0]);
 		const signed = (n) => n >= 0 ? `+${n}` : `${n}`;
 		const DENOMINATIONS = [
@@ -375,7 +508,12 @@ function CharacterSheet($$renderer, $$props) {
 					$$renderer.push(`<li>${escape_html(i.name)}${escape_html(i.quantity > 1 ? ` × ${i.quantity}` : "")}${escape_html(i.equipped ? " (equipped)" : "")}</li>`);
 				}
 			} else $$renderer.push(`<!--[!--><li class="text-muted">Nothing carried</li>`);
-			$$renderer.push(`<!--]--></ul> <p role="group" aria-label="Coin" class="mt-1 flex justify-between"><span class="text-muted">Coin</span><span>${escape_html(coinText(shown().coin))}</span></p></section></div>`);
+			$$renderer.push(`<!--]--></ul> <p role="group" aria-label="Coin" class="mt-1 flex justify-between"><span class="text-muted">Coin</span><span>${escape_html(coinText(shown().coin))}</span></p></section> <!---->`);
+			CharacterDetails($$renderer, {
+				details: shown().details,
+				onsave: onsavedetails && ((details) => onsavedetails(shown().id, details))
+			});
+			$$renderer.push(`<!----></div>`);
 		} else $$renderer.push(`<!--[-1--><p class="p-3 text-sm text-muted">No Characters in the Party yet.</p>`);
 		$$renderer.push(`<!--]--></aside>`);
 	});
@@ -512,7 +650,7 @@ function FloorComposer($$renderer, $$props) {
 			} else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--> `);
 			if (away) {
-				$$renderer.push(`<!--[0--><div role="status" aria-label="DM away" class="flex flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1 text-sm"><span class="font-medium">The DM is away.</span> <span class="text-muted">Start a sitting to play on; your drafts wait here.</span> <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs">${escape_html(relaunch())}</code> `);
+				$$renderer.push(`<!--[0--><div role="status" aria-label="DM away" class="flex flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1 text-sm"><span class="font-medium">The DM is away.</span> <span class="text-muted">Start a Session to play on; your drafts wait here.</span> <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs">${escape_html(relaunch())}</code> `);
 				Button($$renderer, {
 					size: "sm",
 					variant: "secondary",
@@ -613,9 +751,6 @@ function actingCharacter(actors, picked, combat) {
 	if (turn) return actors.find((a) => a.id === turn.characterId) ?? null;
 	return actors.find((a) => a.id === picked) ?? actors[0] ?? null;
 }
-// src/lib/play/journal.ts
-/** The entries a Character holds: "What <Character> knows". */
-var knownBy = (journal, character) => journal.entries.filter((e) => e.holders.some((h) => h.id === character));
 // src/lib/play/PermissionCard.svelte
 function PermissionCard($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -739,7 +874,7 @@ function Timeline($$renderer, $$props) {
 			Alert($$renderer, {
 				variant: "warning",
 				children: ($$renderer) => {
-					$$renderer.push(`<!---->The DM left mid-turn. What was done stays done; the next sitting answers this turn after the
+					$$renderer.push(`<!---->The DM left mid-turn. What was done stays done; the next Session answers this turn after the
     recap.`);
 				},
 				$$slots: { default: true }
@@ -835,7 +970,7 @@ function _page($$renderer, $$props) {
 			try {
 				await change();
 			} catch (e) {
-				if (e instanceof FloorChangeError) problem = e.message;
+				if (e instanceof PlayRequestError) problem = e.message;
 				else throw e;
 			}
 		}
@@ -883,7 +1018,8 @@ function _page($$renderer, $$props) {
 			sheets: sheets(),
 			acting: acting()?.id ?? null,
 			onselect: (id) => picked = id,
-			onlevelup: archived() ? void 0 : (id, picks) => attempt(() => levelUp(data.campaign.id, id, picks))
+			onlevelup: archived() ? void 0 : (id, picks) => attempt(() => levelUp(data.campaign.id, id, picks)),
+			onsavedetails: archived() ? void 0 : (id, details) => saveDetails(data.campaign.id, id, details)
 		});
 		$$renderer.push(`<!----> <section aria-label="Story" class="flex min-h-0 flex-col gap-2">`);
 		Timeline($$renderer, {
@@ -955,7 +1091,7 @@ function _page($$renderer, $$props) {
 		$$renderer.push(`<!----> <section aria-labelledby="knows-heading" class="rounded-panel border border-border bg-surface p-3"><h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">What ${escape_html(acting()?.name ?? "the Party")} knows</h2> `);
 		Journal($$renderer, {
 			entries: acting() ? knownBy(journal.data, acting().id) : journal.data.entries,
-			holders: !acting()
+			actor: acting()?.id
 		});
 		$$renderer.push(`<!----></section></aside></main></div>`);
 	});

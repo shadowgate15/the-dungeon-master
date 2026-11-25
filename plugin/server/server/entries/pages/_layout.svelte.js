@@ -5,6 +5,7 @@ import { _ as resolveQueryValue, a as notifyManager, c as functionalUpdate, f as
 import { a as Subscribable, i as onlineManager, r as setQueryClientContext } from "../../chunks/context.js";
 import "../../chunks/forms.js";
 import { n as THEME_OPTIONS } from "../../chunks/theme.js";
+import { t as Button } from "../../chunks/Button.js";
 import { t as page } from "../../chunks/state.js";
 import "../../chunks/paths.js";
 // src/lib/assets/favicon.svg
@@ -1523,6 +1524,68 @@ function ThemeToggle($$renderer, $$props) {
 	}
 	$$renderer.push(`<!--]--></div></form>`);
 }
+// src/lib/server-control/StopServer.svelte
+function StopServer($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		let step = "idle";
+		let problem = null;
+		/** Stops the game server, as `dm stop` does; any live Session loses its server. */
+		async function stop() {
+			step = "stopping";
+			try {
+				if (!(await fetch("/api/server/stop", { method: "POST" })).ok) throw new Error();
+				step = "stopped";
+			} catch {
+				problem = "The server could not be stopped. Run dm stop in a terminal.";
+				step = "idle";
+			}
+		}
+		if (step === "stopped") $$renderer.push(`<!--[0--><p role="status" class="text-sm">The game server stopped. Run dm to start it again.</p>`);
+		else if (step === "idle") {
+			$$renderer.push(`<!--[1--><div class="flex items-center gap-2">`);
+			if (problem) $$renderer.push(`<!--[0--><p role="alert" class="text-sm text-danger">${escape_html(problem)}</p>`);
+			else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> `);
+			Button($$renderer, {
+				variant: "ghost",
+				size: "sm",
+				onclick: () => {
+					problem = null;
+					step = "confirming";
+				},
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->Stop server`);
+				},
+				$$slots: { default: true }
+			});
+			$$renderer.push(`<!----></div>`);
+		} else {
+			$$renderer.push(`<!--[-1--><div role="group" aria-label="Stop the game server" class="flex items-center gap-2 text-sm"><span>Stop the game server? A Session in play loses it.</span> `);
+			Button($$renderer, {
+				variant: "danger",
+				size: "sm",
+				disabled: step === "stopping",
+				onclick: stop,
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->Stop the server`);
+				},
+				$$slots: { default: true }
+			});
+			$$renderer.push(`<!----> `);
+			Button($$renderer, {
+				variant: "secondary",
+				size: "sm",
+				onclick: () => step = "idle",
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->Cancel`);
+				},
+				$$slots: { default: true }
+			});
+			$$renderer.push(`<!----></div>`);
+		}
+		$$renderer.push(`<!--]-->`);
+	});
+}
 // src/routes/+layout.svelte
 function _layout($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -1531,7 +1594,9 @@ function _layout($$renderer, $$props) {
 		head("12qhfyh", $$renderer, ($$renderer) => {
 			$$renderer.push(`<link rel="icon"${attr("href", favicon_default)}/>`);
 		});
-		$$renderer.push(`<header class="flex h-12 items-center justify-end gap-4 border-b border-border px-4"><a${attr("href", resolve("/credits"))} class="text-sm underline">Credits</a> `);
+		$$renderer.push(`<header class="flex h-12 items-center justify-end gap-4 border-b border-border px-4">`);
+		StopServer($$renderer, {});
+		$$renderer.push(`<!----> <a${attr("href", resolve("/credits"))} class="text-sm underline">Credits</a> `);
 		ThemeToggle($$renderer, {
 			theme: data.theme,
 			redirectTo: page.url.pathname + page.url.search

@@ -9,7 +9,7 @@ var TONES = [
 	"epic"
 ];
 /**
-* Story scope, not hours. Ordered: one-shot (a single sitting), short (a few sessions),
+* Story scope, not hours. Ordered: one-shot (a single Session), short (a few sessions),
 * medium (a season of play), long (an open-ended saga).
 */
 var LENGTHS = [

@@ -1,7 +1,7 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
 import { _ as attr, c as ensure_array_like, l as head, p as stringify, x as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/paths.js";
-import { f as Journal, i as createJournalQuery, o as createSessionHistoryQuery } from "../../../../../chunks/floor-client.js";
+import { i as createJournalQuery, o as createSessionHistoryQuery, p as Journal } from "../../../../../chunks/floor-client.js";
 import { t as Link } from "../../../../../chunks/Link.js";
 // src/lib/play/SessionHistory.svelte
 function SessionHistory($$renderer, $$props) {

@@ -1,19 +1,15 @@
 import { i as json } from "../../../../../../chunks/exports.js";
-import { c as CampaignNotFoundError, n as library, s as CampaignMissingError } from "../../../../../../chunks/campaign.js";
+import { n as library } from "../../../../../../chunks/campaign.js";
+import { n as withCampaign } from "../../../../../../chunks/http.js";
 // src/routes/api/campaigns/[id]/seed/+server.ts
 /** The Campaign Seed and the fields the DM set ("✎ DM"), or 404 `{ error }`. */
-var GET = ({ params }) => {
-	try {
-		const body = {
-			seed: library.seed(params.id),
-			dmFields: library.dmSeedFields(params.id)
-		};
-		return json(body);
-	} catch (e) {
-		if (e instanceof CampaignNotFoundError || e instanceof CampaignMissingError) return json({ error: e.message }, { status: 404 });
-		throw e;
-	}
-};
+var GET = ({ params }) => withCampaign(() => {
+	const body = {
+		seed: library.seed(params.id),
+		dmFields: library.dmSeedFields(params.id)
+	};
+	return json(body);
+});
 export { GET };
 
 //# sourceMappingURL=_server.ts.js.map

@@ -1,21 +1,17 @@
 import { i as json } from "../../../../../../../chunks/exports.js";
-import { E as DraftNotFoundError, c as CampaignNotFoundError, n as library, s as CampaignMissingError } from "../../../../../../../chunks/campaign.js";
+import { E as DraftNotFoundError, n as library } from "../../../../../../../chunks/campaign.js";
+import { n as withCampaign } from "../../../../../../../chunks/http.js";
 import { n as readJson, t as changeParty } from "../../../../../../../chunks/respond.js";
 // src/routes/api/campaigns/[id]/drafts/[draft]/+server.ts
 /** The stored draft with its version and the fields the DM set: 200, or 404 `{ error }`. */
-var GET = ({ params }) => {
-	try {
-		const { draft, version, dmFields } = library.party(params.id).draft(params.draft);
-		return json({
-			draft,
-			version,
-			dmFields
-		});
-	} catch (e) {
-		if (e instanceof CampaignNotFoundError || e instanceof CampaignMissingError || e instanceof DraftNotFoundError) return json({ error: e.message }, { status: 404 });
-		throw e;
-	}
-};
+var GET = ({ params }) => withCampaign(() => {
+	const { draft, version, dmFields } = library.party(params.id).draft(params.draft);
+	return json({
+		draft,
+		version,
+		dmFields
+	});
+}, [[DraftNotFoundError, 404]]);
 /** Writes the stored draft and the step it is on: 204, or 400/404 `{ error }`. */
 var PUT = async ({ params, request }) => {
 	const body = await readJson(request);

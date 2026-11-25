@@ -1,4 +1,4 @@
-import { $ as ABILITY_METHODS, A as returnedDraft, B as worldLink, C as combat, D as event, E as declaration, F as belief, G as background, H as NPC_STATUSES, I as entity, J as race, K as classTable, L as entityAlias, M as act, N as arc, O as floor, P as beat, Q as subrace, R as fact, S as characterSpell, St as DUNGEON_MASTER_HOME, T as conversationMessage, U as abilityScoreMethod, V as ENTITY_TYPES, W as alignment, X as spell, Y as skill, Z as subclass, _ as characterChoice, _t as sql, a as userStateDir, at as desc, b as characterItem, c as abilities_default, ct as gt, d as openDatabase, dt as isNotNull, et as BACKSTORY_MAX, f as activityLine, ft as isNull, g as character, gt as or, h as campaign, ht as ne, i as defaultCampaignRoot, it as asc, j as session, k as npcCombat, l as createRulesRepository, lt as gte, m as callPart, mt as lt, n as campaignDatabasePath, o as loadRulesDataset, ot as and, p as call, pt as like, q as equipment, r as canonicalFolder, rt as SOLO_PLAYER, s as skills_default, st as eq, t as seedRulesData, tt as CUSTOM_BACKGROUND_FEATURE_MAX, u as migrateDatabase, ut as inArray, v as characterDraft, vt as Column, w as combatant$1, x as characterSkill, xt as DUNGEON_MASTER_CAMPAIGNS, y as characterEquipment, yt as is, z as pageRevision } from "./seed.js";
+import { $ as subrace, A as returnedDraft, B as worldLink, C as combat, Ct as DUNGEON_MASTER_HOME, D as event, E as declaration, F as belief, G as alignment, H as NPC_STATUSES, I as entity, J as equipment, K as background, L as entityAlias, M as act, N as arc, O as floor, P as beat, Q as subclass, R as fact, S as characterSpell, St as DUNGEON_MASTER_CAMPAIGNS, T as conversationMessage, U as handleKind, V as ENTITY_TYPES, W as abilityScoreMethod, X as skill, Y as race, Z as spell, _ as characterChoice, _t as or, a as abilities_default, at as asc, b as characterItem, bt as is, c as defaultCampaignRoot, ct as eq, d as openDatabase, dt as inArray, et as ABILITY_METHODS, f as activityLine, ft as isNotNull, g as character, gt as ne, h as campaign, ht as lt, i as skills_default, it as SOLO_PLAYER, j as session, k as npcCombat, l as userStateDir, lt as gt, m as callPart, mt as like, n as createRulesRepository, nt as CUSTOM_BACKGROUND_FEATURE_MAX, o as campaignDatabasePath, ot as desc, p as call, pt as isNull, q as classTable, r as loadRulesDataset, s as canonicalFolder, st as and, t as seedRulesData, tt as BACKSTORY_MAX, u as migrateDatabase, ut as gte, v as characterDraft, vt as sql, w as combatant$1, x as characterSkill, y as characterEquipment, yt as Column, z as pageRevision } from "./seed.js";
 import { F as equipmentGroups, P as equipmentGroupKeys, R as resolveFeatures, c as WIZARD_RULES_KEYS, f as resolverDraft, g as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, p as classSpellOptions, t as buildSummary, u as emptyDraft } from "./summary.js";
 import { _ as prettifyError, c as literal, f as strictObject, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
@@ -239,6 +239,113 @@ function levelUpIssue(offer, picks) {
 	}
 	return null;
 }
+// src/lib/server/world/names.ts
+/** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
+var plain = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/** The slug part of a handle: `Mira Voss` → `mira-voss`. */
+function slug$1(name) {
+	return plain(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
+}
+/** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
+function normalizeName(name) {
+	return plain(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
+}
+function distance(a, b) {
+	let row = Array.from({ length: b.length + 1 }, (_, i) => i);
+	for (let i = 1; i <= a.length; i++) {
+		const next = [i];
+		for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+		row = next;
+	}
+	return row[b.length];
+}
+/**
+* Whether two names are close enough to be the same thing: equal once normalized, a typo apart,
+* or one's words all in the other ("Mira" and "Mira Voss").
+*/
+function isNearName(a, b) {
+	const x = normalizeName(a);
+	const y = normalizeName(b);
+	if (!x || !y) return false;
+	if (x === y) return true;
+	if (distance(x, y) <= Math.max(1, Math.floor(Math.max(x.length, y.length) / 6))) return true;
+	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+	const words = new Set(long.split(" "));
+	return short.split(" ").every((w) => words.has(w));
+}
+// src/lib/server/knowledge/holders.ts
+/**
+* Every Character with its handle, in the order they joined the Party: the one place handles are
+* worked out. A handle is `char:` and the name's slug, numbered (`char:wren-2`) when two
+* Characters share a name. Characters are not Entities, but Facts, Beliefs and tools link to them
+* by handle.
+*/
+function characterRefs(db) {
+	const rows = db.select().from(character).orderBy(sql`rowid`).all();
+	const taken = /* @__PURE__ */ new Set();
+	return rows.map((row) => {
+		const base = `char:${slug$1(row.name) || "character"}`;
+		let handle = base;
+		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
+		taken.add(handle);
+		return {
+			handle,
+			row
+		};
+	});
+}
+/** A Character's handle by its id. */
+function characterHandleOf(db, id) {
+	return characterRefs(db).find((c) => c.row.id === id)?.handle;
+}
+/** A Character reference as a Holder. */
+var asHolder = ({ handle, row }) => ({
+	id: row.id,
+	handle,
+	name: row.name,
+	player: row.controllingPlayer
+});
+/** Every Character in the Campaign as a Holder. */
+function characterHolders(db) {
+	return characterRefs(db).map(asHolder);
+}
+// src/lib/server/bridge/channels.ts
+/** Channel events per Campaign folder, delivered to the bridges listening for it. */
+function createChannels({ annotate } = {}) {
+	const listeners = /* @__PURE__ */ new Map();
+	const verdictListeners = /* @__PURE__ */ new Map();
+	const key = canonicalFolder;
+	return {
+		/** Starts listening for a Campaign's events; returns the unsubscribe. */
+		listen(folder, listener) {
+			const set = listeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
+			listeners.set(key(folder), set);
+			set.add(listener);
+			return () => set.delete(listener);
+		},
+		/** Whether any bridge is listening for the Campaign. */
+		listening(folder) {
+			return (listeners.get(key(folder))?.size ?? 0) > 0;
+		},
+		send(folder, event) {
+			const set = listeners.get(key(folder));
+			if (!set?.size) return;
+			const delivered = annotate ? annotate(folder, event) : event;
+			for (const listener of set) listener(delivered);
+		},
+		/** Starts listening for the verdicts the Player gives the Campaign's session; returns the unsubscribe. */
+		listenVerdicts(folder, listener) {
+			const set = verdictListeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
+			verdictListeners.set(key(folder), set);
+			set.add(listener);
+			return () => set.delete(listener);
+		},
+		/** Relays a permission verdict to the Campaign's session. */
+		sendVerdict(folder, verdict) {
+			for (const listener of verdictListeners.get(key(folder)) ?? []) listener(verdict);
+		}
+	};
+}
 // src/lib/play/clock.ts
 /**
 * The Campaign clock counts in-fiction minutes from the Campaign's start, which is day 1 at 08:00.
@@ -338,40 +445,6 @@ function creationTool(tool) {
 		mutates: "creation",
 		run: tool.run
 	};
-}
-// src/lib/server/world/names.ts
-/** Names: handle slugs and the near-duplicate test `establish` and link near-matches use. */
-var plain$1 = (s) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-/** The slug part of a handle: `Mira Voss` → `mira-voss`. */
-function slug$1(name) {
-	return plain$1(name).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unnamed";
-}
-/** A name reduced for comparison: lower case, letters and digits only, no leading "the". */
-function normalizeName(name) {
-	return plain$1(name).replace(/[^a-z0-9]+/g, " ").trim().replace(/^the /, "");
-}
-function distance(a, b) {
-	let row = Array.from({ length: b.length + 1 }, (_, i) => i);
-	for (let i = 1; i <= a.length; i++) {
-		const next = [i];
-		for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-		row = next;
-	}
-	return row[b.length];
-}
-/**
-* Whether two names are close enough to be the same thing: equal once normalized, a typo apart,
-* or one's words all in the other ("Mira" and "Mira Voss").
-*/
-function isNearName(a, b) {
-	const x = normalizeName(a);
-	const y = normalizeName(b);
-	if (!x || !y) return false;
-	if (x === y) return true;
-	if (distance(x, y) <= Math.max(1, Math.floor(Math.max(x.length, y.length) / 6))) return true;
-	const [short, long] = x.length <= y.length ? [x, y] : [y, x];
-	const words = new Set(long.split(" "));
-	return short.split(" ").every((w) => words.has(w));
 }
 // src/lib/server/story/arc.ts
 /** There is already a current Arc; a Campaign has at most one. */
@@ -654,38 +727,10 @@ function reviseArc(ctx, input) {
 		added
 	};
 }
-// src/lib/server/knowledge/holders.ts
-/**
-* Every Character in the Campaign with its readable handle, `char:` plus its name's slug. Two
-* Characters with the same slug are told apart by creation order (`char:wren-2`).
-*/
-function characterHolders(db) {
-	const taken = /* @__PURE__ */ new Set();
-	return db.select({
-		id: character.id,
-		name: character.name,
-		player: character.controllingPlayer
-	}).from(character).orderBy(asc(character.createdAt), asc(character.id)).all().map((c) => {
-		const base = `char:${slug$1(c.name) || "character"}`;
-		let handle = base;
-		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
-		taken.add(handle);
-		return {
-			...c,
-			handle
-		};
-	});
-}
-/**
-* The Characters present in the Scene. There is no Scene yet (#328 adds it and presence from
-* whereabouts), so until then every Character in the Party is present.
-*/
-function charactersInScene(db) {
-	return characterHolders(db);
-}
 // src/lib/server/world/links.ts
 /** `[[Name]]`, `[[alias]]` or `[[npc:handle]]`; text after a `|` is a label and ignored. */
 var LINK = /\[\[([^[\]]+?)\]\]/g;
+/** An Entity handle, such as `npc:mira-voss`. */
 var HANDLE = new RegExp(`^(${ENTITY_TYPES.join("|")}):[a-z0-9-]+$`);
 var target = (inner) => inner.split("|")[0].trim();
 /** The Entity a merged handle now lives in. */
@@ -1867,6 +1912,56 @@ function loadWizardRules() {
 	}
 	return cached;
 }
+/**
+* The name the Characters know an Entity by: the name on the latest current Belief a Character
+* holds about it, or null when none of them knows it. Every name the Player sees for an NPC or a
+* Place comes from here, never from the World layer (ADR 0007).
+*/
+function believedName(db, handle) {
+	return db.select({ name: belief.aboutName }).from(belief).where(and(eq(belief.about, handle), isNotNull(belief.holderCharacter), isNotNull(belief.aboutName), isNull(belief.replacedBy), isNull(belief.retiredAt))).orderBy(desc(belief.id)).get()?.name ?? null;
+}
+// src/lib/rules/armor-class.ts
+/**
+* A Character's AC from what it wears (SRD "Armor and Shields"): equipped body armor's base plus
+* the Dexterity modifier (all of it for light armor, at most 2 for medium, none for heavy), or the
+* unarmored AC without armor; +2 with an equipped shield; +1 from the Defense fighting style while
+* armored. Pure.
+*/
+function armorClass(equipment, input) {
+	const worn = input.equipped.flatMap((slug) => equipment.find((e) => e.slug === slug) ?? []);
+	const armor = worn.find((e) => e.armorCategory && e.armorCategory !== "Shield" && e.armorClassBase !== null);
+	const shield = worn.find((e) => e.armorCategory === "Shield");
+	let value = input.unarmored;
+	if (armor) {
+		const dex = !armor.armorClassDexBonus ? 0 : armor.armorClassMaxBonus === null ? input.dexModifier : Math.min(input.dexModifier, armor.armorClassMaxBonus);
+		value = armor.armorClassBase + dex + (input.defense ? 1 : 0);
+	}
+	if (shield) value += shield.armorClassBase ?? 2;
+	const note = [armor ? armor.name : "unarmored", ...shield ? [shield.name] : []].join(", ");
+	return {
+		value,
+		note
+	};
+}
+/** Whether an item can be equipped: armor, a shield or a weapon. */
+var equippable = (item) => item.armorCategory !== null || item.weaponCategory !== null;
+/** Whether an item is body armor (one suit at a time), as opposed to a shield or a weapon. */
+var isBodyArmor = (item) => item.armorCategory !== null && item.armorCategory !== "Shield";
+// src/lib/server/character/armor.ts
+/**
+* A Character's AC from its equipped armor and shield (see `armorClass`), or null while its
+* unarmored AC can't be derived yet.
+*/
+function characterAc(rules, detail, stats) {
+	if (stats.unarmoredAc.status !== "ok") return null;
+	const dex = stats.abilities.dex;
+	return armorClass(rules.equipment, {
+		equipped: detail.inventory.filter((i) => i.equipped).map((i) => i.item),
+		dexModifier: dex.status === "ok" ? dex.value.modifier : 0,
+		unarmored: stats.unarmoredAc.value.value,
+		defense: detail.choices.some((c) => c.optionSlug.endsWith("fighting-style-defense"))
+	});
+}
 // src/lib/server/play/scene.ts
 /** A move of the clock that would take it backwards. */
 var ClockBackwardsError = class extends Error {};
@@ -1886,25 +1981,6 @@ function advanceClock(db, to) {
 		from,
 		to
 	};
-}
-/**
-* Every Character with its handle, in the order they joined the Party. A handle is `char:` and the
-* name's slug, numbered (`char:wren-2`) when two Characters share a name. Characters are not
-* Entities, but Facts, Beliefs and tools link to them by handle.
-*/
-function characterRefs(db) {
-	const rows = db.select().from(character).orderBy(sql`rowid`).all();
-	const taken = /* @__PURE__ */ new Set();
-	return rows.map((row) => {
-		const base = `char:${slug$1(row.name)}`;
-		let handle = base;
-		for (let n = 2; taken.has(handle); n++) handle = `${base}-${n}`;
-		taken.add(handle);
-		return {
-			handle,
-			row
-		};
-	});
 }
 /** The Place the spotlight is on, or null before the DM first sets the Scene. */
 function scenePlace(db) {
@@ -1940,13 +2016,13 @@ var SpotlightRefusedError = class extends Error {};
 function playerScene(db) {
 	const { place, characters, elsewhere } = present(db);
 	const minute = currentMinute(db);
-	const placeName = (handle) => handle === null ? null : db.select({ name: entity.name }).from(entity).where(eq(entity.handle, handle)).get()?.name ?? null;
+	const placeName = (handle) => handle === null ? null : believedName(db, handle) ?? "an unfamiliar place";
 	return {
 		clock: {
 			minute,
 			...clockParts(minute)
 		},
-		place: place && { name: place.name },
+		place: place && { name: placeName(place.handle) },
 		present: characters.map((c) => ({
 			id: c.row.id,
 			name: c.row.name
@@ -2112,6 +2188,691 @@ function deathSaveCall(db, handle, at) {
 		sequence: null
 	}], at, "death_save");
 }
+// src/lib/server/play/concentration.ts
+/** The lowest DC a concentration save has. */
+var MIN_DC = 10;
+/** The DC to keep concentration after taking this much damage. */
+var concentrationDc = (damage) => Math.max(MIN_DC, Math.floor(damage / 2));
+/** Writes the caster's concentration link: a spell slug, or null to end it. */
+function setConcentration(db, who, spell) {
+	if (who.kind === "character") db.update(character).set({ concentration: spell }).where(eq(character.id, who.id)).run();
+	else if (who.kind === "npc") db.update(npcCombat).set({ concentration: spell }).where(eq(npcCombat.handle, who.handle)).run();
+	else {
+		const live = liveCombat(db);
+		if (!live) return;
+		db.update(combatant$1).set({ concentration: spell }).where(and(eq(combatant$1.combatId, live.id), eq(combatant$1.handle, who.handle))).run();
+	}
+}
+/** Starts concentrating on a spell; returns the spell it ended, if any. */
+function concentrate(db, who, spell) {
+	setConcentration(db, who, spell);
+	return who.concentration && who.concentration !== spell ? who.concentration : null;
+}
+/**
+* Damage to a concentrating caster: a Character gets a pending Constitution save Call; an NPC or
+* Creature rolls it now (`bonus` is its Con save) and loses the spell on a failure.
+*/
+function concentrationCheck(db, who, damage, { dice, at, bonus }) {
+	const spell = who.concentration;
+	if (!spell || damage <= 0) return {
+		notes: [],
+		calls: []
+	};
+	const dc = concentrationDc(damage);
+	if (who.kind === "character") {
+		const id = createPendingCall(db, [{
+			characterId: who.id,
+			player: who.player,
+			sequence: null,
+			save: "con",
+			dc,
+			reason: `To keep concentration on ${spell}`
+		}], at, "concentration");
+		return {
+			notes: [`${who.name} must make a Constitution save (DC ${dc}) to keep concentration on ${spell}: attach pending Call ${id} with narrate`],
+			calls: [id]
+		};
+	}
+	const d20 = dice.rollD20();
+	const total = d20.kept + bonus;
+	const kept = total >= dc;
+	if (!kept) setConcentration(db, who, null);
+	const sign = bonus >= 0 ? `+ ${bonus}` : `- ${-bonus}`;
+	return {
+		notes: [`${who.name} Constitution save to keep concentration: d20 ${d20.kept} ${sign} = ${total} vs DC ${dc} → ${kept ? "success" : `failure; concentration on ${spell} ends`}`],
+		calls: []
+	};
+}
+// src/lib/server/play/combatants.ts
+/**
+* The SRD stat block a ref names, with or without its `monster:` prefix. The one lookup NPCs,
+* Creatures and start_combat share, refused alike when the SRD has no such stat block.
+*/
+function statBlockFor(db, block) {
+	const ref = block.startsWith("monster:") ? block : `monster:${block}`;
+	const found = createRulesRepository(db).entry(ref);
+	if (!found || found.kind !== "monster") throw new ToolError("unknown_stat_block", `No SRD stat block is ${ref}`, "Find the monster: slug with lookup and call again");
+	return found.entry;
+}
+var ok = (s) => s.status === "ok" ? s.value : null;
+/** A Character's derived stats, from its stored choices and what it carries now. */
+function characterStats(db, id) {
+	const detail = createCharacterService(db).get(id);
+	const rules = loadWizardRules();
+	const { stats, resolved } = buildSummary(rules, {
+		...detailToSummaryData(detail),
+		equipment: detail.inventory
+	});
+	return {
+		detail,
+		stats,
+		features: resolved.features.map((f) => ({
+			slug: f.slug,
+			name: f.name
+		})),
+		ac: characterAc(rules, detail, stats)?.value ?? 10
+	};
+}
+function characterCombatant(db, ref) {
+	const key = ref.trim().toLowerCase();
+	const holder = characterHolders(db).find((c) => c.handle === key || c.id === ref || c.name.toLowerCase() === key);
+	if (!holder) return null;
+	const { detail, stats, features, ac } = characterStats(db, holder.id);
+	return {
+		kind: "character",
+		handle: holder.handle,
+		name: holder.name,
+		id: holder.id,
+		player: holder.player,
+		detail,
+		stats,
+		features,
+		ac,
+		hp: detail.currentHp,
+		maxHp: ok(stats.hitPoints) ?? detail.currentHp,
+		conditions: detail.conditions,
+		concentration: detail.concentration
+	};
+}
+/** The stat block's AC: its first listed armor class. */
+var statBlockAc = (m) => m.armorClass[0]?.value ?? 10;
+/**
+* An NPC's HP and conditions, kept apart from its World page. The first time an NPC is drawn into
+* the rules it starts at its stat block's full HP.
+*/
+function npcCombatState(db, handle, block) {
+	return db.select().from(npcCombat).where(eq(npcCombat.handle, handle)).get() ?? db.insert(npcCombat).values({
+		handle,
+		hp: block.hitPoints,
+		maxHp: block.hitPoints,
+		conditions: []
+	}).returning().get();
+}
+function npcCombatant(db, handle) {
+	const npc = db.select().from(entity).where(eq(entity.handle, handle)).get();
+	if (!npc || npc.type !== "npc" || npc.retiredAt !== null) return null;
+	const ref = npc.fields.stat_block;
+	if (typeof ref !== "string") throw new ToolError("no_stat_block", `${npc.name} (${handle}) has no stat block`, `Give it one with set_field(${handle}, stat_block, monster:<slug>) — find the slug with lookup — and call again`);
+	const statBlock = statBlockFor(db, ref);
+	const state = npcCombatState(db, handle, statBlock);
+	return {
+		kind: "npc",
+		handle,
+		name: npc.name,
+		statBlock,
+		ac: statBlockAc(statBlock),
+		hp: state.hp,
+		maxHp: state.maxHp,
+		conditions: state.conditions,
+		concentration: state.concentration
+	};
+}
+/** A Creature in the live Combat; gone once the Combat ends. */
+function creatureCombatant(db, handle) {
+	const row = liveCreature(db, handle);
+	if (!row) return null;
+	const statBlock = statBlockFor(db, row.statBlock);
+	return {
+		kind: "creature",
+		handle,
+		name: row.name,
+		statBlock,
+		ac: statBlockAc(statBlock),
+		hp: row.hp,
+		maxHp: row.maxHp,
+		conditions: row.conditions,
+		concentration: row.concentration
+	};
+}
+var deadRefusal = (who, status, code) => new ToolError(code, `${who.name} is ${status}; healing can't bring them back`, "Only magic that restores life can; narrate it and leave the HP alone");
+var CHARACTER = {
+	find: (db, ref) => characterCombatant(db, ref),
+	saveBonus: (who, ability) => ok(who.stats.savingThrows[ability])?.modifier ?? 0,
+	canAct: (who) => canAct(who.detail),
+	damageFactor: () => 1,
+	takeDamage(db, who, dealt, { crit }) {
+		const absorbed = Math.min(who.detail.tempHp, dealt);
+		const taken = dealt - absorbed;
+		const hp = Math.max(0, who.hp - taken);
+		db.update(character).set({
+			currentHp: hp,
+			tempHp: who.detail.tempHp - absorbed
+		}).where(eq(character.id, who.id)).run();
+		return {
+			hp,
+			notes: damagedCharacter(db, who.detail, {
+				before: who.hp,
+				taken,
+				maxHp: who.maxHp,
+				crit
+			})
+		};
+	},
+	assertHealable(_db, who) {
+		if (who.detail.status !== "alive") throw deadRefusal(who, who.detail.status, "character_dead");
+	},
+	restore(db, who, hp) {
+		db.update(character).set({ currentHp: hp }).where(eq(character.id, who.id)).run();
+		healedCharacter(db, who.detail, hp);
+	},
+	isOut: (_db, who) => who.detail.status !== "alive",
+	write(db, who, { hp, conditions, concentration }) {
+		db.update(character).set({
+			...hp !== void 0 ? { currentHp: hp } : {},
+			...conditions !== void 0 ? { conditions } : {},
+			...concentration !== void 0 ? { concentration } : {}
+		}).where(eq(character.id, who.id)).run();
+	}
+};
+/** The rules NPCs and Creatures share: a stat block, and their own HP and conditions. */
+function foeRules(find, write, { dead, die }) {
+	const rules = {
+		find,
+		write,
+		saveBonus(who, ability) {
+			const proficient = who.statBlock.proficiencies.find((p) => p.proficiency === `saving-throw-${ability}`);
+			if (proficient) return proficient.value;
+			const score = who.statBlock.abilityScores[ability] ?? 10;
+			return Math.floor((score - 10) / 2);
+		},
+		canAct: () => true,
+		damageFactor(who, damageType) {
+			if (!damageType) return 1;
+			const has = (list) => list.some((entry) => entry.toLowerCase().split(/[,;]\s*|\s+and\s+/).includes(damageType));
+			if (has(who.statBlock.damageImmunities)) return 0;
+			if (has(who.statBlock.damageResistances)) return .5;
+			if (has(who.statBlock.damageVulnerabilities)) return 2;
+			return 1;
+		},
+		takeDamage(db, who, dealt, { knockOut }) {
+			const hp = Math.max(0, who.hp - dealt);
+			write(db, who, { hp });
+			return {
+				hp,
+				notes: who.hp > 0 && hp === 0 ? down(db, who, knockOut) : []
+			};
+		},
+		assertHealable(db, who) {
+			if (rules.isOut(db, who)) throw deadRefusal(who, "dead", "npc_dead");
+		},
+		restore(db, who, hp) {
+			write(db, who, {
+				hp,
+				conditions: hp > 0 ? who.conditions.filter((c) => c !== "unconscious") : who.conditions
+			});
+		},
+		isOut: (db, who) => dead(db, who) || who.hp === 0 && !who.conditions.includes("unconscious")
+	};
+	/** At 0 HP: knocked out (Unconscious) when the DM rules it, else dead. */
+	function down(db, who, knockOut) {
+		const ended = who.concentration ? [`concentration on ${who.concentration} ends`] : [];
+		if (who.concentration) write(db, who, { concentration: null });
+		if (knockOut) {
+			if (!who.conditions.includes("unconscious")) write(db, who, { conditions: [...who.conditions, "unconscious"] });
+			return [[`${who.name} is knocked out`, ...ended].join("; ")];
+		}
+		die(db, who);
+		return [[`${who.name} dies`, ...ended].join("; ")];
+	}
+	return rules;
+}
+var KINDS = {
+	character: CHARACTER,
+	npc: foeRules((db, ref) => npcCombatant(db, ref), (db, who, set) => {
+		db.update(npcCombat).set(set).where(eq(npcCombat.handle, who.handle)).run();
+	}, {
+		dead: (db, who) => db.select().from(entity).where(eq(entity.handle, who.handle)).get()?.fields.status === "dead",
+		die(db, who) {
+			const npc = db.select().from(entity).where(eq(entity.handle, who.handle)).get();
+			db.update(entity).set({
+				fields: {
+					...npc.fields,
+					status: "dead"
+				},
+				version: npc.version + 1
+			}).where(eq(entity.handle, who.handle)).run();
+		}
+	}),
+	creature: foeRules((db, ref) => creatureCombatant(db, ref), (db, who, set) => {
+		const row = liveCreature(db, who.handle);
+		db.update(combatant$1).set(set).where(eq(combatant$1.id, row.id)).run();
+	}, {
+		dead: () => false,
+		die: () => {}
+	})
+};
+/** The rules for a combatant's kind. */
+var rulesOf = (who) => KINDS[who.kind];
+/**
+* The combatant a tool names: a Character by handle (`char:wren`) or name, an NPC by handle, or a
+* Creature in the live Combat (`creature:goblin-2`). The one lookup every action tool and primitive
+* goes through.
+*/
+function combatant(db, ref) {
+	const kind = handleKind(ref);
+	const found = (kind === "npc" || kind === "creature" ? KINDS[kind] : CHARACTER).find(db, ref);
+	if (!found) throw ToolError.unknownHandle(ref);
+	return found;
+}
+/** A combatant's saving throw bonus: a Character's derived save, a stat block's proficiency or ability. */
+var saveBonus = (who, ability) => rulesOf(who).saveBonus(who, ability);
+/** A Character who acts must be able to. */
+function mustAct(who) {
+	if (!rulesOf(who).canAct(who)) throw new ToolError("character_cannot_act", `${who.name} can't act`, "Choose a Character who can act");
+}
+/**
+* The one way HP goes down. Temporary HP absorbs damage first; HP never drops below 0. Stat block
+* resistances apply. A Character at 0 HP falls Unconscious (or dies outright) and takes Death save
+* failures from more damage; an NPC or Creature dies at 0 HP unless knocked out. A concentrating
+* target still standing saves to keep its spell.
+*/
+function applyDamage(db, who, amount, damageType, { crit = false, knockOut = false, dice, at = Date.now() } = {}) {
+	const rules = rulesOf(who);
+	const dealt = Math.floor(amount * rules.damageFactor(who, damageType));
+	const { hp, notes } = rules.takeDamage(db, who, dealt, {
+		crit,
+		knockOut
+	});
+	const save = dice && hp > 0 ? concentrationCheck(db, who, dealt, {
+		dice,
+		at,
+		bonus: rules.saveBonus(who, "con")
+	}) : {
+		notes: [],
+		calls: []
+	};
+	return {
+		dealt,
+		hp,
+		max: who.maxHp,
+		notes: [...notes, ...save.notes],
+		calls: save.calls
+	};
+}
+/** Restores HP, never above the maximum. A Character at 0 HP wakes; the dead stay dead. */
+function applyHealing(db, who, amount) {
+	const rules = rulesOf(who);
+	rules.assertHealable(db, who);
+	const hp = Math.min(who.maxHp, who.hp + amount);
+	rules.restore(db, who, hp);
+	return {
+		dealt: hp - who.hp,
+		hp,
+		max: who.maxHp,
+		notes: [],
+		calls: []
+	};
+}
+/**
+* Whether a combatant is out of the Combat for good: a dead Character, or an NPC or Creature that
+* is dead or at 0 HP without being knocked out. A Character at 0 HP still rolls Death saves.
+*/
+var isOut = (db, who) => rulesOf(who).isOut(db, who);
+/** Replaces a combatant's conditions. */
+function setConditions(db, who, conditions) {
+	rulesOf(who).write(db, who, { conditions });
+}
+/** Conditions that leave a creature incapacitated, which ends its concentration (SRD). */
+var INCAPACITATING = /* @__PURE__ */ new Set([
+	"incapacitated",
+	"paralyzed",
+	"petrified",
+	"stunned",
+	"unconscious"
+]);
+/** Whether a condition leaves its bearer incapacitated. */
+var incapacitates = (condition) => INCAPACITATING.has(condition);
+// src/lib/server/play/combat.ts
+/** Seconds in a Combat round (SRD). */
+var ROUND_SECONDS = 6;
+var FRESH = {
+	action: false,
+	bonusAction: false,
+	reaction: false
+};
+var abilityMod = (score) => Math.floor((score - 10) / 2);
+/** The live Combat, or null. */
+function liveCombat(db) {
+	return db.select().from(combat).where(isNull(combat.endedAt)).get() ?? null;
+}
+/** The live Combat, or `no_combat`. */
+function requireCombat(db) {
+	const live = liveCombat(db);
+	if (!live) throw new ToolError("no_combat", "No Combat is live", "Start one with start_combat");
+	return live;
+}
+/** Refuses while a Combat is live. */
+function refuseDuringCombat(db, what) {
+	if (liveCombat(db)) throw new ToolError("combat_live", `A Combat is live: ${what} waits until it ends`, "Finish the fight and call end_combat first");
+}
+/** Every combatant of a Combat, in the order they joined. */
+function combatantsOf(db, combatId) {
+	return db.select().from(combatant$1).where(eq(combatant$1.combatId, combatId)).orderBy(asc(combatant$1.joined)).all();
+}
+/**
+* The initiative order: everyone with initiative, highest first; ties go to the higher Dexterity,
+* then to whoever joined first. A Character still to roll isn't in it yet.
+*/
+function initiativeOrder(db, combatId) {
+	return combatantsOf(db, combatId).filter((c) => c.initiative !== null).sort((a, b) => b.initiative - a.initiative || b.dex - a.dex || a.joined - b.joined);
+}
+/** The combatants still to roll initiative (Characters whose Call isn't rolled yet). */
+function waitingOnInitiative(db, combatId) {
+	return combatantsOf(db, combatId).filter((c) => c.initiative === null);
+}
+/** A Creature in the live Combat by handle, or null. */
+function liveCreature(db, handle) {
+	const live = liveCombat(db);
+	if (!live) return null;
+	return db.select().from(combatant$1).where(and(eq(combatant$1.combatId, live.id), eq(combatant$1.handle, handle), eq(combatant$1.kind, "creature"))).get() ?? null;
+}
+var statBlockDex = (m) => m.abilityScores.dex ?? 10;
+function joining(db, combatId, entries) {
+	const existing = combatantsOf(db, combatId);
+	const taken = new Set(existing.map((c) => c.handle));
+	const out = [];
+	for (const entry of entries) {
+		const spec = typeof entry === "string" && entry.startsWith("monster:") ? { monster: entry } : entry;
+		if (typeof spec !== "string") {
+			const statBlock = statBlockFor(db, spec.monster);
+			for (let i = 0; i < (spec.count ?? 1); i++) {
+				let n = 1;
+				while (taken.has(`creature:${statBlock.slug}-${n}`)) n++;
+				const handle = `creature:${statBlock.slug}-${n}`;
+				taken.add(handle);
+				out.push({ row: {
+					kind: "creature",
+					handle,
+					name: `${statBlock.name} ${n}`,
+					dex: statBlockDex(statBlock),
+					statBlock: `monster:${statBlock.slug}`,
+					hp: statBlock.hitPoints,
+					maxHp: statBlock.hitPoints
+				} });
+			}
+			continue;
+		}
+		const who = combatant(db, spec);
+		if (taken.has(who.handle)) throw ToolError.invalidInput("start_combat", `${who.name} (${who.handle}) is already fighting`);
+		taken.add(who.handle);
+		const dex = who.kind === "character" ? who.stats.abilities.dex.status === "ok" ? who.stats.abilities.dex.value.score : 10 : statBlockDex(who.statBlock);
+		out.push({
+			row: {
+				kind: who.kind,
+				handle: who.handle,
+				name: who.name,
+				dex
+			},
+			who
+		});
+	}
+	return out;
+}
+/**
+* Adds combatants to a Combat. NPCs and Creatures roll initiative now, in code; Characters get
+* one pending initiative Call between them, for the closing narrate to attach.
+*/
+function join(db, dice, combatId, entries, { surprised = [], at }) {
+	const adding = joining(db, combatId, entries);
+	const unknown = surprised.filter((h) => !adding.some((a) => a.row.handle === h));
+	if (unknown.length) throw ToolError.invalidInput("start_combat", `Surprised must name combatants in this fight: ${unknown.join(", ")}`);
+	let joined = combatantsOf(db, combatId).length;
+	const rolls = [];
+	const rolled = [];
+	const parts = [];
+	for (const { row, who } of adding) {
+		let initiative = null;
+		if (row.kind === "character" && who?.kind === "character") parts.push({
+			characterId: who.id,
+			player: who.player,
+			sequence: null,
+			reason: null
+		});
+		else {
+			const modifier = abilityMod(row.dex);
+			const d20 = dice.rollD20();
+			initiative = d20.kept + modifier;
+			const sign = modifier >= 0 ? `+ ${modifier}` : `- ${-modifier}`;
+			rolled.push(`${row.name} initiative: d20 ${d20.kept} ${sign} = ${initiative}`);
+			rolls.push({
+				characterName: row.name,
+				characterHandle: row.handle,
+				what: "Initiative",
+				dice: d20.dice,
+				modifier,
+				total: initiative,
+				outcome: null,
+				mode: "normal",
+				reason: null,
+				target: null
+			});
+		}
+		db.insert(combatant$1).values({
+			...row,
+			combatId,
+			joined: ++joined,
+			initiative,
+			surprised: surprised.includes(row.handle)
+		}).run();
+	}
+	const pendingCall = parts.length ? createPendingCall(db, parts, at, "initiative") : null;
+	beginIfReady(db, combatId);
+	return {
+		creatures: adding.filter((a) => a.row.kind === "creature").map((a) => a.row.handle),
+		rolls,
+		rolled,
+		pendingCall
+	};
+}
+/** Starts a Combat. Refused while one is live. */
+function startCombat(db, dice, entries, { surprised, at }) {
+	if (liveCombat(db)) throw new ToolError("combat_live", "A Combat is already live", "Add late arrivals with add_combatant, or end it with end_combat first");
+	const { id } = db.insert(combat).values({ startedAt: currentMinute(db) }).returning({ id: combat.id }).get();
+	return join(db, dice, id, entries, {
+		surprised,
+		at
+	});
+}
+/** Adds a late arrival to the live Combat. */
+function addCombatants(db, dice, entries, at) {
+	return join(db, dice, requireCombat(db).id, entries, { at });
+}
+/**
+* Whether a combatant acts this round: a surprised one loses its first turn, and the dead (or a
+* foe at 0 HP that wasn't knocked out) lose every turn.
+*/
+function acts(db, c, round) {
+	if (round === 1 && c.surprised) return false;
+	return !isOut(db, combatant(db, c.handle));
+}
+/**
+* Moves the turn pointer to the next combatant who acts, wrapping into the next round, and resets
+* their per-turn resources. From no current turn, starts from the top of round `round`.
+*/
+function advance(db, live) {
+	const order = initiativeOrder(db, live.id);
+	let round = live.round;
+	let index = live.current === null ? -1 : order.findIndex((c) => c.id === live.current);
+	let next = null;
+	for (let step = 0; step < order.length * 2 + 1 && order.length; step++) {
+		index++;
+		if (index >= order.length) {
+			index = 0;
+			round++;
+		}
+		if (acts(db, order[index], round)) {
+			next = order[index];
+			break;
+		}
+	}
+	db.update(combat).set({
+		round,
+		current: next?.id ?? null
+	}).where(eq(combat.id, live.id)).run();
+	if (next) db.update(combatant$1).set({ used: FRESH }).where(eq(combatant$1.id, next.id)).run();
+	return {
+		round,
+		current: next
+	};
+}
+/** Once every combatant has initiative, round 1 begins with the first who acts. */
+function beginIfReady(db, combatId) {
+	const live = db.select().from(combat).where(eq(combat.id, combatId)).get();
+	if (live.round !== 0 || live.endedAt !== null) return;
+	if (combatantsOf(db, combatId).some((c) => c.initiative === null)) return;
+	advance(db, {
+		...live,
+		round: 1,
+		current: null
+	});
+}
+/**
+* Records a Character's initiative roll from the Party's Call. Late arrivals slot into the order;
+* the last roll at the start of a Combat begins round 1.
+*/
+function recordInitiative(db, characterHandle, total) {
+	const live = liveCombat(db);
+	if (!live) return;
+	db.update(combatant$1).set({ initiative: total }).where(and(eq(combatant$1.combatId, live.id), eq(combatant$1.handle, characterHandle))).run();
+	beginIfReady(db, live.id);
+}
+/** Advances to the next turn. Refused until every combatant has initiative. */
+function nextTurn(db) {
+	const live = requireCombat(db);
+	if (live.round === 0) throw new ToolError("initiative_pending", "The order is not known yet: some Characters have not rolled initiative", "Attach the initiative Call with narrate and wait for its call_result");
+	return advance(db, live);
+}
+var RESOURCE_NAMES = {
+	action: "an action",
+	bonusAction: "a bonus action",
+	reaction: "a reaction"
+};
+/**
+* Marks a per-turn resource spent by a combatant in the live Combat. Returns a reminder when it was
+* already spent this turn, never a refusal; null outside a Combat or the first time.
+*/
+function spendTurnResource(db, handle, name, resource) {
+	const live = liveCombat(db);
+	if (!live) return null;
+	const row = db.select().from(combatant$1).where(and(eq(combatant$1.combatId, live.id), eq(combatant$1.handle, handle))).get();
+	if (!row) return null;
+	if (row.used[resource]) return `${name} has already used ${RESOURCE_NAMES[resource]} this turn (a reminder: go on if the fiction allows it)`;
+	db.update(combatant$1).set({ used: {
+		...row.used,
+		[resource]: true
+	} }).where(eq(combatant$1.id, row.id)).run();
+	return null;
+}
+/** The DM's one-line order: `Order: Wren 20, Goblin 2 17. Round 1: Wren (char:wren) acts.` */
+function orderText(db) {
+	const live = liveCombat(db);
+	if (!live) return "No Combat is live.";
+	const order = initiativeOrder(db, live.id);
+	const waiting = waitingOnInitiative(db, live.id);
+	const current = order.find((c) => c.id === live.current);
+	return [
+		`Order: ${order.map((c) => `${c.name} ${c.initiative}`).join(", ") || "none yet"}.`,
+		waiting.length ? `Waiting on initiative: ${waiting.map((c) => c.name).join(", ")}.` : null,
+		current ? `Round ${live.round}: ${current.name} (${current.handle}) acts.` : null
+	].filter(Boolean).join(" ");
+}
+/** The live Combat as the DM reads it: round, current turn and the order with Creatures' state. */
+function combatState(db) {
+	const live = requireCombat(db);
+	const current = initiativeOrder(db, live.id).find((c) => c.id === live.current) ?? null;
+	return {
+		round: live.round,
+		turn: current && {
+			handle: current.handle,
+			name: current.name,
+			used: current.used
+		},
+		order: orderText(db)
+	};
+}
+/**
+* Ends the live Combat: its rounds go onto the clock, rounded up to a whole minute, Creatures
+* vanish, and any initiative Call still pending is cancelled.
+*/
+function endCombat(db, at) {
+	const live = requireCombat(db);
+	const rounds = live.round;
+	const minutes = Math.ceil(rounds * ROUND_SECONDS / 60);
+	const clock = advanceClock(db, currentMinute(db) + minutes);
+	const creatures = combatantsOf(db, live.id).filter((c) => c.kind === "creature");
+	db.update(call).set({
+		state: "cancelled",
+		closedAt: at
+	}).where(and(eq(call.kind, "initiative"), inArray(call.state, ["pending", "open"]))).run();
+	db.delete(combatant$1).where(eq(combatant$1.combatId, live.id)).run();
+	db.update(combat).set({
+		endedAt: at,
+		current: null
+	}).where(eq(combat.id, live.id)).run();
+	return {
+		rounds,
+		minutes,
+		clock,
+		gone: creatures.map((c) => ({
+			handle: c.handle,
+			statBlock: c.statBlock,
+			hp: c.hp,
+			maxHp: c.maxHp
+		}))
+	};
+}
+/** A Creature's HP as the Player reads it. */
+var stateOf = (c) => c.kind === "creature" ? hpState(c.hp, c.maxHp) : null;
+/**
+* The live Combat as the Player's rail shows it: the order with the current turn marked; enemy HP
+* only as a state, never a number, and no handles. Null when no Combat is live.
+*/
+function playerCombat(db, characterIds, npcState) {
+	const live = liveCombat(db);
+	if (!live) return null;
+	const order = initiativeOrder(db, live.id);
+	const waiting = waitingOnInitiative(db, live.id);
+	const shown = (c) => c.kind === "npc" ? believedName(db, c.handle) ?? "a stranger" : c.name;
+	return {
+		round: live.round,
+		order: order.map((c, i) => ({
+			key: `${i}`,
+			name: shown(c),
+			kind: c.kind,
+			characterId: characterIds.get(c.handle) ?? null,
+			initiative: c.initiative,
+			current: c.id === live.current,
+			state: c.kind === "npc" ? npcState(c.handle) : stateOf(c)
+		})),
+		waiting: waiting.map(shown)
+	};
+}
+/** The Character whose turn it is in the live Combat, by handle; null outside a Character's turn. */
+function currentTurn(db) {
+	const live = liveCombat(db);
+	if (!live?.current) return null;
+	return db.select().from(combatant$1).where(eq(combatant$1.id, live.current)).get() ?? null;
+}
 // src/lib/server/play/log.ts
 /**
 * The Campaign's current stamp: the open Session (null offline) and the Campaign clock's minute.
@@ -2124,7 +2885,7 @@ function currentStamp(db) {
 }
 /**
 * The current Session: the newest one still open, or undefined offline. An older open one is a
-* sitting that stopped without End Session, waiting for its catch-up close.
+* Session that stopped without End Session, waiting for its catch-up close.
 */
 function currentSession(db) {
 	return db.select().from(session).where(isNull(session.closedAt)).orderBy(desc(session.number)).get();
@@ -2208,12 +2969,13 @@ var SHOWN = /* @__PURE__ */ new Set([
 	"answer"
 ]);
 /** One roll in the dice log: a Player's click on a Call, or one of an NPC's rolls. */
-function rollEntry(id, data) {
+function rollEntry(id, data, shown) {
+	const target = data.target;
 	const mode = data.mode === "advantage" || data.mode === "disadvantage" ? data.mode : "normal";
 	return {
 		type: "roll",
 		id,
-		character: String(data.characterName),
+		character: shown(data.characterHandle, String(data.characterName)),
 		what: String(data.what),
 		dice: data.dice.map(Number),
 		modifier: Number(data.modifier),
@@ -2221,17 +2983,20 @@ function rollEntry(id, data) {
 		outcome: "outcome" in data ? data.outcome : data.success ? "success" : "failure",
 		mode,
 		reason: mode === "normal" ? null : String(data.reason ?? ""),
-		target: data.target ?? null
+		target: target ? {
+			name: shown(target.handle, target.name),
+			state: target.state
+		} : null
 	};
 }
 /** One logged Event as timeline entries: none, one, or one per roll of an NPC's `rolls`. */
-function entriesFor(e) {
-	if (e.kind === "rolls" && !e.dmOnly) return (e.data?.rolls ?? []).map((r, i) => rollEntry(`e${e.id}-${i}`, r));
-	const entry = entryFor(e);
+function entriesFor(e, shown) {
+	if (e.kind === "rolls" && !e.dmOnly) return (e.data?.rolls ?? []).map((r, i) => rollEntry(`e${e.id}-${i}`, r, shown));
+	const entry = entryFor(e, shown);
 	return entry ? [entry] : [];
 }
 /** One logged Event as a timeline entry, or null for one the timeline does not show. */
-function entryFor(e) {
+function entryFor(e, shown) {
 	if (e.dmOnly || !SHOWN.has(e.kind)) return null;
 	const data = e.data ?? {};
 	const id = `e${e.id}`;
@@ -2247,7 +3012,7 @@ function entryFor(e) {
 		id,
 		text: String(data.text)
 	};
-	if (e.kind === "roll") return rollEntry(id, data);
+	if (e.kind === "roll") return rollEntry(id, data, shown);
 	if (e.kind === "answer") return {
 		type: "answer",
 		id,
@@ -2270,6 +3035,7 @@ function entryFor(e) {
 */
 function timeline(db) {
 	const lines = db.select().from(activityLine).orderBy(asc(activityLine.id)).all();
+	const shown = (handle, name) => typeof handle === "string" && handleKind(handle) === "npc" ? believedName(db, handle) ?? "a stranger" : name;
 	const entries = [];
 	let next = 0;
 	const flushUntil = (eventId) => {
@@ -2284,7 +3050,7 @@ function timeline(db) {
 	};
 	for (const e of db.select().from(event).orderBy(asc(event.id)).all()) {
 		flushUntil(e.id);
-		entries.push(...entriesFor(e));
+		entries.push(...entriesFor(e, shown));
 	}
 	flushUntil(Infinity);
 	return {
@@ -2292,325 +3058,6 @@ function timeline(db) {
 		awaitingSince: awaitingNarrationSince(db),
 		call: openCallView(db)
 	};
-}
-// src/lib/rules/armor-class.ts
-/**
-* A Character's AC from what it wears (SRD "Armor and Shields"): equipped body armor's base plus
-* the Dexterity modifier (all of it for light armor, at most 2 for medium, none for heavy), or the
-* unarmored AC without armor; +2 with an equipped shield; +1 from the Defense fighting style while
-* armored. Pure.
-*/
-function armorClass(equipment, input) {
-	const worn = input.equipped.flatMap((slug) => equipment.find((e) => e.slug === slug) ?? []);
-	const armor = worn.find((e) => e.armorCategory && e.armorCategory !== "Shield" && e.armorClassBase !== null);
-	const shield = worn.find((e) => e.armorCategory === "Shield");
-	let value = input.unarmored;
-	if (armor) {
-		const dex = !armor.armorClassDexBonus ? 0 : armor.armorClassMaxBonus === null ? input.dexModifier : Math.min(input.dexModifier, armor.armorClassMaxBonus);
-		value = armor.armorClassBase + dex + (input.defense ? 1 : 0);
-	}
-	if (shield) value += shield.armorClassBase ?? 2;
-	const note = [armor ? armor.name : "unarmored", ...shield ? [shield.name] : []].join(", ");
-	return {
-		value,
-		note
-	};
-}
-/** Whether an item can be equipped: armor, a shield or a weapon. */
-var equippable = (item) => item.armorCategory !== null || item.weaponCategory !== null;
-/** Whether an item is body armor (one suit at a time), as opposed to a shield or a weapon. */
-var isBodyArmor = (item) => item.armorCategory !== null && item.armorCategory !== "Shield";
-// src/lib/server/character/armor.ts
-/**
-* A Character's AC from its equipped armor and shield (see `armorClass`), or null while its
-* unarmored AC can't be derived yet.
-*/
-function characterAc(rules, detail, stats) {
-	if (stats.unarmoredAc.status !== "ok") return null;
-	const dex = stats.abilities.dex;
-	return armorClass(rules.equipment, {
-		equipped: detail.inventory.filter((i) => i.equipped).map((i) => i.item),
-		dexModifier: dex.status === "ok" ? dex.value.modifier : 0,
-		unarmored: stats.unarmoredAc.value.value,
-		defense: detail.choices.some((c) => c.optionSlug.endsWith("fighting-style-defense"))
-	});
-}
-// src/lib/server/play/concentration.ts
-/** The lowest DC a concentration save has. */
-var MIN_DC = 10;
-/** The DC to keep concentration after taking this much damage. */
-var concentrationDc = (damage) => Math.max(MIN_DC, Math.floor(damage / 2));
-/** Writes the caster's concentration link: a spell slug, or null to end it. */
-function setConcentration(db, who, spell) {
-	if (who.kind === "character") db.update(character).set({ concentration: spell }).where(eq(character.id, who.id)).run();
-	else if (who.kind === "npc") db.update(npcCombat).set({ concentration: spell }).where(eq(npcCombat.handle, who.handle)).run();
-	else {
-		const live = liveCombat(db);
-		if (!live) return;
-		db.update(combatant$1).set({ concentration: spell }).where(and(eq(combatant$1.combatId, live.id), eq(combatant$1.handle, who.handle))).run();
-	}
-}
-/** Starts concentrating on a spell; returns the spell it ended, if any. */
-function concentrate(db, who, spell) {
-	setConcentration(db, who, spell);
-	return who.concentration && who.concentration !== spell ? who.concentration : null;
-}
-/**
-* Damage to a concentrating caster: a Character gets a pending Constitution save Call; an NPC or
-* Creature rolls it now (`bonus` is its Con save) and loses the spell on a failure.
-*/
-function concentrationCheck(db, who, damage, { dice, at, bonus }) {
-	const spell = who.concentration;
-	if (!spell || damage <= 0) return {
-		notes: [],
-		calls: []
-	};
-	const dc = concentrationDc(damage);
-	if (who.kind === "character") {
-		const id = createPendingCall(db, [{
-			characterId: who.id,
-			player: who.player,
-			sequence: null,
-			save: "con",
-			dc,
-			reason: `To keep concentration on ${spell}`
-		}], at, "concentration");
-		return {
-			notes: [`${who.name} must make a Constitution save (DC ${dc}) to keep concentration on ${spell}: attach pending Call ${id} with narrate`],
-			calls: [id]
-		};
-	}
-	const d20 = dice.rollD20();
-	const total = d20.kept + bonus;
-	const kept = total >= dc;
-	if (!kept) setConcentration(db, who, null);
-	const sign = bonus >= 0 ? `+ ${bonus}` : `- ${-bonus}`;
-	return {
-		notes: [`${who.name} Constitution save to keep concentration: d20 ${d20.kept} ${sign} = ${total} vs DC ${dc} → ${kept ? "success" : `failure; concentration on ${spell} ends`}`],
-		calls: []
-	};
-}
-// src/lib/server/play/combatants.ts
-var ok = (s) => s.status === "ok" ? s.value : null;
-/** A Character's derived stats, from its stored choices and what it carries now. */
-function characterStats(db, id) {
-	const detail = createCharacterService(db).get(id);
-	const rules = loadWizardRules();
-	const { stats, resolved } = buildSummary(rules, {
-		...detailToSummaryData(detail),
-		equipment: detail.inventory
-	});
-	return {
-		detail,
-		stats,
-		features: resolved.features.map((f) => ({
-			slug: f.slug,
-			name: f.name
-		})),
-		ac: characterAc(rules, detail, stats)?.value ?? 10
-	};
-}
-function characterCombatant(db, ref) {
-	const key = ref.trim().toLowerCase();
-	const holder = characterHolders(db).find((c) => c.handle === key || c.id === ref || c.name.toLowerCase() === key);
-	if (!holder) return null;
-	const { detail, stats, features, ac } = characterStats(db, holder.id);
-	return {
-		kind: "character",
-		handle: holder.handle,
-		name: holder.name,
-		id: holder.id,
-		player: holder.player,
-		detail,
-		stats,
-		features,
-		ac,
-		hp: detail.currentHp,
-		maxHp: ok(stats.hitPoints) ?? detail.currentHp,
-		conditions: detail.conditions,
-		concentration: detail.concentration
-	};
-}
-/** The stat block's AC: its first listed armor class. */
-var monsterAc = (m) => m.armorClass[0]?.value ?? 10;
-function npcCombatant(db, handle) {
-	const npc = db.select().from(entity).where(eq(entity.handle, handle)).get();
-	if (!npc || npc.type !== "npc" || npc.retiredAt !== null) return null;
-	const block = npc.fields.stat_block;
-	if (typeof block !== "string") throw new ToolError("no_stat_block", `${npc.name} (${handle}) has no stat block`, `Give it one with set_field(${handle}, stat_block, monster:<slug>) — find the slug with lookup — and call again`);
-	const found = createRulesRepository(db).entry(block);
-	if (!found || found.kind !== "monster") throw ToolError.unknownHandle(block);
-	const monster = found.entry;
-	let state = db.select().from(npcCombat).where(eq(npcCombat.handle, handle)).get();
-	if (!state) state = db.insert(npcCombat).values({
-		handle,
-		hp: monster.hitPoints,
-		maxHp: monster.hitPoints,
-		conditions: []
-	}).returning().get();
-	return {
-		kind: "npc",
-		handle,
-		name: npc.name,
-		monster,
-		ac: monsterAc(monster),
-		hp: state.hp,
-		maxHp: state.maxHp,
-		conditions: state.conditions,
-		concentration: state.concentration
-	};
-}
-/** A Creature in the live Combat; gone once the Combat ends. */
-function creatureCombatant(db, handle) {
-	const row = liveCreature(db, handle);
-	if (!row) return null;
-	const found = createRulesRepository(db).entry(row.statBlock);
-	if (!found || found.kind !== "monster") return null;
-	const monster = found.entry;
-	return {
-		kind: "creature",
-		handle,
-		name: row.name,
-		monster,
-		ac: monsterAc(monster),
-		hp: row.hp,
-		maxHp: row.maxHp,
-		conditions: row.conditions,
-		concentration: row.concentration
-	};
-}
-/**
-* The combatant a tool names: a Character by handle (`char:wren`) or name, an NPC by handle, or a
-* Creature in the live Combat (`creature:goblin-2`). The one lookup every action tool and primitive
-* goes through.
-*/
-function combatant(db, ref) {
-	const found = ref.startsWith("npc:") ? npcCombatant(db, ref) : ref.startsWith("creature:") ? creatureCombatant(db, ref) : characterCombatant(db, ref);
-	if (!found) throw ToolError.unknownHandle(ref);
-	return found;
-}
-/** A combatant's saving throw bonus: a Character's derived save, a stat block's proficiency or ability. */
-function saveBonus(who, ability) {
-	if (who.kind === "character") return ok(who.stats.savingThrows[ability])?.modifier ?? 0;
-	const proficient = who.monster.proficiencies.find((p) => p.proficiency === `saving-throw-${ability}`);
-	if (proficient) return proficient.value;
-	const score = who.monster.abilityScores[ability] ?? 10;
-	return Math.floor((score - 10) / 2);
-}
-/** A Character who acts must be able to. */
-function mustAct(who) {
-	if (who.kind === "character" && !canAct(who.detail)) throw new ToolError("character_cannot_act", `${who.name} can't act`, "Choose a Character who can act");
-}
-/** How a monster's resistances, immunities and vulnerabilities scale damage of one type. */
-function damageFactor(who, damageType) {
-	if (who.kind === "character" || !damageType) return 1;
-	const has = (list) => list.some((entry) => entry.toLowerCase().split(/[,;]\s*|\s+and\s+/).includes(damageType));
-	if (has(who.monster.damageImmunities)) return 0;
-	if (has(who.monster.damageResistances)) return .5;
-	if (has(who.monster.damageVulnerabilities)) return 2;
-	return 1;
-}
-/**
-* The one way HP goes down. Temporary HP absorbs damage first; HP never drops below 0. Monster
-* resistances apply. A Character at 0 HP falls Unconscious (or dies outright) and takes Death save
-* failures from more damage; an NPC or Creature dies at 0 HP unless knocked out. A concentrating
-* target still standing saves to keep its spell.
-*/
-function applyDamage(db, who, amount, damageType, { crit = false, knockOut = false, dice, at = Date.now() } = {}) {
-	const dealt = Math.floor(amount * damageFactor(who, damageType));
-	const saving = (hp) => dice && hp > 0 ? concentrationCheck(db, who, dealt, {
-		dice,
-		at,
-		bonus: saveBonus(who, "con")
-	}) : {
-		notes: [],
-		calls: []
-	};
-	if (who.kind === "character") {
-		const absorbed = Math.min(who.detail.tempHp, dealt);
-		const taken = dealt - absorbed;
-		const hp = Math.max(0, who.hp - taken);
-		db.update(character).set({
-			currentHp: hp,
-			tempHp: who.detail.tempHp - absorbed
-		}).where(eq(character.id, who.id)).run();
-		const notes = damagedCharacter(db, who.detail, {
-			before: who.hp,
-			taken,
-			maxHp: who.maxHp,
-			crit
-		});
-		const save = saving(hp);
-		return {
-			dealt,
-			hp,
-			max: who.maxHp,
-			notes: [...notes, ...save.notes],
-			calls: save.calls
-		};
-	}
-	const hp = Math.max(0, who.hp - dealt);
-	writeFoe(db, who, { hp });
-	const notes = who.hp > 0 && hp === 0 ? foeDown(db, who, knockOut) : [];
-	const save = saving(hp);
-	return {
-		dealt,
-		hp,
-		max: who.maxHp,
-		notes: [...notes, ...save.notes],
-		calls: save.calls
-	};
-}
-/**
-* An NPC or Creature at 0 HP: knocked out (Unconscious) when the DM rules it, else dead. A dead
-* NPC's `status` field becomes `dead`.
-*/
-function foeDown(db, who, knockOut) {
-	const ended = who.concentration ? [`concentration on ${who.concentration} ends`] : [];
-	if (who.concentration) writeFoe(db, who, { concentration: null });
-	if (knockOut) {
-		if (!who.conditions.includes("unconscious")) writeFoe(db, who, { conditions: [...who.conditions, "unconscious"] });
-		return [[`${who.name} is knocked out`, ...ended].join("; ")];
-	}
-	if (who.kind === "npc") {
-		const npc = db.select().from(entity).where(eq(entity.handle, who.handle)).get();
-		db.update(entity).set({
-			fields: {
-				...npc.fields,
-				status: "dead"
-			},
-			version: npc.version + 1
-		}).where(eq(entity.handle, who.handle)).run();
-	}
-	return [[`${who.name} dies`, ...ended].join("; ")];
-}
-/** Restores HP, never above the maximum. A Character at 0 HP wakes; the dead stay dead. */
-function applyHealing(db, who, amount) {
-	if (who.kind === "character" && who.detail.status !== "alive") throw new ToolError("character_dead", `${who.name} is ${who.detail.status}; healing can't bring them back`, "Only magic that restores life can; narrate it and leave the HP alone");
-	const hp = Math.min(who.maxHp, who.hp + amount);
-	if (who.kind === "character") {
-		db.update(character).set({ currentHp: hp }).where(eq(character.id, who.id)).run();
-		healedCharacter(db, who.detail, hp);
-	} else writeFoe(db, who, { hp });
-	return {
-		dealt: hp - who.hp,
-		hp,
-		max: who.maxHp,
-		notes: [],
-		calls: []
-	};
-}
-/** Replaces a combatant's conditions. */
-function setConditions(db, who, conditions) {
-	if (who.kind === "character") db.update(character).set({ conditions }).where(eq(character.id, who.id)).run();
-	else writeFoe(db, who, { conditions });
-}
-/** Writes an NPC's or Creature's own HP or conditions. */
-function writeFoe(db, who, set) {
-	if (who.kind === "creature") {
-		const row = liveCreature(db, who.handle);
-		db.update(combatant$1).set(set).where(eq(combatant$1.id, row.id)).run();
-	} else db.update(npcCombat).set(set).where(eq(npcCombat.handle, who.handle)).run();
 }
 // src/lib/server/play/sequences.ts
 /** A weapon or spell attack: to-hit, then damage on a hit. */
@@ -2776,6 +3223,7 @@ function rollStep(db, sequence, dice, { mode = "normal", reason = "", at = Date.
 		what: stepLabel$1(sequence, step),
 		roll,
 		targetState: target.kind !== "character" && roll.after && step.kind !== "to_hit" ? {
+			handle: target.handle,
 			name: target.name,
 			state: hpState(roll.after.hp, roll.after.max)
 		} : null
@@ -3000,7 +3448,32 @@ function createHitDiceCall(db, parts, at) {
 }
 /** The pending Calls no Narration has attached yet. */
 function pendingCalls(db) {
-	return db.select({ id: call.id }).from(call).where(eq(call.state, "pending")).all().map((c) => c.id);
+	return db.select({ id: call.id }).from(call).where(eq(call.state, "pending")).orderBy(sql`rowid`).all().map((c) => c.id);
+}
+/**
+* The rules' own Calls, which wait past a turn: only one Call is open at a time, so when one is,
+* these stay pending for a later turn to attach instead of being dropped.
+*/
+var QUEUEABLE = [
+	"concentration",
+	"death_save",
+	"reaction"
+];
+/**
+* The pending Calls this turn must attach or cancel before it ends: all of them, less the rules'
+* own while another Call is open (they wait for the next turn).
+*/
+function unattachedCalls(db) {
+	const waiting = openCallRow(db) !== void 0;
+	return db.select({
+		id: call.id,
+		kind: call.kind
+	}).from(call).where(eq(call.state, "pending")).orderBy(sql`rowid`).all().filter((c) => !(waiting && QUEUEABLE.includes(c.kind))).map((c) => c.id);
+}
+/** The pending Calls left for the next Narration to attach, as a line for the DM. */
+function waitingLine(db) {
+	const ids = pendingCalls(db);
+	return ids.length ? [`Pending Calls to attach: ${ids.join(", ")}`] : [];
 }
 /** Drops a pending Call the DM won't attach; refused for any other Call. */
 function cancelPendingCall(db, id, at) {
@@ -3044,12 +3517,22 @@ function openCallView(db) {
 		}))
 	};
 }
+/**
+* The Calls a Declaration can answer instead: the Players chose not to roll or reply. Initiative,
+* Death saves, concentration saves and reactions are the rules' own and stay open.
+*/
+var WITHDRAWABLE = [
+	"check",
+	"question",
+	"roll_sequence",
+	"hit_dice"
+];
 /** A closed Floor with Declarations on it withdraws the open Call; returns its id, if any. */
 function withdrawOpenCall(db, at) {
 	return db.update(call).set({
 		state: "withdrawn",
 		closedAt: at
-	}).where(eq(call.state, "open")).returning({ id: call.id }).get()?.id ?? null;
+	}).where(and(eq(call.state, "open"), inArray(call.kind, [...WITHDRAWABLE]))).returning({ id: call.id }).get()?.id ?? null;
 }
 /** The Call or part isn't open (answered, withdrawn or unknown). */
 var CallClosedError = class extends Error {};
@@ -3154,7 +3637,7 @@ function createCalls(db, now = Date.now) {
 				call: callId,
 				players: [...new Set(parts.map((p) => p.player))],
 				parts,
-				after: open.kind === "initiative" ? [orderText(db)] : []
+				after: [...open.kind === "initiative" ? [orderText(db)] : [], ...waitingLine(db)]
 			};
 			logEvent(db, {
 				tool: "call",
@@ -3235,6 +3718,19 @@ function createCalls(db, now = Date.now) {
 	/** A Death save: a d20 with no modifier, its tallies applied by code. */
 	function rollDeathSave(part, dice, player) {
 		const row = db.select().from(character).where(eq(character.id, part.characterId)).get();
+		if (!rollsDeathSaves(row)) return {
+			values: { answer: "no longer dying" },
+			event: {
+				kind: "answer",
+				summary: `${row.name} is no longer dying`,
+				data: {
+					part: part.id,
+					player,
+					question: "Death save",
+					text: "no longer dying"
+				}
+			}
+		};
 		const d20 = dice.rollD20();
 		const saved = applyDeathSave(db, row, d20.kept);
 		const result = {
@@ -3427,335 +3923,6 @@ function createCalls(db, now = Date.now) {
 		}
 	};
 }
-// src/lib/server/play/combat.ts
-/** Seconds in a Combat round (SRD). */
-var ROUND_SECONDS = 6;
-var FRESH = {
-	action: false,
-	bonusAction: false,
-	reaction: false
-};
-var abilityMod = (score) => Math.floor((score - 10) / 2);
-/** The live Combat, or null. */
-function liveCombat(db) {
-	return db.select().from(combat).where(isNull(combat.endedAt)).get() ?? null;
-}
-/** The live Combat, or `no_combat`. */
-function requireCombat(db) {
-	const live = liveCombat(db);
-	if (!live) throw new ToolError("no_combat", "No Combat is live", "Start one with start_combat");
-	return live;
-}
-/** Refuses while a Combat is live. */
-function refuseDuringCombat(db, what) {
-	if (liveCombat(db)) throw new ToolError("combat_live", `A Combat is live: ${what} waits until it ends`, "Finish the fight and call end_combat first");
-}
-/** Every combatant of a Combat, in the order they joined. */
-function combatantsOf(db, combatId) {
-	return db.select().from(combatant$1).where(eq(combatant$1.combatId, combatId)).orderBy(asc(combatant$1.joined)).all();
-}
-/**
-* The initiative order: everyone with initiative, highest first; ties go to the higher Dexterity,
-* then to whoever joined first. A Character still to roll isn't in it yet.
-*/
-function initiativeOrder(db, combatId) {
-	return combatantsOf(db, combatId).filter((c) => c.initiative !== null).sort((a, b) => b.initiative - a.initiative || b.dex - a.dex || a.joined - b.joined);
-}
-/** The combatants still to roll initiative (Characters whose Call isn't rolled yet). */
-function waitingOnInitiative(db, combatId) {
-	return combatantsOf(db, combatId).filter((c) => c.initiative === null);
-}
-/** A Creature in the live Combat by handle, or null. */
-function liveCreature(db, handle) {
-	const live = liveCombat(db);
-	if (!live) return null;
-	return db.select().from(combatant$1).where(and(eq(combatant$1.combatId, live.id), eq(combatant$1.handle, handle), eq(combatant$1.kind, "creature"))).get() ?? null;
-}
-function monsterFor(db, block) {
-	const ref = block.startsWith("monster:") ? block : `monster:${block}`;
-	const found = createRulesRepository(db).entry(ref);
-	if (!found || found.kind !== "monster") throw new ToolError("unknown_stat_block", `No SRD stat block is ${ref}`, "Find the monster: slug with lookup and call again");
-	return found.entry;
-}
-var monsterDex = (m) => m.abilityScores.dex ?? 10;
-function joining(db, combatId, entries) {
-	const existing = combatantsOf(db, combatId);
-	const taken = new Set(existing.map((c) => c.handle));
-	const out = [];
-	for (const entry of entries) {
-		const spec = typeof entry === "string" && entry.startsWith("monster:") ? { monster: entry } : entry;
-		if (typeof spec !== "string") {
-			const monster = monsterFor(db, spec.monster);
-			for (let i = 0; i < (spec.count ?? 1); i++) {
-				let n = 1;
-				while (taken.has(`creature:${monster.slug}-${n}`)) n++;
-				const handle = `creature:${monster.slug}-${n}`;
-				taken.add(handle);
-				out.push({ row: {
-					kind: "creature",
-					handle,
-					name: `${monster.name} ${n}`,
-					dex: monsterDex(monster),
-					statBlock: `monster:${monster.slug}`,
-					hp: monster.hitPoints,
-					maxHp: monster.hitPoints
-				} });
-			}
-			continue;
-		}
-		const who = combatant(db, spec);
-		if (taken.has(who.handle)) throw ToolError.invalidInput("start_combat", `${who.name} (${who.handle}) is already fighting`);
-		taken.add(who.handle);
-		const dex = who.kind === "character" ? who.stats.abilities.dex.status === "ok" ? who.stats.abilities.dex.value.score : 10 : monsterDex(who.monster);
-		out.push({
-			row: {
-				kind: who.kind,
-				handle: who.handle,
-				name: who.name,
-				dex
-			},
-			who
-		});
-	}
-	return out;
-}
-/**
-* Adds combatants to a Combat. NPCs and Creatures roll initiative now, in code; Characters get
-* one pending initiative Call between them, for the closing narrate to attach.
-*/
-function join(db, dice, combatId, entries, { surprised = [], at }) {
-	const adding = joining(db, combatId, entries);
-	const unknown = surprised.filter((h) => !adding.some((a) => a.row.handle === h));
-	if (unknown.length) throw ToolError.invalidInput("start_combat", `Surprised must name combatants in this fight: ${unknown.join(", ")}`);
-	let joined = combatantsOf(db, combatId).length;
-	const rolls = [];
-	const rolled = [];
-	const parts = [];
-	for (const { row, who } of adding) {
-		let initiative = null;
-		if (row.kind === "character" && who?.kind === "character") parts.push({
-			characterId: who.id,
-			player: who.player,
-			sequence: null,
-			reason: null
-		});
-		else {
-			const modifier = abilityMod(row.dex);
-			const d20 = dice.rollD20();
-			initiative = d20.kept + modifier;
-			const sign = modifier >= 0 ? `+ ${modifier}` : `- ${-modifier}`;
-			rolled.push(`${row.name} initiative: d20 ${d20.kept} ${sign} = ${initiative}`);
-			rolls.push({
-				characterName: row.name,
-				what: "Initiative",
-				dice: d20.dice,
-				modifier,
-				total: initiative,
-				outcome: null,
-				mode: "normal",
-				reason: null,
-				target: null
-			});
-		}
-		db.insert(combatant$1).values({
-			...row,
-			combatId,
-			joined: ++joined,
-			initiative,
-			surprised: surprised.includes(row.handle)
-		}).run();
-	}
-	const pendingCall = parts.length ? createPendingCall(db, parts, at, "initiative") : null;
-	beginIfReady(db, combatId);
-	return {
-		creatures: adding.filter((a) => a.row.kind === "creature").map((a) => a.row.handle),
-		rolls,
-		rolled,
-		pendingCall
-	};
-}
-/** Starts a Combat. Refused while one is live. */
-function startCombat(db, dice, entries, { surprised, at }) {
-	if (liveCombat(db)) throw new ToolError("combat_live", "A Combat is already live", "Add late arrivals with add_combatant, or end it with end_combat first");
-	const { id } = db.insert(combat).values({ startedAt: currentMinute(db) }).returning({ id: combat.id }).get();
-	return join(db, dice, id, entries, {
-		surprised,
-		at
-	});
-}
-/** Adds a late arrival to the live Combat. */
-function addCombatants(db, dice, entries, at) {
-	return join(db, dice, requireCombat(db).id, entries, { at });
-}
-/** Whether a combatant acts this round: a surprised one loses its first turn. */
-var acts = (c, round) => !(round === 1 && c.surprised);
-/**
-* Moves the turn pointer to the next combatant who acts, wrapping into the next round, and resets
-* their per-turn resources. From no current turn, starts from the top of round `round`.
-*/
-function advance(db, live) {
-	const order = initiativeOrder(db, live.id);
-	let round = live.round;
-	let index = live.current === null ? -1 : order.findIndex((c) => c.id === live.current);
-	let next = null;
-	for (let step = 0; step < order.length * 2 + 1 && order.length; step++) {
-		index++;
-		if (index >= order.length) {
-			index = 0;
-			round++;
-		}
-		if (acts(order[index], round)) {
-			next = order[index];
-			break;
-		}
-	}
-	db.update(combat).set({
-		round,
-		current: next?.id ?? null
-	}).where(eq(combat.id, live.id)).run();
-	if (next) db.update(combatant$1).set({ used: FRESH }).where(eq(combatant$1.id, next.id)).run();
-	return {
-		round,
-		current: next
-	};
-}
-/** Once every combatant has initiative, round 1 begins with the first who acts. */
-function beginIfReady(db, combatId) {
-	const live = db.select().from(combat).where(eq(combat.id, combatId)).get();
-	if (live.round !== 0 || live.endedAt !== null) return;
-	if (combatantsOf(db, combatId).some((c) => c.initiative === null)) return;
-	advance(db, {
-		...live,
-		round: 1,
-		current: null
-	});
-}
-/**
-* Records a Character's initiative roll from the Party's Call. Late arrivals slot into the order;
-* the last roll at the start of a Combat begins round 1.
-*/
-function recordInitiative(db, characterHandle, total) {
-	const live = liveCombat(db);
-	if (!live) return;
-	db.update(combatant$1).set({ initiative: total }).where(and(eq(combatant$1.combatId, live.id), eq(combatant$1.handle, characterHandle))).run();
-	beginIfReady(db, live.id);
-}
-/** Advances to the next turn. Refused until every combatant has initiative. */
-function nextTurn(db) {
-	const live = requireCombat(db);
-	if (live.round === 0) throw new ToolError("initiative_pending", "The order is not known yet: some Characters have not rolled initiative", "Attach the initiative Call with narrate and wait for its call_result");
-	return advance(db, live);
-}
-var RESOURCE_NAMES = {
-	action: "an action",
-	bonusAction: "a bonus action",
-	reaction: "a reaction"
-};
-/**
-* Marks a per-turn resource spent by a combatant in the live Combat. Returns a reminder when it was
-* already spent this turn, never a refusal; null outside a Combat or the first time.
-*/
-function spendTurnResource(db, handle, name, resource) {
-	const live = liveCombat(db);
-	if (!live) return null;
-	const row = db.select().from(combatant$1).where(and(eq(combatant$1.combatId, live.id), eq(combatant$1.handle, handle))).get();
-	if (!row) return null;
-	if (row.used[resource]) return `${name} has already used ${RESOURCE_NAMES[resource]} this turn (a reminder: go on if the fiction allows it)`;
-	db.update(combatant$1).set({ used: {
-		...row.used,
-		[resource]: true
-	} }).where(eq(combatant$1.id, row.id)).run();
-	return null;
-}
-/** The DM's one-line order: `Order: Wren 20, Goblin 2 17. Round 1: Wren (char:wren) acts.` */
-function orderText(db) {
-	const live = liveCombat(db);
-	if (!live) return "No Combat is live.";
-	const order = initiativeOrder(db, live.id);
-	const waiting = waitingOnInitiative(db, live.id);
-	const current = order.find((c) => c.id === live.current);
-	return [
-		`Order: ${order.map((c) => `${c.name} ${c.initiative}`).join(", ") || "none yet"}.`,
-		waiting.length ? `Waiting on initiative: ${waiting.map((c) => c.name).join(", ")}.` : null,
-		current ? `Round ${live.round}: ${current.name} (${current.handle}) acts.` : null
-	].filter(Boolean).join(" ");
-}
-/** The live Combat as the DM reads it: round, current turn and the order with Creatures' state. */
-function combatState(db) {
-	const live = requireCombat(db);
-	const current = initiativeOrder(db, live.id).find((c) => c.id === live.current) ?? null;
-	return {
-		round: live.round,
-		turn: current && {
-			handle: current.handle,
-			name: current.name,
-			used: current.used
-		},
-		order: orderText(db)
-	};
-}
-/**
-* Ends the live Combat: its rounds go onto the clock, rounded up to a whole minute, Creatures
-* vanish, and any initiative Call still pending is cancelled.
-*/
-function endCombat(db, at) {
-	const live = requireCombat(db);
-	const rounds = live.round;
-	const minutes = Math.ceil(rounds * ROUND_SECONDS / 60);
-	const clock = advanceClock(db, currentMinute(db) + minutes);
-	const creatures = combatantsOf(db, live.id).filter((c) => c.kind === "creature");
-	db.update(call).set({
-		state: "cancelled",
-		closedAt: at
-	}).where(and(eq(call.kind, "initiative"), inArray(call.state, ["pending", "open"]))).run();
-	db.delete(combatant$1).where(eq(combatant$1.combatId, live.id)).run();
-	db.update(combat).set({
-		endedAt: at,
-		current: null
-	}).where(eq(combat.id, live.id)).run();
-	return {
-		rounds,
-		minutes,
-		clock,
-		gone: creatures.map((c) => ({
-			handle: c.handle,
-			statBlock: c.statBlock,
-			hp: c.hp,
-			maxHp: c.maxHp
-		}))
-	};
-}
-/** A Creature's HP as the Player reads it. */
-var stateOf = (c) => c.kind === "creature" ? hpState(c.hp, c.maxHp) : null;
-/**
-* The live Combat as the Player's rail shows it: the order with the current turn marked; enemy HP
-* only as a state, never a number, and no handles. Null when no Combat is live.
-*/
-function playerCombat(db, characterIds, npcState) {
-	const live = liveCombat(db);
-	if (!live) return null;
-	const order = initiativeOrder(db, live.id);
-	const waiting = waitingOnInitiative(db, live.id);
-	return {
-		round: live.round,
-		order: order.map((c, i) => ({
-			key: `${i}`,
-			name: c.name,
-			kind: c.kind,
-			characterId: characterIds.get(c.handle) ?? null,
-			initiative: c.initiative,
-			current: c.id === live.current,
-			state: c.kind === "npc" ? npcState(c.handle) : stateOf(c)
-		})),
-		waiting: waiting.map((c) => c.name)
-	};
-}
-/** The Character whose turn it is in the live Combat, by handle; null outside a Character's turn. */
-function currentTurn(db) {
-	const live = liveCombat(db);
-	if (!live?.current) return null;
-	return db.select().from(combatant$1).where(eq(combatant$1.id, live.current)).get() ?? null;
-}
 // src/lib/server/play/sheets.ts
 var signed = (n) => n >= 0 ? `+${n}` : `${n}`;
 function toPlaySheet(c, levelUp) {
@@ -3820,7 +3987,13 @@ function toPlaySheet(c, levelUp) {
 			equipped: i.equipped ?? false
 		})),
 		coin: c.coin,
-		levelUp
+		levelUp,
+		details: {
+			notes: c.notes,
+			personality: c.personality,
+			appearance: c.appearance,
+			backstory: c.backstory
+		}
 	};
 }
 /** The play sheet of every saved Character in the Party, oldest first. */
@@ -3828,13 +4001,26 @@ function playSheets(party) {
 	return party.list().flatMap((m) => m.kind === "character" ? [toPlaySheet(party.character(m.id).character, party.levelUpOffer(m.id))] : []);
 }
 // src/lib/server/play/core-block.ts
-/** A Character's handle, from its name. */
-var characterHandle = (name) => `char:${slug$1(name)}`;
-/** The Scene: its Place (handle and name) and the in-fiction time. */
+/**
+* The Scene: its Place (handle and name) and the in-fiction time, then the open Call (id, kind and
+* the Characters yet to answer) and the ids of pending Calls no Narration has attached.
+*/
 function scenePart({ db }) {
 	const place = present(db).place;
 	const time = formatClock(currentMinute(db));
-	return place ? `Scene: ${place.name} (${place.handle}), ${time}.` : `Scene: none set yet, ${time}.`;
+	const lines = [place ? `Scene: ${place.name} (${place.handle}), ${time}.` : `Scene: none set yet, ${time}.`];
+	const open = db.select().from(call).where(eq(call.state, "open")).get();
+	if (open) {
+		const refs = new Map(characterRefs(db).map((c) => [c.row.id, c]));
+		const waiting = db.select({ characterId: callPart.characterId }).from(callPart).where(and(eq(callPart.callId, open.id), isNull(callPart.answeredAt))).orderBy(asc(callPart.position)).all().map(({ characterId }) => {
+			const ref = characterId ? refs.get(characterId) : void 0;
+			return ref ? `${ref.row.name} (${ref.handle})` : "the Player";
+		});
+		lines.push(`Open Call: ${open.id}, ${open.kind}, waiting on ${[...new Set(waiting)].join(", ") || "no one"}.`);
+	}
+	const pending = pendingCalls(db);
+	if (pending.length) lines.push(`Pending Calls: ${pending.join(", ")}.`);
+	return lines.join("\n");
 }
 var plural = (n, word, many) => `${n} ${n === 1 ? word : many}`;
 /** A downed Character's Death saves: `stable`, or `Death saves 1 success, 2 failures`. */
@@ -3855,7 +4041,7 @@ function partyPart({ party, db }) {
 		const hp = `HP ${c.hp.current}/${c.hp.max ?? "?"}${c.hp.temp ? ` (+${c.hp.temp} temp)` : ""}`;
 		const conditions = c.conditions.length ? c.conditions.join(", ") : "none";
 		const extra = [c.concentration && `concentrating on ${c.concentration}`, c.deathSaves && deathSavesText(c.deathSaves)].filter(Boolean);
-		return [`- ${c.name} (${handles.get(c.id) ?? characterHandle(c.name)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? "unknown"}`, ...extra].join(", ");
+		return [`- ${c.name} (${handles.get(c.id)}): ${hp}, conditions ${conditions}, ${status.get(c.id)}, whereabouts ${c.whereabouts ?? "unknown"}`, ...extra].join(", ");
 	})].join("\n");
 }
 /** The NPCs at the Scene's Place: handle, name, role and one-line description. */
@@ -3935,49 +4121,12 @@ function coreBlock(source) {
 		lintPart(source)
 	].filter((part) => part !== null).join("\n");
 }
-// src/lib/server/bridge/channels.ts
-/** Channel events per Campaign folder, delivered to the bridges listening for it. */
-function createChannels({ annotate } = {}) {
-	const listeners = /* @__PURE__ */ new Map();
-	const verdictListeners = /* @__PURE__ */ new Map();
-	const key = canonicalFolder;
-	return {
-		/** Starts listening for a Campaign's events; returns the unsubscribe. */
-		listen(folder, listener) {
-			const set = listeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
-			listeners.set(key(folder), set);
-			set.add(listener);
-			return () => set.delete(listener);
-		},
-		/** Whether any bridge is listening for the Campaign. */
-		listening(folder) {
-			return (listeners.get(key(folder))?.size ?? 0) > 0;
-		},
-		send(folder, event) {
-			const set = listeners.get(key(folder));
-			if (!set?.size) return;
-			const delivered = annotate ? annotate(folder, event) : event;
-			for (const listener of set) listener(delivered);
-		},
-		/** Starts listening for the verdicts the Player gives the Campaign's session; returns the unsubscribe. */
-		listenVerdicts(folder, listener) {
-			const set = verdictListeners.get(key(folder)) ?? /* @__PURE__ */ new Set();
-			verdictListeners.set(key(folder), set);
-			set.add(listener);
-			return () => set.delete(listener);
-		},
-		/** Relays a permission verdict to the Campaign's session. */
-		sendVerdict(folder, verdict) {
-			for (const listener of verdictListeners.get(key(folder)) ?? []) listener(verdict);
-		}
-	};
-}
 // src/lib/server/play/notices.ts
 var TOOL = "player";
 var KIND = "change";
 /**
 * Logs a change the Player made outside the DM (a UI edit), so the DM hears of it next. An
-* `offline` edit (no DM at the table) belongs to no Session, even while an earlier sitting's
+* `offline` edit (no DM at the table) belongs to no Session, even while an earlier Session's
 * Session is still open for its catch-up close.
 */
 function logChange(db, change, { at, offline = false }) {
@@ -4000,7 +4149,7 @@ function logChange(db, change, { at, offline = false }) {
 /**
 * The changes the DM has not heard about yet, marking them heard: each Player edit logged in the
 * open Session since the last channel event. Offline edits belong to no Session; they reach the DM
-* at the next sitting's opening instead.
+* at the next Session's opening instead.
 */
 function takeChanges(db) {
 	const through = db.select({ at: campaign.noticedThrough }).from(campaign).get()?.at ?? 0;
@@ -4034,15 +4183,15 @@ function takeOfflineChanges(db) {
 	}));
 }
 /**
-* What a sitting's opening adds to the core block, in the caller's transaction: the "changed since
-* last sitting" notice for offline edits (told once), and a turn left awaiting Narration, to answer
+* What a Session's opening adds to the core block, in the caller's transaction: the "changed since
+* last Session" notice for offline edits (told once), and a turn left awaiting Narration, to answer
 * after the recap. Empty when neither applies.
 */
 function openingNotice(db) {
 	const parts = [];
 	const changes = takeOfflineChanges(db);
-	if (changes.length > 0) parts.push(["Changed since last sitting:", ...changeLines(changes)].join("\n"));
-	if (awaitingNarrationSince(db) !== null) parts.push("A turn awaits Narration: the last sitting ended before the DM answered it. Read it with history and answer it with narrate after the recap.");
+	if (changes.length > 0) parts.push(["Changed since last Session:", ...changeLines(changes)].join("\n"));
+	if (awaitingNarrationSince(db) !== null) parts.push("A turn awaits Narration: the last Session ended before the DM answered it. Read it with history and answer it with narrate after the recap.");
 	return parts.join("\n\n");
 }
 /**
@@ -4058,7 +4207,7 @@ function createDmChannels(library) {
 		const changes = db.transaction((tx) => takeChanges(tx));
 		if (changes.length === 0) return sent;
 		const parts = ["Changed outside the DM:", ...changeLines(changes)];
-		if (changes.some((c) => c.handle.startsWith("char:"))) parts.push("", partyPart({
+		if (changes.some((c) => handleKind(c.handle) === "char")) parts.push("", partyPart({
 			party: library.party(entry.id),
 			db
 		}));
@@ -4127,7 +4276,7 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 	function noteChange(id, summary) {
 		const row = db.select().from(character).where(eq(character.id, id)).get();
 		logChange(db, {
-			handle: characterHandle(row.name),
+			handle: characterHandleOf(db, id),
 			version: row.version,
 			summary
 		}, {
@@ -4238,10 +4387,11 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 		},
 		/**
 		* Replaces a saved Character's choices from the edit wizard's draft. It resets play state (HP,
-		* slots, coin, inventory), so once the Campaign has begun it is the DM's while the DM is away.
+		* slots, coin, inventory), so once the Campaign has begun it is refused: play state changes only
+		* through the DM's tools.
 		*/
 		updateCharacter(id, draft) {
-			dmOnly("Rewriting a Character in the wizard");
+			if (begun()) throw new DmOnlyEditError("Rewriting a Character in the wizard resets their play state, so once the Campaign has begun only their notes, personality and appearance can be edited. Ask the DM at the table for anything else.");
 			return db.transaction(() => {
 				const updated = characters.update(id, input(draft));
 				db.update(character).set({ version: sql`${character.version} + 1` }).where(eq(character.id, id)).run();
@@ -4373,7 +4523,7 @@ function createFloor(db, now = Date.now) {
 		return [...new Set(actors.map((c) => c.controllingPlayer))];
 	}
 	function cleanText(text) {
-		const trimmed = typeof text === "string" ? text.trim() : "";
+		const trimmed = typeof text === "string" ? text.replace(/\s*[\r\n]+\s*/g, " ").trim() : "";
 		if (!trimmed) throw new DeclarationRefusedError("Say what the Character does");
 		if (trimmed.length > 2e3) throw new DeclarationRefusedError(`Keep a Declaration under ${DECLARATION_MAX} characters`);
 		return trimmed;
@@ -4515,14 +4665,20 @@ function createFloor(db, now = Date.now) {
 	};
 }
 // src/lib/server/knowledge/journal.ts
-/** Shows `[[Name]]` links as plain names for the Player. */
-var plain = (text) => text.replace(/\[\[([^[\]|]+)(?:\|[^[\]]*)?\]\]/g, "$1");
+/** What the Player sees for a linked Entity no Character knows. */
+var SOMEONE = "someone";
+/**
+* Shows `[[Name]]` links as plain names for the Player. A link kept as a handle (its name was
+* ambiguous) reads as the name the Characters believe, or "someone": never the handle.
+*/
+var plainFor = (db) => (text) => text.replace(/\[\[([^[\]|]+)(?:\|[^[\]]*)?\]\]/g, (_, inner) => HANDLE.test(inner) ? believedName(db, inner) ?? SOMEONE : inner);
 /**
 * The Player's Journal: their Characters' current Beliefs as each was learned, one entry per
 * thing believed with every Character who holds it. Built from the Knowledge layer only, never
 * from the World layer or an NPC's Beliefs, and with the truth stripped (ADR 0007).
 */
 function journal(db, player) {
+	const plain = plainFor(db);
 	const characters = characterHolders(db).filter((c) => player === void 0 || c.player === player);
 	const types = new Map(db.select({
 		handle: entity.handle,
@@ -4596,9 +4752,10 @@ function closeSession(db, { summary, threads, session: number, at }) {
 	};
 }
 /**
-* What the DM recalls of earlier sittings: Session summaries newest first (none for empty
+* What the DM recalls of earlier Sessions: Session summaries newest first (none for empty
 * Sessions), the current Session, older unclosed ones awaiting a catch-up close, and whether a
-* recap is due (a summary exists from an earlier sitting and none was given this one).
+* recap is due (an earlier Session has a summary, or will once its catch-up close writes one,
+* and no recap was given this one).
 */
 function sessionsView(db, last) {
 	const all = db.select().from(session).orderBy(desc(session.number)).all();
@@ -4608,7 +4765,7 @@ function sessionsView(db, last) {
 	return {
 		current: current?.number ?? null,
 		unclosed: all.filter((s) => s.closedAt === null && s.id !== current?.id).map((s) => s.number).reverse(),
-		recap_due: current !== void 0 && !recapGiven && all.some((s) => s.number < current.number && s.summary !== null),
+		recap_due: current !== void 0 && !recapGiven && all.some((s) => s.number < current.number && (s.summary !== null || s.closedAt === null && hasNarration(db, s.id))),
 		sessions: listed.slice(0, last).map((s) => ({
 			number: s.number,
 			closed: s.closedAt !== null,
@@ -4723,9 +4880,11 @@ var StartOverRefusedError = class extends Error {};
 /**
 * Start over: discards the World (Entities, Pages, Facts, links), every Belief and the Arc, and
 * clears `begunAt` so the Seed unlocks. Allowed only after Begin and until the first Narration.
-* It needs no DM. The Scene and the clock go back to the start with the World they pointed into.
+* It needs no DM. The Scene, the clock and the Characters' whereabouts go back to the start with
+* the World they pointed into. `offline` (the DM away) logs it in no Session, so the next
+* opening tells the DM.
 */
-function startOver(db, at) {
+function startOver(db, at, { offline = false } = {}) {
 	const found = db.select().from(campaign).get();
 	if (!found) throw new Error("The Campaign database has no Campaign");
 	if (found.begunAt === null) throw new StartOverRefusedError("The story has not begun, so there is nothing to start over");
@@ -4738,6 +4897,7 @@ function startOver(db, at) {
 	db.run(sql`DELETE FROM world_search`);
 	db.delete(entity).run();
 	discardArcs(db);
+	db.update(character).set({ whereabouts: null }).run();
 	logChange(db, {
 		handle: "campaign",
 		version: db.update(campaign).set({
@@ -4747,7 +4907,10 @@ function startOver(db, at) {
 			updatedAt: at
 		}).returning().get().version,
 		summary: "the Player chose Start over: the World and the Arc are gone and the Seed is unlocked"
-	}, { at });
+	}, {
+		at,
+		offline
+	});
 }
 // src/lib/server/campaign/registry.ts
 /**
@@ -4866,12 +5029,15 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		},
 		/**
 		* Registers an existing Campaign folder. A folder whose Campaign is already registered under
-		* another path (it was moved) replaces that entry, so a Missing Campaign comes back.
+		* another path (it was moved) replaces that entry, so a Missing Campaign comes back. A live
+		* Campaign keeps its folder: a copy of it (a git clone) registering must not repoint the
+		* session's calls.
 		*/
 		register(input) {
 			const folder = path.resolve(input);
 			const found = readCampaign(folder);
 			if (!found) throw new NotACampaignFolderError(`No Campaign in ${folder}`);
+			if (live(found.id) && registry.get(found.id)) return found;
 			registry.put({
 				id: found.id,
 				path: folder,
@@ -4957,7 +5123,7 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 		startOver(id) {
 			const { folder, found } = find(id);
 			if (found.archivedAt !== null) throw new CampaignArchivedError("An archived Campaign cannot be changed");
-			database(folder).transaction((tx) => startOver(tx, now()));
+			database(folder).transaction((tx) => startOver(tx, now(), { offline: !live(id) }));
 		},
 		/** The creation conversation in the DM pane. It is out of fiction and never logged. */
 		conversation(id) {
@@ -4997,8 +5163,8 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 					db
 				}),
 				/**
-				* What a sitting's opening injects: the core block, then what changed since the last
-				* sitting (told once) and any turn still awaiting Narration.
+				* What a Session's opening injects: the core block, then what changed since the last
+				* Session (told once) and any turn still awaiting Narration.
 				*/
 				opening: () => db.transaction((tx) => {
 					const notice = openingNotice(tx);
@@ -5009,9 +5175,10 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 					return notice ? `${core}\n\n${notice}` : core;
 				}),
 				/** Pending Calls an action tool stored that no narrate has attached yet. */
-				pendingCalls: () => pendingCalls(db),
-				/** Drops the pending Calls a turn ended without attaching. */
-				dropPendingCalls: () => db.transaction((tx) => pendingCalls(tx).forEach((id) => cancelPendingCall(tx, id, now()))),
+				/** The pending Calls this turn must attach or cancel (rules' Calls can wait). */
+				pendingCalls: () => unattachedCalls(db),
+				/** Drops the pending Calls a turn ended without attaching, leaving those that can wait. */
+				dropPendingCalls: () => db.transaction((tx) => unattachedCalls(tx).forEach((id) => cancelPendingCall(tx, id, now()))),
 				/** Logs a turn that went wrong, as the Player sees it in the timeline. */
 				turnError: (text) => logEvent(db, {
 					tool: "stop",
@@ -5096,6 +5263,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { saveSequence as $, combatState as A, renderLinks as At, DC_BY_TIER as B, reviseArc as Bt, DmBusyError as C, loadWizardRules as Ct, createDmChannels as D, lintWorld as Dt, DraftNotFoundError as E, hpState as Et, spendTurnResource as F, createArc as Ft, cancelPendingCall as G, readTool as Gt, TIERS as H, ToolError as Ht, startCombat as I, currentArc as It, openCall as J, parseClock as Jt, createHitDiceCall as K, writeTool as Kt, ABILITY_NAMES as L, pastArcs as Lt, nextTurn as M, characterHolders as Mt, orderText as N, charactersInScene as Nt, playSheets as O, createWorld as Ot, refuseDuringCombat as P, CurrentArcError as Pt, rollAll as Q, CallClosedError as R, resolveBeat as Rt, DeclarationRefusedError as S, scenePlace as St, DmOnlyEditError as T, CharacterValidationError as Tt, callInput as U, creationTool as Ut, PASS as V, PLUGIN_NAME as Vt, callResultEvent as W, expectVersion as Wt, attackSequence as X, saveKey as Y, SESSION_LIVE_MESSAGE as Yt, damageSequence as Z, closeSession as _, SpotlightRefusedError as _t, CampaignArchivedError as a, saveBonus as at, sessionsView as b, currentMinute as bt, CampaignNotFoundError as c, equippable as ct, BeginRefusedError as d, logActivity as dt, sequenceText as et, SeedLockedError as f, logEvent as ft, addConversationLine as g, ClockBackwardsError as gt, refuseLockedSeed as h, deathSaveCall as ht, sessions as i, mustAct as it, endCombat as j, resolveLinks as jt, addCombatants as k, fieldNames as kt, NotACampaignFolderError as l, isBodyArmor as lt, creationStage as m, setAwaitingNarration as mt, library as n, applyHealing as nt, CampaignExistsError as o, setConditions as ot, StartOverRefusedError as p, nextEventId as pt, createPendingCall as q, formatClock as qt, live as r, combatant as rt, CampaignMissingError as s, concentrate as st, campaignRoot as t, applyDamage as tt, SessionLiveError as u, currentStamp as ut, history as v, advanceClock as vt, returnStrandedDrafts as w, CharacterNotFoundError as wt, DeclarationNotFoundError as x, present as xt, indexNarration as y, characterRefs as yt, CallRefusedError as z, retireArc as zt };
+export { combatState as $, CallClosedError as A, createWorld as At, openCall as B, reviseArc as Bt, DmBusyError as C, isBodyArmor as Ct, createDmChannels as D, CharacterValidationError as Dt, DraftNotFoundError as E, CharacterNotFoundError as Et, callInput as F, createArc as Ft, saveSequence as G, readTool as Gt, attackSequence as H, ToolError as Ht, callResultEvent as I, currentArc as It, logActivity as J, parseClock as Jt, sequenceText as K, writeTool as Kt, cancelPendingCall as L, pastArcs as Lt, DC_BY_TIER as M, renderLinks as Mt, PASS as N, resolveLinks as Nt, playSheets as O, hpState as Ot, TIERS as P, CurrentArcError as Pt, addCombatants as Q, createHitDiceCall as R, resolveBeat as Rt, DeclarationRefusedError as S, equippable as St, DmOnlyEditError as T, loadWizardRules as Tt, damageSequence as U, creationTool as Ut, saveKey as V, PLUGIN_NAME as Vt, rollAll as W, expectVersion as Wt, nextEventId as X, characterRefs as Xt, logEvent as Y, characterHolders as Yt, setAwaitingNarration as Z, SESSION_LIVE_MESSAGE as Zt, closeSession as _, SpotlightRefusedError as _t, CampaignArchivedError as a, startCombat as at, sessionsView as b, present as bt, CampaignNotFoundError as c, combatant as ct, BeginRefusedError as d, saveBonus as dt, endCombat as et, SeedLockedError as f, setConditions as ft, addConversationLine as g, ClockBackwardsError as gt, refuseLockedSeed as h, deathSaveCall as ht, sessions as i, spendTurnResource as it, CallRefusedError as j, fieldNames as jt, ABILITY_NAMES as k, lintWorld as kt, NotACampaignFolderError as l, incapacitates as lt, creationStage as m, setConcentration as mt, library as n, orderText as nt, CampaignExistsError as o, applyDamage as ot, StartOverRefusedError as p, concentrate as pt, currentStamp as q, formatClock as qt, live as r, refuseDuringCombat as rt, CampaignMissingError as s, applyHealing as st, campaignRoot as t, nextTurn as tt, SessionLiveError as u, mustAct as ut, history as v, advanceClock as vt, returnStrandedDrafts as w, believedName as wt, DeclarationNotFoundError as x, scenePlace as xt, indexNarration as y, currentMinute as yt, createPendingCall as z, retireArc as zt };
 
 //# sourceMappingURL=campaign.js.map

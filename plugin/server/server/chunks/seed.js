@@ -4734,6 +4734,23 @@ var ENTITY_TYPES = [
 	"faction",
 	"topic"
 ];
+/**
+* Every kind of handle: the Entity types, a Character (`char:`), a Creature in the live Combat
+* (`creature:`) and an SRD stat block (`monster:`).
+*/
+var HANDLE_KINDS = [
+	...ENTITY_TYPES,
+	"char",
+	"creature",
+	"monster"
+];
+/** What a handle refers to, by its prefix; null for a name or an unknown prefix. */
+function handleKind(handle) {
+	const at = handle.indexOf(":");
+	if (at <= 0 || at === handle.length - 1) return null;
+	const prefix = handle.slice(0, at);
+	return HANDLE_KINDS.includes(prefix) ? prefix : null;
+}
 /** An NPC's status. A dead NPC is not retired. */
 var NPC_STATUSES = [
 	"alive",
@@ -5011,7 +5028,7 @@ var campaign = sqliteTable("campaign", {
 	begunAt: integer("begun_at"),
 	/** The last Event the DM has heard about: change notices cover the Player's edits after it. */
 	noticedThrough: integer("noticed_through").notNull().default(0),
-	/** The last offline edit a sitting's opening has told the DM about ("changed since last sitting"). */
+	/** The last offline edit a Session's opening has told the DM about ("changed since last Session"). */
 	offlineNoticedThrough: integer("offline_noticed_through").notNull().default(0),
 	/** The Campaign clock: in-fiction minutes since the Campaign started. Never moves backwards. */
 	clockMinute: integer("clock_minute").notNull().default(0),
@@ -5249,7 +5266,7 @@ var declaration = sqliteTable("declaration", {
 	updatedAt: integer("updated_at").notNull()
 }, (t) => [index("declaration_floor_idx").on(t.floorId)]);
 /**
-* A Session: one sitting, begun when a DM attaches. At most one is open. Summary and threads are
+* A Session: one stretch of play, begun when a DM attaches. At most one is open. Summary and threads are
 * written when it closes.
 */
 var session = sqliteTable("session", {
@@ -5433,352 +5450,30 @@ function openDatabase(url) {
 function migrateDatabase(db) {
 	migrate(db, { migrationsFolder: "drizzle" });
 }
-// src/lib/server/rules/repository.ts
-function group(rows, key) {
-	const out = /* @__PURE__ */ new Map();
-	for (const row of rows) {
-		const list = out.get(key(row));
-		if (list) list.push(row);
-		else out.set(key(row), [row]);
-	}
-	return out;
+// src/lib/server/campaign/paths.ts
+/** The user-level state directory (registry, server runtime file). */
+function userStateDir(env = process.env) {
+	return env.DUNGEON_MASTER_HOME || path.join(os.homedir(), ".dungeon-master");
 }
-var slugs = (rows) => new Map(rows.map((r) => [r.id, r.slug]));
-function createRulesRepository(db) {
-	const abilitySlugs = () => slugs(db.select().from(ability).all());
-	const choiceGroups = (ownerType) => {
-		const groups = db.select().from(choiceGroup).where(eq(choiceGroup.ownerType, ownerType)).all();
-		const options = db.select().from(choiceOption).orderBy(asc(choiceOption.position)).all();
-		const items = db.select().from(choiceOptionItem).orderBy(asc(choiceOptionItem.position)).all();
-		const proficiency$6 = slugs(db.select().from(proficiency).all());
-		const language$3 = slugs(db.select().from(language).all());
-		const ability = abilitySlugs();
-		const equipment$3 = slugs(db.select().from(equipment).all());
-		const category = slugs(db.select().from(equipmentCategory).all());
-		const itemsByOption = group(items, (i) => i.optionId);
-		const optionsByGroup = group(options, (o) => o.groupId);
-		const toItem = (i) => {
-			switch (i.itemType) {
-				case "proficiency": return {
-					type: "proficiency",
-					proficiency: proficiency$6.get(i.proficiencyId)
-				};
-				case "language": return {
-					type: "language",
-					language: language$3.get(i.languageId)
-				};
-				case "abilityBonus": return {
-					type: "abilityBonus",
-					ability: ability.get(i.abilityId),
-					bonus: i.bonus
-				};
-				case "equipment": return {
-					type: "equipment",
-					equipment: equipment$3.get(i.equipmentId),
-					count: i.count,
-					requiresProficiency: i.requiresProficiencyId ? proficiency$6.get(i.requiresProficiencyId) : null
-				};
-				case "equipmentCategory": return {
-					type: "equipmentCategory",
-					category: category.get(i.equipmentCategoryId),
-					count: i.count
-				};
-			}
-		};
-		const byOwner = /* @__PURE__ */ new Map();
-		for (const g of groups) {
-			const built = {
-				key: g.key.split("/").slice(2).join("/"),
-				kind: g.kind,
-				choose: g.choose,
-				description: g.description,
-				options: (optionsByGroup.get(g.id) ?? []).map((o) => ({ items: (itemsByOption.get(o.id) ?? []).map(toItem) }))
-			};
-			const list = byOwner.get(g.ownerSlug);
-			if (list) list.push(built);
-			else byOwner.set(g.ownerSlug, [built]);
-		}
-		return byOwner;
-	};
-	const bonuses = (rows) => {
-		const ability = abilitySlugs();
-		return rows.map((r) => ({
-			ability: ability.get(r.abilityId),
-			bonus: r.bonus
-		}));
-	};
-	function races() {
-		const rows = db.select().from(race).orderBy(asc(race.slug)).all();
-		const choices = choiceGroups("race");
-		const bonusRows = group(db.select().from(raceAbilityBonus).all(), (r) => r.raceId);
-		const languageRows = group(db.select().from(raceLanguage).all(), (r) => r.raceId);
-		const traitRows = group(db.select().from(raceTrait).all(), (r) => r.raceId);
-		const language$2 = slugs(db.select().from(language).all());
-		const trait$4 = slugs(db.select().from(trait).all());
-		return rows.map((r) => ({
-			...r,
-			abilityBonuses: bonuses(bonusRows.get(r.id) ?? []),
-			languages: (languageRows.get(r.id) ?? []).map((l) => language$2.get(l.languageId)),
-			traits: (traitRows.get(r.id) ?? []).map((x) => trait$4.get(x.traitId)),
-			choiceGroups: choices.get(r.slug) ?? []
-		}));
+/** Where the New Campaign dialog suggests creating Campaign folders. */
+function defaultCampaignRoot(env = process.env) {
+	return env.DUNGEON_MASTER_CAMPAIGNS || path.join(os.homedir(), "dm-campaigns");
+}
+/** A Campaign folder's database, inside its `.dm/` directory. */
+function campaignDatabasePath(folder) {
+	return path.join(folder, ".dm", "campaign.db");
+}
+/**
+* A folder's canonical path, with symlinks resolved, so the same Campaign folder matches however
+* it was reached (a process's cwd is always the real path).
+*/
+function canonicalFolder(folder) {
+	const resolved = path.resolve(folder);
+	try {
+		return fs.realpathSync(resolved);
+	} catch {
+		return resolved;
 	}
-	function subraces() {
-		const race$2 = slugs(db.select().from(race).all());
-		const bonusRows = group(db.select().from(subraceAbilityBonus).all(), (r) => r.subraceId);
-		const traitRows = group(db.select().from(subraceTrait).all(), (r) => r.subraceId);
-		const trait$3 = slugs(db.select().from(trait).all());
-		return db.select().from(subrace).orderBy(asc(subrace.slug)).all().map(({ raceId, ...s }) => ({
-			...s,
-			race: race$2.get(raceId),
-			abilityBonuses: bonuses(bonusRows.get(s.id) ?? []),
-			traits: (traitRows.get(s.id) ?? []).map((x) => trait$3.get(x.traitId))
-		}));
-	}
-	function traits() {
-		const rows = db.select().from(trait).orderBy(asc(trait.slug)).all();
-		const trait$2 = slugs(rows);
-		const proficiency$3 = slugs(db.select().from(proficiency).all());
-		const profRows = group(db.select().from(traitProficiency).all(), (r) => r.traitId);
-		const choices = choiceGroups("trait");
-		return rows.map(({ parentId, ...r }) => ({
-			...r,
-			parent: parentId ? trait$2.get(parentId) : null,
-			proficiencies: (profRows.get(r.id) ?? []).map((p) => proficiency$3.get(p.proficiencyId)),
-			choiceGroups: choices.get(r.slug) ?? []
-		}));
-	}
-	function classes() {
-		const rows = db.select().from(classTable).orderBy(asc(classTable.slug)).all();
-		const ability = abilitySlugs();
-		const proficiency$5 = slugs(db.select().from(proficiency).all());
-		const equipment$4 = slugs(db.select().from(equipment).all());
-		const saves = group(db.select().from(classSavingThrow).all(), (r) => r.classId);
-		const profs = group(db.select().from(classProficiency).all(), (r) => r.classId);
-		const gear = group(db.select().from(classStartingEquipment).all(), (r) => r.classId);
-		const choices = choiceGroups("class");
-		return rows.map(({ spellcastingAbilityId, ...c }) => ({
-			...c,
-			spellcastingAbility: spellcastingAbilityId ? ability.get(spellcastingAbilityId) : null,
-			savingThrows: (saves.get(c.id) ?? []).map((s) => ability.get(s.abilityId)),
-			proficiencies: (profs.get(c.id) ?? []).map((p) => proficiency$5.get(p.proficiencyId)),
-			startingEquipment: (gear.get(c.id) ?? []).map((e) => ({
-				item: equipment$4.get(e.itemId),
-				quantity: e.quantity
-			})),
-			choiceGroups: choices.get(c.slug) ?? []
-		}));
-	}
-	function classLevels(classSlug) {
-		const cls = db.select().from(classTable).where(eq(classTable.slug, classSlug)).get();
-		if (!cls) return [];
-		const feature$3 = slugs(db.select().from(feature).all());
-		const levels = db.select().from(classLevel).where(eq(classLevel.classId, cls.id)).orderBy(asc(classLevel.level)).all();
-		const links = group(db.select().from(classLevelFeature).all(), (r) => r.classLevelId);
-		return levels.map((l) => ({
-			...l,
-			features: (links.get(l.id) ?? []).map((f) => feature$3.get(f.featureId))
-		}));
-	}
-	function subclasses() {
-		const cls = slugs(db.select().from(classTable).all());
-		return db.select().from(subclass).orderBy(asc(subclass.slug)).all().map(({ classId, ...s }) => ({
-			...s,
-			class: cls.get(classId)
-		}));
-	}
-	function features(filter = {}) {
-		const cls = slugs(db.select().from(classTable).all());
-		const sub = slugs(db.select().from(subclass).all());
-		const rows = db.select().from(feature).orderBy(asc(feature.slug)).all();
-		const feature$2 = slugs(rows);
-		return rows.map(({ classId, subclassId, parentId, ...f }) => ({
-			...f,
-			class: cls.get(classId),
-			subclass: subclassId ? sub.get(subclassId) : null,
-			parent: parentId ? feature$2.get(parentId) : null
-		})).filter((f) => (filter.classSlug === void 0 || f.class === filter.classSlug) && (filter.level === void 0 || f.level === filter.level));
-	}
-	function spells(filter = {}) {
-		const school = slugs(db.select().from(magicSchool).all());
-		const ability = abilitySlugs();
-		const cls = slugs(db.select().from(classTable).all());
-		const links = group(db.select().from(spellClass).all(), (r) => r.spellId);
-		return db.select().from(spell).orderBy(asc(spell.slug)).all().map(({ schoolId, dcAbilityId, ...s }) => ({
-			...s,
-			school: school.get(schoolId),
-			dcAbility: dcAbilityId ? ability.get(dcAbilityId) : null,
-			classes: (links.get(s.id) ?? []).map((l) => cls.get(l.classId)).sort()
-		})).filter((s) => (filter.level === void 0 || s.level === filter.level) && (filter.classSlug === void 0 || s.classes.includes(filter.classSlug)));
-	}
-	function equipment$2(filter = {}) {
-		const category = slugs(db.select().from(equipmentCategory).all());
-		const damage = slugs(db.select().from(damageType).all());
-		const property = slugs(db.select().from(weaponProperty).all());
-		const rows = db.select().from(equipment).orderBy(asc(equipment.slug)).all();
-		const item = slugs(rows);
-		const props = group(db.select().from(equipmentWeaponProperty).all(), (r) => r.equipmentId);
-		const contents = group(db.select().from(equipmentContent).all(), (r) => r.packId);
-		const inCategory = group(db.select().from(equipmentCategoryItem).all(), (r) => r.equipmentId);
-		return rows.map(({ categoryId, gearCategoryId, damageTypeId, twoHandedDamageTypeId, ...e }) => ({
-			...e,
-			category: category.get(categoryId),
-			gearCategory: gearCategoryId ? category.get(gearCategoryId) : null,
-			damageType: damageTypeId ? damage.get(damageTypeId) : null,
-			twoHandedDamageType: twoHandedDamageTypeId ? damage.get(twoHandedDamageTypeId) : null,
-			properties: (props.get(e.id) ?? []).map((p) => property.get(p.propertyId)).sort(),
-			contents: (contents.get(e.id) ?? []).map((c) => ({
-				item: item.get(c.itemId),
-				quantity: c.quantity
-			})),
-			categories: (inCategory.get(e.id) ?? []).map((c) => category.get(c.categoryId)).sort()
-		})).filter((e) => filter.categorySlug === void 0 || e.categories.includes(filter.categorySlug));
-	}
-	function backgrounds() {
-		const proficiency$4 = slugs(db.select().from(proficiency).all());
-		const item = slugs(db.select().from(equipment).all());
-		const alignment$2 = slugs(db.select().from(alignment).all());
-		const profs = group(db.select().from(backgroundProficiency).all(), (r) => r.backgroundId);
-		const gear = group(db.select().from(backgroundEquipment).all(), (r) => r.backgroundId);
-		const options = group(db.select().from(backgroundOption).orderBy(asc(backgroundOption.kind), asc(backgroundOption.position)).all(), (o) => o.backgroundId);
-		const optionAlignments = group(db.select().from(backgroundOptionAlignment).all(), (r) => r.optionId);
-		const choices = choiceGroups("background");
-		return db.select().from(background).orderBy(asc(background.slug)).all().map((b) => ({
-			...b,
-			proficiencies: (profs.get(b.id) ?? []).map((p) => proficiency$4.get(p.proficiencyId)),
-			startingEquipment: (gear.get(b.id) ?? []).map((e) => ({
-				item: item.get(e.itemId),
-				quantity: e.quantity
-			})),
-			options: (options.get(b.id) ?? []).map((o) => ({
-				kind: o.kind,
-				text: o.text,
-				alignments: (optionAlignments.get(o.id) ?? []).map((a) => alignment$2.get(a.alignmentId))
-			})),
-			choiceGroups: choices.get(b.slug) ?? []
-		}));
-	}
-	function monsters() {
-		const proficiency$2 = slugs(db.select().from(proficiency).all());
-		const condition$2 = slugs(db.select().from(condition).all());
-		const profs = group(db.select().from(monsterProficiency).orderBy(asc(monsterProficiency.position)).all(), (r) => r.monsterId);
-		const immunities = group(db.select().from(monsterConditionImmunity).all(), (r) => r.monsterId);
-		return db.select().from(monster).orderBy(asc(monster.slug)).all().map(({ str, dex, con, int, wis, cha, ...m }) => ({
-			...m,
-			abilityScores: {
-				str,
-				dex,
-				con,
-				int,
-				wis,
-				cha
-			},
-			proficiencies: (profs.get(m.id) ?? []).map((p) => ({
-				proficiency: proficiency$2.get(p.proficiencyId),
-				value: p.value
-			})),
-			conditionImmunities: (immunities.get(m.id) ?? []).map((c) => condition$2.get(c.conditionId)).sort()
-		}));
-	}
-	function magicItems() {
-		const category = slugs(db.select().from(equipmentCategory).all());
-		const rows = db.select().from(magicItem).orderBy(asc(magicItem.slug)).all();
-		const item = slugs(rows);
-		const variants = group(rows.filter((r) => r.variantOfId !== null), (r) => r.variantOfId);
-		return rows.map(({ categoryId, variantOfId, ...i }) => ({
-			...i,
-			category: category.get(categoryId),
-			variantOf: variantOfId ? item.get(variantOfId) : null,
-			variants: (variants.get(i.id) ?? []).map((v) => v.slug)
-		}));
-	}
-	const conditions = () => db.select().from(condition).orderBy(asc(condition.slug)).all();
-	const ruleSections = () => db.select().from(ruleSection).orderBy(asc(ruleSection.slug)).all();
-	/** Each rules kind a handle can name, and how to read its entries. */
-	const kinds = {
-		spell: () => spells(),
-		monster: monsters,
-		condition: conditions,
-		"magic-item": magicItems,
-		rule: ruleSections
-	};
-	/** Resolves a rules handle (`monster:goblin`, `condition:prone`) to its entry, or null. */
-	function entry(handle) {
-		const [kind, slug, ...rest] = handle.split(":");
-		if (rest.length || !slug || !Object.hasOwn(kinds, kind)) return null;
-		const found = kinds[kind]().find((e) => e.slug === slug);
-		return found ? {
-			handle,
-			kind,
-			name: found.name,
-			entry: found
-		} : null;
-	}
-	/**
-	* Ranked matches for a free-text query across every rules kind. An entry named exactly by the
-	* query comes first; then entries holding every word, then entries holding any, by relevance
-	* (a word in the name weighs more than one in the text). Words match other forms of themselves
-	* ("grappling" finds Grappled).
-	*/
-	function search(query, { limit = 10 } = {}) {
-		const words = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-		if (!words.length) return [];
-		const terms = words.map((w) => `"${w}"`);
-		const name = words.join(" ");
-		const run = (match, max) => db.all(sql`
-        SELECT handle, kind, name,
-          snippet(rules_search, 3, '', '', '…', 16) AS snippet
-        FROM rules_search
-        WHERE rules_search MATCH ${match}
-        ORDER BY lower(name) = ${name} DESC, bm25(rules_search, 0, 0, 10, 1)
-        LIMIT ${max}
-      `);
-		const results = run(terms.join(" AND "), limit);
-		if (results.length < limit && terms.length > 1) {
-			const seen = new Set(results.map((r) => r.handle));
-			for (const r of run(terms.join(" OR "), limit)) {
-				if (results.length >= limit) break;
-				if (!seen.has(r.handle)) results.push(r);
-			}
-		}
-		return results;
-	}
-	return {
-		datasetInfo: () => db.select().from(rulesDataset).where(eq(rulesDataset.id, 1)).get() ?? null,
-		abilities: () => db.select().from(ability).orderBy(asc(ability.id)).all(),
-		skills: () => {
-			const ability = abilitySlugs();
-			return db.select().from(skill).orderBy(asc(skill.slug)).all().map(({ abilityId, ...s }) => ({
-				...s,
-				ability: ability.get(abilityId)
-			}));
-		},
-		languages: () => db.select().from(language).orderBy(asc(language.slug)).all(),
-		alignments: () => db.select().from(alignment).orderBy(asc(alignment.id)).all(),
-		proficiencies: () => db.select().from(proficiency).orderBy(asc(proficiency.slug)).all(),
-		traits,
-		races,
-		race: (slug) => races().find((r) => r.slug === slug) ?? null,
-		subraces,
-		classes,
-		classBySlug: (slug) => classes().find((c) => c.slug === slug) ?? null,
-		classLevels,
-		subclasses,
-		features,
-		spells,
-		spell: (slug) => spells().find((s) => s.slug === slug) ?? null,
-		equipment: equipment$2,
-		equipmentItem: (slug) => equipment$2().find((e) => e.slug === slug) ?? null,
-		backgrounds,
-		background: (slug) => backgrounds().find((b) => b.slug === slug) ?? null,
-		monsters,
-		conditions,
-		magicItems,
-		ruleSections,
-		entry,
-		search,
-		abilityScoreMethods: () => db.select().from(abilityScoreMethod).orderBy(asc(abilityScoreMethod.id)).all()
-	};
 }
 // src/lib/rules/data/abilities.json
 var abilities_default = [
@@ -6889,30 +6584,352 @@ function loadRulesDataset() {
 		abilityScoreMethods: abilityScoreMethods_default
 	});
 }
-// src/lib/server/campaign/paths.ts
-/** The user-level state directory (registry, server runtime file). */
-function userStateDir(env = process.env) {
-	return env.DUNGEON_MASTER_HOME || path.join(os.homedir(), ".dungeon-master");
-}
-/** Where the New Campaign dialog suggests creating Campaign folders. */
-function defaultCampaignRoot(env = process.env) {
-	return env.DUNGEON_MASTER_CAMPAIGNS || path.join(os.homedir(), "dm-campaigns");
-}
-/** A Campaign folder's database, inside its `.dm/` directory. */
-function campaignDatabasePath(folder) {
-	return path.join(folder, ".dm", "campaign.db");
-}
-/**
-* A folder's canonical path, with symlinks resolved, so the same Campaign folder matches however
-* it was reached (a process's cwd is always the real path).
-*/
-function canonicalFolder(folder) {
-	const resolved = path.resolve(folder);
-	try {
-		return fs.realpathSync(resolved);
-	} catch {
-		return resolved;
+// src/lib/server/rules/repository.ts
+function group(rows, key) {
+	const out = /* @__PURE__ */ new Map();
+	for (const row of rows) {
+		const list = out.get(key(row));
+		if (list) list.push(row);
+		else out.set(key(row), [row]);
 	}
+	return out;
+}
+var slugs = (rows) => new Map(rows.map((r) => [r.id, r.slug]));
+function createRulesRepository(db) {
+	const abilitySlugs = () => slugs(db.select().from(ability).all());
+	const choiceGroups = (ownerType) => {
+		const groups = db.select().from(choiceGroup).where(eq(choiceGroup.ownerType, ownerType)).all();
+		const options = db.select().from(choiceOption).orderBy(asc(choiceOption.position)).all();
+		const items = db.select().from(choiceOptionItem).orderBy(asc(choiceOptionItem.position)).all();
+		const proficiency$6 = slugs(db.select().from(proficiency).all());
+		const language$3 = slugs(db.select().from(language).all());
+		const ability = abilitySlugs();
+		const equipment$3 = slugs(db.select().from(equipment).all());
+		const category = slugs(db.select().from(equipmentCategory).all());
+		const itemsByOption = group(items, (i) => i.optionId);
+		const optionsByGroup = group(options, (o) => o.groupId);
+		const toItem = (i) => {
+			switch (i.itemType) {
+				case "proficiency": return {
+					type: "proficiency",
+					proficiency: proficiency$6.get(i.proficiencyId)
+				};
+				case "language": return {
+					type: "language",
+					language: language$3.get(i.languageId)
+				};
+				case "abilityBonus": return {
+					type: "abilityBonus",
+					ability: ability.get(i.abilityId),
+					bonus: i.bonus
+				};
+				case "equipment": return {
+					type: "equipment",
+					equipment: equipment$3.get(i.equipmentId),
+					count: i.count,
+					requiresProficiency: i.requiresProficiencyId ? proficiency$6.get(i.requiresProficiencyId) : null
+				};
+				case "equipmentCategory": return {
+					type: "equipmentCategory",
+					category: category.get(i.equipmentCategoryId),
+					count: i.count
+				};
+			}
+		};
+		const byOwner = /* @__PURE__ */ new Map();
+		for (const g of groups) {
+			const built = {
+				key: g.key.split("/").slice(2).join("/"),
+				kind: g.kind,
+				choose: g.choose,
+				description: g.description,
+				options: (optionsByGroup.get(g.id) ?? []).map((o) => ({ items: (itemsByOption.get(o.id) ?? []).map(toItem) }))
+			};
+			const list = byOwner.get(g.ownerSlug);
+			if (list) list.push(built);
+			else byOwner.set(g.ownerSlug, [built]);
+		}
+		return byOwner;
+	};
+	const bonuses = (rows) => {
+		const ability = abilitySlugs();
+		return rows.map((r) => ({
+			ability: ability.get(r.abilityId),
+			bonus: r.bonus
+		}));
+	};
+	function races() {
+		const rows = db.select().from(race).orderBy(asc(race.slug)).all();
+		const choices = choiceGroups("race");
+		const bonusRows = group(db.select().from(raceAbilityBonus).all(), (r) => r.raceId);
+		const languageRows = group(db.select().from(raceLanguage).all(), (r) => r.raceId);
+		const traitRows = group(db.select().from(raceTrait).all(), (r) => r.raceId);
+		const language$2 = slugs(db.select().from(language).all());
+		const trait$4 = slugs(db.select().from(trait).all());
+		return rows.map((r) => ({
+			...r,
+			abilityBonuses: bonuses(bonusRows.get(r.id) ?? []),
+			languages: (languageRows.get(r.id) ?? []).map((l) => language$2.get(l.languageId)),
+			traits: (traitRows.get(r.id) ?? []).map((x) => trait$4.get(x.traitId)),
+			choiceGroups: choices.get(r.slug) ?? []
+		}));
+	}
+	function subraces() {
+		const race$2 = slugs(db.select().from(race).all());
+		const bonusRows = group(db.select().from(subraceAbilityBonus).all(), (r) => r.subraceId);
+		const traitRows = group(db.select().from(subraceTrait).all(), (r) => r.subraceId);
+		const trait$3 = slugs(db.select().from(trait).all());
+		return db.select().from(subrace).orderBy(asc(subrace.slug)).all().map(({ raceId, ...s }) => ({
+			...s,
+			race: race$2.get(raceId),
+			abilityBonuses: bonuses(bonusRows.get(s.id) ?? []),
+			traits: (traitRows.get(s.id) ?? []).map((x) => trait$3.get(x.traitId))
+		}));
+	}
+	function traits() {
+		const rows = db.select().from(trait).orderBy(asc(trait.slug)).all();
+		const trait$2 = slugs(rows);
+		const proficiency$3 = slugs(db.select().from(proficiency).all());
+		const profRows = group(db.select().from(traitProficiency).all(), (r) => r.traitId);
+		const choices = choiceGroups("trait");
+		return rows.map(({ parentId, ...r }) => ({
+			...r,
+			parent: parentId ? trait$2.get(parentId) : null,
+			proficiencies: (profRows.get(r.id) ?? []).map((p) => proficiency$3.get(p.proficiencyId)),
+			choiceGroups: choices.get(r.slug) ?? []
+		}));
+	}
+	function classes() {
+		const rows = db.select().from(classTable).orderBy(asc(classTable.slug)).all();
+		const ability = abilitySlugs();
+		const proficiency$5 = slugs(db.select().from(proficiency).all());
+		const equipment$4 = slugs(db.select().from(equipment).all());
+		const saves = group(db.select().from(classSavingThrow).all(), (r) => r.classId);
+		const profs = group(db.select().from(classProficiency).all(), (r) => r.classId);
+		const gear = group(db.select().from(classStartingEquipment).all(), (r) => r.classId);
+		const choices = choiceGroups("class");
+		return rows.map(({ spellcastingAbilityId, ...c }) => ({
+			...c,
+			spellcastingAbility: spellcastingAbilityId ? ability.get(spellcastingAbilityId) : null,
+			savingThrows: (saves.get(c.id) ?? []).map((s) => ability.get(s.abilityId)),
+			proficiencies: (profs.get(c.id) ?? []).map((p) => proficiency$5.get(p.proficiencyId)),
+			startingEquipment: (gear.get(c.id) ?? []).map((e) => ({
+				item: equipment$4.get(e.itemId),
+				quantity: e.quantity
+			})),
+			choiceGroups: choices.get(c.slug) ?? []
+		}));
+	}
+	function classLevels(classSlug) {
+		const cls = db.select().from(classTable).where(eq(classTable.slug, classSlug)).get();
+		if (!cls) return [];
+		const feature$3 = slugs(db.select().from(feature).all());
+		const levels = db.select().from(classLevel).where(eq(classLevel.classId, cls.id)).orderBy(asc(classLevel.level)).all();
+		const links = group(db.select().from(classLevelFeature).all(), (r) => r.classLevelId);
+		return levels.map((l) => ({
+			...l,
+			features: (links.get(l.id) ?? []).map((f) => feature$3.get(f.featureId))
+		}));
+	}
+	function subclasses() {
+		const cls = slugs(db.select().from(classTable).all());
+		return db.select().from(subclass).orderBy(asc(subclass.slug)).all().map(({ classId, ...s }) => ({
+			...s,
+			class: cls.get(classId)
+		}));
+	}
+	function features(filter = {}) {
+		const cls = slugs(db.select().from(classTable).all());
+		const sub = slugs(db.select().from(subclass).all());
+		const rows = db.select().from(feature).orderBy(asc(feature.slug)).all();
+		const feature$2 = slugs(rows);
+		return rows.map(({ classId, subclassId, parentId, ...f }) => ({
+			...f,
+			class: cls.get(classId),
+			subclass: subclassId ? sub.get(subclassId) : null,
+			parent: parentId ? feature$2.get(parentId) : null
+		})).filter((f) => (filter.classSlug === void 0 || f.class === filter.classSlug) && (filter.level === void 0 || f.level === filter.level));
+	}
+	function spells(filter = {}) {
+		const school = slugs(db.select().from(magicSchool).all());
+		const ability = abilitySlugs();
+		const cls = slugs(db.select().from(classTable).all());
+		const links = group(db.select().from(spellClass).all(), (r) => r.spellId);
+		return db.select().from(spell).orderBy(asc(spell.slug)).all().map(({ schoolId, dcAbilityId, ...s }) => ({
+			...s,
+			school: school.get(schoolId),
+			dcAbility: dcAbilityId ? ability.get(dcAbilityId) : null,
+			classes: (links.get(s.id) ?? []).map((l) => cls.get(l.classId)).sort()
+		})).filter((s) => (filter.level === void 0 || s.level === filter.level) && (filter.classSlug === void 0 || s.classes.includes(filter.classSlug)));
+	}
+	function equipment$2(filter = {}) {
+		const category = slugs(db.select().from(equipmentCategory).all());
+		const damage = slugs(db.select().from(damageType).all());
+		const property = slugs(db.select().from(weaponProperty).all());
+		const rows = db.select().from(equipment).orderBy(asc(equipment.slug)).all();
+		const item = slugs(rows);
+		const props = group(db.select().from(equipmentWeaponProperty).all(), (r) => r.equipmentId);
+		const contents = group(db.select().from(equipmentContent).all(), (r) => r.packId);
+		const inCategory = group(db.select().from(equipmentCategoryItem).all(), (r) => r.equipmentId);
+		return rows.map(({ categoryId, gearCategoryId, damageTypeId, twoHandedDamageTypeId, ...e }) => ({
+			...e,
+			category: category.get(categoryId),
+			gearCategory: gearCategoryId ? category.get(gearCategoryId) : null,
+			damageType: damageTypeId ? damage.get(damageTypeId) : null,
+			twoHandedDamageType: twoHandedDamageTypeId ? damage.get(twoHandedDamageTypeId) : null,
+			properties: (props.get(e.id) ?? []).map((p) => property.get(p.propertyId)).sort(),
+			contents: (contents.get(e.id) ?? []).map((c) => ({
+				item: item.get(c.itemId),
+				quantity: c.quantity
+			})),
+			categories: (inCategory.get(e.id) ?? []).map((c) => category.get(c.categoryId)).sort()
+		})).filter((e) => filter.categorySlug === void 0 || e.categories.includes(filter.categorySlug));
+	}
+	function backgrounds() {
+		const proficiency$4 = slugs(db.select().from(proficiency).all());
+		const item = slugs(db.select().from(equipment).all());
+		const alignment$2 = slugs(db.select().from(alignment).all());
+		const profs = group(db.select().from(backgroundProficiency).all(), (r) => r.backgroundId);
+		const gear = group(db.select().from(backgroundEquipment).all(), (r) => r.backgroundId);
+		const options = group(db.select().from(backgroundOption).orderBy(asc(backgroundOption.kind), asc(backgroundOption.position)).all(), (o) => o.backgroundId);
+		const optionAlignments = group(db.select().from(backgroundOptionAlignment).all(), (r) => r.optionId);
+		const choices = choiceGroups("background");
+		return db.select().from(background).orderBy(asc(background.slug)).all().map((b) => ({
+			...b,
+			proficiencies: (profs.get(b.id) ?? []).map((p) => proficiency$4.get(p.proficiencyId)),
+			startingEquipment: (gear.get(b.id) ?? []).map((e) => ({
+				item: item.get(e.itemId),
+				quantity: e.quantity
+			})),
+			options: (options.get(b.id) ?? []).map((o) => ({
+				kind: o.kind,
+				text: o.text,
+				alignments: (optionAlignments.get(o.id) ?? []).map((a) => alignment$2.get(a.alignmentId))
+			})),
+			choiceGroups: choices.get(b.slug) ?? []
+		}));
+	}
+	function monsters() {
+		const proficiency$2 = slugs(db.select().from(proficiency).all());
+		const condition$2 = slugs(db.select().from(condition).all());
+		const profs = group(db.select().from(monsterProficiency).orderBy(asc(monsterProficiency.position)).all(), (r) => r.monsterId);
+		const immunities = group(db.select().from(monsterConditionImmunity).all(), (r) => r.monsterId);
+		return db.select().from(monster).orderBy(asc(monster.slug)).all().map(({ str, dex, con, int, wis, cha, ...m }) => ({
+			...m,
+			abilityScores: {
+				str,
+				dex,
+				con,
+				int,
+				wis,
+				cha
+			},
+			proficiencies: (profs.get(m.id) ?? []).map((p) => ({
+				proficiency: proficiency$2.get(p.proficiencyId),
+				value: p.value
+			})),
+			conditionImmunities: (immunities.get(m.id) ?? []).map((c) => condition$2.get(c.conditionId)).sort()
+		}));
+	}
+	function magicItems() {
+		const category = slugs(db.select().from(equipmentCategory).all());
+		const rows = db.select().from(magicItem).orderBy(asc(magicItem.slug)).all();
+		const item = slugs(rows);
+		const variants = group(rows.filter((r) => r.variantOfId !== null), (r) => r.variantOfId);
+		return rows.map(({ categoryId, variantOfId, ...i }) => ({
+			...i,
+			category: category.get(categoryId),
+			variantOf: variantOfId ? item.get(variantOfId) : null,
+			variants: (variants.get(i.id) ?? []).map((v) => v.slug)
+		}));
+	}
+	const conditions = () => db.select().from(condition).orderBy(asc(condition.slug)).all();
+	const ruleSections = () => db.select().from(ruleSection).orderBy(asc(ruleSection.slug)).all();
+	/** Each rules kind a handle can name, and how to read its entries. */
+	const kinds = {
+		spell: () => spells(),
+		monster: monsters,
+		condition: conditions,
+		"magic-item": magicItems,
+		rule: ruleSections
+	};
+	/** Resolves a rules handle (`monster:goblin`, `condition:prone`) to its entry, or null. */
+	function entry(handle) {
+		const [kind, slug, ...rest] = handle.split(":");
+		if (rest.length || !slug || !Object.hasOwn(kinds, kind)) return null;
+		const found = kinds[kind]().find((e) => e.slug === slug);
+		return found ? {
+			handle,
+			kind,
+			name: found.name,
+			entry: found
+		} : null;
+	}
+	/**
+	* Ranked matches for a free-text query across every rules kind. An entry named exactly by the
+	* query comes first; then entries holding every word, then entries holding any, by relevance
+	* (a word in the name weighs more than one in the text). Words match other forms of themselves
+	* ("grappling" finds Grappled).
+	*/
+	function search(query, { limit = 10 } = {}) {
+		const words = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+		if (!words.length) return [];
+		const terms = words.map((w) => `"${w}"`);
+		const name = words.join(" ");
+		const run = (match, max) => db.all(sql`
+        SELECT handle, kind, name,
+          snippet(rules_search, 3, '', '', '…', 16) AS snippet
+        FROM rules_search
+        WHERE rules_search MATCH ${match}
+        ORDER BY lower(name) = ${name} DESC, bm25(rules_search, 0, 0, 10, 1)
+        LIMIT ${max}
+      `);
+		const results = run(terms.join(" AND "), limit);
+		if (results.length < limit && terms.length > 1) {
+			const seen = new Set(results.map((r) => r.handle));
+			for (const r of run(terms.join(" OR "), limit)) {
+				if (results.length >= limit) break;
+				if (!seen.has(r.handle)) results.push(r);
+			}
+		}
+		return results;
+	}
+	return {
+		datasetInfo: () => db.select().from(rulesDataset).where(eq(rulesDataset.id, 1)).get() ?? null,
+		abilities: () => db.select().from(ability).orderBy(asc(ability.id)).all(),
+		skills: () => {
+			const ability = abilitySlugs();
+			return db.select().from(skill).orderBy(asc(skill.slug)).all().map(({ abilityId, ...s }) => ({
+				...s,
+				ability: ability.get(abilityId)
+			}));
+		},
+		languages: () => db.select().from(language).orderBy(asc(language.slug)).all(),
+		alignments: () => db.select().from(alignment).orderBy(asc(alignment.id)).all(),
+		proficiencies: () => db.select().from(proficiency).orderBy(asc(proficiency.slug)).all(),
+		traits,
+		races,
+		race: (slug) => races().find((r) => r.slug === slug) ?? null,
+		subraces,
+		classes,
+		classBySlug: (slug) => classes().find((c) => c.slug === slug) ?? null,
+		classLevels,
+		subclasses,
+		features,
+		spells,
+		spell: (slug) => spells().find((s) => s.slug === slug) ?? null,
+		equipment: equipment$2,
+		equipmentItem: (slug) => equipment$2().find((e) => e.slug === slug) ?? null,
+		backgrounds,
+		background: (slug) => backgrounds().find((b) => b.slug === slug) ?? null,
+		monsters,
+		conditions,
+		magicItems,
+		ruleSections,
+		entry,
+		search,
+		abilityScoreMethods: () => db.select().from(abilityScoreMethod).orderBy(asc(abilityScoreMethod.id)).all()
+	};
 }
 // src/lib/server/rules/seed.ts
 /** Keeps a statement under SQLite's bound-parameter limit. */
@@ -7340,6 +7357,6 @@ function seedRulesData(db, dataset = loadRulesDataset(), now = Date.now) {
 		}).run();
 	});
 }
-export { ABILITY_METHODS as $, returnedDraft as A, worldLink as B, combat as C, DUNGEON_MASTER_PORT as Ct, event as D, declaration as E, belief as F, background as G, NPC_STATUSES as H, entity as I, race as J, classTable as K, entityAlias as L, act as M, arc as N, floor as O, beat as P, subrace as Q, fact as R, characterSpell as S, DUNGEON_MASTER_HOME as St, conversationMessage as T, abilityScoreMethod as U, ENTITY_TYPES as V, alignment as W, spell as X, skill as Y, subclass as Z, characterChoice as _, sql as _t, userStateDir as a, desc as at, characterItem as b, DATABASE_URL as bt, abilities_default as c, gt as ct, openDatabase as d, isNotNull as dt, BACKSTORY_MAX as et, activityLine as f, isNull as ft, character as g, or as gt, campaign as h, ne as ht, defaultCampaignRoot as i, asc as it, session as j, npcCombat as k, createRulesRepository as l, gte as lt, callPart as m, lt as mt, campaignDatabasePath as n, CUSTOM_BACKGROUND_SLUG as nt, loadRulesDataset as o, and as ot, call as p, like as pt, equipment as q, canonicalFolder as r, SOLO_PLAYER as rt, skills_default as s, eq as st, seedRulesData as t, CUSTOM_BACKGROUND_FEATURE_MAX as tt, migrateDatabase as u, inArray as ut, characterDraft as v, Column as vt, combatant as w, DUNGEON_MASTER_VERSION as wt, characterSkill as x, DUNGEON_MASTER_CAMPAIGNS as xt, characterEquipment as y, is as yt, pageRevision as z };
+export { subrace as $, returnedDraft as A, worldLink as B, combat as C, DUNGEON_MASTER_HOME as Ct, event as D, declaration as E, belief as F, alignment as G, NPC_STATUSES as H, entity as I, equipment as J, background as K, entityAlias as L, act as M, arc as N, floor as O, beat as P, subclass as Q, fact as R, characterSpell as S, DUNGEON_MASTER_CAMPAIGNS as St, conversationMessage as T, DUNGEON_MASTER_VERSION as Tt, handleKind as U, ENTITY_TYPES as V, abilityScoreMethod as W, skill as X, race as Y, spell as Z, characterChoice as _, or as _t, abilities_default as a, asc as at, characterItem as b, is as bt, defaultCampaignRoot as c, eq as ct, openDatabase as d, inArray as dt, ABILITY_METHODS as et, activityLine as f, isNotNull as ft, character as g, ne as gt, campaign as h, lt as ht, skills_default as i, SOLO_PLAYER as it, session as j, npcCombat as k, userStateDir as l, gt as lt, callPart as m, like as mt, createRulesRepository as n, CUSTOM_BACKGROUND_FEATURE_MAX as nt, campaignDatabasePath as o, desc as ot, call as p, isNull as pt, classTable as q, loadRulesDataset as r, CUSTOM_BACKGROUND_SLUG as rt, canonicalFolder as s, and as st, seedRulesData as t, BACKSTORY_MAX as tt, migrateDatabase as u, gte as ut, characterDraft as v, sql as vt, combatant as w, DUNGEON_MASTER_PORT as wt, characterSkill as x, DATABASE_URL as xt, characterEquipment as y, Column as yt, pageRevision as z };
 
 //# sourceMappingURL=seed.js.map

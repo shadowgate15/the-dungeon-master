@@ -1,6 +1,14 @@
 import { _ as attr, c as ensure_array_like, o as derived, x as escape_html } from "./server2.js";
 import { a as journalQueryKey, d as timelineQueryKey, f as createQuery, i as floorQueryKey, l as sessionHistoryQueryKey, p as SvelteMap, s as sceneQueryKey, u as sheetsQueryKey } from "./messages.js";
 import { t as useQueryClient } from "./useQueryClient.js";
+// src/lib/play/journal.ts
+/** Whether a Character holds an entry themselves. */
+var holds = (entry, character) => entry.holders.some((h) => h.id === character);
+/**
+* "What <Character> knows": the entries they hold, then the rest of the Party's, which the
+* Character can be told about at the table.
+*/
+var knownBy = (journal, character) => [...journal.entries.filter((e) => holds(e, character)), ...journal.entries.filter((e) => !holds(e, character))];
 // src/lib/play/Journal.svelte
 function Journal($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -8,7 +16,7 @@ function Journal($$renderer, $$props) {
 		* What the Player's Characters believe, grouped by who or what it is about, each entry marked
 		* with the Characters who hold it. Only Beliefs, as learned: never the World layer.
 		*/
-		let { entries, holders = true } = $$props;
+		let { entries, actor } = $$props;
 		const typeLabel = {
 			npc: "Person",
 			place: "Place",
@@ -43,7 +51,7 @@ function Journal($$renderer, $$props) {
 					if (entry.source) $$renderer.push(`<!--[0--><span class="text-muted">(from ${escape_html(entry.source)})</span>`);
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--> `);
-					if (holders) $$renderer.push(`<!--[0--><span class="block text-xs text-muted">${escape_html(entry.holders.map((h) => h.name).join(", "))}</span>`);
+					if (actor === void 0 || !holds(entry, actor)) $$renderer.push(`<!--[0--><span class="block text-xs text-muted">${escape_html(entry.holders.map((h) => h.name).join(", "))}</span>`);
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--></li>`);
 				}
@@ -55,105 +63,77 @@ function Journal($$renderer, $$props) {
 	});
 }
 // src/lib/play/floor-client.ts
-/** A Floor change the server refused, with its message for the Player. */
-var FloorChangeError = class extends Error {};
-/** The Campaign's open Floor, starting from the server-rendered one; live updates keep it fresh. */
-function createFloorQuery(campaign, initial) {
+/** A play request the server refused or failed, with its message for the Player. */
+var PlayRequestError = class extends Error {};
+/** The server's refusal of a request as a `PlayRequestError`: its `{ error }`, else `fallback`. */
+async function refusal(res, fallback) {
+	return new PlayRequestError((await res.json().catch(() => ({}))).error ?? fallback);
+}
+var campaignPath = (campaign, path) => `/api/campaigns/${encodeURIComponent(campaign)}/${path}`;
+/**
+* A query of one Campaign read the play console shows, starting from the server-rendered value;
+* live updates invalidate its key to keep it fresh.
+*/
+function campaignQuery(key, path, failure, campaign, initial) {
 	return createQuery(() => ({
-		queryKey: floorQueryKey(campaign()),
+		queryKey: key(campaign()),
 		queryFn: async () => {
-			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/floor`);
-			if (!res.ok) throw new FloorChangeError("The Floor could not be loaded");
+			const res = await fetch(campaignPath(campaign(), path));
+			if (!res.ok) throw await refusal(res, failure);
 			return await res.json();
 		},
 		initialData: initial()
 	}));
 }
-/** The Campaign's timeline and awaiting Narration, starting from the server-rendered one. */
-function createTimelineQuery(campaign, initial) {
-	return createQuery(() => ({
-		queryKey: timelineQueryKey(campaign()),
-		queryFn: async () => {
-			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/timeline`);
-			if (!res.ok) throw new FloorChangeError("The timeline could not be loaded");
-			return await res.json();
-		},
-		initialData: initial()
-	}));
-}
-/** The Party's play sheets, starting from the server-rendered ones; every DM write refreshes them. */
-function createSheetsQuery(campaign, initial) {
-	return createQuery(() => ({
-		queryKey: sheetsQueryKey(campaign()),
-		queryFn: async () => {
-			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/sheets`);
-			if (!res.ok) throw new Error("The sheets could not be loaded");
-			return await res.json();
-		},
-		initialData: initial()
-	}));
-}
+/** The Campaign's open Floor. */
+var createFloorQuery = (campaign, initial) => campaignQuery(floorQueryKey, "floor", "The Floor could not be loaded", campaign, initial);
+/** The Campaign's timeline and awaiting Narration. */
+var createTimelineQuery = (campaign, initial) => campaignQuery(timelineQueryKey, "timeline", "The timeline could not be loaded", campaign, initial);
+/** The Party's play sheets; every DM write refreshes them. */
+var createSheetsQuery = (campaign, initial) => campaignQuery(sheetsQueryKey, "sheets", "The sheets could not be loaded", campaign, initial);
+/** The Campaign's Scene for the rail. */
+var createSceneQuery = (campaign, initial) => campaignQuery(sceneQueryKey, "scene", "The Scene could not be loaded", campaign, initial);
+/** The Player's Journal. */
+var createJournalQuery = (campaign, initial) => campaignQuery(journalQueryKey, "journal", "The Journal could not be loaded", campaign, initial);
+/** The Player's read-only Session history. */
+var createSessionHistoryQuery = (campaign, initial) => campaignQuery(sessionHistoryQueryKey, "sessions", "The Session history could not be loaded", campaign, initial);
 /** Takes the level the DM awarded with the picked spells; throws the server's refusal. */
 async function levelUp(campaign, character, picks) {
-	const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign)}/characters/${encodeURIComponent(character)}/level-up`, {
+	const res = await fetch(campaignPath(campaign, `characters/${encodeURIComponent(character)}/level-up`), {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify(picks)
 	});
-	if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The level-up was refused");
+	if (!res.ok) throw await refusal(res, "The level-up was refused");
 }
-/** The Campaign's Scene for the rail, starting from the server-rendered one. */
-function createSceneQuery(campaign, initial) {
-	return createQuery(() => ({
-		queryKey: sceneQueryKey(campaign()),
-		queryFn: async () => {
-			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/scene`);
-			if (!res.ok) throw new FloorChangeError("The Scene could not be loaded");
-			return await res.json();
-		},
-		initialData: initial()
-	}));
+/**
+* Saves a Character's notes, personality and appearance; works with the DM away. Throws the
+* server's refusal.
+*/
+async function saveDetails(campaign, character, details) {
+	const res = await fetch(campaignPath(campaign, `characters/${encodeURIComponent(character)}`), {
+		method: "PATCH",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify(details)
+	});
+	if (!res.ok) throw await refusal(res, "The details could not be saved");
 }
-/** The Player's Journal, starting from the server-rendered one; live updates keep it fresh. */
-function createJournalQuery(campaign, initial) {
-	return createQuery(() => ({
-		queryKey: journalQueryKey(campaign()),
-		queryFn: async () => {
-			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/journal`);
-			if (!res.ok) throw new Error("The Journal could not be loaded");
-			return await res.json();
-		},
-		initialData: initial()
-	}));
-}
-/** The Player's read-only Session history, starting from the server-rendered one. */
-function createSessionHistoryQuery(campaign, initial) {
-	return createQuery(() => ({
-		queryKey: sessionHistoryQueryKey(campaign()),
-		queryFn: async () => {
-			const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/sessions`);
-			if (!res.ok) throw new Error("The Session history could not be loaded");
-			return await res.json();
-		},
-		initialData: initial()
-	}));
-}
-/** End Session: asks the DM to close the sitting. */
+/** End Session: asks the DM to close the Session. */
 async function endSession(campaign) {
-	const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign)}/end-session`, { method: "POST" });
-	if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The session could not be ended");
+	const res = await fetch(campaignPath(campaign, "end-session"), { method: "POST" });
+	if (!res.ok) throw await refusal(res, "The session could not be ended");
 }
 /** Send, edit, withdraw and Done on the Campaign's open Floor; each refreshes the Floor and timeline. */
 function floorActions(campaign) {
 	const queryClient = useQueryClient();
-	const base = () => `/api/campaigns/${encodeURIComponent(campaign())}/floor/declarations`;
+	const base = () => campaignPath(campaign(), "floor/declarations");
 	async function call(url, init) {
 		const res = await fetch(url, {
 			...init,
 			headers: init.body ? { "content-type": "application/json" } : void 0
 		});
 		await Promise.all([queryClient.invalidateQueries({ queryKey: floorQueryKey(campaign()) }), queryClient.invalidateQueries({ queryKey: timelineQueryKey(campaign()) })]);
-		if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The Floor could not be changed");
+		if (!res.ok) throw await refusal(res, "The Floor could not be changed");
 		return res;
 	}
 	return {
@@ -177,18 +157,18 @@ function floorActions(campaign) {
 		},
 		/** The composer loaded drafts a cut sent back; the server stops holding them. */
 		async clearReturned(ids) {
-			for (const id of ids) await call(`/api/campaigns/${encodeURIComponent(campaign())}/floor/returned/${encodeURIComponent(id)}`, { method: "DELETE" });
+			for (const id of ids) await call(campaignPath(campaign(), `floor/returned/${encodeURIComponent(id)}`), { method: "DELETE" });
 		},
 		/** "Cut to <Name>": a spotlight request to the DM. Doesn't make the DM answer a turn. */
 		async cut(character) {
-			await call(`/api/campaigns/${encodeURIComponent(campaign())}/spotlight`, {
+			await call(campaignPath(campaign(), "spotlight"), {
 				method: "POST",
 				body: JSON.stringify({ character })
 			});
 		},
 		/** Done: closes the Floor (once every Player has pressed it) and wakes the DM. */
 		async done() {
-			await call(`/api/campaigns/${encodeURIComponent(campaign())}/floor/done`, { method: "POST" });
+			await call(campaignPath(campaign(), "floor/done"), { method: "POST" });
 		}
 	};
 }
@@ -196,13 +176,13 @@ function floorActions(campaign) {
 function callActions(campaign) {
 	const queryClient = useQueryClient();
 	async function post(call, part, body) {
-		const res = await fetch(`/api/campaigns/${encodeURIComponent(campaign())}/calls/${encodeURIComponent(call)}/parts/${encodeURIComponent(part)}`, {
+		const res = await fetch(campaignPath(campaign(), `calls/${encodeURIComponent(call)}/parts/${encodeURIComponent(part)}`), {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify(body)
 		});
 		await queryClient.invalidateQueries({ queryKey: timelineQueryKey(campaign()) });
-		if (!res.ok) throw new FloorChangeError((await res.json().catch(() => ({}))).error ?? "The Call could not be answered");
+		if (!res.ok) throw await refusal(res, "The Call could not be answered");
 	}
 	return {
 		/** Rolls one Check of the Call; the server rolls the dice. */
@@ -211,6 +191,6 @@ function callActions(campaign) {
 		answer: (call, part, answer) => post(call, part, { answer })
 	};
 }
-export { createSceneQuery as a, createTimelineQuery as c, levelUp as d, Journal as f, createJournalQuery as i, endSession as l, callActions as n, createSessionHistoryQuery as o, createFloorQuery as r, createSheetsQuery as s, FloorChangeError as t, floorActions as u };
+export { createSceneQuery as a, createTimelineQuery as c, levelUp as d, saveDetails as f, createJournalQuery as i, endSession as l, knownBy as m, callActions as n, createSessionHistoryQuery as o, Journal as p, createFloorQuery as r, createSheetsQuery as s, PlayRequestError as t, floorActions as u };
 
 //# sourceMappingURL=floor-client.js.map

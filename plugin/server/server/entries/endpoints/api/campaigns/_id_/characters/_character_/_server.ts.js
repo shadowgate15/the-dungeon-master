@@ -1,4 +1,5 @@
 import { i as json } from "../../../../../../../chunks/exports.js";
+import { r as live } from "../../../../../../../chunks/campaign.js";
 import { n as readJson, t as changeParty } from "../../../../../../../chunks/respond.js";
 // src/routes/api/campaigns/[id]/characters/[character]/+server.ts
 /**
@@ -17,6 +18,10 @@ var PATCH = async ({ params, request }) => {
 	const body = await readJson(request);
 	return changeParty(params.id, body, (party) => {
 		const updated = party.updateDetails(params.character, body);
+		live.publish({
+			type: "timeline",
+			campaign: params.id
+		});
 		return json({
 			id: updated.id,
 			version: updated.version

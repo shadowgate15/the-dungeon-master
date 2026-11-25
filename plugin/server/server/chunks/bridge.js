@@ -1,5 +1,5 @@
-import { Ct as DUNGEON_MASTER_PORT, D as event, F as belief, G as background, I as entity, J as race, K as classTable, R as fact, St as DUNGEON_MASTER_HOME, V as ENTITY_TYPES, _t as sql, a as userStateDir, b as characterItem, ft as isNull, g as character, gt as or, h as campaign, ht as ne, it as asc, l as createRulesRepository, ot as and, q as equipment, rt as SOLO_PLAYER, st as eq, ut as inArray, v as characterDraft, wt as DUNGEON_MASTER_VERSION } from "./seed.js";
-import { $ as saveSequence, A as combatState, At as renderLinks, B as DC_BY_TIER, Bt as reviseArc, Ct as loadWizardRules, D as createDmChannels, Dt as lintWorld, Et as hpState, F as spendTurnResource, Ft as createArc, G as cancelPendingCall, Gt as readTool, H as TIERS, Ht as ToolError, I as startCombat, It as currentArc, J as openCall, Jt as parseClock, K as createHitDiceCall, Kt as writeTool, L as ABILITY_NAMES, Lt as pastArcs, M as nextTurn, Mt as characterHolders, N as orderText, Nt as charactersInScene, Ot as createWorld, P as refuseDuringCombat, Pt as CurrentArcError, Q as rollAll, Rt as resolveBeat, St as scenePlace, U as callInput, Ut as creationTool, V as PASS, Vt as PLUGIN_NAME, W as callResultEvent, Wt as expectVersion, X as attackSequence, Y as saveKey, Yt as SESSION_LIVE_MESSAGE, Z as damageSequence, _ as closeSession, at as saveBonus, b as sessionsView, bt as currentMinute, c as CampaignNotFoundError, ct as equippable, dt as logActivity, et as sequenceText, f as SeedLockedError, ft as logEvent, g as addConversationLine, gt as ClockBackwardsError, h as refuseLockedSeed, ht as deathSaveCall, i as sessions, it as mustAct, j as endCombat, jt as resolveLinks, k as addCombatants, kt as fieldNames, l as NotACampaignFolderError, lt as isBodyArmor, m as creationStage, mt as setAwaitingNarration, n as library, nt as applyHealing, ot as setConditions, pt as nextEventId, q as createPendingCall, qt as formatClock, r as live, rt as combatant, st as concentrate, tt as applyDamage, ut as currentStamp, v as history, vt as advanceClock, w as returnStrandedDrafts, xt as present, y as indexNarration, yt as characterRefs, zt as retireArc } from "./campaign.js";
+import { Ct as DUNGEON_MASTER_HOME, D as event, F as belief, I as entity, J as equipment, K as background, R as fact, Tt as DUNGEON_MASTER_VERSION, U as handleKind, V as ENTITY_TYPES, Y as race, _t as or, at as asc, b as characterItem, ct as eq, dt as inArray, g as character, gt as ne, h as campaign, it as SOLO_PLAYER, l as userStateDir, n as createRulesRepository, pt as isNull, q as classTable, st as and, v as characterDraft, vt as sql, wt as DUNGEON_MASTER_PORT } from "./seed.js";
+import { $ as combatState, At as createWorld, B as openCall, Bt as reviseArc, Ct as isBodyArmor, D as createDmChannels, F as callInput, Ft as createArc, G as saveSequence, Gt as readTool, H as attackSequence, Ht as ToolError, I as callResultEvent, It as currentArc, J as logActivity, Jt as parseClock, K as sequenceText, Kt as writeTool, L as cancelPendingCall, Lt as pastArcs, M as DC_BY_TIER, Mt as renderLinks, N as PASS, Nt as resolveLinks, Ot as hpState, P as TIERS, Pt as CurrentArcError, Q as addCombatants, R as createHitDiceCall, Rt as resolveBeat, St as equippable, Tt as loadWizardRules, U as damageSequence, Ut as creationTool, V as saveKey, Vt as PLUGIN_NAME, W as rollAll, Wt as expectVersion, X as nextEventId, Xt as characterRefs, Y as logEvent, Yt as characterHolders, Z as setAwaitingNarration, Zt as SESSION_LIVE_MESSAGE, _ as closeSession, at as startCombat, b as sessionsView, bt as present, c as CampaignNotFoundError, ct as combatant, dt as saveBonus, et as endCombat, f as SeedLockedError, ft as setConditions, g as addConversationLine, gt as ClockBackwardsError, h as refuseLockedSeed, ht as deathSaveCall, i as sessions, it as spendTurnResource, jt as fieldNames, k as ABILITY_NAMES, kt as lintWorld, l as NotACampaignFolderError, lt as incapacitates, m as creationStage, mt as setConcentration, n as library, nt as orderText, ot as applyDamage, pt as concentrate, q as currentStamp, qt as formatClock, r as live, rt as refuseDuringCombat, st as applyHealing, tt as nextTurn, ut as mustAct, v as history, vt as advanceClock, w as returnStrandedDrafts, wt as believedName, xt as scenePlace, y as indexNarration, yt as currentMinute, z as createPendingCall, zt as retireArc } from "./campaign.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { M as rollTotals, T as arrangementProblem, b as lengthIssue, d as reconcile, l as changedDraftFields, u as emptyDraft } from "./summary.js";
@@ -18,6 +18,23 @@ function writeRuntimeFile(home, runtime) {
 	const tmp = `${file}.${process.pid}.tmp`;
 	fs.writeFileSync(tmp, JSON.stringify(runtime) + "\n", { mode: 384 });
 	fs.renameSync(tmp, file);
+}
+/** The runtime file, or undefined when no server has written one. */
+function readRuntimeFile(home) {
+	try {
+		return JSON.parse(fs.readFileSync(runtimeFilePath(home), "utf8"));
+	} catch {
+		return;
+	}
+}
+/**
+* Stops this game server from the UI, as `dm stop` does from the terminal: its runtime file goes
+* first (only if it still names this server), so neither the bridge nor the launcher finds a
+* stopped server, then `exit` ends the process.
+*/
+function stopServer({ home, pid, exit }) {
+	if (readRuntimeFile(home)?.pid === pid) fs.rmSync(runtimeFilePath(home), { force: true });
+	exit();
 }
 // src/lib/server/tools/action-tools.ts
 var adv = {
@@ -40,7 +57,7 @@ function attacksOf(who) {
 			damageType: a.damage.type
 		}
 	}));
-	return who.monster.actions.flatMap((a) => {
+	return who.statBlock.actions.flatMap((a) => {
 		if (a.attack_bonus === void 0) return [];
 		const first = a.damage?.find((d) => d.damage_dice && d.damage_type);
 		return [{
@@ -64,7 +81,8 @@ function findAttack(who, name) {
 function diceLogRoll(roller, rolled, mode) {
 	const d20 = rolled.roll.kept !== null;
 	return {
-		characterName: roller,
+		characterName: roller.name,
+		characterHandle: roller.handle,
 		what: rolled.what,
 		dice: rolled.roll.dice,
 		modifier: rolled.roll.modifier,
@@ -96,7 +114,7 @@ function resolve(db, dice, now, rolls, { summary, pre = [], result = {} }) {
 		})
 	}));
 	const concentration = outcomes.flatMap((o) => o.sequence.rolls.flatMap((r) => r.calls ?? []));
-	const log = [...pre.map((p) => p.log), ...outcomes.flatMap((o) => o.steps.map((s) => diceLogRoll(o.roller.name, s, o.mode)))];
+	const log = [...pre.map((p) => p.log), ...outcomes.flatMap((o) => o.steps.map((s) => diceLogRoll(o.roller, s, o.mode)))];
 	const text = [...pre.map((p) => p.text), ...outcomes.map((o) => sequenceText(o.sequence, o.mode.mode))];
 	const full = {
 		...result,
@@ -163,7 +181,8 @@ function preRollDamage(dice, by, what, expression, damageType) {
 		pre: {
 			text: `${what}: ${rolled.dice.join(" + ")}${modifier} = ${total}${damageType ? ` ${damageType}` : ""}`,
 			log: {
-				characterName: by,
+				characterName: by.name,
+				characterHandle: by.handle,
 				what,
 				dice: rolled.dice,
 				modifier: rolled.modifier,
@@ -190,7 +209,7 @@ function casting(who) {
 			spells: who.detail.spells.map((s) => s.spell)
 		};
 	}
-	const block = who.monster.specialAbilities?.find((a) => a.spellcasting)?.spellcasting;
+	const block = who.statBlock.specialAbilities?.find((a) => a.spellcasting)?.spellcasting;
 	if (!block) return null;
 	return {
 		attackBonus: block.modifier ?? 0,
@@ -227,6 +246,33 @@ function spendSlot(db, who, level) {
 		level,
 		spent: spent + 1,
 		max
+	};
+}
+/**
+* The HP a damage or heal applies: code rolls `dice`, or a fixed `amount` for an effect that
+* names a number rather than dice (such as a potion's flat bonus or a trap's set damage).
+*/
+var hpChange = {
+	dice: string().trim().min(1).optional().describe("The dice to roll, such as 2d6+1; code rolls them"),
+	amount: number().int().min(0).optional().describe("A fixed number, only for an effect that names one instead of dice")
+};
+var oneHpChange = [(i) => i.dice === void 0 !== (i.amount === void 0), { message: "Give exactly one of dice and amount" }];
+/** The HP a damage or heal applies, rolling its dice; `rolled` is set when dice were rolled. */
+function hpAmount(dice, input) {
+	if (input.dice === void 0) return {
+		amount: input.amount,
+		rolled: void 0
+	};
+	const rolled = rollExpressionOrRefuse(dice, input.dice);
+	const amount = Math.max(0, rolled.total);
+	return {
+		amount,
+		rolled: {
+			expr: input.dice,
+			dice: rolled.dice,
+			modifier: rolled.modifier,
+			total: amount
+		}
 	};
 }
 /** Rolls a dice expression, or refuses one that isn't. */
@@ -370,7 +416,7 @@ var actionTools = [
 			}
 			if (spell.dcAbility) {
 				const ability = spell.dcAbility;
-				const rolled = damage && preRollDamage(dice, caster.name, `${spell.name} damage`, damage.dice, damage.damageType);
+				const rolled = damage && preRollDamage(dice, caster, `${spell.name} damage`, damage.dice, damage.damageType);
 				return resolve(db, dice, now, targets.map((t) => ({
 					roller: t,
 					sequence: saveSequence(abilityName(ability), t, {
@@ -432,7 +478,10 @@ var actionTools = [
 			const dc = input.dc ?? DC_BY_TIER[input.dc_tier];
 			const source = input.source ?? "Effect";
 			const damageType = input.on_fail.type?.toLowerCase() ?? null;
-			const rolled = input.on_fail.damage ? preRollDamage(dice, source, `${source} damage`, input.on_fail.damage, damageType) : null;
+			const rolled = input.on_fail.damage ? preRollDamage(dice, {
+				name: source,
+				handle: null
+			}, `${source} damage`, input.on_fail.damage, damageType) : null;
 			return resolve(db, dice, now, targets.map((t) => ({
 				roller: t,
 				sequence: saveSequence(abilityName(ability), t, {
@@ -521,19 +570,20 @@ var actionTools = [
 	}),
 	writeTool({
 		name: "damage",
-		description: "Deal damage outside an attack or save, such as a fall. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply. A Character dropped to 0 falls Unconscious (or dies outright); damage at 0 is a Death save failure. An NPC or Creature dropped to 0 dies unless knock_out. notes says what came of it.",
+		description: "Deal damage outside an attack or save, such as a fall. Pass dice and code rolls them; pass amount only for an effect that names a fixed number. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply. A Character dropped to 0 falls Unconscious (or dies outright); damage at 0 is a Death save failure. An NPC or Creature dropped to 0 dies unless knock_out. notes says what came of it.",
 		input: object({
 			target: string().min(1).describe("char:… or npc:…"),
-			amount: number().int().min(0),
+			...hpChange,
 			type: string().min(1).describe("The damage type, such as bludgeoning"),
 			crit: boolean().optional().describe("A critical hit: at 0 HP a Character takes two Death save failures"),
 			knock_out: boolean().optional().describe("An NPC or Creature dropped to 0 is knocked out instead of killed")
-		}),
+		}).refine(...oneHpChange),
 		activity: "DM applies damage",
 		run: ({ db, dice, now }, input) => {
 			const who = combatant(db, input.target);
 			const type = input.type.toLowerCase();
-			const { calls, ...change } = applyDamage(db, who, input.amount, type, {
+			const { amount, rolled } = hpAmount(dice, input);
+			const { calls, ...change } = applyDamage(db, who, amount, type, {
 				crit: input.crit,
 				knockOut: input.knock_out,
 				dice,
@@ -541,6 +591,7 @@ var actionTools = [
 			});
 			return {
 				result: {
+					...rolled ? { rolled } : {},
 					...change,
 					state: hpState(change.hp, change.max),
 					...concentrationCalls(calls)
@@ -560,17 +611,19 @@ var actionTools = [
 	}),
 	writeTool({
 		name: "heal",
-		description: "Restore HP, never above the maximum. Roll a healing spell or potion with roll first.",
+		description: "Restore HP, never above the maximum. Pass a healing spell or potion's dice and code rolls them; pass amount only for an effect that names a fixed number.",
 		input: object({
 			target: string().min(1).describe("char:… or npc:…"),
-			amount: number().int().min(0)
-		}),
+			...hpChange
+		}).refine(...oneHpChange),
 		activity: "DM applies healing",
-		run: ({ db }, input) => {
+		run: ({ db, dice }, input) => {
 			const who = combatant(db, input.target);
-			const change = applyHealing(db, who, input.amount);
+			const { amount, rolled } = hpAmount(dice, input);
+			const change = applyHealing(db, who, amount);
 			return {
 				result: {
+					...rolled ? { rolled } : {},
 					healed: change.dealt,
 					hp: change.hp,
 					max: change.max,
@@ -590,7 +643,7 @@ var actionTools = [
 	}),
 	writeTool({
 		name: "add_condition",
-		description: "Give a Character or NPC an SRD condition, such as prone or frightened.",
+		description: "Give a Character or NPC an SRD condition, such as prone or frightened. An incapacitating condition ends concentration.",
 		input: object({
 			target: string().min(1),
 			condition: string().min(1)
@@ -600,10 +653,13 @@ var actionTools = [
 			const who = combatant(db, input.target);
 			const condition = srdCondition(db, input.condition);
 			if (!who.conditions.includes(condition)) setConditions(db, who, [...who.conditions, condition]);
+			const ended = incapacitates(condition) ? who.concentration : null;
+			if (ended) setConcentration(db, who, null);
 			return {
 				result: {
 					target: who.handle,
-					conditions: [.../* @__PURE__ */ new Set([...who.conditions, condition])]
+					conditions: [.../* @__PURE__ */ new Set([...who.conditions, condition])],
+					...ended && { ended_concentration: ended }
 				},
 				event: {
 					kind: "condition_added",
@@ -1816,7 +1872,7 @@ function createKnowledge(ctx) {
 		};
 	}
 	function holderFor(handle, characters, tool) {
-		if (handle.startsWith("char:")) {
+		if (handleKind(handle) === "char") {
 			const found = characters.find((c) => c.handle === handle);
 			if (!found) throw ToolError.unknownHandle(handle);
 			return {
@@ -1904,7 +1960,7 @@ function createKnowledge(ctx) {
 		reveal(input, tool = "reveal") {
 			const t = target(input, tool);
 			const characters = characterHolders(db);
-			const handles = input.holders?.length ? [...new Set(input.holders)] : charactersInScene(db).map((c) => c.handle);
+			const handles = input.holders?.length ? [...new Set(input.holders)] : present(db).characters.map((c) => c.handle);
 			if (!handles.length) throw new ToolError("no_holders", "No Characters are in the Scene to learn this", "Name the holders explicitly");
 			const holders = handles.map((h) => holderFor(h, characters, tool));
 			const named = [...new Set(input.replaces ?? [])].map((id) => {
@@ -2057,7 +2113,7 @@ var knowledgeTools = [writeTool({
 */
 var lintTools = [writeTool({
 	name: "lint",
-	description: "Check the World for what code can detect: near-duplicate names, broken [[links]], Facts restating a typed field, Beliefs pointing at retired Facts and Pages linking to retired Entities. Also returns the Pages of Entities changed since the last lint, for you to check each Page against its fields. Changes nothing: fix each finding with the ordinary tools. Run it when ending a sitting.",
+	description: "Check the World for what code can detect: near-duplicate names, broken [[links]], Facts restating a typed field, Beliefs pointing at retired Facts and Pages linking to retired Entities. Also returns the Pages of Entities changed since the last lint, for you to check each Page against its fields. Changes nothing: fix each finding with the ordinary tools. Run it when ending a Session.",
 	input: object({}),
 	run: (ctx) => {
 		const result = lintWorld(ctx);
@@ -2083,15 +2139,17 @@ function speaker({ db }, handle) {
 /** Telling the Players what happens. */
 var narrationTools = [writeTool({
 	name: "narrate",
-	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks. The first Narration after a closed Floor answers it; later ones in the same turn are fine. Pass recap: true for the opening recap of a sitting: it shows as \"Previously\", answers nothing and is left out of later summaries.",
+	description: "Narrate to the Players: the Narration shows in their timeline. Pass voice (an NPC handle) when an NPC speaks: the Players see the name their Characters know, or voice_label if they know none. The first Narration after a closed Floor answers it; later ones in the same turn are fine. Pass recap: true for the opening recap of a Session: it shows as \"Previously\", answers nothing and is left out of later summaries.",
 	input: object({
 		text: string().trim().min(1),
 		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks"),
+		voice_label: string().trim().min(1).optional().describe("What the Players see for a speaker their Characters do not know by name, such as \"the hooded man\""),
 		call: callInput.optional().describe("Ask the Players: inline {kind: \"check\", character, skill | save, tier, adv?, reason} (or a list of them, one roll per Character) or {kind: \"question\", text, choices?}. A Call ends your turn; its call_result wakes you."),
-		recap: boolean().optional().describe("The opening recap of a sitting")
+		recap: boolean().optional().describe("The opening recap of a Session")
 	}),
 	activity: null,
-	run: (ctx, { text, voice, call, recap = false }) => {
+	run: (ctx, { text, voice, voice_label, call, recap = false }) => {
+		if (recap && call !== void 0) throw new ToolError("invalid_input", "A recap answers nothing, so it cannot ask a Call", "Narrate the recap on its own, then ask the Call in the next narrate");
 		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
 		if (!recap) {
 			setAwaitingNarration(ctx.db, null);
@@ -2113,7 +2171,7 @@ var narrationTools = [writeTool({
 				data: {
 					text,
 					voice: npc?.handle ?? null,
-					voiceName: npc?.name ?? null,
+					voiceName: npc ? believedName(ctx.db, npc.handle) ?? voice_label ?? null : null,
 					call: callId,
 					...recap ? { recap: true } : {}
 				}
@@ -2229,7 +2287,7 @@ var sceneTools = [
 			via: string().min(1).optional().describe("Exit name on the movers' Place")
 		}).refine((m) => m.to !== void 0 || m.via !== void 0, { message: "Pass to or via" }),
 		activity: (_, result) => {
-			const names = result.moved.filter((m) => m.handle.startsWith("char:")).map((m) => m.name);
+			const names = result.moved.filter((m) => handleKind(m.handle) === "char").map((m) => m.name);
 			return names.length ? `DM moves ${names.join(", ")}` : null;
 		},
 		run: (ctx, { who, to, via }) => {
@@ -2307,7 +2365,7 @@ var sceneTools = [
 		name: "set_scene",
 		description: "Move the spotlight to a Place. Refused unless a Character is there (move them first), and while a Combat is live. Who is present follows from whereabouts. On a cut, Declarations for Characters no longer in the Scene go back to their Player as unsent text and the Floor reopens. Honour a spotlight request within a Floor or two, at a natural break.",
 		input: strictObject({ place: string().min(1).describe("Place handle") }),
-		activity: (_, result) => `DM sets the Scene: ${result.scene.name}`,
+		activity: "DM sets the Scene",
 		run: ({ db, now }, { place: handle }) => {
 			refuseDuringCombat(db, "moving the spotlight");
 			const place = placeAt(db, handle);
@@ -2374,7 +2432,7 @@ var sceneTools = [
 // src/lib/server/tools/session-tools.ts
 /** The most words a Session summary may have (the target is about 250). */
 var SUMMARY_WORDS = 300;
-/** Continuity between sittings: Session summaries and the Event log. */
+/** Continuity between Sessions: Session summaries and the Event log. */
 var sessionTools = [
 	writeTool({
 		name: "close_session",
@@ -2402,9 +2460,9 @@ var sessionTools = [
 	}),
 	readTool({
 		name: "sessions",
-		description: "Session summaries and open threads, newest first (last limits how many). Also says which Session is current, which older ones are unclosed (catch-up close them first) and whether a recap is due this sitting.",
+		description: "Session summaries and open threads, newest first (last limits how many). Also says which Session is current, which older ones are unclosed (catch-up close them first) and whether a recap is due this Session.",
 		input: object({ last: number().int().positive().optional() }),
-		activity: "DM remembers earlier sittings",
+		activity: "DM remembers earlier Sessions",
 		run: ({ db }, { last }) => sessionsView(db, last)
 	}),
 	readTool({
@@ -2955,7 +3013,7 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 /** Play input (and a creation conversation message) needs a DM at the table to hear it. */
 var DmAwayError = class extends Error {};
 /** What every refused play input says while no session is attached. */
-var DM_AWAY_MESSAGE = "The DM is away. Run dm in the Campaign folder to start a sitting; your drafts wait here.";
+var DM_AWAY_MESSAGE = "The DM is away. Run dm in the Campaign folder to start a Session; your drafts wait here.";
 /**
 * A closed Floor as the DM hears it: one `floor` channel event, one body line per Declaration in
 * send order (`[d1 Wren · player] picks the lock`). An empty body hands the DM the initiative.
@@ -3113,12 +3171,12 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 			});
 		},
 		/**
-		* The Player presses End Session: the DM gets one `end_session` event and closes the sitting
-		* (closing beat, summary, Arc review, lint) with the ending-a-sitting skill.
+		* The Player presses End Session: the DM gets one `end_session` event and closes the Session
+		* (closing beat, Arc review, lint, goodbye, summary) with the ending-a-session skill.
 		*/
 		endSession(campaignId) {
 			channels.send(atTable(campaignId), {
-				content: "The Player pressed End Session. Close the sitting.",
+				content: "The Player pressed End Session. Close the Session.",
 				meta: { kind: "end_session" }
 			});
 		},
@@ -3152,8 +3210,8 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 			return { block: false };
 		},
 		/**
-		* What SessionStart injects when a sitting opens: the core block, the "changed since last
-		* sitting" notice for offline edits (told once) and any turn left awaiting Narration.
+		* What SessionStart injects when a Session opens: the core block, the "changed since last
+		* Session" notice for offline edits (told once) and any turn left awaiting Narration.
 		*/
 		sessionStart(campaignId) {
 			return library.record(campaignId).opening();
@@ -3229,8 +3287,8 @@ var SESSION_LIVE = {
 * - `POST stop-check` with `{campaign, again}`: whether the Stop hook refuses to end the DM's turn,
 *   as `{block, reason}`.
 * - `GET  core-block?campaign=<folder>`: the DM's core block, as `{text}`, after compaction.
-* - `POST session-start` with `{campaign}`: what a sitting's opening injects, as `{text}`: the core
-*   block, then what changed since the last sitting (told once) and a turn awaiting Narration.
+* - `POST session-start` with `{campaign}`: what a Session's opening injects, as `{text}`: the core
+*   block, then what changed since the last Session (told once) and a turn awaiting Narration.
 * - `POST permission_request` with `{campaign, request_id, tool_name, description, input_preview}`:
 *   the session's permission prompt, shown to the Player; the verdict comes back on `events`.
 */
@@ -3417,6 +3475,17 @@ function announceServer() {
 		version: DUNGEON_MASTER_VERSION || void 0
 	});
 }
-export { permissions as a, DmAwayError as c, host as i, bridgeApi as n, play as o, channels as r, port as s, announceServer as t };
+/**
+* The UI's stop control: like `dm stop`, it ends this server. The process exits just after the
+* response goes out, through the same SIGTERM `dm stop` sends.
+*/
+function stop() {
+	stopServer({
+		home: userStateDir({ DUNGEON_MASTER_HOME }),
+		pid: process.pid,
+		exit: () => setTimeout(() => process.kill(process.pid, "SIGTERM"), 100)
+	});
+}
+export { permissions as a, stop as c, host as i, DmAwayError as l, bridgeApi as n, play as o, channels as r, port as s, announceServer as t };
 
 //# sourceMappingURL=bridge.js.map
