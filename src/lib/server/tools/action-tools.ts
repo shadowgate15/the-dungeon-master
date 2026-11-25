@@ -651,17 +651,28 @@ export const actionTools = [
   writeTool({
     name: 'damage',
     description:
-      "Deal damage outside an attack or save, such as a fall. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply.",
+      "Deal damage outside an attack or save, such as a fall. Temporary HP absorb it first, HP stop at 0, and an NPC's resistances apply. A Character dropped to 0 falls Unconscious (or dies outright); damage at 0 is a Death save failure. An NPC or Creature dropped to 0 dies unless knock_out. notes says what came of it.",
     input: z.object({
       target: z.string().min(1).describe('char:… or npc:…'),
       amount: z.number().int().min(0),
-      type: z.string().min(1).describe('The damage type, such as bludgeoning')
+      type: z.string().min(1).describe('The damage type, such as bludgeoning'),
+      crit: z
+        .boolean()
+        .optional()
+        .describe('A critical hit: at 0 HP a Character takes two Death save failures'),
+      knock_out: z
+        .boolean()
+        .optional()
+        .describe('An NPC or Creature dropped to 0 is knocked out instead of killed')
     }),
     activity: 'DM applies damage',
     run: ({ db }, input) => {
       const who = combatant(db, input.target)
       const type = input.type.toLowerCase()
-      const change = applyDamage(db, who, input.amount, type)
+      const change = applyDamage(db, who, input.amount, type, {
+        crit: input.crit,
+        knockOut: input.knock_out
+      })
       return {
         result: { ...change, state: hpState(change.hp, change.max) },
         event: {

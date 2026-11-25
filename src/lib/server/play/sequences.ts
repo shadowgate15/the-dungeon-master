@@ -124,7 +124,7 @@ export function rollStep(
     const crit = sequence.rolls.at(-1)?.outcome === 'critical hit'
     const rolled = dice.rollExpression(step.dice, { crit })
     const total = Math.max(0, rolled.total)
-    const change = applyDamage(db, target, total, step.damageType)
+    const change = applyDamage(db, target, total, step.damageType, { crit })
     roll = {
       dice: rolled.dice,
       kept: null,

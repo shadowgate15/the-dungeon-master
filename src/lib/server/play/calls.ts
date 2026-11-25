@@ -23,6 +23,7 @@ import {
 import type { Dice } from '../dice'
 import { ToolError } from '../tools/contract'
 import { orderText, recordInitiative } from './combat'
+import { applyDeathSave } from './death'
 import { logEvent, setAwaitingNarration } from './log'
 import { characterRefs } from './scene'
 import { nextStep, rollStep, sequenceText } from './sequences'
@@ -138,6 +139,7 @@ function labelOf(
   kind?: CallKind
 ): string | null {
   if (kind === 'initiative') return 'Initiative'
+  if (kind === 'death_save') return 'Death save'
   if (part.sequence) return part.sequence.label
   if (part.skill) return `${SKILL_NAMES.get(part.skill) ?? part.skill} check`
   if (part.save) return `${ABILITY_NAMES.get(part.save) ?? part.save} save`
@@ -238,7 +240,7 @@ export function createPendingCall(
   db: Queryable,
   parts: PendingPart[],
   at: number,
-  kind: 'roll_sequence' | 'initiative' = 'roll_sequence'
+  kind: 'roll_sequence' | 'initiative' | 'death_save' = 'roll_sequence'
 ): string {
   const id = db
     .insert(call)
@@ -365,6 +367,9 @@ function resultLine(p: Answered): string {
   const r = p.result
   const dice = r.dice.length > 1 ? `${r.dice.join('/')} (${p.mode}) kept ${r.kept}` : `${r.kept}`
   const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`
+  if (p.kind === 'death_save') {
+    return `[${p.characterName} · ${p.player}] Death save: d20 ${r.kept} → ${p.answer}`
+  }
   if (p.kind === 'initiative') {
     return `[${p.characterName} · ${p.player}] Initiative: d20 ${dice} ${modifier} = ${r.total}`
   }
@@ -506,6 +511,37 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     }
   }
 
+  /** A Death save: a d20 with no modifier, its tallies applied by code. */
+  function rollDeathSave(part: typeof callPart.$inferSelect, dice: Dice, player: string) {
+    const row = db.select().from(character).where(eq(character.id, part.characterId!)).get()!
+    const d20 = dice.rollD20()
+    const saved = applyDeathSave(db, row, d20.kept)
+    const result: CheckResult = {
+      dice: d20.dice,
+      kept: d20.kept,
+      modifier: 0,
+      total: d20.kept,
+      success: saved.success
+    }
+    return {
+      values: { result, answer: saved.text },
+      event: {
+        kind: 'roll',
+        summary: `${row.name} Death save: ${d20.kept} (${saved.outcome})`,
+        data: {
+          part: part.id,
+          characterName: row.name,
+          player,
+          what: 'Death save',
+          mode: 'normal',
+          reason: null,
+          ...result,
+          outcome: saved.outcome
+        }
+      }
+    }
+  }
+
   return {
     /** The open Call, Player-safe. */
     open: () => openCallView(db),
@@ -518,6 +554,7 @@ export function createCalls(db: Database, now: () => number = Date.now) {
       return answer(callId, partId, player, (part, kind) => {
         if (!part.characterId) throw new CallRefusedError('That part is a question: answer it')
         if (part.sequence) return rollSequenceStep(part, dice, player)
+        if (kind === 'death_save') return rollDeathSave(part, dice, player)
         const modifier = modifierFor(part.characterId, part, kind)
         const d20 =
           part.mode === 'normal'

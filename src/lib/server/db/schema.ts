@@ -125,6 +125,9 @@ const campaignOwner = () =>
 /** Coin by denomination. */
 export type Coin = { cp: number; sp: number; ep: number; gp: number; pp: number }
 
+/** A Character's Death save tallies; reset when it regains HP or becomes stable. */
+export type DeathSaves = { successes: number; failures: number; stable?: boolean }
+
 /**
  * A Player's hero in one Campaign: the Player's choices plus play state. Everything computed from
  * the choices (max HP, AC, modifiers, slots) is derived and never stored. Rules references are
@@ -196,8 +199,9 @@ export const character = sqliteTable(
       .$defaultFn(() => ({ cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 })),
     /** The spell slug being concentrated on. */
     concentration: text('concentration'),
+    /** Death save tallies at 0 HP; `stable` after three successes (absent on older rows). */
     deathSaves: text('death_saves', { mode: 'json' })
-      .$type<{ successes: number; failures: number }>()
+      .$type<DeathSaves>()
       .notNull()
       .$defaultFn(() => ({ successes: 0, failures: 0 })),
     /** Where the Character is; presence in a Scene is computed from it. */
@@ -405,10 +409,16 @@ export const activityLine = sqliteTable('activity_line', {
 })
 
 /**
- * What a Call asks for: a Check, a question, an action's roll sequences, or Combat initiative
- * (one roll per Character, recorded in the Combat's order).
+ * What a Call asks for: a Check, a question, an action's roll sequences, Combat initiative (one
+ * roll per Character, recorded in the Combat's order), or a downed Character's Death save.
  */
-export const CALL_KINDS = ['check', 'question', 'roll_sequence', 'initiative'] as const
+export const CALL_KINDS = [
+  'check',
+  'question',
+  'roll_sequence',
+  'initiative',
+  'death_save'
+] as const
 
 /**
  * A Call: the DM's open request to the Players, a Check to roll or a question to answer. At most

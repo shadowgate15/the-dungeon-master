@@ -10,6 +10,7 @@ import { characterHolders } from '../knowledge/holders'
 import { createRulesRepository } from '../rules/repository'
 import { ToolError } from '../tools/contract'
 import { liveCreature } from './combat'
+import { damagedCharacter, healedCharacter } from './death'
 
 /** A monster stat block, as the rules repository returns it. */
 export type Monster = NonNullable<
@@ -197,43 +198,85 @@ function damageFactor(who: Combatant, damageType: string | null): number {
   return 1
 }
 
-/** Where a combatant was left by damage or healing. */
-export type HpChange = { dealt: number; hp: number; max: number }
+/** Where a combatant was left by damage or healing, with the DM's notes on what came of it. */
+export type HpChange = { dealt: number; hp: number; max: number; notes: string[] }
+
+/** How damage lands: a critical hit (two Death save failures at 0 HP), a knockout blow. */
+export type DamageOptions = { crit?: boolean; knockOut?: boolean }
 
 /**
  * The one way HP goes down. Temporary HP absorbs damage first; HP never drops below 0. Monster
- * resistances apply. Concentration saves (#332) and Death at 0 HP (#332) hook in here.
+ * resistances apply. A Character at 0 HP falls Unconscious (or dies outright) and takes Death save
+ * failures from more damage; an NPC or Creature dies at 0 HP unless knocked out.
  */
 export function applyDamage(
   db: Queryable,
   who: Combatant,
   amount: number,
-  damageType: string | null
+  damageType: string | null,
+  { crit = false, knockOut = false }: DamageOptions = {}
 ): HpChange {
   const dealt = Math.floor(amount * damageFactor(who, damageType))
   if (who.kind === 'character') {
     const absorbed = Math.min(who.detail.tempHp, dealt)
-    const hp = Math.max(0, who.hp - (dealt - absorbed))
+    const taken = dealt - absorbed
+    const hp = Math.max(0, who.hp - taken)
     db.update(character)
       .set({ currentHp: hp, tempHp: who.detail.tempHp - absorbed })
       .where(eq(character.id, who.id))
       .run()
-    return { dealt, hp, max: who.maxHp }
+    const notes = damagedCharacter(db, who.detail, {
+      before: who.hp,
+      taken,
+      maxHp: who.maxHp,
+      crit
+    })
+    return { dealt, hp, max: who.maxHp, notes }
   }
   const hp = Math.max(0, who.hp - dealt)
   writeFoe(db, who, { hp })
-  return { dealt, hp, max: who.maxHp }
+  const notes = who.hp > 0 && hp === 0 ? foeDown(db, who, knockOut) : []
+  return { dealt, hp, max: who.maxHp, notes }
 }
 
-/** Restores HP, never above the maximum. */
+/**
+ * An NPC or Creature at 0 HP: knocked out (Unconscious) when the DM rules it, else dead. A dead
+ * NPC's `status` field becomes `dead`.
+ */
+function foeDown(db: Queryable, who: Combatant & { kind: 'npc' | 'creature' }, knockOut: boolean) {
+  if (knockOut) {
+    if (!who.conditions.includes('unconscious')) {
+      writeFoe(db, who, { conditions: [...who.conditions, 'unconscious'] })
+    }
+    return [`${who.name} is knocked out`]
+  }
+  if (who.kind === 'npc') {
+    const npc = db.select().from(entity).where(eq(entity.handle, who.handle)).get()!
+    db.update(entity)
+      .set({ fields: { ...npc.fields, status: 'dead' }, version: npc.version + 1 })
+      .where(eq(entity.handle, who.handle))
+      .run()
+  }
+  return [`${who.name} dies`]
+}
+
+/** Restores HP, never above the maximum. A Character at 0 HP wakes; the dead stay dead. */
 export function applyHealing(db: Queryable, who: Combatant, amount: number): HpChange {
+  if (who.kind === 'character' && who.detail.status !== 'alive') {
+    throw new ToolError(
+      'character_dead',
+      `${who.name} is ${who.detail.status}; healing can't bring them back`,
+      'Only magic that restores life can; narrate it and leave the HP alone'
+    )
+  }
   const hp = Math.min(who.maxHp, who.hp + amount)
   if (who.kind === 'character') {
     db.update(character).set({ currentHp: hp }).where(eq(character.id, who.id)).run()
+    healedCharacter(db, who.detail, hp)
   } else {
     writeFoe(db, who, { hp })
   }
-  return { dealt: hp - who.hp, hp, max: who.maxHp }
+  return { dealt: hp - who.hp, hp, max: who.maxHp, notes: [] }
 }
 
 /** Replaces a combatant's conditions. */

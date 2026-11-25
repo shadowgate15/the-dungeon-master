@@ -11,6 +11,7 @@ const base = {
   canAct: true,
   conditions: [],
   concentration: null,
+  deathSaves: null,
   spellSlots: [],
   features: [],
   inventory: []
@@ -70,6 +71,8 @@ export const sheets: PlaySheet[] = [
     headline: 'Human Wizard 1',
     canAct: false,
     hp: { current: 0, max: 8, temp: 0 },
+    conditions: ['unconscious'],
+    deathSaves: { successes: 1, failures: 2, stable: false },
     ac: { value: 11, note: 'unarmored' },
     abilities: [],
     attacks: []

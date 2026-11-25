@@ -32,6 +32,14 @@ function toPlaySheet(c: CharacterDetail): PlaySheet {
         : null,
     conditions: c.conditions,
     concentration: c.concentration,
+    deathSaves:
+      c.status === 'alive' && c.currentHp === 0
+        ? {
+            successes: c.deathSaves.successes,
+            failures: c.deathSaves.failures,
+            stable: c.deathSaves.stable ?? false
+          }
+        : null,
     abilities: ABILITY_KEYS.flatMap((key) => {
       const a = ok(stats.abilities[key])
       return a ? [{ key, score: a.score, modifier: a.modifier }] : []
