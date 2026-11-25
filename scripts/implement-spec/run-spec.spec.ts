@@ -843,6 +843,21 @@ describe('runSpec', () => {
       expect(new Set(claude.sessions.map(({ sessionId }) => sessionId)).size).toBe(7)
     })
 
+    it('runs every role session on its model: sonnet for exploring, implementing and the PR, opus for merging, review and fixing', async () => {
+      const { ports, claude } = portsFor([ticket(1)])
+
+      await runSpec(100, { explore: true }, ports)
+
+      expect(claude.sessions.map(({ role, model }) => [role, model])).toEqual([
+        ['explorer', 'sonnet'],
+        ['implementer', 'sonnet'],
+        ['merger', 'opus'],
+        ['reviewer', 'opus'],
+        ['fixer', 'opus'],
+        ['pr-writer', 'sonnet']
+      ])
+    })
+
     it('appends the Closes lines the description is missing, replaces the PR body, marks the PR ready and removes the integration worktree', async () => {
       const order: string[] = []
       const { ports, tracker, git } = portsFor(
@@ -1280,7 +1295,8 @@ describe('runSpec', () => {
       expect(resumed).toMatchObject({
         sessionId: failedMerger?.sessionId,
         cwd: failedMerger?.cwd,
-        resume: true
+        resume: true,
+        model: 'opus'
       })
       expect(resumed?.prompt).toMatch(/exited with code 1/)
       expect(resumed?.prompt).toContain(failedMerger?.prompt)
@@ -1326,7 +1342,13 @@ describe('runSpec', () => {
       expect(result.ok).toBe(true)
       const [first, resumed, fresh] = claude.sessions
       expect(resumed).toMatchObject({ sessionId: first.sessionId, resume: true })
-      expect(fresh).toMatchObject({ role: 'implementer', cwd: first.cwd, resume: false })
+      expect(resumed.model).toBe('sonnet')
+      expect(fresh).toMatchObject({
+        role: 'implementer',
+        model: 'sonnet',
+        cwd: first.cwd,
+        resume: false
+      })
       expect(fresh.sessionId).not.toBe(first.sessionId)
       expect(fresh.prompt).toContain(first.prompt)
       expect(savedAtLaunch.every(Boolean)).toBe(true)
@@ -1353,7 +1375,12 @@ describe('runSpec', () => {
       expect(result.ok).toBe(true)
       expect(waits).toEqual([resetsAt + USAGE_LIMIT_GRACE_MS])
       const [first, resumed] = claude.sessions.filter(({ role }) => role === 'implementer')
-      expect(resumed).toMatchObject({ sessionId: first.sessionId, resume: true, cwd: first.cwd })
+      expect(resumed).toMatchObject({
+        sessionId: first.sessionId,
+        resume: true,
+        cwd: first.cwd,
+        model: 'sonnet'
+      })
       expect(resumed.prompt).toContain('usage limit')
       expect(resumed.prompt).toContain(first.prompt)
       expect(readState(100).tickets[1].status).toBe('done')
@@ -1377,7 +1404,7 @@ describe('runSpec', () => {
       expect(result.ok).toBe(true)
       const [first, resumed, fresh] = claude.sessions.filter(({ role }) => role === 'implementer')
       expect(resumed).toMatchObject({ sessionId: first.sessionId, resume: true })
-      expect(fresh.resume).toBe(false)
+      expect(fresh).toMatchObject({ resume: false, model: 'sonnet' })
       expect(fresh.sessionId).not.toBe(first.sessionId)
       expect(fresh.prompt).toContain('usage limit')
     })

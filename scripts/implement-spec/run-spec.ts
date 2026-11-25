@@ -61,9 +61,29 @@ export type GitPort = {
 /** The roles a `claude` session can play in a run. */
 export type Role = 'explorer' | 'implementer' | 'merger' | 'reviewer' | 'fixer' | 'pr-writer'
 
-/** One role session: started with `sessionId`, or resumed by it, in `cwd`, all output to `logFile`. */
+/** A Claude model, named by alias so runs follow new releases. */
+export type Model = 'sonnet' | 'opus'
+
+/**
+ * The model each role's sessions run on: Sonnet for the routine work, Opus where judgment counts
+ * (resolving merges, reviewing and fixing).
+ */
+export const ROLE_MODELS: Record<Role, Model> = {
+  explorer: 'sonnet',
+  implementer: 'sonnet',
+  'pr-writer': 'sonnet',
+  merger: 'opus',
+  reviewer: 'opus',
+  fixer: 'opus'
+}
+
+/**
+ * One role session on `model`: started with `sessionId`, or resumed by it, in `cwd`, all output to
+ * `logFile`.
+ */
 export type ClaudeSession = {
   role: Role
+  model: Model
   cwd: string
   prompt: string
   sessionId: string
@@ -411,6 +431,7 @@ const runSession = async (run: Run, spec: SessionSpec): Promise<boolean> => {
   const launch = (resume: boolean, prompt: string) =>
     claude.run({
       role: spec.role,
+      model: ROLE_MODELS[spec.role],
       cwd: spec.cwd,
       prompt,
       sessionId: session.id,
