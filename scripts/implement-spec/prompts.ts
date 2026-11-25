@@ -27,9 +27,33 @@ export const implementerPrompt = (
     'Do not push, open pull requests, or change anything on GitHub.'
   ].join('\n')
 
+/**
+ * Why the script's own `git merge` couldn't land the ticket, which it aborted before the merger:
+ * the files it conflicted on, or git's error.
+ */
+export type MergeReason = { conflicts: string[] } | { error: string }
+
+const reasonLines = (reason: MergeReason | undefined) => {
+  if (reason === undefined) return []
+  if ('conflicts' in reason) {
+    return [
+      '',
+      'The script tried `git merge --no-ff` first and aborted it on conflicts in:',
+      ...reason.conflicts.map((path) => `- ${path}`)
+    ]
+  }
+  return [
+    '',
+    "The script tried `git merge --no-ff` first, and aborted it after git's error:",
+    '```',
+    reason.error,
+    '```'
+  ]
+}
+
 export const mergerPrompt = (
   pointers: Pointers,
-  { ticket, branch }: { ticket: number; branch: string }
+  { ticket, branch, reason }: { ticket: number; branch: string; reason?: MergeReason }
 ) =>
   [
     `You are the merger for ticket #${ticket} of spec #${pointers.spec}.`,
@@ -37,6 +61,7 @@ export const mergerPrompt = (
     `Ticket: #${ticket} (read it with \`gh issue view ${ticket}\`).`,
     `Ticket branch: ${branch}. Its implementer has finished and passed its done check.`,
     `This directory is the integration worktree, with ${pointers.integrationBranch} checked out.`,
+    ...reasonLines(reason),
     '',
     `1. Merge ${branch} into ${pointers.integrationBranch} here (\`git merge --no-ff ${branch}\`).`,
     '2. If there are conflicts, resolve them with judgment, keeping the intent of both sides, and commit the merge.',

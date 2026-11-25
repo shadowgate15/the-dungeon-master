@@ -18,6 +18,7 @@ import {
   mergerPrompt,
   prWriterPrompt,
   reviewerPrompt,
+  type MergeReason,
   type Pointers
 } from './prompts.ts'
 
@@ -56,6 +57,30 @@ export type GitPort = {
   removeWorktree: (path: string) => Promise<void>
   /** Pushes `branch` to `origin`, creating or updating the remote branch of the same name. */
   push: (branch: string) => Promise<void>
+  /** Runs `git merge --no-ff <branch>` in the worktree at `worktree` (the integration worktree). */
+  merge: (worktree: string, branch: string) => Promise<MergeResult>
+  /** Aborts the merge in progress in the worktree at `worktree`; does nothing when there is none. */
+  abortMerge: (worktree: string) => Promise<void>
+}
+
+/**
+ * How a `git merge` ended: committed cleanly, stopped on conflicts in `paths`, or failed some other
+ * way with git's `message`.
+ */
+export type MergeResult =
+  | { result: 'clean' }
+  | { result: 'conflicts'; paths: string[] }
+  | { result: 'error'; message: string }
+
+/** The checks run after a clean git merge, in order: install, lint, type-check and unit tests. */
+export type ChecksStep = 'install' | 'lint' | 'check' | 'test'
+
+/** How the checks ended: all passed, or stopped at the first `step` that failed. */
+export type ChecksResult = { passed: true } | { passed: false; step: ChecksStep }
+
+export type ChecksPort = {
+  /** Runs the checks in `cwd`, stopping at the first failure, with all output appended to `logFile`. */
+  run: (run: { cwd: string; logFile: string }) => Promise<ChecksResult>
 }
 
 /** The roles a `claude` session can play in a run. */
@@ -107,6 +132,7 @@ export type Ports = {
   tracker: TrackerPort
   git: GitPort
   claude: ClaudePort
+  checks: ChecksPort
   log: (line: string) => void
   /** The current time, in epoch milliseconds. */
   now: () => number
@@ -180,12 +206,20 @@ export type TicketState = {
   session?: SessionState
   /** The merger session that merges the ticket branch into the integration branch. */
   merger?: SessionState
+  /** The script's own clean merge of the ticket branch, saved before its checks run. */
+  gitMerge?: GitMergeState
   /**
    * The ticket's place in the merge queue: 1 for the first implementer to pass in the spec's runs,
    * 2 for the next, and so on. A re-run queues tickets left `implemented` by it.
    */
   finishOrder?: number
 }
+
+/**
+ * A clean `git merge` of a ticket branch and the checks after it, in epoch milliseconds: `endedAt`
+ * and `checks` are set once the checks end.
+ */
+export type GitMergeState = { startedAt: number; endedAt?: number; checks?: ChecksResult }
 
 /**
  * A step of the run not tied to a ticket. `explore` runs before any implementer, when asked for.
@@ -241,6 +275,9 @@ export const ticketBranch = (spec: number, ticket: number) => `implement-spec/${
 /** A session's log: `logs/<role>-<ticket#>.log`, or `logs/<role>.log` for a role not tied to a ticket. */
 export const logPath = (logs: string, role: Role, ticket?: number) =>
   join(logs, ticket === undefined ? `${role}.log` : `${role}-${ticket}.log`)
+
+/** The log of the checks after a ticket's clean git merge: `logs/checks-<ticket#>.log`. */
+export const checksLogPath = (logs: string, ticket: number) => join(logs, `checks-${ticket}.log`)
 
 const worktreePath = (root: string, branch: string) =>
   join(root, '.claude', 'worktrees', branch.replaceAll('/', '-'))
@@ -594,15 +631,72 @@ const publish = async (run: Run) => {
 }
 
 /**
- * Runs a merger in the integration worktree to merge an implemented ticket's branch: the ticket's
- * earlier merger resumed when it didn't complete, otherwise a fresh one. It passes when it exits 0
- * and the integration branch contains the ticket branch's head. On a pass the ticket is `done` and
- * its worktree removed; on a failure it stays `implemented`, with the merger's outcome recorded.
- * Each pass pushes the integration branch, and the first opens the draft PR. Resolves to whether the merge passed.
+ * Merges an implemented ticket's branch into the integration branch. A ticket with an earlier
+ * merger session has it resumed, with no git attempt. Otherwise the script runs `git merge` itself:
+ * a clean merge goes on to the checks, with no session; conflicts or any other error are aborted
+ * and handed to a merger, told why. Resolves to whether the merge passed.
  */
 const merge = async (run: Run, ticket: number): Promise<boolean> => {
   const { git } = run.ports
-  const { log } = run
+  const branch = ticketBranch(run.spec, ticket)
+  const entry = run.state.tickets[ticket]
+  if (entry.merger !== undefined) return mergeBySession(run, ticket)
+  const startedAt = run.ports.now()
+  const merged = await git.merge(run.state.integrationWorktree, branch)
+  if (merged.result === 'clean') return checkGitMerge(run, ticket, startedAt)
+  await git.abortMerge(run.state.integrationWorktree)
+  if (merged.result === 'conflicts') {
+    run.log(
+      `git merge of #${ticket} conflicted in ${merged.paths.join(', ')}, handing it to a merger`
+    )
+    return mergeBySession(run, ticket, { conflicts: merged.paths })
+  }
+  run.log(`git merge of #${ticket} failed: ${merged.message}, handing it to a merger`)
+  return mergeBySession(run, ticket, { error: merged.message })
+}
+
+/** Marks a merged ticket `done`, removes its worktree and publishes the integration branch. */
+const merged = async (run: Run, ticket: number, how: string) => {
+  run.state.tickets[ticket].status = 'done'
+  run.save()
+  await run.ports.git.removeWorktree(worktreePath(run.root, ticketBranch(run.spec, ticket)))
+  run.log(`merged #${ticket}${how}`)
+  await publish(run)
+}
+
+/**
+ * Records a clean git merge of the ticket (saved before the checks start), then runs the checks in
+ * the integration worktree. Passing checks mark the ticket `done`, with no session; failing ones
+ * leave it `implemented` and fail the merge. Resolves to whether the merge passed.
+ */
+const checkGitMerge = async (run: Run, ticket: number, startedAt: number): Promise<boolean> => {
+  const entry = run.state.tickets[ticket]
+  const record: GitMergeState = { startedAt }
+  entry.gitMerge = record
+  run.save()
+  const logFile = checksLogPath(run.paths.logs, ticket)
+  const checks = await run.ports.checks.run({ cwd: run.state.integrationWorktree, logFile })
+  record.endedAt = run.ports.now()
+  record.checks = checks
+  run.save()
+  if (!checks.passed) {
+    run.log(`failed #${ticket} checks after its git merge: ${checks.step} (log ${logFile})`)
+    return false
+  }
+  await merged(run, ticket, ' by git, checks passed')
+  return true
+}
+
+/**
+ * Runs a merger in the integration worktree to merge an implemented ticket's branch: the ticket's
+ * earlier merger resumed when it didn't complete, otherwise a fresh one, told `reason` the script's
+ * git merge didn't land. It passes when it exits 0 and the integration branch contains the ticket
+ * branch's head. On a pass the ticket is `done`, its worktree removed and the integration branch
+ * published; on a failure it stays `implemented`, with the merger's outcome recorded. Resolves to
+ * whether the merge passed.
+ */
+const mergeBySession = async (run: Run, ticket: number, reason?: MergeReason): Promise<boolean> => {
+  const { git } = run.ports
   const branch = ticketBranch(run.spec, ticket)
   const ticketHead = await git.head(branch)
   const entry = run.state.tickets[ticket]
@@ -610,7 +704,7 @@ const merge = async (run: Run, ticket: number): Promise<boolean> => {
     role: 'merger',
     ticket,
     cwd: run.state.integrationWorktree,
-    prompt: mergerPrompt(pointers(run), { ticket, branch }),
+    prompt: mergerPrompt(pointers(run), { ticket, branch, reason }),
     previous: entry.merger,
     record: (session) => {
       entry.merger = session
@@ -624,9 +718,7 @@ const merge = async (run: Run, ticket: number): Promise<boolean> => {
     }
   })
   if (!passed) return false
-  await git.removeWorktree(worktreePath(run.root, branch))
-  log(`merged #${ticket}`)
-  await publish(run)
+  await merged(run, ticket, '')
   return true
 }
 
@@ -789,7 +881,8 @@ const drive = async (run: Run, tickets: Ticket[]): Promise<boolean> => {
 
 /**
  * Prints every failed ticket, ascending, with the session that failed, its check and its log: a
- * `failed` ticket's implementer, or the merger of an `implemented` ticket whose merge failed.
+ * `failed` ticket's implementer, or the merger of an `implemented` ticket whose merge failed, or
+ * the failed checks step and checks log of one whose git merge failed its checks.
  */
 const reportFailures = (run: Run) => {
   const failures = Object.entries(run.state.tickets).flatMap(([key, entry]) => {
@@ -801,8 +894,12 @@ const reportFailures = (run: Run) => {
         : [`  #${ticket} ${role} ${check} (log ${logPath(run.paths.logs, role, ticket)})`]
     }
     if (entry.status === 'failed') return failed('implementer', entry.session)
-    if (entry.status === 'implemented') return failed('merger', entry.merger)
-    return []
+    if (entry.status !== 'implemented') return []
+    const checks = entry.gitMerge?.checks
+    if (entry.merger === undefined && checks?.passed === false) {
+      return [`  #${ticket} checks ${checks.step} (log ${checksLogPath(run.paths.logs, ticket)})`]
+    }
+    return failed('merger', entry.merger)
   })
   if (failures.length === 0) return
   run.log('failed tickets:')
