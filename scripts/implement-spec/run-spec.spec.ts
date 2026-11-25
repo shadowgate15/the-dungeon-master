@@ -1515,6 +1515,118 @@ describe('runSpec', () => {
       expect(lines).not.toContain('failed tickets:')
     })
 
+    /**
+     * A run of `tickets` whose git merges are clean and whose first checks run is killed after the
+     * merge committed, leaving a ticket `implemented` with no merger. Later checks runs answer from
+     * `rerun`.
+     */
+    const interruptedDuringChecks = async (
+      tickets: Ticket[],
+      rerun: () => ChecksResult = () => ({ passed: true })
+    ) => {
+      let crash = true
+      const point = crashPoint()
+      const run = portsFor(tickets, succeeds, {
+        merge: () => ({ result: 'clean' }),
+        checks: () => {
+          if (crash) {
+            crash = false
+            point.kill()
+          }
+          clock.at += 2 * MINUTE
+          return rerun()
+        }
+      })
+      await runSpec(100, {}, run.ports)
+      point.restore()
+      expect(readState(100).tickets[1]).toMatchObject({
+        status: 'implemented',
+        gitMerge: { startedAt: START }
+      })
+      expect(readState(100).tickets[1].merger).toBeUndefined()
+      run.git.merges.length = 0
+      run.checks.runs.length = 0
+      run.claude.sessions.length = 0
+      lines.length = 0
+      return run
+    }
+
+    it('runs the checks with no git merge for a ticket the integration branch already contains, then marks it done and publishes', async () => {
+      const { ports, git, checks, claude, tracker } = await interruptedDuringChecks([ticket(1)])
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(git.merges).toEqual([])
+      expect(git.aborts).toEqual([])
+      const [integration] = integrationWorktrees(git)
+      expect(checks.runs).toEqual([
+        {
+          cwd: integration.path,
+          logFile: join(root, '.implement-spec', '100', 'logs', 'checks-1.log')
+        }
+      ])
+      expect(claude.sessions.map(({ role }) => role)).not.toContain('merger')
+      const state = readState(100)
+      expect(state.tickets[1].status).toBe('done')
+      expect(state.tickets[1].merger).toBeUndefined()
+      expect(state.tickets[1].gitMerge.checks).toEqual({ passed: true })
+      expect(git.removed).toContain(join(root, '.claude', 'worktrees', 'implement-spec-100-1'))
+      expect(git.pushed.map(({ branch }) => branch)).toContain('implement-spec/100')
+      expect(tracker.prs).toHaveLength(1)
+      expect(lines).toContain('merged #1 by git, checks passed')
+    })
+
+    it('fails the merge as after a fresh clean merge when the re-run checks fail', async () => {
+      const { ports, git, claude, tracker } = await interruptedDuringChecks(
+        [ticket(1), ticket(2, [{ number: 1, open: true }])],
+        () => ({ passed: false, step: 'test' })
+      )
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(false)
+      expect(git.merges).toEqual([])
+      expect(claude.sessions).toEqual([])
+      const state = readState(100)
+      expect(state.tickets[1]).toMatchObject({
+        status: 'implemented',
+        gitMerge: { checks: { passed: false, step: 'test' } }
+      })
+      expect(state.tickets[1].merger).toBeUndefined()
+      expect(state.tickets[2].status).toBe('pending')
+      expect(tracker.prs).toEqual([])
+      const log = join(root, '.implement-spec', '100', 'logs', 'checks-1.log')
+      expect(lines.slice(lines.indexOf('failed tickets:') + 1)).toEqual([
+        `  #1 checks test (log ${log})`
+      ])
+    })
+
+    it('still git merges a ticket left implemented that the integration branch does not contain', async () => {
+      let crash = true
+      const point = crashPoint()
+      const { ports, git, checks } = portsFor([ticket(1)], succeeds, {
+        merge: () => {
+          if (crash) {
+            crash = false
+            point.kill()
+          }
+          return { result: 'clean' }
+        }
+      })
+      await runSpec(100, {}, ports)
+      point.restore()
+      expect(readState(100).tickets[1].status).toBe('implemented')
+      git.merges.length = 0
+
+      const result = await runSpec(100, {}, ports)
+
+      expect(result.ok).toBe(true)
+      expect(git.merges).toEqual(['implement-spec/100-1'])
+      expect(checks.runs).toHaveLength(1)
+      expect(readState(100).tickets[1].status).toBe('done')
+    })
+
     it('resumes a failed merger before launching anything, then merges tickets left implemented', async () => {
       let mergerFails = true
       const events: string[] = []
