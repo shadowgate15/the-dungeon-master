@@ -85,6 +85,10 @@ export async function startBridge({ env = process.env, cwd = process.cwd() } = {
     }
   }
 
+  // Set once the server refuses this bridge because another session holds its Campaign. The
+  // refusal stands for the bridge's life: it never takes the table, even after a restart.
+  let refusal: CallToolResult | undefined
+
   const server = new Server(
     { name: 'the-dungeon-master', version: '0.0.1' },
     {
@@ -115,6 +119,7 @@ export async function startBridge({ env = process.env, cwd = process.cwd() } = {
         isError: true
       }
     }
+    if (refusal) return refusal
     try {
       const res = await api('call', {
         method: 'POST',
@@ -155,19 +160,19 @@ export async function startBridge({ env = process.env, cwd = process.cwd() } = {
    * the server is away.
    */
   async function relayChannel(campaign: string) {
-    let refused = false
     for (;;) {
       try {
         const res = await api(`events?campaign=${encodeURIComponent(campaign)}`)
         if (res.status === 409) {
-          // Another session holds this Campaign; tool calls say so. Keep trying, so this
-          // session takes the table once the other one leaves.
-          if (!refused) log((await res.json()).message)
-          refused = true
-          throw new ServerDown()
+          // Another session holds this Campaign: this bridge stays refused and stops trying.
+          const body = (await res.json()) as { message?: string }
+          log(body.message)
+          refusal = { content: [{ type: 'text', text: JSON.stringify(body) }], isError: true }
+          return
         }
-        refused = false
         if (!res.ok || !res.body) throw new ServerDown()
+        // The server may be new, or was down when Claude Code listed the tools.
+        void server.sendToolListChanged().catch(() => {})
         const decoder = new TextDecoder()
         let buffer = ''
         for await (const chunk of res.body) {

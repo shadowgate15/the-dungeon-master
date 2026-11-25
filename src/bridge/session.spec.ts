@@ -106,6 +106,24 @@ describe('one live session per Campaign', () => {
     await first.close()
   })
 
+  it('keeps a refused bridge refused after the first session leaves', async () => {
+    const first = await dmIn(folder)
+    await server.whenListening(folder)
+    const second = await dmIn(folder)
+    await eventually(async () =>
+      expect(await second.call('seed')).toMatchObject({ payload: { code: 'session_live' } })
+    )
+
+    await first.close()
+    await eventually(async () =>
+      expect((await register(server, folder)).body).toMatchObject({ attached: false })
+    )
+    await new Promise((r) => setTimeout(r, 1500))
+    expect((await register(server, folder)).body).toMatchObject({ attached: false })
+    expect(await second.call('seed')).toMatchObject({ payload: { code: 'session_live' } })
+    await second.close()
+  })
+
   it('lets different Campaigns be live at once', async () => {
     const other = path.join(tmp, 'salt-marsh')
     server.library.create({ name: 'Salt Marsh', folder: other })
@@ -132,11 +150,34 @@ describe('a server restart', () => {
     await restarted.whenListening(folder)
 
     expect((await register(restarted, folder)).body).toMatchObject({ attached: true })
+    // Each connect tells Claude Code to fetch the (possibly new) server's tool list.
+    await eventually(async () => expect(dm.toolListChanges).toBeGreaterThanOrEqual(2))
     expect(await dm.call('seed')).toMatchObject({
       isError: false,
       payload: expect.objectContaining({ name: 'Ember Road' })
     })
     await dm.close()
+  })
+})
+
+describe('a server restart with a refused bridge', () => {
+  it('gives the table back to the first session, never the refused one', async () => {
+    const first = await dmIn(folder)
+    await server.whenListening(folder)
+    const second = await dmIn(folder)
+    await eventually(async () =>
+      expect(await second.call('seed')).toMatchObject({ payload: { code: 'session_live' } })
+    )
+
+    await server.stop()
+    const restarted = await startServer()
+    await restarted.whenListening(folder)
+    await new Promise((r) => setTimeout(r, 1500))
+
+    expect(await first.call('seed')).toMatchObject({ isError: false })
+    expect(await second.call('seed')).toMatchObject({ payload: { code: 'session_live' } })
+    await second.close()
+    await first.close()
   })
 })
 

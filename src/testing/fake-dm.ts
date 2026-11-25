@@ -98,7 +98,13 @@ export async function startFakeDm({ folder, home, bridge = BRIDGE_BUNDLE }: Opti
   const verdicts = new Map<string, PermissionBehavior>()
   const awaiting = new Map<string, (behavior: PermissionBehavior) => void>()
 
+  let toolListChanges = 0
+
   client.fallbackNotificationHandler = async (notification) => {
+    if (notification.method === 'notifications/tools/list_changed') {
+      toolListChanges++
+      return
+    }
     const verdict = VerdictNotification.safeParse(notification)
     if (verdict.success) {
       const { request_id, behavior } = verdict.data.params
@@ -136,6 +142,11 @@ export async function startFakeDm({ folder, home, bridge = BRIDGE_BUNDLE }: Opti
   const dm = {
     protocolVersion,
     capabilities: client.getServerCapabilities() as ServerCapabilities,
+
+    /** How many times the bridge said its tool list changed. */
+    get toolListChanges() {
+      return toolListChanges
+    },
 
     async listTools(): Promise<Tool[]> {
       return (await client.listTools()).tools

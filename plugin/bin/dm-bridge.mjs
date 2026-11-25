@@ -30436,6 +30436,7 @@ async function startBridge({ env = process.env, cwd = process.cwd() } = {}) {
       throw new ServerDown();
     }
   }
+  let refusal;
   const server = new Server(
     { name: "the-dungeon-master", version: "0.0.1" },
     {
@@ -30462,6 +30463,7 @@ async function startBridge({ env = process.env, cwd = process.cwd() } = {}) {
         isError: true
       };
     }
+    if (refusal) return refusal;
     try {
       const res = await api("call", {
         method: "POST",
@@ -30493,17 +30495,18 @@ async function startBridge({ env = process.env, cwd = process.cwd() } = {}) {
     });
   });
   async function relayChannel(campaign) {
-    let refused = false;
     for (; ; ) {
       try {
         const res = await api(`events?campaign=${encodeURIComponent(campaign)}`);
         if (res.status === 409) {
-          if (!refused) log((await res.json()).message);
-          refused = true;
-          throw new ServerDown();
+          const body = await res.json();
+          log(body.message);
+          refusal = { content: [{ type: "text", text: JSON.stringify(body) }], isError: true };
+          return;
         }
-        refused = false;
         if (!res.ok || !res.body) throw new ServerDown();
+        void server.sendToolListChanged().catch(() => {
+        });
         const decoder = new TextDecoder();
         let buffer = "";
         for await (const chunk of res.body) {
