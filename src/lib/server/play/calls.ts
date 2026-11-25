@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { z } from 'zod'
 import { canAct } from '#lib/character/acting.ts'
 import { SOLO_PLAYER } from '#lib/character/enums.ts'
@@ -402,12 +402,18 @@ export function openCallView(db: Queryable): OpenCall | null {
   }
 }
 
+/**
+ * The Calls a Declaration can answer instead: the Players chose not to roll or reply. Initiative,
+ * Death saves, concentration saves and reactions are the rules' own and stay open.
+ */
+const WITHDRAWABLE = ['check', 'question', 'roll_sequence', 'hit_dice'] as const
+
 /** A closed Floor with Declarations on it withdraws the open Call; returns its id, if any. */
 export function withdrawOpenCall(db: Queryable, at: number): string | null {
   const withdrawn = db
     .update(call)
     .set({ state: 'withdrawn', closedAt: at })
-    .where(eq(call.state, 'open'))
+    .where(and(eq(call.state, 'open'), inArray(call.kind, [...WITHDRAWABLE])))
     .returning({ id: call.id })
     .get()
   return withdrawn?.id ?? null

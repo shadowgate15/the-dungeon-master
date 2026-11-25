@@ -267,6 +267,20 @@ describe('add_combatant', () => {
 })
 
 describe('the Floor in Combat', () => {
+  it('leaves the initiative Call open when Declarations close a Floor', () => {
+    const wren = addWren()
+    load([20, 10])
+    const { pending_call: id } = ok('start_combat', { combatants: ['char:wren', 'monster:goblin'] })
+    ok('narrate', { text: 'Roll for initiative!', call: id })
+
+    library.floor(campaignId).send({ character: wren, text: 'I draw my sword.' })
+    play.done(campaignId)
+
+    expect(timeline().call).toMatchObject({ id, kind: 'initiative' })
+    rollInitiative(id, 18)
+    expect(combatView()).toMatchObject({ round: 1, waiting: [] })
+  })
+
   it('takes Declarations only for the Character whose turn it is', () => {
     const ash = addAsh()
     fight([10], 18) // Wren 20, Goblin 1 12; Ash isn't fighting.
