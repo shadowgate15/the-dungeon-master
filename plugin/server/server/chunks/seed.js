@@ -4,8 +4,8 @@ import { a as rulesDataset$1, i as PROFICIENCY_REFERENCE_TYPES, n as CHOICE_KIND
 import crypto$1 from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import Client from "better-sqlite3";
 import os from "node:os";
+import Client from "better-sqlite3";
 // \0rolldown/runtime.js
 var __defProp = Object.defineProperty;
 var __exportAll = (all, no_symbols) => {
@@ -1211,42 +1211,31 @@ function mapRelationalRow(tablesConfig, tableConfig, row, buildQueryResultSelect
 	}
 	return result;
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/selection-proxy.js
-var SelectionProxyHandler = class SelectionProxyHandler {
-	static [entityKind] = "SelectionProxyHandler";
-	config;
-	constructor(config) {
-		this.config = { ...config };
+// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/checks.js
+var CheckBuilder = class {
+	constructor(name, value) {
+		this.name = name;
+		this.value = value;
 	}
-	get(subquery, prop) {
-		if (prop === "_") return {
-			...subquery["_"],
-			selectedFields: new Proxy(subquery._.selectedFields, this)
-		};
-		if (prop === ViewBaseConfig) return {
-			...subquery[ViewBaseConfig],
-			selectedFields: new Proxy(subquery[ViewBaseConfig].selectedFields, this)
-		};
-		if (typeof prop === "symbol") return subquery[prop];
-		const value = (is(subquery, Subquery) ? subquery._.selectedFields : is(subquery, View) ? subquery[ViewBaseConfig].selectedFields : subquery)[prop];
-		if (is(value, SQL.Aliased)) {
-			if (this.config.sqlAliasedBehavior === "sql" && !value.isSelectionField) return value.sql;
-			const newValue = value.clone();
-			newValue.isSelectionField = true;
-			return newValue;
-		}
-		if (is(value, SQL)) {
-			if (this.config.sqlBehavior === "sql") return value;
-			throw new Error(`You tried to reference "${prop}" field from a subquery, which is a raw SQL field, but it doesn't have an alias declared. Please add an alias to the field using ".as('alias')" method.`);
-		}
-		if (is(value, Column)) {
-			if (this.config.alias) return new Proxy(value, new ColumnAliasProxyHandler(new Proxy(value.table, new TableAliasProxyHandler(this.config.alias, this.config.replaceOriginalName ?? false))));
-			return value;
-		}
-		if (typeof value !== "object" || value === null) return value;
-		return new Proxy(value, new SelectionProxyHandler(this.config));
+	static [entityKind] = "SQLiteCheckBuilder";
+	brand;
+	build(table) {
+		return new Check(table, this);
 	}
 };
+var Check = class {
+	constructor(table, builder) {
+		this.table = table;
+		this.name = builder.name;
+		this.value = builder.value;
+	}
+	static [entityKind] = "SQLiteCheck";
+	name;
+	value;
+};
+function check(name, value) {
+	return new CheckBuilder(name, value);
+}
 // node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/foreign-keys.js
 var ForeignKeyBuilder = class {
 	static [entityKind] = "SQLiteForeignKeyBuilder";
@@ -1746,6 +1735,42 @@ function text(a, b = {}) {
 	if (config.mode === "json") return new SQLiteTextJsonBuilder(name);
 	return new SQLiteTextBuilder(name, config);
 }
+// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/selection-proxy.js
+var SelectionProxyHandler = class SelectionProxyHandler {
+	static [entityKind] = "SelectionProxyHandler";
+	config;
+	constructor(config) {
+		this.config = { ...config };
+	}
+	get(subquery, prop) {
+		if (prop === "_") return {
+			...subquery["_"],
+			selectedFields: new Proxy(subquery._.selectedFields, this)
+		};
+		if (prop === ViewBaseConfig) return {
+			...subquery[ViewBaseConfig],
+			selectedFields: new Proxy(subquery[ViewBaseConfig].selectedFields, this)
+		};
+		if (typeof prop === "symbol") return subquery[prop];
+		const value = (is(subquery, Subquery) ? subquery._.selectedFields : is(subquery, View) ? subquery[ViewBaseConfig].selectedFields : subquery)[prop];
+		if (is(value, SQL.Aliased)) {
+			if (this.config.sqlAliasedBehavior === "sql" && !value.isSelectionField) return value.sql;
+			const newValue = value.clone();
+			newValue.isSelectionField = true;
+			return newValue;
+		}
+		if (is(value, SQL)) {
+			if (this.config.sqlBehavior === "sql") return value;
+			throw new Error(`You tried to reference "${prop}" field from a subquery, which is a raw SQL field, but it doesn't have an alias declared. Please add an alias to the field using ".as('alias')" method.`);
+		}
+		if (is(value, Column)) {
+			if (this.config.alias) return new Proxy(value, new ColumnAliasProxyHandler(new Proxy(value.table, new TableAliasProxyHandler(this.config.alias, this.config.replaceOriginalName ?? false))));
+			return value;
+		}
+		if (typeof value !== "object" || value === null) return value;
+		return new Proxy(value, new SelectionProxyHandler(this.config));
+	}
+};
 // node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/all.js
 function getSQLiteColumnBuilders() {
 	return {
@@ -1789,31 +1814,6 @@ function sqliteTableBase(name, columns, extraConfig, schema, baseName = name) {
 var sqliteTable = (name, columns, extraConfig) => {
 	return sqliteTableBase(name, columns, extraConfig);
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/checks.js
-var CheckBuilder = class {
-	constructor(name, value) {
-		this.name = name;
-		this.value = value;
-	}
-	static [entityKind] = "SQLiteCheckBuilder";
-	brand;
-	build(table) {
-		return new Check(table, this);
-	}
-};
-var Check = class {
-	constructor(table, builder) {
-		this.table = table;
-		this.name = builder.name;
-		this.value = builder.value;
-	}
-	static [entityKind] = "SQLiteCheck";
-	name;
-	value;
-};
-function check(name, value) {
-	return new CheckBuilder(name, value);
-}
 // node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/indexes.js
 var IndexBuilderOn = class {
 	constructor(name, unique) {
@@ -4075,161 +4075,6 @@ var SQLiteTransaction = class extends BaseSQLiteDatabase {
 		throw new TransactionRollbackError();
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/session.js
-var BetterSQLiteSession = class extends SQLiteSession {
-	constructor(client, dialect, schema, options = {}) {
-		super(dialect);
-		this.client = client;
-		this.schema = schema;
-		this.logger = options.logger ?? new NoopLogger();
-		this.cache = options.cache ?? new NoopCache();
-	}
-	static [entityKind] = "BetterSQLiteSession";
-	logger;
-	cache;
-	prepareQuery(query, fields, executeMethod, isResponseInArrayMode, customResultMapper, queryMetadata, cacheConfig) {
-		return new PreparedQuery(this.client.prepare(query.sql), query, this.logger, this.cache, queryMetadata, cacheConfig, fields, executeMethod, isResponseInArrayMode, customResultMapper);
-	}
-	transaction(transaction, config = {}) {
-		const tx = new BetterSQLiteTransaction("sync", this.dialect, this, this.schema);
-		return this.client.transaction(transaction)[config.behavior ?? "deferred"](tx);
-	}
-};
-var BetterSQLiteTransaction = class BetterSQLiteTransaction extends SQLiteTransaction {
-	static [entityKind] = "BetterSQLiteTransaction";
-	transaction(transaction) {
-		const savepointName = `sp${this.nestedIndex}`;
-		const tx = new BetterSQLiteTransaction("sync", this.dialect, this.session, this.schema, this.nestedIndex + 1);
-		this.session.run(sql.raw(`savepoint ${savepointName}`));
-		try {
-			const result = transaction(tx);
-			this.session.run(sql.raw(`release savepoint ${savepointName}`));
-			return result;
-		} catch (err) {
-			this.session.run(sql.raw(`rollback to savepoint ${savepointName}`));
-			throw err;
-		}
-	}
-};
-var PreparedQuery = class extends SQLitePreparedQuery {
-	constructor(stmt, query, logger, cache, queryMetadata, cacheConfig, fields, executeMethod, _isResponseInArrayMode, customResultMapper) {
-		super("sync", executeMethod, query, cache, queryMetadata, cacheConfig);
-		this.stmt = stmt;
-		this.logger = logger;
-		this.fields = fields;
-		this._isResponseInArrayMode = _isResponseInArrayMode;
-		this.customResultMapper = customResultMapper;
-	}
-	static [entityKind] = "BetterSQLitePreparedQuery";
-	run(placeholderValues) {
-		const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
-		this.logger.logQuery(this.query.sql, params);
-		return this.stmt.run(...params);
-	}
-	all(placeholderValues) {
-		const { fields, joinsNotNullableMap, query, logger, stmt, customResultMapper } = this;
-		if (!fields && !customResultMapper) {
-			const params = fillPlaceholders(query.params, placeholderValues ?? {});
-			logger.logQuery(query.sql, params);
-			return stmt.all(...params);
-		}
-		const rows = this.values(placeholderValues);
-		if (customResultMapper) return customResultMapper(rows);
-		return rows.map((row) => mapResultRow(fields, row, joinsNotNullableMap));
-	}
-	get(placeholderValues) {
-		const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
-		this.logger.logQuery(this.query.sql, params);
-		const { fields, stmt, joinsNotNullableMap, customResultMapper } = this;
-		if (!fields && !customResultMapper) return stmt.get(...params);
-		const row = stmt.raw().get(...params);
-		if (!row) return;
-		if (customResultMapper) return customResultMapper([row]);
-		return mapResultRow(fields, row, joinsNotNullableMap);
-	}
-	values(placeholderValues) {
-		const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
-		this.logger.logQuery(this.query.sql, params);
-		return this.stmt.raw().all(...params);
-	}
-	/** @internal */
-	isResponseInArrayMode() {
-		return this._isResponseInArrayMode;
-	}
-};
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/driver.js
-var BetterSQLite3Database = class extends BaseSQLiteDatabase {
-	static [entityKind] = "BetterSQLite3Database";
-};
-function construct(client, config = {}) {
-	const dialect = new SQLiteSyncDialect({ casing: config.casing });
-	let logger;
-	if (config.logger === true) logger = new DefaultLogger();
-	else if (config.logger !== false) logger = config.logger;
-	let schema;
-	if (config.schema) {
-		const tablesConfig = extractTablesRelationalConfig(config.schema, createTableRelationsHelpers);
-		schema = {
-			fullSchema: config.schema,
-			schema: tablesConfig.tables,
-			tableNamesMap: tablesConfig.tableNamesMap
-		};
-	}
-	const db = new BetterSQLite3Database("sync", dialect, new BetterSQLiteSession(client, dialect, schema, { logger }), schema);
-	db.$client = client;
-	return db;
-}
-function drizzle(...params) {
-	if (params[0] === void 0 || typeof params[0] === "string") return construct(params[0] === void 0 ? new Client() : new Client(params[0]), params[1]);
-	if (isConfig(params[0])) {
-		const { connection, client, ...drizzleConfig } = params[0];
-		if (client) return construct(client, drizzleConfig);
-		if (typeof connection === "object") {
-			const { source, ...options } = connection;
-			return construct(new Client(source, options), drizzleConfig);
-		}
-		return construct(new Client(connection), drizzleConfig);
-	}
-	return construct(params[0], params[1]);
-}
-((drizzle2) => {
-	function mock(config) {
-		return construct({}, config);
-	}
-	drizzle2.mock = mock;
-})(drizzle || (drizzle = {}));
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/migrator.js
-function readMigrationFiles(config) {
-	const migrationFolderTo = config.migrationsFolder;
-	const migrationQueries = [];
-	const journalPath = `${migrationFolderTo}/meta/_journal.json`;
-	if (!fs.existsSync(journalPath)) throw new Error(`Can't find meta/_journal.json file`);
-	const journalAsString = fs.readFileSync(`${migrationFolderTo}/meta/_journal.json`).toString();
-	const journal = JSON.parse(journalAsString);
-	for (const journalEntry of journal.entries) {
-		const migrationPath = `${migrationFolderTo}/${journalEntry.tag}.sql`;
-		try {
-			const query = fs.readFileSync(`${migrationFolderTo}/${journalEntry.tag}.sql`).toString();
-			const result = query.split("--> statement-breakpoint").map((it) => {
-				return it;
-			});
-			migrationQueries.push({
-				sql: result,
-				bps: journalEntry.breakpoints,
-				folderMillis: journalEntry.when,
-				hash: crypto$1.createHash("sha256").update(query).digest("hex")
-			});
-		} catch {
-			throw new Error(`No file ${migrationPath} found in ${migrationFolderTo} folder`);
-		}
-	}
-	return migrationQueries;
-}
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/migrator.js
-function migrate(db, config) {
-	const migrations = readMigrationFiles(config);
-	db.dialect.migrate(migrations, db.session, config);
-}
 // src/lib/character/enums.ts
 /** The nine alignments; slugs match the Rules Data alignments. NULL means unspecified. */
 var ALIGNMENTS = [
@@ -5440,16 +5285,6 @@ var returnedDraft = sqliteTable("returned_draft", {
 	text: text("text").notNull(),
 	createdAt: integer("created_at").notNull()
 });
-// src/lib/server/db/connect.ts
-/** The only place connections are opened, so foreign keys are always enforced. */
-function openDatabase(url) {
-	const client = new Client(url);
-	client.pragma("foreign_keys = ON");
-	return drizzle(client, { schema: schema_exports });
-}
-function migrateDatabase(db) {
-	migrate(db, { migrationsFolder: "drizzle" });
-}
 // src/lib/server/campaign/paths.ts
 /** The user-level state directory (registry, server runtime file). */
 function userStateDir(env = process.env) {
@@ -6931,6 +6766,174 @@ function createRulesRepository(db) {
 		abilityScoreMethods: () => db.select().from(abilityScoreMethod).orderBy(asc(abilityScoreMethod.id)).all()
 	};
 }
+// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/session.js
+var BetterSQLiteSession = class extends SQLiteSession {
+	constructor(client, dialect, schema, options = {}) {
+		super(dialect);
+		this.client = client;
+		this.schema = schema;
+		this.logger = options.logger ?? new NoopLogger();
+		this.cache = options.cache ?? new NoopCache();
+	}
+	static [entityKind] = "BetterSQLiteSession";
+	logger;
+	cache;
+	prepareQuery(query, fields, executeMethod, isResponseInArrayMode, customResultMapper, queryMetadata, cacheConfig) {
+		return new PreparedQuery(this.client.prepare(query.sql), query, this.logger, this.cache, queryMetadata, cacheConfig, fields, executeMethod, isResponseInArrayMode, customResultMapper);
+	}
+	transaction(transaction, config = {}) {
+		const tx = new BetterSQLiteTransaction("sync", this.dialect, this, this.schema);
+		return this.client.transaction(transaction)[config.behavior ?? "deferred"](tx);
+	}
+};
+var BetterSQLiteTransaction = class BetterSQLiteTransaction extends SQLiteTransaction {
+	static [entityKind] = "BetterSQLiteTransaction";
+	transaction(transaction) {
+		const savepointName = `sp${this.nestedIndex}`;
+		const tx = new BetterSQLiteTransaction("sync", this.dialect, this.session, this.schema, this.nestedIndex + 1);
+		this.session.run(sql.raw(`savepoint ${savepointName}`));
+		try {
+			const result = transaction(tx);
+			this.session.run(sql.raw(`release savepoint ${savepointName}`));
+			return result;
+		} catch (err) {
+			this.session.run(sql.raw(`rollback to savepoint ${savepointName}`));
+			throw err;
+		}
+	}
+};
+var PreparedQuery = class extends SQLitePreparedQuery {
+	constructor(stmt, query, logger, cache, queryMetadata, cacheConfig, fields, executeMethod, _isResponseInArrayMode, customResultMapper) {
+		super("sync", executeMethod, query, cache, queryMetadata, cacheConfig);
+		this.stmt = stmt;
+		this.logger = logger;
+		this.fields = fields;
+		this._isResponseInArrayMode = _isResponseInArrayMode;
+		this.customResultMapper = customResultMapper;
+	}
+	static [entityKind] = "BetterSQLitePreparedQuery";
+	run(placeholderValues) {
+		const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
+		this.logger.logQuery(this.query.sql, params);
+		return this.stmt.run(...params);
+	}
+	all(placeholderValues) {
+		const { fields, joinsNotNullableMap, query, logger, stmt, customResultMapper } = this;
+		if (!fields && !customResultMapper) {
+			const params = fillPlaceholders(query.params, placeholderValues ?? {});
+			logger.logQuery(query.sql, params);
+			return stmt.all(...params);
+		}
+		const rows = this.values(placeholderValues);
+		if (customResultMapper) return customResultMapper(rows);
+		return rows.map((row) => mapResultRow(fields, row, joinsNotNullableMap));
+	}
+	get(placeholderValues) {
+		const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
+		this.logger.logQuery(this.query.sql, params);
+		const { fields, stmt, joinsNotNullableMap, customResultMapper } = this;
+		if (!fields && !customResultMapper) return stmt.get(...params);
+		const row = stmt.raw().get(...params);
+		if (!row) return;
+		if (customResultMapper) return customResultMapper([row]);
+		return mapResultRow(fields, row, joinsNotNullableMap);
+	}
+	values(placeholderValues) {
+		const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
+		this.logger.logQuery(this.query.sql, params);
+		return this.stmt.raw().all(...params);
+	}
+	/** @internal */
+	isResponseInArrayMode() {
+		return this._isResponseInArrayMode;
+	}
+};
+// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/driver.js
+var BetterSQLite3Database = class extends BaseSQLiteDatabase {
+	static [entityKind] = "BetterSQLite3Database";
+};
+function construct(client, config = {}) {
+	const dialect = new SQLiteSyncDialect({ casing: config.casing });
+	let logger;
+	if (config.logger === true) logger = new DefaultLogger();
+	else if (config.logger !== false) logger = config.logger;
+	let schema;
+	if (config.schema) {
+		const tablesConfig = extractTablesRelationalConfig(config.schema, createTableRelationsHelpers);
+		schema = {
+			fullSchema: config.schema,
+			schema: tablesConfig.tables,
+			tableNamesMap: tablesConfig.tableNamesMap
+		};
+	}
+	const db = new BetterSQLite3Database("sync", dialect, new BetterSQLiteSession(client, dialect, schema, { logger }), schema);
+	db.$client = client;
+	return db;
+}
+function drizzle(...params) {
+	if (params[0] === void 0 || typeof params[0] === "string") return construct(params[0] === void 0 ? new Client() : new Client(params[0]), params[1]);
+	if (isConfig(params[0])) {
+		const { connection, client, ...drizzleConfig } = params[0];
+		if (client) return construct(client, drizzleConfig);
+		if (typeof connection === "object") {
+			const { source, ...options } = connection;
+			return construct(new Client(source, options), drizzleConfig);
+		}
+		return construct(new Client(connection), drizzleConfig);
+	}
+	return construct(params[0], params[1]);
+}
+((drizzle2) => {
+	function mock(config) {
+		return construct({}, config);
+	}
+	drizzle2.mock = mock;
+})(drizzle || (drizzle = {}));
+// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/migrator.js
+function readMigrationFiles(config) {
+	const migrationFolderTo = config.migrationsFolder;
+	const migrationQueries = [];
+	const journalPath = `${migrationFolderTo}/meta/_journal.json`;
+	if (!fs.existsSync(journalPath)) throw new Error(`Can't find meta/_journal.json file`);
+	const journalAsString = fs.readFileSync(`${migrationFolderTo}/meta/_journal.json`).toString();
+	const journal = JSON.parse(journalAsString);
+	for (const journalEntry of journal.entries) {
+		const migrationPath = `${migrationFolderTo}/${journalEntry.tag}.sql`;
+		try {
+			const query = fs.readFileSync(`${migrationFolderTo}/${journalEntry.tag}.sql`).toString();
+			const result = query.split("--> statement-breakpoint").map((it) => {
+				return it;
+			});
+			migrationQueries.push({
+				sql: result,
+				bps: journalEntry.breakpoints,
+				folderMillis: journalEntry.when,
+				hash: crypto$1.createHash("sha256").update(query).digest("hex")
+			});
+		} catch {
+			throw new Error(`No file ${migrationPath} found in ${migrationFolderTo} folder`);
+		}
+	}
+	return migrationQueries;
+}
+// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/migrator.js
+function migrate(db, config) {
+	const migrations = readMigrationFiles(config);
+	db.dialect.migrate(migrations, db.session, config);
+}
+// src/lib/server/db/connect.ts
+/**
+* The only place connections are opened, so foreign keys are always enforced. A Buffer holding a
+* database file opens as an in-memory copy of it.
+*/
+function openDatabase(url) {
+	const client = new Client(url);
+	client.pragma("foreign_keys = ON");
+	return drizzle(client, { schema: schema_exports });
+}
+function migrateDatabase(db) {
+	migrate(db, { migrationsFolder: "drizzle" });
+}
 // src/lib/server/rules/seed.ts
 /** Keeps a statement under SQLite's bound-parameter limit. */
 var MAX_PARAMS = 800;
@@ -7357,6 +7360,13 @@ function seedRulesData(db, dataset = loadRulesDataset(), now = Date.now) {
 		}).run();
 	});
 }
-export { subrace as $, returnedDraft as A, worldLink as B, combat as C, DUNGEON_MASTER_HOME as Ct, event as D, declaration as E, belief as F, alignment as G, NPC_STATUSES as H, entity as I, equipment as J, background as K, entityAlias as L, act as M, arc as N, floor as O, beat as P, subclass as Q, fact as R, characterSpell as S, DUNGEON_MASTER_CAMPAIGNS as St, conversationMessage as T, DUNGEON_MASTER_VERSION as Tt, handleKind as U, ENTITY_TYPES as V, abilityScoreMethod as W, skill as X, race as Y, spell as Z, characterChoice as _, or as _t, abilities_default as a, asc as at, characterItem as b, is as bt, defaultCampaignRoot as c, eq as ct, openDatabase as d, inArray as dt, ABILITY_METHODS as et, activityLine as f, isNotNull as ft, character as g, ne as gt, campaign as h, lt as ht, skills_default as i, SOLO_PLAYER as it, session as j, npcCombat as k, userStateDir as l, gt as lt, callPart as m, like as mt, createRulesRepository as n, CUSTOM_BACKGROUND_FEATURE_MAX as nt, campaignDatabasePath as o, desc as ot, call as p, isNull as pt, classTable as q, loadRulesDataset as r, CUSTOM_BACKGROUND_SLUG as rt, canonicalFolder as s, and as st, seedRulesData as t, BACKSTORY_MAX as tt, migrateDatabase as u, gte as ut, characterDraft as v, sql as vt, combatant as w, DUNGEON_MASTER_PORT as wt, characterSkill as x, DATABASE_URL as xt, characterEquipment as y, Column as yt, pageRevision as z };
+/** Opens the database file, migrating it and seeding Rules Data. */
+function openSeededDatabase(file) {
+	const db = openDatabase(file);
+	migrateDatabase(db);
+	seedRulesData(db);
+	return db;
+}
+export { subclass as $, npcCombat as A, pageRevision as B, characterSpell as C, DUNGEON_MASTER_CAMPAIGNS as Ct, declaration as D, conversationMessage as E, DUNGEON_MASTER_VERSION as Et, beat as F, abilityScoreMethod as G, ENTITY_TYPES as H, belief as I, classTable as J, alignment as K, entity as L, session as M, act as N, event as O, arc as P, spell as Q, entityAlias as R, characterSkill as S, DATABASE_URL as St, combatant as T, DUNGEON_MASTER_PORT as Tt, NPC_STATUSES as U, worldLink as V, handleKind as W, race as X, equipment as Y, skill as Z, character as _, ne as _t, createRulesRepository as a, SOLO_PLAYER as at, characterEquipment as b, Column as bt, abilities_default as c, and as ct, defaultCampaignRoot as d, gte as dt, subrace as et, userStateDir as f, inArray as ft, campaign as g, lt as gt, callPart as h, like as ht, openDatabase as i, CUSTOM_BACKGROUND_SLUG as it, returnedDraft as j, floor as k, campaignDatabasePath as l, eq as lt, call as m, isNull as mt, seedRulesData as n, BACKSTORY_MAX as nt, loadRulesDataset as o, asc as ot, activityLine as p, isNotNull as pt, background as q, migrateDatabase as r, CUSTOM_BACKGROUND_FEATURE_MAX as rt, skills_default as s, desc as st, openSeededDatabase as t, ABILITY_METHODS as tt, canonicalFolder as u, gt as ut, characterChoice as v, or as vt, combat as w, DUNGEON_MASTER_HOME as wt, characterItem as x, is as xt, characterDraft as y, sql as yt, fact as z };
 
 //# sourceMappingURL=seed.js.map

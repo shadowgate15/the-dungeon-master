@@ -94,3 +94,76 @@ test('the console is bound to the viewport and the composer stays pinned', async
   const composer = await box.boundingBox()
   expect(composer!.y + composer!.height).toBeLessThanOrEqual(720)
 })
+
+test('the Scene rail is bound to the viewport and its cards scroll inside', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  const { id: campaign, folder } = await createCampaign(page, unique('Rail Test'))
+  await addFighter(page, campaign, 'Wren')
+  dm = await startFakeDm({ folder, home: E2E_HOME })
+
+  const villagers = [
+    'Aldous',
+    'Brina',
+    'Corwin',
+    'Dagny',
+    'Elric',
+    'Fenna',
+    'Gorm',
+    'Hester',
+    'Ivo',
+    'Jessamy',
+    'Kestrel',
+    'Lorcan',
+    'Maud',
+    'Nyle'
+  ]
+  dm.script({
+    on: 'floor',
+    run: async () => {
+      for (const name of villagers) {
+        const npc = await dm!.call('establish', { type: 'npc', name })
+        expect(npc.isError).toBe(false)
+        await dm!.call('reveal', { of: npc.payload.handle, holders: ['char:wren'] })
+      }
+      const combat = await dm!.call('start_combat', {
+        combatants: [{ monster: 'monster:goblin', count: 20 }]
+      })
+      expect(combat.isError).toBe(false)
+      await dm!.call('narrate', {
+        text: 'Goblins pour out of every doorway.',
+        call: combat.payload.pending_call
+      })
+    }
+  })
+
+  await page.goto(`/campaigns/${campaign}/play`)
+  await page.waitForLoadState('networkidle')
+  await page.getByRole('textbox', { name: 'What does Wren do?' }).fill('I ask around.')
+  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Done' }).click()
+  await expect(page.getByText('Goblins pour out of every doorway.')).toBeVisible()
+  await dm.settled()
+
+  const rail = page.getByRole('complementary', { name: 'Scene' })
+  const initiative = rail.getByRole('region', { name: 'Initiative' })
+  const knows = rail.getByRole('region', { name: /^What .* knows$/ })
+  await expect(initiative.getByRole('listitem')).toHaveCount(20)
+  await expect(knows.getByRole('region', { name: 'Nyle' })).toBeAttached()
+
+  const railBox = await rail.boundingBox()
+  expect(railBox!.y + railBox!.height).toBeLessThanOrEqual(720)
+
+  for (const card of [initiative, knows]) {
+    const cardBox = await card.boundingBox()
+    expect(cardBox!.y + cardBox!.height).toBeLessThanOrEqual(railBox!.y + railBox!.height + 1)
+    const body = card.getByTestId('rail-card-body')
+    const overflow = await body.evaluate((el) => el.scrollHeight - el.clientHeight)
+    expect(overflow).toBeGreaterThan(0)
+    // The header stays put while the body scrolls.
+    const header = card.getByRole('heading', { level: 2 })
+    const before = await header.boundingBox()
+    await body.evaluate((el) => (el.scrollTop = el.scrollHeight))
+    expect(await header.boundingBox()).toEqual(before)
+    await expect(header).toBeInViewport()
+  }
+})
