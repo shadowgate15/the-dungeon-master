@@ -1,4 +1,4 @@
-import { $ as subrace, A as returnedDraft, B as worldLink, C as combat, Ct as DUNGEON_MASTER_HOME, D as event, E as declaration, F as belief, G as alignment, H as NPC_STATUSES, I as entity, J as equipment, K as background, L as entityAlias, M as act, N as arc, O as floor, P as beat, Q as subclass, R as fact, S as characterSpell, St as DUNGEON_MASTER_CAMPAIGNS, T as conversationMessage, U as handleKind, V as ENTITY_TYPES, W as abilityScoreMethod, X as skill, Y as race, Z as spell, _ as characterChoice, _t as or, a as abilities_default, at as asc, b as characterItem, bt as is, c as defaultCampaignRoot, ct as eq, d as openDatabase, dt as inArray, et as ABILITY_METHODS, f as activityLine, ft as isNotNull, g as character, gt as ne, h as campaign, ht as lt, i as skills_default, it as SOLO_PLAYER, j as session, k as npcCombat, l as userStateDir, lt as gt, m as callPart, mt as like, n as createRulesRepository, nt as CUSTOM_BACKGROUND_FEATURE_MAX, o as campaignDatabasePath, ot as desc, p as call, pt as isNull, q as classTable, r as loadRulesDataset, s as canonicalFolder, st as and, t as seedRulesData, tt as BACKSTORY_MAX, u as migrateDatabase, ut as gte, v as characterDraft, vt as sql, w as combatant$1, x as characterSkill, y as characterEquipment, yt as Column, z as pageRevision } from "./seed.js";
+import { $ as subclass, A as npcCombat, B as pageRevision, C as characterSpell, Ct as DUNGEON_MASTER_CAMPAIGNS, D as declaration, E as conversationMessage, F as beat, G as abilityScoreMethod, H as ENTITY_TYPES, I as belief, J as classTable, K as alignment, L as entity, M as session, N as act, O as event, P as arc, Q as spell, R as entityAlias, S as characterSkill, T as combatant$1, U as NPC_STATUSES, V as worldLink, W as handleKind, X as race, Y as equipment, Z as skill, _ as character, _t as ne, a as createRulesRepository, at as SOLO_PLAYER, b as characterEquipment, bt as Column, c as abilities_default, ct as and, d as defaultCampaignRoot, dt as gte, et as subrace, f as userStateDir, ft as inArray, g as campaign, gt as lt, h as callPart, ht as like, j as returnedDraft, k as floor, l as campaignDatabasePath, lt as eq, m as call, mt as isNull, nt as BACKSTORY_MAX, o as loadRulesDataset, ot as asc, p as activityLine, pt as isNotNull, q as background, rt as CUSTOM_BACKGROUND_FEATURE_MAX, s as skills_default, st as desc, t as openSeededDatabase, tt as ABILITY_METHODS, u as canonicalFolder, ut as gt, v as characterChoice, vt as or, w as combat, wt as DUNGEON_MASTER_HOME, x as characterItem, xt as is, y as characterDraft, yt as sql, z as fact } from "./seed.js";
 import { F as equipmentGroups, P as equipmentGroupKeys, R as resolveFeatures, c as WIZARD_RULES_KEYS, f as resolverDraft, g as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, p as classSpellOptions, t as buildSummary, u as emptyDraft } from "./summary.js";
 import { _ as prettifyError, c as literal, f as strictObject, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
@@ -4960,16 +4960,14 @@ var NotACampaignFolderError = class extends Error {};
 * Every Campaign the server knows: each lives in its own folder, with its database in `.dm/`, and
 * the registry in the user-level state directory lists the folders.
 */
-function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
+function createCampaignLibrary({ home, live = () => false, now = Date.now, initDatabase = openSeededDatabase }) {
 	const registry = createRegistry(home);
 	const open = /* @__PURE__ */ new Map();
 	/** The folder's Campaign database, opened (migrated and Rules Data seeded) once per server. */
 	function database(folder) {
 		let db = open.get(folder);
 		if (!db) {
-			db = openDatabase(campaignDatabasePath(folder));
-			migrateDatabase(db);
-			seedRulesData(db);
+			db = openSeededDatabase(campaignDatabasePath(folder));
 			open.set(folder, db);
 		}
 		return db;
@@ -5014,8 +5012,10 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now }) {
 			const folder = path.resolve(input.folder);
 			if (fs.existsSync(campaignDatabasePath(folder))) throw new CampaignExistsError(`${folder} already holds a Campaign`);
 			fs.mkdirSync(path.dirname(campaignDatabasePath(folder)), { recursive: true });
+			const db = initDatabase(campaignDatabasePath(folder));
+			open.set(folder, db);
 			const at = now();
-			const created = database(folder).insert(campaign).values({
+			const created = db.insert(campaign).values({
 				name,
 				createdAt: at,
 				updatedAt: at
