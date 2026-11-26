@@ -94,3 +94,18 @@ test('the console is bound to the viewport and the composer stays pinned', async
   const composer = await box.boundingBox()
   expect(composer!.y + composer!.height).toBeLessThanOrEqual(720)
 })
+
+test('a reload opens the Timeline at the latest entry', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  const { id: campaign, folder } = await createCampaign(page, unique('Scroll Test'))
+  await addFighter(page, campaign, 'Wren')
+  dm = await startFakeDm({ folder, home: E2E_HOME })
+  for (let i = 0; i < 30; i++) {
+    await dm.call('narrate', { text: `Step ${i}: the corridor stretches on into the dark.` })
+  }
+
+  await page.goto(`/campaigns/${campaign}/play`)
+  const timeline = page.getByRole('list', { name: 'Timeline' })
+  await expect(timeline.getByText('Step 29:')).toBeInViewport()
+  await expect(timeline.getByText('Step 0:')).not.toBeInViewport()
+})
