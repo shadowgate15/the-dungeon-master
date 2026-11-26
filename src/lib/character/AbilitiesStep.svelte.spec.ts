@@ -67,22 +67,29 @@ describe('AbilitiesStep point buy', () => {
   })
 
   it('spends points by cost and stops at the budget', async () => {
-    const wizard = setup()
-    await chooseMethod('Point buy')
+    // 15, 15 and 13 cost 9 + 9 + 5: 4 of the 27 points are left.
+    const wizard = setup({
+      abilityMethod: 'point-buy',
+      baseScores: { str: 15, dex: 15, con: 13, int: 8, wis: 8, cha: 8 }
+    })
     const up = (name: string) => page.getByRole('button', { name: `Increase ${name}` })
+    const remaining = page.getByTestId('points-remaining')
+    await expect.element(remaining).toHaveTextContent('4')
 
-    // 8 to 15 costs 9 points: three abilities spend the whole 27.
-    for (const name of ['Strength', 'Dexterity', 'Constitution']) {
-      for (let i = 0; i < 7; i++) await up(name).click()
-    }
-    await expect.element(page.getByTestId('points-remaining')).toHaveTextContent('0')
-    await expect.element(up('Intelligence')).toBeDisabled()
+    await up('Intelligence').click() // 8 to 9 costs 1
+    await expect.element(remaining).toHaveTextContent('3')
+    await up('Constitution').click() // 13 to 14 costs 2
+    await expect.element(remaining).toHaveTextContent('1')
+    await expect.element(up('Constitution')).toBeDisabled() // 14 to 15 would cost 2
+    await up('Intelligence').click() // 9 to 10 costs 1
+    await expect.element(remaining).toHaveTextContent('0')
+    await expect.element(up('Wisdom')).toBeDisabled()
     await expect.element(up('Strength')).toBeDisabled()
     expect(wizard.step('abilities')?.status).toBe('valid')
 
     await page.getByRole('button', { name: 'Decrease Strength' }).click()
-    await expect.element(page.getByTestId('points-remaining')).toHaveTextContent('2')
-    await expect.element(up('Intelligence')).toBeEnabled()
+    await expect.element(remaining).toHaveTextContent('2')
+    await expect.element(up('Wisdom')).toBeEnabled()
   })
 
   it('cannot go below 8', async () => {
