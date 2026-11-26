@@ -1,8 +1,7 @@
 import { execFile } from 'node:child_process'
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tempDir } from '../testing/temp-dir'
 import { addCharacter, fighterDraft } from '../lib/server/character/test-characters'
 import { startTestGameServer, type TestGameServer } from '../testing/game-server'
 
@@ -20,7 +19,7 @@ let folder: string
 let campaignId: string
 
 beforeEach(async () => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-hooks-'))
+  tmp = tempDir('hooks')
   home = path.join(tmp, 'home')
   server = await startTestGameServer({ home })
   folder = path.join(tmp, 'ember-road')
@@ -145,7 +144,7 @@ describe('SessionStart', () => {
 describe('outside a Campaign folder', () => {
   it('every hook is inert', async () => {
     closeFloor()
-    const elsewhere = fs.mkdtempSync(path.join(tmp, 'code-'))
+    const elsewhere = tempDir('code')
     const inputs = {
       'pre-tool-use': { hook_event_name: 'PreToolUse', tool_name: GAME_TOOL },
       stop: { hook_event_name: 'Stop', stop_hook_active: false },

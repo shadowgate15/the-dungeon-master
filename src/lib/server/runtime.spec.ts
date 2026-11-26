@@ -1,12 +1,10 @@
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { tempDir } from '../../testing/temp-dir'
 import { readRuntimeFile, stopServer, writeRuntimeFile } from './runtime'
 
 let home: string
 beforeEach(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-runtime-'))
+  home = tempDir('runtime')
 })
 
 describe('stopServer', () => {

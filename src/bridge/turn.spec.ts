@@ -1,7 +1,6 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { tempDir } from '../testing/temp-dir'
 import { addCharacter, fighterDraft } from '../lib/server/character/test-characters'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { startTestGameServer, type TestGameServer } from '../testing/game-server'
@@ -16,7 +15,7 @@ let campaignId: string
 let dm: FakeDm | undefined
 
 beforeEach(async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-turn-'))
+  const tmp = tempDir('turn')
   home = path.join(tmp, 'home')
   server = await startTestGameServer({ home })
   folder = path.join(tmp, 'ember-road')

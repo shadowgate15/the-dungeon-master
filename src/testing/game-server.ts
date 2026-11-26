@@ -4,13 +4,13 @@ import { Readable } from 'node:stream'
 import { BRIDGE_API, createBridgeApi } from '../lib/server/bridge/api'
 import { createPermissions } from '../lib/server/bridge/permissions'
 import { createSessions } from '../lib/server/bridge/sessions'
-import { createCampaignLibrary } from '../lib/server/campaign/library'
 import { createLiveUpdates, LIVE_STREAM } from '../lib/server/live'
 import { writeRuntimeFile } from '../lib/server/runtime'
 import { gameTools } from '../lib/server/tools'
 import { createToolHost } from '../lib/server/tools/host'
 import { createDmChannels } from '../lib/server/play/notices'
 import { createPlay, openSessionsOnAttach } from '../lib/server/play/play'
+import { testLibrary } from './library'
 
 /**
  * A game server for Vitest: the real Campaign library, tool host, bridge API and the browser's
@@ -18,7 +18,7 @@ import { createPlay, openSessionsOnAttach } from '../lib/server/play/play'
  */
 export async function startTestGameServer({ home }: { home: string }) {
   const sessions = createSessions()
-  const library = createCampaignLibrary({ home, live: (id) => sessions.attached(id) })
+  const library = testLibrary({ home, live: (id) => sessions.attached(id) })
   const channels = createDmChannels(library)
   const live = createLiveUpdates({ sessions })
   const host = createToolHost({ library, tools: gameTools, publish: live.publish })

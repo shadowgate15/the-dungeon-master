@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tempDir } from '../../src/testing/temp-dir'
 import { startTestGameServer, type TestGameServer } from '../../src/testing/game-server'
 
 // The CLI spawns a real bridge process; give it room when the whole suite is running.
@@ -16,7 +16,7 @@ let server: TestGameServer
 let folder: string
 
 beforeEach(async () => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-fake-cli-'))
+  tmp = tempDir('fake-cli')
   home = path.join(tmp, 'home')
   server = await startTestGameServer({ home })
   folder = path.join(tmp, 'ember-road')

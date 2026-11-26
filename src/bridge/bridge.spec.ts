@@ -1,7 +1,7 @@
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tempDir } from '../testing/temp-dir'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { startTestGameServer, type TestGameServer } from '../testing/game-server'
 
@@ -15,7 +15,7 @@ let folder: string
 const dms: FakeDm[] = []
 
 beforeEach(async () => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-bridge-'))
+  tmp = tempDir('bridge')
   home = path.join(tmp, 'home')
   server = await startTestGameServer({ home })
   folder = path.join(tmp, 'ember-road')

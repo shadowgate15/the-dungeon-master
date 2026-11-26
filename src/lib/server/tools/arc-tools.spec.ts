@@ -1,9 +1,9 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { tempDir } from '../../../testing/temp-dir'
+import { testLibrary } from '../../../testing/library'
 import type { LiveMessage } from '#lib/live/messages.ts'
-import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
+import type { CampaignLibrary } from '../campaign/library'
 import { addCharacter, fighterDraft } from '../character/test-characters'
 import { gameTools } from '.'
 import { createToolHost, type ToolHost } from './host'
@@ -15,8 +15,8 @@ let campaignId: string
 let pushed: LiveMessage[]
 
 beforeEach(() => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-arc-'))
-  library = createCampaignLibrary({ home: path.join(tmp, 'home') })
+  const tmp = tempDir('arc')
+  library = testLibrary({ home: path.join(tmp, 'home') })
   folder = path.join(tmp, 'campaigns', 'ember-road')
   campaignId = library.create({ name: 'Ember Road', folder }).id
   pushed = []

@@ -1,10 +1,10 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { tempDir } from '../../../testing/temp-dir'
+import { testLibrary } from '../../../testing/library'
 import type { LiveMessage } from '#lib/live/messages.ts'
 import { createChannels, type ChannelEvent } from '../bridge/channels'
-import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
+import type { CampaignLibrary } from '../campaign/library'
 import { addCharacter, fighterDraft } from '../character/test-characters'
 import { createCampaignDice } from '../dice'
 import { gameTools } from '../tools'
@@ -22,9 +22,9 @@ let heard: ChannelEvent[]
 let pushed: LiveMessage[]
 
 beforeEach(() => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-calls-'))
+  const tmp = tempDir('calls')
   home = path.join(tmp, 'home')
-  library = createCampaignLibrary({ home })
+  library = testLibrary({ home })
   folder = path.join(tmp, 'campaigns', 'ember-road')
   campaignId = library.create({ name: 'Ember Road', folder }).id
   const channels = createChannels()
@@ -263,7 +263,7 @@ describe('an open Call', () => {
     const before = openCall()
     library.close()
 
-    library = createCampaignLibrary({ home })
+    library = testLibrary({ home })
     expect(library.record(campaignId).timeline().call).toEqual(before)
   })
 

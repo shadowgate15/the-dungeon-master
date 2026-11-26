@@ -1,9 +1,9 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { tempDir } from '../../../testing/temp-dir'
+import { testLibrary } from '../../../testing/library'
 import { createChannels } from '../bridge/channels'
-import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
+import type { CampaignLibrary } from '../campaign/library'
 import { addCharacter, fighterDraft } from '../character/test-characters'
 import { createPlay, type Play } from '../play/play'
 import type { ToolResult } from './contract'
@@ -19,10 +19,10 @@ let clock: number
 let wren: string
 
 beforeEach(() => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-sessions-'))
+  const tmp = tempDir('sessions')
   clock = Date.UTC(2026, 10, 20, 19, 0)
   const now = () => clock
-  library = createCampaignLibrary({ home: path.join(tmp, 'home'), now })
+  library = testLibrary({ home: path.join(tmp, 'home'), now })
   folder = path.join(tmp, 'ember-road')
   campaignId = library.create({ name: 'Ember Road', folder }).id
   host = createToolHost({ library, tools: gameTools, now })

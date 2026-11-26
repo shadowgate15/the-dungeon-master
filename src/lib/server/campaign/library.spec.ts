@@ -1,7 +1,8 @@
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { tempDir } from '../../../testing/temp-dir'
+import { testLibrary } from '../../../testing/library'
 import { CampaignSeedError, emptyCampaignSeed } from '#lib/campaign/seed.ts'
 import {
   CampaignArchivedError,
@@ -13,16 +14,17 @@ import {
   SessionLiveError,
   type CampaignLibrary
 } from './library'
+import { migrateDatabase, openDatabase } from '../db/connect'
 
 let home: string
 let root: string
 let library: CampaignLibrary
 
 beforeEach(() => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-library-'))
+  const tmp = tempDir('library')
   home = path.join(tmp, 'home')
   root = path.join(tmp, 'campaigns')
-  library = createCampaignLibrary({ home })
+  library = testLibrary({ home })
 })
 
 afterEach(() => library.close())
@@ -30,10 +32,30 @@ afterEach(() => library.close())
 const folder = (name: string) => path.join(root, name)
 
 describe('Campaign library', () => {
+  describe('a new Campaign database', () => {
+    it('is set up by initDatabase, at the Campaign folder’s database path', () => {
+      const made: string[] = []
+      const custom = createCampaignLibrary({
+        home,
+        initDatabase: (file) => {
+          made.push(file)
+          const db = openDatabase(file)
+          migrateDatabase(db)
+          return db
+        }
+      })
+      const created = custom.create({ name: 'Ember Road', folder: folder('ember-road') })
+
+      expect(made).toEqual([path.join(folder('ember-road'), '.dm', 'campaign.db')])
+      expect(custom.get(created.id)).toMatchObject({ name: 'Ember Road' })
+      custom.close()
+    })
+  })
+
   describe('while a session is live', () => {
     it('refuses archive, delete and unregister, and changes nothing', () => {
       const live = new Set<string>()
-      const guarded = createCampaignLibrary({ home, live: (id) => live.has(id) })
+      const guarded = testLibrary({ home, live: (id) => live.has(id) })
       const { id } = guarded.create({ name: 'Ember Road', folder: folder('ember') })
       live.add(id)
 
@@ -88,7 +110,7 @@ describe('Campaign library', () => {
       library.close()
       fs.renameSync(folder('ember-road'), folder('moved'))
 
-      expect(createCampaignLibrary({ home }).list()).toEqual([
+      expect(testLibrary({ home }).list()).toEqual([
         expect.objectContaining({ id: created.id, name: 'Ember Road', status: 'missing' })
       ])
     })
@@ -98,7 +120,7 @@ describe('Campaign library', () => {
       library.close()
       fs.renameSync(folder('ember-road'), folder('moved'))
 
-      library = createCampaignLibrary({ home })
+      library = testLibrary({ home })
       library.register(folder('moved'))
 
       expect(library.list()).toEqual([
@@ -108,7 +130,7 @@ describe('Campaign library', () => {
 
     it('keeps a live Campaign at its folder when a copy of it registers', () => {
       const live = new Set<string>()
-      const guarded = createCampaignLibrary({ home, live: (id) => live.has(id) })
+      const guarded = testLibrary({ home, live: (id) => live.has(id) })
       const created = guarded.create({ name: 'Ember Road', folder: folder('ember-road') })
       fs.cpSync(folder('ember-road'), folder('clone'), { recursive: true })
       live.add(created.id)
@@ -216,7 +238,7 @@ describe('Campaign library', () => {
 
       library.saveSeed(id, { ...card, name: 'Ember Road Redux' })
       library.close()
-      library = createCampaignLibrary({ home })
+      library = testLibrary({ home })
 
       expect(library.seed(id)).toEqual({ ...card, name: 'Ember Road Redux' })
       expect(library.list()).toEqual([expect.objectContaining({ name: 'Ember Road Redux' })])

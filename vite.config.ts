@@ -54,6 +54,8 @@ export default defineConfig({
     expect: {
       requireAssertions: true
     },
+    // Leave half of a developer's machine free while tests run; CI runners have nothing else to do.
+    maxWorkers: process.env.CI ? undefined : '50%',
     projects: [
       {
         extends: './vite.config.ts',
@@ -78,6 +80,8 @@ export default defineConfig({
         test: {
           name: 'server',
           environment: 'node',
+          globalSetup: ['src/testing/campaign-template.ts'],
+          setupFiles: ['src/testing/setup-server.ts'],
           include: ['src/**/*.{test,spec}.{js,ts}', 'scripts/**/*.{test,spec}.{js,ts}'],
           exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
         }

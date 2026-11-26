@@ -10,8 +10,11 @@ export type Database = ReturnType<typeof openDatabase>
 /** A database or a transaction on one: what code that must work inside a transaction takes. */
 export type Queryable = BaseSQLiteDatabase<'sync', RunResult, typeof schema>
 
-/** The only place connections are opened, so foreign keys are always enforced. */
-export function openDatabase(url: string) {
+/**
+ * The only place connections are opened, so foreign keys are always enforced. A Buffer holding a
+ * database file opens as an in-memory copy of it.
+ */
+export function openDatabase(url: string | Buffer) {
   const client = new Database(url)
   client.pragma('foreign_keys = ON')
   return drizzle(client, { schema })

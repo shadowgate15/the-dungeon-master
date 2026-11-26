@@ -1,9 +1,9 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { tempDir } from '../../../testing/temp-dir'
+import { testLibrary } from '../../../testing/library'
 import { z } from 'zod'
-import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
+import type { CampaignLibrary } from '../campaign/library'
 import { campaign } from '../db/schema'
 import { ToolError, readTool, writeTool, type ToolResult } from './contract'
 import { createToolHost, type ToolHost } from './host'
@@ -46,8 +46,8 @@ const fixtureTools = [
 ]
 
 beforeEach(() => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-tools-'))
-  library = createCampaignLibrary({ home: path.join(tmp, 'home') })
+  const tmp = tempDir('tools')
+  library = testLibrary({ home: path.join(tmp, 'home') })
   folder = path.join(tmp, 'ember-road')
   library.create({ name: 'Ember Road', folder })
   host = createToolHost({ library, tools: [...seedTools, ...creationTools, ...fixtureTools] })
