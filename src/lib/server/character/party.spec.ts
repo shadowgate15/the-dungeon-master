@@ -1,9 +1,9 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { tempDir } from '../../../testing/temp-dir'
+import { testLibrary } from '../../../testing/library'
 import { emptyDraft, type CharacterDraft } from '#lib/character/draft.ts'
-import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
+import type { CampaignLibrary } from '../campaign/library'
 import { CharacterValidationError } from './service'
 import { DraftNotFoundError } from './party'
 
@@ -13,10 +13,10 @@ let library: CampaignLibrary
 let campaignId: string
 
 beforeEach(() => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-party-'))
+  const tmp = tempDir('party')
   home = path.join(tmp, 'home')
   root = path.join(tmp, 'campaigns')
-  library = createCampaignLibrary({ home })
+  library = testLibrary({ home })
   campaignId = library.create({ name: 'Ember Road', folder: path.join(root, 'ember-road') }).id
 })
 
@@ -57,7 +57,7 @@ describe('Party', () => {
     party.writeDraft(id, { draft: { ...emptyDraft(), name: 'Wren' }, step: 'abilities' })
     library.close()
 
-    const reopened = createCampaignLibrary({ home }).party(campaignId)
+    const reopened = testLibrary({ home }).party(campaignId)
     expect(reopened.draft(id)).toMatchObject({
       id,
       step: 'abilities',

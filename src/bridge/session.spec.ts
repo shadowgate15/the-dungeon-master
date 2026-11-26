@@ -1,7 +1,6 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tempDir } from '../testing/temp-dir'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { startTestGameServer, type TestGameServer } from '../testing/game-server'
 
@@ -16,7 +15,7 @@ const servers: TestGameServer[] = []
 const dms: FakeDm[] = []
 
 beforeEach(async () => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-session-'))
+  tmp = tempDir('session')
   home = path.join(tmp, 'home')
   server = await startServer()
   folder = path.join(tmp, 'ember-road')
@@ -118,6 +117,7 @@ describe('one live session per Campaign', () => {
     await eventually(async () =>
       expect((await register(server, folder)).body).toMatchObject({ attached: false })
     )
+    // Outlasts the bridge's 1s reconnect delay, so a refused bridge that kept retrying would show.
     await new Promise((r) => setTimeout(r, 1500))
     expect((await register(server, folder)).body).toMatchObject({ attached: false })
     expect(await second.call('seed')).toMatchObject({ payload: { code: 'session_live' } })
@@ -172,6 +172,7 @@ describe('a server restart with a refused bridge', () => {
     await server.stop()
     const restarted = await startServer()
     await restarted.whenListening(folder)
+    // Outlasts the bridge's 1s reconnect delay, so a refused bridge that kept retrying would show.
     await new Promise((r) => setTimeout(r, 1500))
 
     expect(await first.call('seed')).toMatchObject({ isError: false })

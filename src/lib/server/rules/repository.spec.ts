@@ -1,15 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { migrateDatabase, openDatabase } from '../db/connect'
+import { openCampaignTestDatabase } from '../db/test-database'
 import { createRulesRepository, type RulesRepository } from './repository'
-import { seedRulesData } from './seed'
 
 let repo: RulesRepository
 
 beforeAll(() => {
-  const db = openDatabase(':memory:')
-  migrateDatabase(db)
-  seedRulesData(db)
-  repo = createRulesRepository(db)
+  repo = createRulesRepository(openCampaignTestDatabase().db)
 })
 
 describe('RulesRepository', () => {

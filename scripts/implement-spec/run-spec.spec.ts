@@ -1,7 +1,7 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { tempDir } from '../../src/testing/temp-dir'
 import {
   runSpec,
   USAGE_LIMIT_GRACE_MS,
@@ -217,12 +217,10 @@ const START = Date.parse('2026-11-23T14:00:00Z')
 const MINUTE = 60 * 1000
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'implement-spec-'))
+  root = tempDir('implement-spec')
   lines = []
   clock = { at: START }
 })
-
-afterEach(() => rmSync(root, { recursive: true, force: true }))
 
 /** A fake checks port answering each run with `answer` (passing by default), recording each call. */
 const fakeChecks = (

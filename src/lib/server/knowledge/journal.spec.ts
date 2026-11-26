@@ -1,8 +1,8 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
+import { tempDir } from '../../../testing/temp-dir'
+import { testLibrary } from '../../../testing/library'
+import type { CampaignLibrary } from '../campaign/library'
 import { addCharacter, fighterDraft } from '../character/test-characters'
 import { createToolHost, type ToolHost } from '../tools/host'
 import { gameTools } from '../tools/index'
@@ -15,8 +15,8 @@ let wren: string
 let kael: string
 
 beforeEach(() => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-journal-'))
-  library = createCampaignLibrary({ home: path.join(tmp, 'home') })
+  const tmp = tempDir('journal')
+  library = testLibrary({ home: path.join(tmp, 'home') })
   folder = path.join(tmp, 'ember-road')
   campaignId = library.create({ name: 'Ember Road', folder }).id
   host = createToolHost({ library, tools: gameTools })

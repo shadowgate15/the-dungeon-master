@@ -1,9 +1,9 @@
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
-import os from 'node:os'
 import net from 'node:net'
 import path from 'node:path'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { tempDir } from '../testing/temp-dir'
 import { buildLauncher } from '../../scripts/build-bridge/build'
 
 /**
@@ -16,7 +16,7 @@ const PLUGIN_ID = 'the-dungeon-master@the-dungeon-master'
 let launcher: string
 
 beforeAll(async () => {
-  launcher = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dm-launcher-build-')), 'dm.mjs')
+  launcher = path.join(tempDir('launcher-build'), 'dm.mjs')
   await buildLauncher(launcher)
 })
 
@@ -28,7 +28,7 @@ afterEach(() => {
 
 /** A plugin root, a stub `claude`, a state directory and a folder to run `dm` in. */
 async function setup({ version = '1.0.0' } = {}) {
-  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dm-launcher-')))
+  const tmp = fs.realpathSync(tempDir('launcher'))
   const plugin = path.join(tmp, 'plugin')
   const home = path.join(tmp, 'home')
   const folder = path.join(tmp, 'campaign')

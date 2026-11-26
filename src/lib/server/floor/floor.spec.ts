@@ -1,10 +1,10 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { tempDir } from '../../../testing/temp-dir'
+import { testLibrary } from '../../../testing/library'
 import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import { addCharacter, fighterDraft } from '../character/test-characters'
-import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
+import type { CampaignLibrary } from '../campaign/library'
 import { DeclarationNotFoundError, DeclarationRefusedError } from './floor'
 
 let home: string
@@ -12,9 +12,9 @@ let library: CampaignLibrary
 let campaignId: string
 
 beforeEach(() => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-floor-'))
+  const tmp = tempDir('floor')
   home = path.join(tmp, 'home')
-  library = createCampaignLibrary({ home })
+  library = testLibrary({ home })
   campaignId = library.create({
     name: 'Ember Road',
     folder: path.join(tmp, 'campaigns', 'ember-road')
@@ -84,7 +84,7 @@ describe('Floor', () => {
     library.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })
     library.close()
 
-    const reopened = createCampaignLibrary({ home })
+    const reopened = testLibrary({ home })
     expect(
       reopened
         .floor(campaignId)

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { eq } from 'drizzle-orm'
-import { migrateDatabase, openDatabase, type Database } from '../db/connect'
+import type { Database } from '../db/connect'
 import { campaign } from '../db/schema'
 import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
@@ -12,7 +12,7 @@ import { sessionHistory } from '../play/sessions'
 import { logChange, openingNotice } from '../play/notices'
 import { logEvent, openSession, timeline } from '../play/log'
 import { playerScene, spotlightRequest } from '../play/scene'
-import { seedRulesData } from '../rules/seed'
+import { openSeededDatabase } from '../rules/seed'
 import {
   CAMPAIGN_SEED_FIELDS,
   campaignSeedCard,
@@ -54,19 +54,29 @@ export class SessionLiveError extends Error {}
 /** The folder has no `.dm/` Campaign database. */
 export class NotACampaignFolderError extends Error {}
 
-type Options = {
+export type CampaignLibraryOptions = {
   /** The user-level state directory, which holds the registry. */
   home: string
   /** Whether the Campaign has a live session; such a Campaign can't be archived or removed. */
   live?: (id: string) => boolean
   now?: () => number
+  /**
+   * Sets up a new Campaign's database file and returns it open, migrated and seeded with Rules
+   * Data. Tests pass one that copies a seeded template instead of seeding every time.
+   */
+  initDatabase?: (file: string) => Database
 }
 
 /**
  * Every Campaign the server knows: each lives in its own folder, with its database in `.dm/`, and
  * the registry in the user-level state directory lists the folders.
  */
-export function createCampaignLibrary({ home, live = () => false, now = Date.now }: Options) {
+export function createCampaignLibrary({
+  home,
+  live = () => false,
+  now = Date.now,
+  initDatabase = openSeededDatabase
+}: CampaignLibraryOptions) {
   const registry = createRegistry(home)
   const open = new Map<string, Database>()
 
@@ -74,9 +84,7 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
   function database(folder: string): Database {
     let db = open.get(folder)
     if (!db) {
-      db = openDatabase(campaignDatabasePath(folder))
-      migrateDatabase(db)
-      seedRulesData(db)
+      db = openSeededDatabase(campaignDatabasePath(folder))
       open.set(folder, db)
     }
     return db
@@ -130,8 +138,10 @@ export function createCampaignLibrary({ home, live = () => false, now = Date.now
         throw new CampaignExistsError(`${folder} already holds a Campaign`)
       }
       fs.mkdirSync(path.dirname(campaignDatabasePath(folder)), { recursive: true })
+      const db = initDatabase(campaignDatabasePath(folder))
+      open.set(folder, db)
       const at = now()
-      const created = database(folder)
+      const created = db
         .insert(campaign)
         .values({ name, createdAt: at, updatedAt: at })
         .returning()

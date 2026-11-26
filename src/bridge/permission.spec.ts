@@ -1,7 +1,6 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { tempDir } from '../testing/temp-dir'
 import type { LiveMessage } from '../lib/live/messages'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { startTestGameServer, type TestGameServer } from '../testing/game-server'
@@ -17,7 +16,7 @@ let dm: FakeDm | undefined
 let stopLive = () => {}
 
 beforeEach(async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-permission-'))
+  const tmp = tempDir('permission')
   home = path.join(tmp, 'home')
   server = await startTestGameServer({ home })
   folder = path.join(tmp, 'ember-road')

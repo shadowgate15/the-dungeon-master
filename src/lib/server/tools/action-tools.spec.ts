@@ -1,9 +1,9 @@
-import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { tempDir } from '../../../testing/temp-dir'
+import { testLibrary } from '../../../testing/library'
 import { createChannels, type ChannelEvent } from '../bridge/channels'
-import { createCampaignLibrary, type CampaignLibrary } from '../campaign/library'
+import type { CampaignLibrary } from '../campaign/library'
 import { addCharacter, fighterDraft, wizardDraft } from '../character/test-characters'
 import { createDice } from '../dice'
 import { createPlay, type Play } from '../play/play'
@@ -35,8 +35,8 @@ const load = (...queue: [number, number][]) => faces.push(...queue)
 
 beforeEach(() => {
   faces = []
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-actions-'))
-  library = createCampaignLibrary({ home: path.join(tmp, 'home') })
+  const tmp = tempDir('actions')
+  library = testLibrary({ home: path.join(tmp, 'home') })
   folder = path.join(tmp, 'campaigns', 'ember-road')
   campaignId = library.create({ name: 'Ember Road', folder }).id
   const channels = createChannels()

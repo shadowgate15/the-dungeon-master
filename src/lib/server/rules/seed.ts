@@ -1,7 +1,7 @@
 import { getTableColumns, sql } from 'drizzle-orm'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { RulesDataset } from '../../rules/schema'
-import type { Database } from '../db/connect'
+import { migrateDatabase, openDatabase, type Database } from '../db/connect'
 import * as t from '../db/rules-schema'
 import { loadRulesDataset } from './dataset'
 
@@ -684,4 +684,12 @@ export function seedRulesData(
       })
       .run()
   })
+}
+
+/** Opens the database file, migrating it and seeding Rules Data. */
+export function openSeededDatabase(file: string): Database {
+  const db = openDatabase(file)
+  migrateDatabase(db)
+  seedRulesData(db)
+  return db
 }
