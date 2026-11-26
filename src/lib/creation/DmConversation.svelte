@@ -2,6 +2,7 @@
   import Alert from '#lib/ui/Alert.svelte'
   import Button from '#lib/ui/Button.svelte'
   import Textarea from '#lib/ui/Textarea.svelte'
+  import { follow } from '#lib/ui/follow.svelte.ts'
   import { conversationActions, createConversationQuery } from './client.ts'
   import type { ConversationMessage } from './conversation.ts'
 
@@ -27,13 +28,6 @@
   let text = $state('')
   let sending = $state(false)
   let error = $state<string | null>(null)
-  let log = $state<HTMLOListElement>()
-
-  // Each new line scrolls the conversation to the bottom.
-  $effect(() => {
-    void conversation.data.length
-    log?.scrollTo({ top: log.scrollHeight })
-  })
 
   async function send(e: SubmitEvent) {
     e.preventDefault()
@@ -60,7 +54,11 @@
     <h2 class="font-display text-lg">Ask the DM</h2>
   </header>
 
-  <ol bind:this={log} aria-label="Conversation" class="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+  <ol
+    {@attach follow(() => conversation.data.length > 0)}
+    aria-label="Conversation"
+    class="flex-1 space-y-2 overflow-y-auto px-4 py-3"
+  >
     {#each conversation.data as line (line.id)}
       {#if line.author === 'dm_write'}
         <li class="text-center text-xs text-muted italic">✎ {line.text}</li>

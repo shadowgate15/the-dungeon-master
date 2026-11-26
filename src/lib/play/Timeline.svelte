@@ -1,5 +1,6 @@
 <script lang="ts">
   import Alert from '#lib/ui/Alert.svelte'
+  import { follow } from '#lib/ui/follow.svelte.ts'
   import { EXPECTED_TURN_SECONDS, type TimelineEntry } from './timeline'
 
   /**
@@ -57,6 +58,7 @@
   {/each}
 </div>
 <ol
+  {@attach follow(() => entries.length > 0)}
   aria-label="Timeline"
   class="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto rounded-panel border border-border bg-surface p-3"
 >

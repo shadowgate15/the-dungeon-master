@@ -1,8 +1,34 @@
-import { page } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-svelte'
+// The real layout, so a long story overflows the Timeline and it scrolls.
+import '../../routes/layout.css'
 import { attackRollEntries, rollEntries, timelineEntries } from './play-fixtures'
+import type { TimelineEntry } from './timeline'
 import Timeline from './Timeline.svelte'
+
+const narrations = (count: number): TimelineEntry[] =>
+  Array.from({ length: count }, (_, i) => ({
+    type: 'narration',
+    id: `n${i}`,
+    text: `Narration ${i}: the corridor stretches on into the dark.`,
+    voice: null
+  }))
+
+/** A short console, so a long story overflows the Timeline. */
+function shortConsole() {
+  const box = document.createElement('div')
+  box.style.cssText = 'display: flex; flex-direction: column; height: 240px'
+  document.body.append(box)
+  return box
+}
+
+const timeline = page.getByRole('list', { name: 'Timeline' })
+const timelineList = () => timeline.element() as HTMLElement
+const distanceFromBottom = () => {
+  const list = timelineList()
+  return list.scrollHeight - list.clientHeight - list.scrollTop
+}
 
 describe('Timeline', () => {
   it('says the story has not started when nothing has happened', async () => {
@@ -119,5 +145,65 @@ describe('Timeline', () => {
     await expect
       .element(items.nth(2))
       .toHaveTextContent(/Grik\s*Scimitar attack\s*🎲 2 \+ 4\s*= 6\s*miss/)
+  })
+
+  describe('following the latest entry', () => {
+    it('opens at the latest entry when the story loads', async () => {
+      const screen = render(Timeline, {
+        target: shortConsole(),
+        props: { entries: [], awaitingSince: null }
+      })
+      await screen.rerender({ entries: narrations(40) })
+
+      await expect.poll(distanceFromBottom).toBeLessThanOrEqual(1)
+      expect(timelineList().scrollTop).toBeGreaterThan(0)
+    })
+
+    it('stays at the latest entry when a new one arrives', async () => {
+      const screen = render(Timeline, {
+        target: shortConsole(),
+        props: { entries: narrations(40), awaitingSince: null }
+      })
+      await expect.poll(distanceFromBottom).toBeLessThanOrEqual(1)
+
+      await screen.rerender({ entries: narrations(45) })
+
+      await expect.element(page.getByText(/^Narration 44:/)).toBeInTheDocument()
+      await expect.poll(distanceFromBottom).toBeLessThanOrEqual(1)
+    })
+
+    it('holds its place when the Player has scrolled up to reread', async () => {
+      const screen = render(Timeline, {
+        target: shortConsole(),
+        props: { entries: narrations(40), awaitingSince: null }
+      })
+      await expect.poll(distanceFromBottom).toBeLessThanOrEqual(1)
+
+      await userEvent.wheel(timeline, { delta: { y: -400 } })
+      await expect.poll(distanceFromBottom).toBeGreaterThan(300)
+      const reading = timelineList().scrollTop
+      await screen.rerender({ entries: narrations(45) })
+
+      await expect.element(page.getByText(/^Narration 44:/)).toBeInTheDocument()
+      expect(timelineList().scrollTop).toBe(reading)
+    })
+
+    it('follows again once a Show filter leaves the Player at the bottom', async () => {
+      const screen = render(Timeline, {
+        target: shortConsole(),
+        props: { entries: narrations(40), awaitingSince: null }
+      })
+      await expect.poll(distanceFromBottom).toBeLessThanOrEqual(1)
+      await userEvent.wheel(timeline, { delta: { y: -400 } })
+      await expect.poll(distanceFromBottom).toBeGreaterThan(300)
+
+      await page.getByRole('checkbox', { name: 'Story' }).click()
+      await expect.element(page.getByText(/^Narration 39:/)).not.toBeInTheDocument()
+      await page.getByRole('checkbox', { name: 'Story' }).click()
+      await screen.rerender({ entries: narrations(45) })
+
+      await expect.element(page.getByText(/^Narration 44:/)).toBeInTheDocument()
+      await expect.poll(distanceFromBottom).toBeLessThanOrEqual(1)
+    })
   })
 })
