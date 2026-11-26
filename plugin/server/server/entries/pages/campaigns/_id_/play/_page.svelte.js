@@ -1,5 +1,5 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
-import { _ as attr, c as ensure_array_like, l as head, n as attr_style, o as derived, p as stringify, r as attributes, t as attr_class, v as clsx, x as escape_html } from "../../../../../chunks/server2.js";
+import { _ as attr, a as bind_props, c as ensure_array_like, l as head, n as attr_style, o as derived, p as stringify, r as attributes, t as attr_class, v as clsx, x as escape_html } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/paths.js";
 import { n as Badge, r as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
 import { t as Button } from "../../../../../chunks/Button.js";
@@ -695,46 +695,134 @@ function FloorComposer($$renderer, $$props) {
 		$$renderer.subsume($$inner_renderer);
 	});
 }
+// src/lib/play/RailCard.svelte
+function RailCard($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		/**
+		* A card in the play console's right rail: a pinned header over a body that, on a wide screen,
+		* scrolls inside the card. It shrinks to share the rail's height but not below 8rem, or its
+		* content height when that is less. (`calc-size` is Chromium-only; elsewhere the floor is 0.)
+		*/
+		let { id, label, heading, headingClass, body = void 0, children } = $$props;
+		$$renderer.push(`<section${attr("aria-label", label)}${attr("aria-labelledby", label ? void 0 : id)} class="flex flex-col overflow-hidden rounded-panel border border-border bg-surface lg:[min-height:calc-size(max-content,min(size,8rem))]"><h2${attr("id", id)}${attr_class(clsx(["shrink-0 px-3 pt-3 pb-1", headingClass]))}>`);
+		heading($$renderer);
+		$$renderer.push(`<!----></h2>  <div role="group"${attr("aria-labelledby", id)} tabindex="0" data-testid="rail-card-body" class="min-h-0 px-3 pb-3 lg:overflow-y-auto">`);
+		children($$renderer);
+		$$renderer.push(`<!----></div></section>`);
+		bind_props($$props, { body });
+	});
+}
 // src/lib/play/SceneRail.svelte
 function SceneRail($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/**
 		* The rail's top panel: the clock (time large, day below), the Scene's Place and the Characters
-		* present, and in a Combat the initiative order. A pure view of the Player-safe `SceneView`.
+		* present, and in a Combat the initiative order under a pinned round header. A view of the
+		* Player-safe `SceneView`.
 		*/
 		let { scene } = $$props;
-		$$renderer.push(`<section aria-label="Clock and Scene" class="rounded-panel border border-border bg-surface p-3"><p class="font-display text-3xl">${escape_html(scene.clock.time)}</p> <p class="text-muted">day ${escape_html(scene.clock.day)}</p> `);
-		if (scene.place) {
-			$$renderer.push(`<!--[0--><p class="mt-2 font-medium">${escape_html(scene.place.name)}</p> <ul aria-label="Present" class="mt-1 flex flex-wrap gap-1 text-xs"><!--[-->`);
-			const each_array = ensure_array_like(scene.present);
-			for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
-				let c = each_array[$$index];
-				$$renderer.push(`<li class="rounded-control bg-raised px-2 py-0.5">${escape_html(c.name)}</li>`);
-			}
-			$$renderer.push(`<!--]--></ul>`);
-		} else $$renderer.push(`<!--[-1--><p class="mt-2 text-muted">The Scene is set once play begins.</p>`);
-		$$renderer.push(`<!--]--></section> `);
-		if (scene.combat) {
-			$$renderer.push(`<!--[0--><section aria-label="Initiative" class="rounded-panel border border-border bg-surface p-3"><p class="font-medium">${escape_html(scene.combat.round ? `Round ${scene.combat.round}` : "Combat starts")}</p> `);
-			if (scene.combat.order.length) {
-				$$renderer.push(`<!--[0--><ol aria-label="Initiative order" class="mt-1 flex flex-col gap-1 text-sm"><!--[-->`);
-				const each_array_1 = ensure_array_like(scene.combat.order);
-				for (let $$index_1 = 0, $$length = each_array_1.length; $$index_1 < $$length; $$index_1++) {
-					let c = each_array_1[$$index_1];
-					$$renderer.push(`<li${attr("aria-current", c.current || void 0)}${attr_class(clsx(["flex items-center gap-2 rounded-control px-2 py-0.5", c.current ? "bg-raised font-medium" : "text-muted"]))}><span class="w-6 text-right tabular-nums">${escape_html(c.initiative)}</span> <span class="flex-1">${escape_html(c.name)}</span> `);
-					if (c.state) $$renderer.push(`<!--[0--><span class="text-xs">${escape_html(c.state)}</span>`);
-					else $$renderer.push("<!--[-1-->");
-					$$renderer.push(`<!--]--></li>`);
+		let body = void 0;
+		derived(() => scene.combat?.order.find((c) => c.current)?.key);
+		let $$settled = true;
+		let $$inner_renderer;
+		function $$render_inner($$renderer) {
+			$$renderer.push(`<section aria-label="Clock and Scene" class="shrink-0 rounded-panel border border-border bg-surface p-3"><p class="font-display text-3xl">${escape_html(scene.clock.time)}</p> <p class="text-muted">day ${escape_html(scene.clock.day)}</p> `);
+			if (scene.place) {
+				$$renderer.push(`<!--[0--><p class="mt-2 font-medium">${escape_html(scene.place.name)}</p> <ul aria-label="Present" class="mt-1 flex flex-wrap gap-1 text-xs"><!--[-->`);
+				const each_array = ensure_array_like(scene.present);
+				for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
+					let c = each_array[$$index];
+					$$renderer.push(`<li class="rounded-control bg-raised px-2 py-0.5">${escape_html(c.name)}</li>`);
 				}
-				$$renderer.push(`<!--]--></ol>`);
+				$$renderer.push(`<!--]--></ul>`);
+			} else $$renderer.push(`<!--[-1--><p class="mt-2 text-muted">The Scene is set once play begins.</p>`);
+			$$renderer.push(`<!--]--></section> `);
+			if (scene.combat) {
+				$$renderer.push("<!--[0-->");
+				{
+					function heading($$renderer) {
+						$$renderer.push(`<!---->${escape_html(scene.combat?.round ? `Round ${scene.combat.round}` : "Combat starts")}`);
+					}
+					RailCard($$renderer, {
+						id: "initiative-heading",
+						label: "Initiative",
+						headingClass: "font-medium",
+						get body() {
+							return body;
+						},
+						set body($$value) {
+							body = $$value;
+							$$settled = false;
+						},
+						heading,
+						children: ($$renderer) => {
+							if (scene.combat.order.length) {
+								$$renderer.push(`<!--[0--><ol aria-label="Initiative order" class="flex flex-col gap-1 text-sm"><!--[-->`);
+								const each_array_1 = ensure_array_like(scene.combat.order);
+								for (let $$index_1 = 0, $$length = each_array_1.length; $$index_1 < $$length; $$index_1++) {
+									let c = each_array_1[$$index_1];
+									$$renderer.push(`<li${attr("aria-current", c.current || void 0)}${attr_class(clsx(["flex items-center gap-2 rounded-control px-2 py-0.5", c.current ? "bg-raised font-medium" : "text-muted"]))}><span class="w-6 text-right tabular-nums">${escape_html(c.initiative)}</span> <span class="flex-1">${escape_html(c.name)}</span> `);
+									if (c.state) $$renderer.push(`<!--[0--><span class="text-xs">${escape_html(c.state)}</span>`);
+									else $$renderer.push("<!--[-1-->");
+									$$renderer.push(`<!--]--></li>`);
+								}
+								$$renderer.push(`<!--]--></ol>`);
+							} else $$renderer.push("<!--[-1-->");
+							$$renderer.push(`<!--]--> `);
+							if (scene.combat.waiting.length) $$renderer.push(`<!--[0--><p class="mt-1 text-xs text-muted">Rolling initiative: ${escape_html(scene.combat.waiting.join(", "))}</p>`);
+							else $$renderer.push("<!--[-1-->");
+							$$renderer.push(`<!--]-->`);
+						},
+						$$slots: {
+							heading: true,
+							default: true
+						}
+					});
+				}
 			} else $$renderer.push("<!--[-1-->");
-			$$renderer.push(`<!--]--> `);
-			if (scene.combat.waiting.length) $$renderer.push(`<!--[0--><p class="mt-1 text-xs text-muted">Rolling initiative: ${escape_html(scene.combat.waiting.join(", "))}</p>`);
-			else $$renderer.push("<!--[-1-->");
-			$$renderer.push(`<!--]--></section>`);
-		} else $$renderer.push("<!--[-1-->");
-		$$renderer.push(`<!--]-->`);
+			$$renderer.push(`<!--]-->`);
+		}
+		do {
+			$$settled = true;
+			$$inner_renderer = $$renderer.copy();
+			$$render_inner($$inner_renderer);
+		} while (!$$settled);
+		$$renderer.subsume($$inner_renderer);
 	});
+}
+// src/lib/play/Rail.svelte
+function Rail($$renderer, $$props) {
+	/**
+	* The play console's right rail: the clock and Scene, the initiative order in a Combat, and
+	* the Journal of what the acting Character believes. On a wide screen it is held to its
+	* column's height: the Scene card keeps its size, and the initiative and Journal cards share
+	* the rest, each scrolling its own body under a pinned header.
+	*/
+	let { scene, believer, entries, actor } = $$props;
+	$$renderer.push(`<aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm lg:overflow-hidden">`);
+	SceneRail($$renderer, { scene });
+	$$renderer.push(`<!----> `);
+	{
+		function heading($$renderer) {
+			$$renderer.push(`<!---->What ${escape_html(believer)} knows`);
+		}
+		RailCard($$renderer, {
+			id: "knows-heading",
+			headingClass: "text-xs font-semibold text-muted uppercase",
+			heading,
+			children: ($$renderer) => {
+				Journal($$renderer, {
+					entries,
+					actor
+				});
+			},
+			$$slots: {
+				heading: true,
+				default: true
+			}
+		});
+	}
+	$$renderer.push(`<!----></aside>`);
 }
 // src/lib/play/combat.ts
 /** Whose turn it is in the Combat, or null outside Combat or while it waits on initiative. */
@@ -1086,14 +1174,14 @@ function _page($$renderer, $$props) {
 				away: attached() ? null : { folder: data.campaign.path }
 			});
 		}
-		$$renderer.push(`<!--]--></section> <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm">`);
-		SceneRail($$renderer, { scene: scene.data });
-		$$renderer.push(`<!----> <section aria-labelledby="knows-heading" class="rounded-panel border border-border bg-surface p-3"><h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">What ${escape_html(acting()?.name ?? "the Party")} knows</h2> `);
-		Journal($$renderer, {
+		$$renderer.push(`<!--]--></section> `);
+		Rail($$renderer, {
+			scene: scene.data,
+			believer: acting()?.name ?? "the Party",
 			entries: acting() ? knownBy(journal.data, acting().id) : journal.data.entries,
 			actor: acting()?.id
 		});
-		$$renderer.push(`<!----></section></aside></main></div>`);
+		$$renderer.push(`<!----></main></div>`);
 	});
 }
 export { _page as default };

@@ -5,9 +5,8 @@
   import CallCard from '#lib/play/CallCard.svelte'
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
-  import SceneRail from '#lib/play/SceneRail.svelte'
+  import Rail from '#lib/play/Rail.svelte'
   import { actingCharacter, turnOf } from '#lib/play/combat.ts'
-  import Journal from '#lib/play/Journal.svelte'
   import { knownBy } from '#lib/play/journal.ts'
   import PermissionCard from '#lib/play/PermissionCard.svelte'
   import Timeline from '#lib/play/Timeline.svelte'
@@ -195,20 +194,11 @@
       {/if}
     </section>
 
-    <aside aria-label="Scene" class="flex min-h-0 flex-col gap-3 overflow-y-auto text-sm">
-      <SceneRail scene={scene.data} />
-      <section
-        aria-labelledby="knows-heading"
-        class="rounded-panel border border-border bg-surface p-3"
-      >
-        <h2 id="knows-heading" class="mb-1 text-xs font-semibold text-muted uppercase">
-          What {acting?.name ?? 'the Party'} knows
-        </h2>
-        <Journal
-          entries={acting ? knownBy(journal.data, acting.id) : journal.data.entries}
-          actor={acting?.id}
-        />
-      </section>
-    </aside>
+    <Rail
+      scene={scene.data}
+      believer={acting?.name ?? 'the Party'}
+      entries={acting ? knownBy(journal.data, acting.id) : journal.data.entries}
+      actor={acting?.id}
+    />
   </main>
 </div>
