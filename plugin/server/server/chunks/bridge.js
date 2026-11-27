@@ -1,5 +1,5 @@
 import { H as ENTITY_TYPES, I as belief, J as classTable, L as entity, O as event, St as DUNGEON_MASTER_VERSION, W as handleKind, X as race, Y as equipment, _ as character, a as createRulesRepository, bt as DUNGEON_MASTER_LAN, f as userStateDir, ft as ne, g as campaign, it as eq, lt as isNull, mt as sql, pt as or, q as background, rt as and, st as inArray, tt as asc, x as characterItem, xt as DUNGEON_MASTER_PORT, y as characterDraft, yt as DUNGEON_MASTER_HOME, z as fact } from "./seed.js";
-import { $ as combatState, At as createWorld, B as openCall, Bt as reviseArc, Ct as isBodyArmor, D as createDmChannels, F as callInput, Ft as createArc, G as saveSequence, Gt as readTool, H as attackSequence, Ht as ToolError, I as callResultEvent, It as currentArc, J as logActivity, Jt as parseClock, K as sequenceText, Kt as writeTool, L as cancelPendingCall, Lt as pastArcs, M as DC_BY_TIER, Mt as renderLinks, N as PASS, Nt as resolveLinks, O as playSheets, Ot as hpState, P as TIERS, Pt as CurrentArcError, Q as addCombatants, R as createHitDiceCall, Rt as resolveBeat, St as equippable, Tt as loadWizardRules, U as damageSequence, Ut as creationTool, V as saveKey, Vt as PLUGIN_NAME, W as rollAll, Wt as expectVersion, X as nextEventId, Xt as characterRefs, Y as logEvent, Yt as characterHolders, Z as setAwaitingNarration, Zt as SESSION_LIVE_MESSAGE, _ as closeSession, at as startCombat, b as sessionsView, bt as present, c as CampaignNotFoundError, ct as combatant, dt as saveBonus, et as endCombat, f as SeedLockedError, ft as setConditions, g as addConversationLine, gt as ClockBackwardsError, h as refuseLockedSeed, ht as deathSaveCall, i as sessions, it as spendTurnResource, jt as fieldNames, k as ABILITY_NAMES, kt as lintWorld, l as NotACampaignFolderError, lt as incapacitates, m as creationStage, mt as setConcentration, n as library, nt as orderText, ot as applyDamage, pt as concentrate, q as currentStamp, qt as formatClock, r as live, rt as refuseDuringCombat, st as applyHealing, tt as nextTurn, ut as mustAct, v as history, vt as advanceClock, w as returnStrandedDrafts, wt as believedName, xt as scenePlace, y as indexNarration, yt as currentMinute, z as createPendingCall, zt as retireArc } from "./campaign.js";
+import { $ as addCombatants, At as lintWorld, B as openCall, Bt as retireArc, Ct as equippable, D as createDmChannels, Et as loadWizardRules, F as callInput, Ft as CurrentArcError, G as saveSequence, Gt as expectVersion, H as attackSequence, Ht as PLUGIN_NAME, I as callResultEvent, It as createArc, J as logActivity, Jt as formatClock, K as sequenceText, Kt as readTool, L as cancelPendingCall, Lt as currentArc, M as DC_BY_TIER, Mt as fieldNames, N as PASS, Nt as renderLinks, O as playSheets, P as TIERS, Pt as resolveLinks, Q as setAwaitingNarration, Qt as SESSION_LIVE_MESSAGE, R as createHitDiceCall, Rt as pastArcs, St as scenePlace, Tt as believedName, U as damageSequence, Ut as ToolError, V as saveKey, Vt as reviseArc, W as rollAll, Wt as creationTool, X as nextEventId, Xt as characterHolders, Y as logEvent, Yt as parseClock, Z as partyAudience, Zt as characterRefs, _ as closeSession, _t as ClockBackwardsError, at as spendTurnResource, b as sessionsView, bt as currentMinute, c as CampaignNotFoundError, ct as applyHealing, dt as mustAct, et as combatState, f as SeedLockedError, ft as saveBonus, g as addConversationLine, gt as deathSaveCall, h as refuseLockedSeed, ht as setConcentration, i as sessions, it as refuseDuringCombat, jt as createWorld, k as ABILITY_NAMES, kt as hpState, l as NotACampaignFolderError, lt as combatant, m as creationStage, mt as concentrate, n as library, nt as nextTurn, ot as startCombat, pt as setConditions, q as currentStamp, qt as writeTool, r as live, rt as orderText, st as applyDamage, tt as endCombat, ut as incapacitates, v as history, w as returnStrandedDrafts, wt as isBodyArmor, xt as present, y as indexNarration, yt as advanceClock, z as createPendingCall, zt as resolveBeat } from "./campaign.js";
 import { n as joinUrls } from "./lan.js";
 import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { t as lanAccess } from "./lan-access.js";
@@ -2138,6 +2138,21 @@ function speaker({ db }, handle) {
 	if (!found || found.type !== "npc" || found.retiredAt !== null) throw ToolError.unknownHandle(handle);
 	return found;
 }
+/**
+* The Audience of a Narration: the Party's Characters, or only those `to` names (a passed note).
+* An empty list or a handle that is not a Party Character is refused (ADR 0008).
+*/
+function audienceOf(ctx, to) {
+	if (to === void 0) return partyAudience(ctx.db);
+	if (to.length === 0) throw new ToolError("invalid_input", "`to` names nobody, so no Character would read it", "Name at least one Party Character, or leave `to` out to narrate to the whole Party");
+	const party = characterRefs(ctx.db);
+	const ids = to.map((handle) => {
+		const found = party.find((c) => c.handle === handle);
+		if (!found) throw new ToolError("not_in_party", `${handle} is not a Party Character`, "Pass Party Character handles (char:<name>) in `to`");
+		return found.row.id;
+	});
+	return [...new Set(ids)];
+}
 /** Telling the Players what happens. */
 var narrationTools = [writeTool({
 	name: "narrate",
@@ -2147,10 +2162,12 @@ var narrationTools = [writeTool({
 		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks"),
 		voice_label: string().trim().min(1).optional().describe("What the Players see for a speaker their Characters do not know by name, such as \"the hooded man\""),
 		call: callInput.optional().describe("Ask the Players: inline {kind: \"check\", character, skill | save, tier, adv?, reason} (or a list of them, one roll per Character) or {kind: \"question\", text, choices?}. A Call ends your turn; its call_result wakes you."),
+		to: array(string().min(1)).optional().describe("A passed note: Character handles (char:<name>) that alone read this Narration. Replaces the default of the whole Party; never empty. A Call it raises can ask only these Characters."),
 		recap: boolean().optional().describe("The opening recap of a Session")
 	}),
 	activity: null,
-	run: (ctx, { text, voice, voice_label, call, recap = false }) => {
+	run: (ctx, { text, voice, voice_label, call, recap = false, to }) => {
+		const audience = audienceOf(ctx, recap ? void 0 : to);
 		if (recap && call !== void 0) throw new ToolError("invalid_input", "A recap answers nothing, so it cannot ask a Call", "Narrate the recap on its own, then ask the Call in the next narrate");
 		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
 		if (!recap) {
@@ -2159,7 +2176,8 @@ var narrationTools = [writeTool({
 		}
 		const callId = call === void 0 ? null : openCall(ctx.db, call, {
 			at: ctx.now,
-			openedBy: ctx.stamp.eventId
+			openedBy: ctx.stamp.eventId,
+			audience
 		});
 		return {
 			result: callId ? {
@@ -2169,6 +2187,7 @@ var narrationTools = [writeTool({
 			} : { narrated: true },
 			event: {
 				kind: "narration",
+				audience,
 				summary: npc ? `${npc.name}: ${text}` : text,
 				data: {
 					text,
