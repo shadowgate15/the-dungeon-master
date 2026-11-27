@@ -229,6 +229,12 @@ export function createParty(
       return [...saved, ...drafts]
     },
 
+    /** A saved Character's name and the browser holding it now (null when unclaimed); null for a Draft. */
+    claimOf(id: string): { name: string; holder: string | null } | null {
+      const saved = db.select().from(character).where(eq(character.id, id)).get()
+      return saved ? { name: saved.name, holder: saved.controllingPlayer } : null
+    },
+
     /** Whether `browser` holds a Claim on any Party Character. */
     holdsClaim(browser: string): boolean {
       return this.claims(browser).some((row) => row.kind === 'character' && row.claim === 'yours')

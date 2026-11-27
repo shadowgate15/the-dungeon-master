@@ -218,3 +218,29 @@ describe('the Arc line', () => {
     expect(arcLine()).toBe('Arc: No current Arc. Declarations since the last Beat change: 1.\n')
   })
 })
+
+describe('Who’s at the table', () => {
+  it('names each Player by their Characters, marks the Host and lists unclaimed Characters', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    addCharacter(library, campaignId, fighterDraft('Ash'))
+    const bram = addCharacter(library, campaignId, fighterDraft('Bram'))
+    library.party(campaignId).letGo(bram, SOLO_PLAYER)
+    library.party(campaignId).letGo(wren, SOLO_PLAYER)
+    library.party(campaignId).claim(wren, 'guest')
+
+    const block = library.record(campaignId).coreBlock()
+
+    expect(block).toContain(
+      "Who's at the table: Host · Player of Ash; Player of Wren; unclaimed: Bram."
+    )
+  })
+
+  it('says nobody has Claimed yet when a Session opens with no Claims', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    library.party(campaignId).letGo(wren, SOLO_PLAYER)
+
+    expect(library.record(campaignId).opening()).toContain(
+      "Who's at the table: no one has Claimed yet; unclaimed: Wren."
+    )
+  })
+})
