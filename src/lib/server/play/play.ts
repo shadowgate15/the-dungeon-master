@@ -227,6 +227,35 @@ export function createPlay({
       if (result) answered(campaignId, result)
     },
 
+    /**
+     * The browser's Character departs: the status is set at once, the Claim dropped, its
+     * Declarations withdrawn from the open Floor, and the DM told. Needs a live Session.
+     */
+    depart(campaignId: string, character: string, browser: string): void {
+      const folder = atTable(campaignId)
+      const party = library.party(campaignId)
+      const name = party.claims(browser).find((r) => r.id === character)?.name ?? 'A Character'
+      party.depart(character, browser)
+      publish({ type: 'claims', campaign: campaignId })
+      settle(campaignId, library.floor(campaignId).lose(character))
+      channels.send(folder, {
+        content: `${name} departed the Party and is no longer played.`,
+        meta: { kind: 'claims' }
+      })
+    },
+
+    /** A departed Character comes back and the browser Claims it, with or without a Session. */
+    rejoin(campaignId: string, character: string, browser: string): void {
+      const party = library.party(campaignId)
+      const name = party.claims(browser).find((r) => r.id === character)?.name ?? 'A Character'
+      party.rejoin(character, browser)
+      publish({ type: 'claims', campaign: campaignId })
+      channels.send(folderOf(campaignId), {
+        content: `${name} rejoined the Party.`,
+        meta: { kind: 'claims' }
+      })
+    },
+
     /** The DM-pane conversation as `viewer`'s Player sees it. */
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the pane is not per Claim
     conversation(campaignId: string, _viewer: string) {

@@ -253,6 +253,9 @@
     {problem}
     onclaim={(id) => attempt(() => seats.claim(id))}
     onletgo={(id) => attempt(() => seats.letGo(id))}
+    attended={attached}
+    ondepart={(id) => attempt(() => seats.depart(id))}
+    onrejoin={(id) => attempt(() => seats.rejoin(id))}
     onrelease={(id) => attempt(() => seats.release(id))}
   />
 </div>
