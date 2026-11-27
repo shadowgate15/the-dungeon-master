@@ -272,5 +272,5 @@ A Player's read-only view of what their Characters believe: the people, places a
 _Avoid_: Codex, log, notes
 
 **Session history**:
-A Player's read-only list of a Campaign's closed Sessions, each with when it was played, the in-fiction time it spanned, and the Session summaries that reach their Characters.
+A Player's read-only list of a Campaign's closed Sessions, each with when it was played, the in-fiction time it spanned, and its Session summary.
 _Avoid_: Sitting history, transcript, log
