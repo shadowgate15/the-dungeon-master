@@ -278,7 +278,7 @@ describe('an open Call', () => {
     library.close()
 
     library = testLibrary({ home })
-    expect(library.record(campaignId).timeline().call).toEqual(before)
+    expect(library.record(campaignId).timeline('player').call).toEqual(before)
   })
 
   it('refuses a second Call while one is open', () => {

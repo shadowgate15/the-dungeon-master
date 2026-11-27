@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  type LiveMessage,
   claimsQueryKey,
   floorQueryKey,
   journalQueryKey,
@@ -49,5 +50,29 @@ describe('staleQueries', () => {
       sessionHistoryQueryKey('c1'),
       sheetsQueryKey('c1')
     ])
+  })
+
+  it('carries no text in any LiveMessage variant, only ids and flags', () => {
+    // One value per variant: `satisfies` makes a new variant a type error until it is listed here.
+    const variants = {
+      session: { type: 'session', campaign: 'c1', attached: true },
+      floor: { type: 'floor', campaign: 'c1' },
+      timeline: { type: 'timeline', campaign: 'c1' },
+      seed: { type: 'seed', campaign: 'c1' },
+      draft: { type: 'draft', campaign: 'c1', draft: 'd1' },
+      conversation: { type: 'conversation', campaign: 'c1' },
+      permission: { type: 'permission', campaign: 'c1' },
+      claims: { type: 'claims', campaign: 'c1' }
+    } satisfies { [T in LiveMessage['type']]: Extract<LiveMessage, { type: T }> }
+
+    for (const message of Object.values(variants)) {
+      const { type, campaign, ...rest } = message as Record<string, unknown>
+      expect(type).toMatch(/^[a-z]+$/)
+      expect(campaign).toBe('c1')
+      for (const value of Object.values(rest)) {
+        expect(['boolean', 'string']).toContain(typeof value)
+        if (typeof value === 'string') expect(value).toMatch(/^[a-z]\d+$/)
+      }
+    }
   })
 })
