@@ -96,6 +96,9 @@ describe('reads filtered by Claims', () => {
   it('shows a Session summary only to browsers its Audience reaches', async () => {
     await dm.call('narrate', { text: 'Rain falls.' })
     await dm.call('close_session', { summary: 'It rained.', threads: [] })
+    // Closing the Session lapses every Claim, so both browsers Claim again.
+    server.play.claim(campaignId, wren, HOST)
+    server.play.claim(campaignId, ash, GUEST)
     expect(server.play.sessionHistory(campaignId, HOST).sessions).toHaveLength(1)
 
     const db = server.library.databaseFor(folder)!
