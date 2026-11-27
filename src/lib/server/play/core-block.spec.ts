@@ -244,3 +244,56 @@ describe('Who’s at the table', () => {
     )
   })
 })
+
+describe('Floors waited by the Characters away from the Scene', () => {
+  let call: (name: string, args?: Record<string, unknown>) => Record<string, unknown>
+  let floorsPass: (n: number) => void
+
+  beforeEach(() => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    addCharacter(library, campaignId, fighterDraft('Bram'))
+    const host = createToolHost({ library, tools: gameTools })
+    call = (name, args = {}) => {
+      const result = host.call(folder, name, args)
+      expect(result.isError ?? false).toBe(false)
+      return JSON.parse(result.content[0].text)
+    }
+    floorsPass = (n) => {
+      for (let i = 0; i < n; i++) {
+        const floor = library.floor(campaignId)
+        floor.send({ character: wren, text: 'I wait.', player: SOLO_PLAYER })
+        floor.done(SOLO_PLAYER)
+        call('narrate', { text: 'Time passes.' })
+      }
+    }
+    call('establish', { type: 'place', name: 'Cellar', fields: { exits: [] } })
+    call('establish', { type: 'place', name: 'Hall', fields: { exits: [] } })
+    call('move', { who: ['char:wren'], to: 'place:hall' })
+    call('set_scene', { place: 'place:hall' })
+  })
+
+  it('counts the Floors an away group has waited, in the core block and the scene result', () => {
+    call('move', { who: ['char:bram'], to: 'place:cellar' })
+    floorsPass(2)
+
+    expect(library.record(campaignId).coreBlock()).toContain(
+      'Away: Bram (char:bram) at place:cellar, waited 2 Floors.'
+    )
+    const away = (call('scene').elsewhere as { handle: string; floorsWaited: number }[]).find(
+      (c) => c.handle === 'char:bram'
+    )
+    expect(away?.floorsWaited).toBe(2)
+  })
+
+  it('counts from when the Scene left them behind, and restarts after a cut to them', () => {
+    call('move', { who: ['char:bram'], to: 'place:hall' })
+    floorsPass(3)
+    call('move', { who: ['char:bram'], to: 'place:cellar' })
+    call('set_scene', { place: 'place:hall' })
+    floorsPass(1)
+    expect(library.record(campaignId).coreBlock()).toContain('waited 1 Floor.')
+
+    call('set_scene', { place: 'place:cellar' })
+    expect(library.record(campaignId).coreBlock()).not.toContain('Away: Bram')
+  })
+})

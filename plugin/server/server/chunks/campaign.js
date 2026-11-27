@@ -2031,6 +2031,27 @@ function present(db) {
 		npcs: place ? npcsAt(db, place.handle) : []
 	};
 }
+/**
+* How many Floors have closed since a Character was left out of the Scene, worked out from the
+* Event log (never stored). They are out of it from their last `moved` Event, unless the Scene
+* was at their Place then, in which case from the first cut to another Place after it.
+*/
+function floorsWaited(db, handle, at) {
+	const lastMove = db.select({
+		kind: event.kind,
+		data: event.data,
+		createdAt: event.createdAt
+	}).from(event).where(and(eq(event.tool, "move"), eq(event.kind, "moved"))).orderBy(asc(event.id)).all().filter((e) => (e.data?.who)?.includes(handle)).at(-1);
+	const cuts = db.select({
+		data: event.data,
+		createdAt: event.createdAt
+	}).from(event).where(eq(event.kind, "scene_set")).orderBy(asc(event.id)).all();
+	const since = lastMove?.createdAt ?? 0;
+	const sceneThen = cuts.filter((c) => c.createdAt <= since).at(-1)?.data?.place;
+	let from = since;
+	if (sceneThen === void 0 || sceneThen === at) from = cuts.find((c) => c.createdAt >= since && c.data?.place !== at)?.createdAt ?? since;
+	return db.select({ id: floor.id }).from(floor).where(and(eq(floor.state, "closed"), gt(floor.closedAt, from))).all().length;
+}
 /** A spotlight request the server won't send: unknown Character, or one already in the Scene. */
 var SpotlightRefusedError = class extends Error {};
 /** The Scene as the Player's rail shows it, built from Player-safe fields only. */
@@ -4249,7 +4270,23 @@ function scenePart({ db }) {
 	}
 	const pending = pendingCalls(db);
 	if (pending.length) lines.push(`Pending Calls: ${pending.join(", ")}.`);
+	lines.push(...awayLines(db));
 	return lines.join("\n");
+}
+/** One line per group of Characters away from the Scene (same Place): the Floors it has waited. */
+function awayLines(db) {
+	const groups = /* @__PURE__ */ new Map();
+	for (const c of present(db).elsewhere) {
+		const at = c.row.whereabouts ?? "no known Place";
+		const group = groups.get(at) ?? {
+			who: [],
+			waited: 0
+		};
+		group.who.push(`${c.row.name} (${c.handle})`);
+		group.waited = Math.max(group.waited, c.row.whereabouts ? floorsWaited(db, c.handle, at) : 0);
+		groups.set(at, group);
+	}
+	return [...groups].map(([at, g]) => `Away: ${g.who.join(", ")} at ${at}, waited ${plural(g.waited, "Floor", "Floors")}.`);
 }
 var plural = (n, word, many) => `${n} ${n === 1 ? word : many}`;
 /** A downed Character's Death saves: `stable`, or `Death saves 1 success, 2 failures`. */
@@ -5655,6 +5692,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { partyAudience as $, characterRefs as $t, ABILITY_NAMES as A, CharacterValidationError as At, createHitDiceCall as B, pastArcs as Bt, DmBusyError as C, advanceClock as Ct, DraftNotFoundError as D, believedName as Dt, DmOnlyEditError as E, scenePlace as Et, TIERS as F, renderLinks as Ft, damageSequence as G, ToolError as Gt, openCall as H, retireArc as Ht, callInput as I, resolveLinks as It, sequenceText as J, readTool as Jt, rollAll as K, creationTool as Kt, callResultEvent as L, CurrentArcError as Lt, CallRefusedError as M, lintWorld as Mt, DC_BY_TIER as N, createWorld as Nt, createDmChannels as O, loadWizardRules as Ot, PASS as P, fieldNames as Pt, nextEventId as Q, characterHolders as Qt, cancelPendingCall as R, createArc as Rt, DeclarationRefusedError as S, SpotlightRefusedError as St, ClaimRefusedError as T, present as Tt, saveKey as U, reviseArc as Ut, createPendingCall as V, resolveBeat as Vt, attackSequence as W, PLUGIN_NAME as Wt, logActivity as X, formatClock as Xt, currentStamp as Y, writeTool as Yt, logEvent as Z, parseClock as Zt, closeSession as _, setConcentration as _t, CampaignArchivedError as a, orderText as at, sessionsView as b, deathSaveCall as bt, CampaignNotFoundError as c, startCombat as ct, BeginRefusedError as d, combatant as dt, SESSION_LIVE_MESSAGE as en, setAwaitingNarration as et, SeedLockedError as f, incapacitates as ft, addConversationLine as g, concentrate as gt, refuseLockedSeed as h, setConditions as ht, sessions as i, nextTurn as it, CallClosedError as j, hpState as jt, playSheets as k, CharacterNotFoundError as kt, NotACampaignFolderError as l, applyDamage as lt, creationStage as m, saveBonus as mt, library as n, combatState as nt, CampaignExistsError as o, refuseDuringCombat as ot, StartOverRefusedError as p, mustAct as pt, saveSequence as q, expectVersion as qt, live as r, endCombat as rt, CampaignMissingError as s, spendTurnResource as st, campaignRoot as t, addCombatants as tt, SessionLiveError as u, applyHealing as ut, history as v, equippable as vt, returnStrandedDrafts as w, currentMinute as wt, DeclarationNotFoundError as x, ClockBackwardsError as xt, indexNarration as y, isBodyArmor as yt, createCalls as z, currentArc as zt };
+export { partyAudience as $, characterHolders as $t, ABILITY_NAMES as A, CharacterNotFoundError as At, createHitDiceCall as B, currentArc as Bt, DmBusyError as C, advanceClock as Ct, DraftNotFoundError as D, scenePlace as Dt, DmOnlyEditError as E, present as Et, TIERS as F, fieldNames as Ft, damageSequence as G, PLUGIN_NAME as Gt, openCall as H, resolveBeat as Ht, callInput as I, renderLinks as It, sequenceText as J, expectVersion as Jt, rollAll as K, ToolError as Kt, callResultEvent as L, resolveLinks as Lt, CallRefusedError as M, hpState as Mt, DC_BY_TIER as N, lintWorld as Nt, createDmChannels as O, believedName as Ot, PASS as P, createWorld as Pt, nextEventId as Q, parseClock as Qt, cancelPendingCall as R, CurrentArcError as Rt, DeclarationRefusedError as S, SpotlightRefusedError as St, ClaimRefusedError as T, floorsWaited as Tt, saveKey as U, retireArc as Ut, createPendingCall as V, pastArcs as Vt, attackSequence as W, reviseArc as Wt, logActivity as X, writeTool as Xt, currentStamp as Y, readTool as Yt, logEvent as Z, formatClock as Zt, closeSession as _, setConcentration as _t, CampaignArchivedError as a, orderText as at, sessionsView as b, deathSaveCall as bt, CampaignNotFoundError as c, startCombat as ct, BeginRefusedError as d, combatant as dt, characterRefs as en, setAwaitingNarration as et, SeedLockedError as f, incapacitates as ft, addConversationLine as g, concentrate as gt, refuseLockedSeed as h, setConditions as ht, sessions as i, nextTurn as it, CallClosedError as j, CharacterValidationError as jt, playSheets as k, loadWizardRules as kt, NotACampaignFolderError as l, applyDamage as lt, creationStage as m, saveBonus as mt, library as n, combatState as nt, CampaignExistsError as o, refuseDuringCombat as ot, StartOverRefusedError as p, mustAct as pt, saveSequence as q, creationTool as qt, live as r, endCombat as rt, CampaignMissingError as s, spendTurnResource as st, campaignRoot as t, SESSION_LIVE_MESSAGE as tn, addCombatants as tt, SessionLiveError as u, applyHealing as ut, history as v, equippable as vt, returnStrandedDrafts as w, currentMinute as wt, DeclarationNotFoundError as x, ClockBackwardsError as xt, indexNarration as y, isBodyArmor as yt, createCalls as z, createArc as zt };
 
 //# sourceMappingURL=campaign.js.map

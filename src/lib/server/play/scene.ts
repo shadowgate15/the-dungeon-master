@@ -1,9 +1,9 @@
 import { clockParts, formatClock } from '#lib/play/clock.ts'
 import type { SceneView } from '#lib/play/scene.ts'
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, asc, eq, gt, isNull } from 'drizzle-orm'
 import type { Queryable } from '../db/connect'
 import { hpState } from '#lib/play/hp-state.ts'
-import { campaign, entity, npcCombat } from '../db/schema'
+import { campaign, entity, event, floor, npcCombat } from '../db/schema'
 import { playerCombat } from './combat'
 import { believedName, UNKNOWN_PLACE } from '../knowledge/player-names'
 import { characterRefs } from '../knowledge/holders'
@@ -71,6 +71,41 @@ export function present(db: Queryable) {
     elsewhere: party.filter((c) => !inScene(place, c.row)),
     npcs: place ? npcsAt(db, place.handle) : []
   }
+}
+
+/**
+ * How many Floors have closed since a Character was left out of the Scene, worked out from the
+ * Event log (never stored). They are out of it from their last `moved` Event, unless the Scene
+ * was at their Place then, in which case from the first cut to another Place after it.
+ */
+export function floorsWaited(db: Queryable, handle: string, at: string): number {
+  const events = db
+    .select({ kind: event.kind, data: event.data, createdAt: event.createdAt })
+    .from(event)
+    .where(and(eq(event.tool, 'move'), eq(event.kind, 'moved')))
+    .orderBy(asc(event.id))
+    .all()
+  const lastMove = events
+    .filter((e) => (e.data?.who as string[] | undefined)?.includes(handle))
+    .at(-1)
+  const cuts = db
+    .select({ data: event.data, createdAt: event.createdAt })
+    .from(event)
+    .where(eq(event.kind, 'scene_set'))
+    .orderBy(asc(event.id))
+    .all()
+  const since = lastMove?.createdAt ?? 0
+  const sceneThen = cuts.filter((c) => c.createdAt <= since).at(-1)?.data?.place
+  let from = since
+  if (sceneThen === undefined || sceneThen === at) {
+    const left = cuts.find((c) => c.createdAt >= since && c.data?.place !== at)
+    from = left?.createdAt ?? since
+  }
+  return db
+    .select({ id: floor.id })
+    .from(floor)
+    .where(and(eq(floor.state, 'closed'), gt(floor.closedAt, from)))
+    .all().length
 }
 
 /** A spotlight request the server won't send: unknown Character, or one already in the Scene. */

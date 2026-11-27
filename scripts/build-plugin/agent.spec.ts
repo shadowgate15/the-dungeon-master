@@ -48,8 +48,8 @@ describe('the dm agent', () => {
     expect(agent.body).not.toContain('once those tools exist')
   })
 
-  it('has a prompt of six parts', () => {
-    expect([...agent.body.matchAll(/^## /gm)]).toHaveLength(6)
+  it('has a prompt of seven parts', () => {
+    expect([...agent.body.matchAll(/^## /gm)]).toHaveLength(7)
   })
 })
 
