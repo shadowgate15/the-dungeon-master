@@ -169,6 +169,10 @@ function floorActions(campaign) {
 		/** Done: closes the Floor (once every Player has pressed it) and wakes the DM. */
 		async done() {
 			await call(campaignPath(campaign(), "floor/done"), { method: "POST" });
+		},
+		/** Not done yet: takes Done back until the Floor closes. */
+		async undone() {
+			await call(campaignPath(campaign(), "floor/done"), { method: "DELETE" });
 		}
 	};
 }

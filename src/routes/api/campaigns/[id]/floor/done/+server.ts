@@ -17,3 +17,11 @@ export const POST: RequestHandler = ({ params, locals }) =>
     [DmBusyError, 409],
     [DmAwayError, 409]
   ])
+
+/** Not done yet: the Player takes Done back until the Floor closes. 409 `{ error }` while the DM is away. */
+export const DELETE: RequestHandler = ({ params, locals }) =>
+  withCampaign(() => {
+    assertPlayable(library, params.id)
+    play.undone(params.id, locals.browser)
+    return json({})
+  }, [[DmAwayError, 409]])

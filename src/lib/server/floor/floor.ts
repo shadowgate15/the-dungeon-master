@@ -158,6 +158,38 @@ export function createFloor(db: Database, now: () => number = Date.now) {
     return { declarations, returned: returned(player) }
   }
 
+  /** Closes the open Floor when every browser at the table is Done; an empty table waits. */
+  function closeIfReady(floorId: string, at: number): DoneOutcome {
+    const done = db.select().from(floor).where(eq(floor.id, floorId)).get()!.done
+    const table = playersAtTable()
+    if (table.length === 0 || !table.every((p) => done.includes(p))) return { closed: false }
+    const declarations = current(SOLO_PLAYER).declarations
+    db.update(floor).set({ state: 'closed', closedAt: at }).where(eq(floor.id, floorId)).run()
+    for (const d of declarations) {
+      logEvent(
+        db,
+        {
+          tool: 'done',
+          kind: 'declaration',
+          summary: `${d.characterName}: ${d.text}`,
+          data: {
+            floor: floorId,
+            declaration: d.id,
+            character: d.character,
+            characterName: d.characterName,
+            player: d.player,
+            text: d.text
+          }
+        },
+        { at }
+      )
+    }
+    // Declarations answer the moment instead of the Call: the Players chose not to roll.
+    const withdrawnCall = declarations.length > 0 ? withdrawOpenCall(db, at) : null
+    setAwaitingNarration(db, at)
+    return { closed: true, floor: floorId, players: done, declarations, withdrawnCall }
+  }
+
   return {
     /** The open Floor (empty until something is sent), with `player`'s returned drafts. */
     current,
@@ -228,10 +260,10 @@ export function createFloor(db: Database, now: () => number = Date.now) {
     },
 
     /**
-     * The Player presses Done. Once every Player at the table has, the Floor closes in one
-     * transaction: its Declarations are logged (stamped with the Session) in send order, they
-     * withdraw any open Call, and the Campaign awaits Narration. An empty Floor closes too, handing the DM the initiative. Refused
-     * while the DM is still answering the last Floor.
+     * The Player presses Done. Once every browser with a Claimed Character in the Scene has, the
+     * Floor closes in one transaction: its Declarations are logged (stamped with the Session) in
+     * send order, they withdraw any open Call, and the Campaign awaits Narration. With no Claimed
+     * Character in the Scene the Floor waits. Refused while the DM is still answering the last Floor.
      */
     done(player: string): DoneOutcome {
       return db.transaction((): DoneOutcome => {
@@ -242,38 +274,37 @@ export function createFloor(db: Database, now: () => number = Date.now) {
         const floorId = openFloor(at)
         const row = db.select().from(floor).where(eq(floor.id, floorId)).get()!
         const done = row.done.includes(player) ? row.done : [...row.done, player]
-        if (!playersAtTable().every((p) => done.includes(p))) {
-          db.update(floor).set({ done }).where(eq(floor.id, floorId)).run()
-          return { closed: false }
-        }
-        const declarations = current(SOLO_PLAYER).declarations
-        db.update(floor)
-          .set({ done, state: 'closed', closedAt: at })
-          .where(eq(floor.id, floorId))
+        db.update(floor).set({ done }).where(eq(floor.id, floorId)).run()
+        return closeIfReady(floorId, at)
+      })
+    },
+
+    /** Not done yet: takes `player`'s Done back, until the Floor closes. */
+    undone(player: string): void {
+      const floorId = openFloorId()
+      if (!floorId) return
+      const row = db.select().from(floor).where(eq(floor.id, floorId)).get()!
+      db.update(floor)
+        .set({ done: row.done.filter((p) => p !== player) })
+        .where(eq(floor.id, floorId))
+        .run()
+    },
+
+    /**
+     * A browser lost a Character (Let go, Release): its open Declarations are withdrawn and the
+     * close is re-checked, so the Floor closes if every remaining browser in the Scene is Done.
+     * A pending Call part stays with the Character.
+     */
+    lose(characterId: string): DoneOutcome {
+      return db.transaction((): DoneOutcome => {
+        const floorId = openFloorId()
+        if (!floorId) return { closed: false }
+        db.delete(declaration)
+          .where(and(eq(declaration.floorId, floorId), eq(declaration.characterId, characterId)))
           .run()
-        for (const d of declarations) {
-          logEvent(
-            db,
-            {
-              tool: 'done',
-              kind: 'declaration',
-              summary: `${d.characterName}: ${d.text}`,
-              data: {
-                floor: floorId,
-                declaration: d.id,
-                character: d.character,
-                characterName: d.characterName,
-                player: d.player,
-                text: d.text
-              }
-            },
-            { at }
-          )
-        }
-        // Declarations answer the moment instead of the Call: the Players chose not to roll.
-        const withdrawnCall = declarations.length > 0 ? withdrawOpenCall(db, at) : null
-        setAwaitingNarration(db, at)
-        return { closed: true, floor: floorId, players: done, declarations, withdrawnCall }
+        // The DM is mid-turn: the re-check waits for the next Done.
+        if (awaitingNarrationSince(db) !== null) return { closed: false }
+        return closeIfReady(floorId, now())
       })
     },
 

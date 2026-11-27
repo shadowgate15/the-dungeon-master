@@ -192,6 +192,74 @@ describe('narrate', () => {
   })
 })
 
+describe('Done per browser', () => {
+  const GUEST = 'guest-browser'
+
+  /** Wren is the Host's, Bram the guest's, Tamsin unclaimed; all in the Scene. */
+  function table() {
+    const wren = addFighter('Wren')
+    const bram = addFighter('Bram')
+    const tamsin = addFighter('Tamsin')
+    play.letGo(campaignId, bram, SOLO_PLAYER)
+    play.claim(campaignId, bram, GUEST)
+    play.letGo(campaignId, tamsin, SOLO_PLAYER)
+    return { wren, bram, tamsin }
+  }
+
+  it('waits for every browser with a Claimed Character, and never counts unclaimed ones', () => {
+    table()
+    expect(play.done(campaignId, SOLO_PLAYER).closed).toBe(false)
+    expect(heard).toHaveLength(0)
+    expect(play.done(campaignId, GUEST).closed).toBe(true)
+    expect(heard).toHaveLength(1)
+  })
+
+  it('takes back Done with Not done yet until the Floor closes', () => {
+    table()
+    play.done(campaignId, SOLO_PLAYER)
+    play.undone(campaignId, SOLO_PLAYER)
+    expect(play.done(campaignId, GUEST).closed).toBe(false)
+    expect(play.done(campaignId, SOLO_PLAYER).closed).toBe(true)
+    // Closed: nothing left to take back.
+    play.undone(campaignId, SOLO_PLAYER)
+    expect(library.floor(campaignId).current(SOLO_PLAYER).declarations).toEqual([])
+  })
+
+  it("withdraws the lost Character's Declarations and closes the Floor if the rest are Done", () => {
+    const { bram } = table()
+    library.floor(campaignId).send({ character: bram, text: 'I bar the door.', player: GUEST })
+    play.done(campaignId, SOLO_PLAYER)
+    expect(heard).toHaveLength(0)
+
+    play.letGo(campaignId, bram, GUEST)
+
+    expect(heard).toHaveLength(1)
+    expect(heard[0].meta).toMatchObject({ kind: 'floor' })
+    expect(heard[0].content).not.toContain('bar the door')
+  })
+
+  it('withdraws Declarations on Let go but keeps waiting while a remaining browser is undecided', () => {
+    const { bram } = table()
+    library.floor(campaignId).send({ character: bram, text: 'I bar the door.', player: GUEST })
+
+    play.letGo(campaignId, bram, GUEST)
+
+    expect(library.floor(campaignId).current(SOLO_PLAYER).declarations).toEqual([])
+    expect(heard).toHaveLength(0)
+  })
+
+  it('waits when no Claimed Character is left in the Scene', () => {
+    const { wren, bram } = table()
+    play.done(campaignId, GUEST)
+    play.letGo(campaignId, bram, GUEST)
+    play.letGo(campaignId, wren, SOLO_PLAYER)
+
+    expect(heard).toHaveLength(0)
+    expect(play.done(campaignId, SOLO_PLAYER).closed).toBe(false)
+    expect(heard).toHaveLength(0)
+  })
+})
+
 describe('Sessions', () => {
   it('stamps Declarations and Narrations with the Session the DM opened on attach', () => {
     const wren = addFighter('Wren')

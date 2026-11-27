@@ -11,6 +11,12 @@ var POST = ({ params, locals }) => withCampaign(() => {
 	assertPlayable(library, params.id);
 	return json({ closed: play.done(params.id, locals.browser).closed });
 }, [[DmBusyError, 409], [DmAwayError, 409]]);
-export { POST };
+/** Not done yet: the Player takes Done back until the Floor closes. 409 `{ error }` while the DM is away. */
+var DELETE = ({ params, locals }) => withCampaign(() => {
+	assertPlayable(library, params.id);
+	play.undone(params.id, locals.browser);
+	return json({});
+}, [[DmAwayError, 409]]);
+export { DELETE, POST };
 
 //# sourceMappingURL=_server.ts.js.map

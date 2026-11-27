@@ -76,7 +76,7 @@ describe('Claims', () => {
     play.letGo(campaignId, wren, SOLO_PLAYER)
     play.claim(campaignId, wren, GUEST)
 
-    expect(pushed).toEqual([
+    expect(pushed.filter((m) => m.type === 'claims')).toEqual([
       { type: 'claims', campaign: campaignId },
       { type: 'claims', campaign: campaignId }
     ])

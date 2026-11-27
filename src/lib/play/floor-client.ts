@@ -179,6 +179,12 @@ export function floorActions(campaign: () => string) {
       await call(campaignPath(campaign(), 'floor/done'), {
         method: 'POST'
       })
+    },
+    /** Not done yet: takes Done back until the Floor closes. */
+    async undone(): Promise<void> {
+      await call(campaignPath(campaign(), 'floor/done'), {
+        method: 'DELETE'
+      })
     }
   }
 }

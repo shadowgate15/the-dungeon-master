@@ -75,6 +75,14 @@ export function createPlay({
     return folder
   }
 
+  /** Tells the DM and the browsers what a Done (or a lost Character) did to the Floor. */
+  function settle(campaignId: string, outcome: DoneOutcome): DoneOutcome {
+    if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome))
+    publish({ type: 'floor', campaign: campaignId })
+    if (outcome.closed) publish({ type: 'timeline', campaign: campaignId })
+    return outcome
+  }
+
   function answered(campaignId: string, result: CallResult | null): { complete: boolean } {
     if (result) channels.send(folderOf(campaignId), callResultEvent(result))
     publish({ type: 'timeline', campaign: campaignId })
@@ -99,11 +107,14 @@ export function createPlay({
      */
     done(campaignId: string, player: string): DoneOutcome {
       atTable(campaignId)
-      const outcome = library.floor(campaignId).done(player)
-      if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome))
+      return settle(campaignId, library.floor(campaignId).done(player))
+    },
+
+    /** Not done yet: the Player takes Done back until the Floor closes. */
+    undone(campaignId: string, player: string): void {
+      atTable(campaignId)
+      library.floor(campaignId).undone(player)
       publish({ type: 'floor', campaign: campaignId })
-      if (outcome.closed) publish({ type: 'timeline', campaign: campaignId })
-      return outcome
     },
 
     /**
@@ -179,6 +190,7 @@ export function createPlay({
     letGo(campaignId: string, character: string, browser: string): void {
       library.party(campaignId).letGo(character, browser)
       publish({ type: 'claims', campaign: campaignId })
+      settle(campaignId, library.floor(campaignId).lose(character))
     },
 
     /** The DM-pane conversation as `viewer`'s Player sees it. */
