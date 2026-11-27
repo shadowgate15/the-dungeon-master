@@ -4822,9 +4822,12 @@ function createFloor(db, now = Date.now) {
 		if (trimmed.length > 2e3) throw new DeclarationRefusedError(`Keep a Declaration under ${DECLARATION_MAX} characters`);
 		return trimmed;
 	}
-	function pending(id) {
+	/** `id` is on the open Floor and `player` sent it; another browser's can only be read. */
+	function pending(id, player) {
 		const floorId = openFloorId();
-		if (!(floorId && db.select({ id: declaration.id }).from(declaration).where(and(eq(declaration.id, id), eq(declaration.floorId, floorId))).get())) throw new DeclarationNotFoundError("Declaration not found on the open Floor");
+		const found = floorId && db.select({ player: declaration.player }).from(declaration).where(and(eq(declaration.id, id), eq(declaration.floorId, floorId))).get();
+		if (!found) throw new DeclarationNotFoundError("Declaration not found on the open Floor");
+		if (found.player !== player) throw new DeclarationRefusedError("That is another Player's Declaration");
 	}
 	/** `player`'s drafts a cut sent back to the composer, oldest first. */
 	function returned(player) {
@@ -4835,11 +4838,40 @@ function createFloor(db, now = Date.now) {
 			text: returnedDraft.text
 		}).from(returnedDraft).innerJoin(character, eq(character.id, returnedDraft.characterId)).where(eq(returnedDraft.player, player)).orderBy(asc(returnedDraft.createdAt), asc(sql`${returnedDraft}.rowid`)).all();
 	}
+	/** Who is at the table for `viewer`: each browser's in-Scene Characters, and the unclaimed. */
+	function table(viewer, done) {
+		const place = scenePlace(db);
+		const inPlay = db.select().from(character).all().filter((c) => canAct(c) && inScene(place, c));
+		const byBrowser = /* @__PURE__ */ new Map();
+		for (const c of inPlay) {
+			const owner = c.controllingPlayer;
+			if (owner === null) continue;
+			const seat = byBrowser.get(owner) ?? {
+				own: owner === viewer,
+				characters: [],
+				done: done.includes(owner)
+			};
+			seat.characters.push({
+				id: c.id,
+				name: c.name
+			});
+			byBrowser.set(owner, seat);
+		}
+		return {
+			browsers: [...byBrowser.values()],
+			unclaimed: inPlay.filter((c) => c.controllingPlayer === null).map((c) => ({
+				id: c.id,
+				name: c.name
+			}))
+		};
+	}
 	/** The open Floor (empty until something is sent), with `player`'s returned drafts. */
 	function current(player) {
 		const floorId = openFloorId();
+		const seats = table(player, floorId ? db.select().from(floor).where(eq(floor.id, floorId)).get().done : []);
 		if (!floorId) return {
 			declarations: [],
+			...seats,
 			returned: returned(player)
 		};
 		return {
@@ -4849,7 +4881,11 @@ function createFloor(db, now = Date.now) {
 				characterName: character.name,
 				player: declaration.player,
 				text: declaration.text
-			}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all(),
+			}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all().map((d) => ({
+				...d,
+				own: d.player === player
+			})),
+			...seats,
 			returned: returned(player)
 		};
 	}
@@ -4858,7 +4894,13 @@ function createFloor(db, now = Date.now) {
 		const done = db.select().from(floor).where(eq(floor.id, floorId)).get().done;
 		const table = playersAtTable();
 		if (table.length === 0 || !table.every((p) => done.includes(p))) return { closed: false };
-		const declarations = current(SOLO_PLAYER).declarations;
+		const declarations = db.select({
+			id: declaration.id,
+			character: declaration.characterId,
+			characterName: character.name,
+			player: declaration.player,
+			text: declaration.text
+		}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all();
 		db.update(floor).set({
 			state: "closed",
 			closedAt: at
@@ -4966,18 +5008,18 @@ function createFloor(db, now = Date.now) {
 				return closeIfReady(floorId, now());
 			});
 		},
-		/** Rewrites a Declaration still on the open Floor. */
-		edit(id, text) {
+		/** Rewrites a Declaration `player` sent that is still on the open Floor. */
+		edit(id, text, player) {
 			const clean = cleanText(text);
-			pending(id);
+			pending(id, player);
 			db.update(declaration).set({
 				text: clean,
 				updatedAt: now()
 			}).where(eq(declaration.id, id)).run();
 		},
-		/** Takes a Declaration back off the open Floor. */
-		withdraw(id) {
-			pending(id);
+		/** Takes a Declaration `player` sent back off the open Floor. */
+		withdraw(id, player) {
+			pending(id, player);
 			db.delete(declaration).where(eq(declaration.id, id)).run();
 		}
 	};
