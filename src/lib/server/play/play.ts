@@ -8,6 +8,7 @@ import type { Sessions } from '../bridge/sessions'
 import { CampaignNotFoundError, type CampaignLibrary } from '../campaign/library'
 import { campaignDice, type Dice } from '../dice'
 import type { DoneOutcome, Floor } from '../floor/floor'
+import { type PlayerLabel } from './labels'
 import { playSheets } from './sheets'
 import { callResultEvent, type CallResult } from './calls'
 
@@ -35,15 +36,23 @@ type Options = {
  * send order (`[d1 Wren · player] picks the lock`). An empty body hands the DM the initiative.
  * `withdrawn_call` names the open Call the Declarations withdrew.
  */
-export function floorEvent(closed: Extract<DoneOutcome, { closed: true }>): ChannelEvent {
+export function floorEvent(
+  closed: Extract<DoneOutcome, { closed: true }>,
+  label: PlayerLabel
+): ChannelEvent {
+  const declared = new Set(closed.declarations.map((d) => d.player))
+  const passed = closed.players.filter((p) => !declared.has(p)).map(label)
   return {
-    content: closed.declarations
-      .map((d, i) => `[d${i + 1} ${d.characterName} · ${d.player}] ${d.text}`)
-      .join('\n'),
+    content: [
+      ...closed.declarations.map(
+        (d, i) => `[d${i + 1} ${d.characterName} · ${label(d.player)}] ${d.text}`
+      ),
+      ...(passed.length ? [`passed: ${passed.join(', ')}`] : [])
+    ].join('\n'),
     meta: {
       kind: 'floor',
       floor_id: closed.floor,
-      players: closed.players.join(','),
+      players: closed.players.map(label).join(','),
       ...(closed.withdrawnCall ? { withdrawn_call: closed.withdrawnCall } : {})
     }
   }
@@ -77,14 +86,16 @@ export function createPlay({
 
   /** Tells the DM and the browsers what a Done (or a lost Character) did to the Floor. */
   function settle(campaignId: string, outcome: DoneOutcome): DoneOutcome {
-    if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome))
+    if (outcome.closed)
+      channels.send(folderOf(campaignId), floorEvent(outcome, library.labels(campaignId)))
     publish({ type: 'floor', campaign: campaignId })
     if (outcome.closed) publish({ type: 'timeline', campaign: campaignId })
     return outcome
   }
 
   function answered(campaignId: string, result: CallResult | null): { complete: boolean } {
-    if (result) channels.send(folderOf(campaignId), callResultEvent(result))
+    if (result)
+      channels.send(folderOf(campaignId), callResultEvent(result, library.labels(campaignId)))
     publish({ type: 'timeline', campaign: campaignId })
     return { complete: result !== null }
   }
@@ -145,7 +156,9 @@ export function createPlay({
      */
     spotlight(campaignId: string, character: string, player: string): void {
       const folder = atTable(campaignId)
-      const request = library.record(campaignId).spotlight(character, player)
+      const request = library
+        .record(campaignId)
+        .spotlight(character, library.labels(campaignId)(player))
       channels.send(folder, request)
     },
 
@@ -216,7 +229,10 @@ export function createPlay({
         throw new DmAwayError('The DM is away. Run dm in the Campaign folder to ask for help.')
       }
       const message = library.conversation(campaignId).add({ text, player })
-      channels.send(folder, { content: text, meta: { kind: 'conversation', player } })
+      const who = library.labels(campaignId)(player)
+      // Before Begin the DM reads the creation chat as a table, so each line names its sender.
+      const content = library.creation(campaignId).state === 'begun' ? text : `[${who}] ${text}`
+      channels.send(folder, { content, meta: { kind: 'conversation', player: who } })
       publish({ type: 'conversation', campaign: campaignId })
       return message
     },
@@ -234,7 +250,7 @@ export function createPlay({
       channels.send(folder, {
         content:
           'The Player pressed Begin. Hand the Seed and the Party to builder to create the World and the first Arc, then open play.',
-        meta: { kind: 'begin', player }
+        meta: { kind: 'begin', player: library.labels(campaignId)(player) }
       })
       publish({ type: 'seed', campaign: campaignId })
     },

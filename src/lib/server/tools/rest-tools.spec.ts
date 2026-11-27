@@ -144,8 +144,14 @@ describe('a short rest', () => {
     expect(sheet('Wren').hp.current).toBe(11)
     expect(sheet('Wren').hitDice).toEqual({ die: 10, total: 1, spent: 1 })
     expect(heard).toHaveLength(1)
-    expect(heard[0].meta).toEqual({ kind: 'call_result', call_id: id, players: 'player' })
-    expect(heard[0].content).toBe('[Wren · player] Hit Dice: spent 1 d10: 4 + 2 = 6 HP → 11/12 HP')
+    expect(heard[0].meta).toEqual({
+      kind: 'call_result',
+      call_id: id,
+      players: 'Host · Player of Wren & Ilyra'
+    })
+    expect(heard[0].content).toBe(
+      '[Wren · Host · Player of Wren & Ilyra] Hit Dice: spent 1 d10: 4 + 2 = 6 HP → 11/12 HP'
+    )
   })
 
   it('refuses to spend more Hit Dice than are left', () => {
@@ -156,7 +162,7 @@ describe('a short rest', () => {
     const part = timeline().call!.parts[0]
     expect(() => play.answer(campaignId, id, part.id, '2', SOLO_PLAYER)).toThrow(/0 to 1/)
     play.answer(campaignId, id, part.id, '0', SOLO_PLAYER)
-    expect(heard[0].content).toBe('[Wren · player] Hit Dice: spent none')
+    expect(heard[0].content).toBe('[Wren · Host · Player of Wren] Hit Dice: spent none')
     expect(sheet('Wren').hp.current).toBe(5)
   })
 

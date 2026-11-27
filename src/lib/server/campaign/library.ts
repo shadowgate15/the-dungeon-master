@@ -3,6 +3,7 @@ import path from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { Database } from '../db/connect'
 import { campaign } from '../db/schema'
+import { playerLabels, type PlayerLabel } from '../play/labels'
 import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
 import { journal } from '../knowledge/journal'
@@ -258,6 +259,11 @@ export function createCampaignLibrary({
         add: (line: { text: string; player: string }): ConversationMessage =>
           addConversationLine(db, { ...line, author: 'player' }, now())
       }
+    },
+
+    /** Names a browser as the DM hears it, by the Characters it Claims now. */
+    labels(id: string): PlayerLabel {
+      return playerLabels(database(find(id).folder))
     },
 
     /** The Campaign's Characters and Character drafts. */

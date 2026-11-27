@@ -39,7 +39,7 @@ it('a DM attaching opens a Session, and one play turn runs Floor to Narration wi
   dm.script({
     on: 'floor',
     run: async (event) => {
-      expect(event.content).toBe('[d1 Wren · player] I pick the lock.')
+      expect(event.content).toBe('[d1 Wren · Host · Player of Wren] I pick the lock.')
       expect((await dm!.call('narrate', { text: 'The lock clicks open.' })).isError).toBe(false)
     }
   })

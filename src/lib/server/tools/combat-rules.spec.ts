@@ -184,7 +184,9 @@ describe('a Death save', () => {
   it('succeeds on 10 or more and fails below, a d20 with no modifier', () => {
     deathSave(downedOnTheirTurn(), 10)
     expect(sheet('Wren').deathSaves).toEqual({ successes: 1, failures: 0, stable: false })
-    expect(heard[0].content).toContain('[Wren · player] Death save: d20 10 → success')
+    expect(heard[0].content).toContain(
+      '[Wren · Host · Player of Wren] Death save: d20 10 → success (1 success, 0 failures)'
+    )
 
     deathSave(ok('next_turn') && ok('next_turn'), 9)
     expect(sheet('Wren').deathSaves).toEqual({ successes: 1, failures: 1, stable: false })
@@ -372,7 +374,7 @@ describe('concentration', () => {
     load([20, 8])
     play.roll(campaignId, open.id, open.parts[0].id, SOLO_PLAYER)
     expect(heard[0].content).toContain(
-      '[Ash · player] Constitution save: d20 8 + 1 = 9 vs DC 10 → failure; concentration on detect-magic ends'
+      '[Ash · Host · Player of Ash] Constitution save: d20 8 + 1 = 9 vs DC 10 → failure; concentration on detect-magic ends'
     )
     expect(sheet('Ash').concentration).toBeNull()
   })
@@ -504,7 +506,7 @@ describe('a reaction', () => {
 
     expect(heard).toHaveLength(1)
     expect(heard[0].content).toBe(
-      `[Wren · player] Opportunity attack, taken: Crossbow, light attack on Grik (${grik}): d20 15 + 4 = 19 vs AC 15 → hit; damage 1d8+2: 5 + 2 = 7 piercing → Grik 0/7 HP (down); Grik dies`
+      `[Wren · Host · Player of Wren] Opportunity attack, taken: Crossbow, light attack on Grik (${grik}): d20 15 + 4 = 19 vs AC 15 → hit; damage 1d8+2: 5 + 2 = 7 piercing → Grik 0/7 HP (down); Grik dies`
     )
     expect(timeline().call).toBeNull()
   })
@@ -512,7 +514,7 @@ describe('a reaction', () => {
   it('passed, rolls nothing and the DM hears so', () => {
     const { open } = offered()
     play.answer(campaignId, open.id, open.parts[0].id, 'Pass', SOLO_PLAYER)
-    expect(heard[0].content).toBe('[Wren · player] Opportunity attack: passes')
+    expect(heard[0].content).toBe('[Wren · Host · Player of Wren] Opportunity attack: passes')
     expect(timeline().call).toBeNull()
   })
 
@@ -527,7 +529,7 @@ describe('a reaction', () => {
     const open = timeline().call!
     expect(open.parts[0].offer).toEqual(['Step in', 'Pass'])
     play.answer(campaignId, open.id, open.parts[0].id, 'Step in', SOLO_PLAYER)
-    expect(heard[0].content).toBe('[Wren · player] Shield ally: takes it (Step in)')
+    expect(heard[0].content).toBe('[Wren · Host · Player of Wren] Shield ally: takes it (Step in)')
   })
 
   it("spends the Character's reaction in a Combat", () => {
@@ -549,9 +551,9 @@ describe('a reaction', () => {
       play.answer(campaignId, open.id, open.parts[0].id, 'Take', SOLO_PLAYER)
       return heard[0].content
     }
-    expect(brace()).toBe('[Wren · player] Brace: takes it (Take)')
+    expect(brace()).toBe('[Wren · Host · Player of Wren] Brace: takes it (Take)')
     expect(brace()).toBe(
-      '[Wren · player] Brace: takes it (Take)\nWren has already used a reaction this turn (a reminder: go on if the fiction allows it)'
+      '[Wren · Host · Player of Wren] Brace: takes it (Take)\nWren has already used a reaction this turn (a reminder: go on if the fiction allows it)'
     )
   })
 

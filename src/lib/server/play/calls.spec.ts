@@ -114,13 +114,19 @@ describe('rolling a Call', () => {
     play.roll(campaignId, id, bram.id, SOLO_PLAYER)
 
     expect(heard).toHaveLength(1)
-    expect(heard[0].meta).toEqual({ kind: 'call_result', call_id: id, players: 'player' })
+    expect(heard[0].meta).toEqual({
+      kind: 'call_result',
+      call_id: id,
+      players: 'Host · Player of Wren & Bram'
+    })
     const lines = heard[0].content.split('\n')
     expect(lines).toHaveLength(2)
     expect(lines[0]).toMatch(
-      /^\[Wren · player\] Sleight of Hand check: d20 \d+ [+-] \d+ = \d+ vs DC 20 \(hard\) → (success|failure)$/
+      /^\[Wren · Host · Player of Wren & Bram\] Sleight of Hand check: d20 \d+ [+-] \d+ = \d+ vs DC 20 \(hard\) → (success|failure)$/
     )
-    expect(lines[1]).toMatch(/^\[Bram · player\] Perception check: .* vs DC 10 \(easy\)/)
+    expect(lines[1]).toMatch(
+      /^\[Bram · Host · Player of Wren & Bram\] Perception check: .* vs DC 10 \(easy\)/
+    )
     expect(play.timeline(campaignId, SOLO_PLAYER).awaitingSince).toEqual(expect.any(Number))
     expect(openCall()).toBeNull()
   })
@@ -212,8 +218,8 @@ describe('a question Call', () => {
 
     expect(heard).toEqual([
       {
-        content: '[player] Left',
-        meta: { kind: 'call_result', call_id: open.id, players: 'player' }
+        content: '[Host · Player of Wren] Left',
+        meta: { kind: 'call_result', call_id: open.id, players: 'Host · Player of Wren' }
       }
     ])
     expect(play.timeline(campaignId, SOLO_PLAYER).entries.at(-1)).toEqual({
@@ -233,7 +239,7 @@ describe('a question Call', () => {
 
     play.answer(campaignId, open.id, open.parts[0].id, 'A shadow', SOLO_PLAYER)
 
-    expect(heard[0].content).toBe('[player] A shadow')
+    expect(heard[0].content).toBe('[Host · Player of Wren] A shadow')
   })
 })
 

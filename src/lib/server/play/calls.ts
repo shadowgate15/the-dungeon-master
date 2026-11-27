@@ -1,3 +1,4 @@
+import type { PlayerLabel } from './labels'
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { canAct } from '#lib/character/acting.ts'
@@ -504,33 +505,33 @@ export type CallResult = { call: string; players: string[]; parts: Answered[]; a
 export const ROLLED_BY_CODE = '(unclaimed: rolled by code)'
 
 /** Who rolled a part, as the DM hears it: the Character and its Player, or just the Character when code rolled it. */
-const tag = (p: Answered) =>
-  p.rolledByCode ? `[${p.characterName}]` : `[${p.characterName} · ${p.player}]`
+const tag = (p: Answered, label: PlayerLabel) =>
+  p.rolledByCode ? `[${p.characterName}]` : `[${p.characterName} · ${label(p.player)}]`
 
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
-function resultLine(p: Answered): string {
-  const line = describePart(p)
+function resultLine(p: Answered, label: PlayerLabel): string {
+  const line = describePart(p, label)
   return p.rolledByCode ? `${line} ${ROLLED_BY_CODE}` : line
 }
 
-function describePart(p: Answered): string {
-  if (p.kind === 'reaction') return reactionLine(p)
-  if (p.hitDice) return `${tag(p)} Hit Dice: ${hitDiceText(p.hitDice)}`
-  if (p.sequence) return `${tag(p)} ${sequenceText(p.sequence, p.mode)}`
-  if (p.result === null) return `[${p.player}] ${p.answer}`
+function describePart(p: Answered, label: PlayerLabel): string {
+  if (p.kind === 'reaction') return reactionLine(p, label)
+  if (p.hitDice) return `${tag(p, label)} Hit Dice: ${hitDiceText(p.hitDice)}`
+  if (p.sequence) return `${tag(p, label)} ${sequenceText(p.sequence, p.mode)}`
+  if (p.result === null) return `[${label(p.player)}] ${p.answer}`
   const r = p.result
   const dice = r.dice.length > 1 ? `${r.dice.join('/')} (${p.mode}) kept ${r.kept}` : `${r.kept}`
   const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`
   if (p.kind === 'death_save') {
-    return `${tag(p)} Death save: d20 ${r.kept} → ${p.answer}`
+    return `${tag(p, label)} Death save: d20 ${r.kept} → ${p.answer}`
   }
   if (p.kind === 'concentration') {
-    return `${tag(p)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? 'success' : 'failure'}; ${p.answer}`
+    return `${tag(p, label)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? 'success' : 'failure'}; ${p.answer}`
   }
   if (p.kind === 'initiative') {
-    return `${tag(p)} Initiative: d20 ${dice} ${modifier} = ${r.total}`
+    return `${tag(p, label)} Initiative: d20 ${dice} ${modifier} = ${r.total}`
   }
-  return `${tag(p)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? 'success' : 'failure'}`
+  return `${tag(p, label)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? 'success' : 'failure'}`
 }
 
 /** The Player's choice on a reaction Call that passes it. */
@@ -540,8 +541,8 @@ export const PASS = 'Pass'
  * A reaction as the DM hears it: passed, taken (with its attack's rolls), and any reminder that
  * the reaction was already spent. The answer is the choice, then `; ` and the reminder.
  */
-function reactionLine(p: Answered): string {
-  const who = `${tag(p)} ${p.reaction}`
+function reactionLine(p: Answered, label: PlayerLabel): string {
+  const who = `${tag(p, label)} ${p.reaction}`
   if (p.answer === PASS) return `${who}: passes`
   const [choice, reminder] = (p.answer ?? '').split('; ')
   const taken = p.sequence
@@ -560,10 +561,17 @@ function hitDiceText(spend: HitDiceSpend): string {
 }
 
 /** The `call_result` channel event: one body line per part, in order. */
-export function callResultEvent(result: CallResult): ChannelEvent {
+export function callResultEvent(
+  result: CallResult,
+  label: PlayerLabel = (browser) => browser
+): ChannelEvent {
   return {
-    content: [...result.parts.map(resultLine), ...(result.after ?? [])].join('\n'),
-    meta: { kind: 'call_result', call_id: result.call, players: result.players.join(',') }
+    content: [...result.parts.map((p) => resultLine(p, label)), ...(result.after ?? [])].join('\n'),
+    meta: {
+      kind: 'call_result',
+      call_id: result.call,
+      players: result.players.map(label).join(',')
+    }
   }
 }
 

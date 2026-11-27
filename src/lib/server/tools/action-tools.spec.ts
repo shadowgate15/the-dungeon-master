@@ -111,9 +111,13 @@ describe('a Character attack', () => {
     play.roll(campaignId, id, part.id, SOLO_PLAYER)
 
     expect(heard).toHaveLength(1)
-    expect(heard[0].meta).toEqual({ kind: 'call_result', call_id: id, players: 'player' })
+    expect(heard[0].meta).toEqual({
+      kind: 'call_result',
+      call_id: id,
+      players: 'Host · Player of Wren'
+    })
     expect(heard[0].content).toBe(
-      `[Wren · player] Crossbow, light attack on Grik (${grik}): d20 15 + 4 = 19 vs AC 15 → hit; damage 1d8+2: 5 + 2 = 7 piercing → Grik 0/7 HP (down); Grik dies`
+      `[Wren · Host · Player of Wren] Crossbow, light attack on Grik (${grik}): d20 15 + 4 = 19 vs AC 15 → hit; damage 1d8+2: 5 + 2 = 7 piercing → Grik 0/7 HP (down); Grik dies`
     )
     expect(timeline().call).toBeNull()
     expect(timeline().awaitingSince).toEqual(expect.any(Number))
@@ -353,7 +357,7 @@ describe('cast', () => {
     play.roll(campaignId, id, part.id, SOLO_PLAYER)
 
     expect(heard[0].content).toBe(
-      `[Ilyra · player] Fire Bolt attack on Grik (${grik}): d20 12 + 5 = 17 vs AC 15 → hit; damage 1d10: 6 = 6 fire → Grik 1/7 HP (near death)`
+      `[Ilyra · Host · Player of Ilyra] Fire Bolt attack on Grik (${grik}): d20 12 + 5 = 17 vs AC 15 → hit; damage 1d10: 6 = 6 fire → Grik 1/7 HP (near death)`
     )
     expect(slots()).toEqual([{ level: 1, max: 2, spent: 0 }])
   })
@@ -414,7 +418,7 @@ describe('force_save', () => {
     play.roll(campaignId, forced.pending_call, part.id, SOLO_PLAYER)
 
     expect(heard[0].content).toBe(
-      '[Wren · player] Dexterity save (char:wren): d20 5 + 2 = 7 vs DC 13 → failure; takes 6 fire, is prone → Wren 6/12 HP (bloodied)'
+      '[Wren · Host · Player of Wren] Dexterity save (char:wren): d20 5 + 2 = 7 vs DC 13 → failure; takes 6 fire, is prone → Wren 6/12 HP (bloodied)'
     )
     const wren = playSheets(library.party(campaignId))[0]
     expect(wren.hp).toMatchObject({ current: 6 })
