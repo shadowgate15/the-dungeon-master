@@ -158,6 +158,23 @@ export function createPlay({
       return playSheets(library.party(campaignId))
     },
 
+    /** Every Party Character with its Claim as `viewer`'s browser sees it (never by whom). */
+    claims(campaignId: string, viewer: string) {
+      return library.party(campaignId).claims(viewer)
+    },
+
+    /** The browser Claims a Character nobody holds; refused for a taken one, the Host's browser included. */
+    claim(campaignId: string, character: string, browser: string): void {
+      library.party(campaignId).claim(character, browser)
+      publish({ type: 'claims', campaign: campaignId })
+    },
+
+    /** The browser gives up a Claim it holds. */
+    letGo(campaignId: string, character: string, browser: string): void {
+      library.party(campaignId).letGo(character, browser)
+      publish({ type: 'claims', campaign: campaignId })
+    },
+
     /** The DM-pane conversation as `viewer`'s Player sees it. */
     conversation(campaignId: string, _viewer: string) {
       return library.conversation(campaignId).list()

@@ -19,9 +19,14 @@ export type LiveMessage =
   | { type: 'conversation'; campaign: string }
   /** A permission prompt from the DM's session appeared or cleared. */
   | { type: 'permission'; campaign: string }
+  /** A Claim was made or given up: content-free, every browser refetches what it sees per Player. */
+  | { type: 'claims'; campaign: string }
 
 /** The query listing the ids of Campaigns with a DM at the table. */
 export const SESSIONS_QUERY_KEY = ['sessions'] as const
+
+/** The query holding the Party's Claims as this browser sees them: yours, taken or free. */
+export const claimsQueryKey = (campaign: string) => ['claims', campaign] as const
 
 /** The query holding a Campaign's open Floor. */
 export const floorQueryKey = (campaign: string) => ['floor', campaign] as const
@@ -66,6 +71,16 @@ export function staleQueries(message: LiveMessage): QueryKey[] {
         timelineQueryKey(message.campaign),
         sceneQueryKey(message.campaign),
         floorQueryKey(message.campaign),
+        journalQueryKey(message.campaign),
+        sessionHistoryQueryKey(message.campaign),
+        sheetsQueryKey(message.campaign)
+      ]
+    case 'claims':
+      return [
+        claimsQueryKey(message.campaign),
+        floorQueryKey(message.campaign),
+        timelineQueryKey(message.campaign),
+        sceneQueryKey(message.campaign),
         journalQueryKey(message.campaign),
         sessionHistoryQueryKey(message.campaign),
         sheetsQueryKey(message.campaign)

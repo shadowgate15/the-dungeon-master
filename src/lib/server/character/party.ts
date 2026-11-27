@@ -1,4 +1,4 @@
-import { asc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { changedDraftFields, emptyDraft, type CharacterDraft } from '#lib/character/draft.ts'
 import { detailToDraft } from '#lib/character/edit.ts'
 import { BACKSTORY_MAX, SOLO_PLAYER, TEXT_MAX, type CharacterStatus } from '#lib/character/enums.ts'
@@ -47,6 +47,17 @@ const DETAIL_LIMITS = {
 const listed = (words: string[]) =>
   words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`
 
+/** A Claim the browser may not make or give up: the Character is taken, or not the browser's. */
+export class ClaimRefusedError extends Error {}
+
+/** One Party Character as a browser sees its Claim: never by whom, only whether it is its own. */
+export type ClaimRow = {
+  kind: 'character' | 'draft'
+  id: string
+  name: string
+  claim: 'yours' | 'taken' | 'free'
+}
+
 /** The Campaign has no draft with this id. */
 export class DraftNotFoundError extends Error {}
 
@@ -65,7 +76,8 @@ export type PartyMember =
 /** A stored Character draft. */
 export type StoredDraft = {
   id: string
-  controllingPlayer: string
+  /** The browser that Claims the draft; null while it is unclaimed. */
+  controllingPlayer: string | null
   draft: CharacterDraft
   step: StepId
   /** Bumped by every write that changes the draft; the DM's writes must pass it. */
@@ -168,7 +180,62 @@ export function createParty(
     return mapped
   }
 
+  const claimOf = (holder: string | null, browser: string): ClaimRow['claim'] =>
+    holder === null ? 'free' : holder === browser ? 'yours' : 'taken'
+
+  /** The Character or draft with this id, as the table to write its Claim to. */
+  function claimable(id: string) {
+    const saved = db.select().from(character).where(eq(character.id, id)).get()
+    if (saved) return { table: character, holder: saved.controllingPlayer, name: saved.name }
+    const draft = db.select().from(characterDraft).where(eq(characterDraft.id, id)).get()
+    if (draft) {
+      const name = (draft.data as CharacterDraft).name.trim()
+      return { table: characterDraft, holder: draft.controllingPlayer, name }
+    }
+    throw new CharacterNotFoundError('Character not found')
+  }
+
   return {
+    /**
+     * Every Party Character with its Claim as `browser` sees it: yours, taken (never by whom) or
+     * free. Saved Characters oldest first.
+     */
+    claims(browser: string): ClaimRow[] {
+      return characters.list().map((c) => ({
+        kind: 'character' as const,
+        id: c.id,
+        name: c.name,
+        claim: claimOf(c.controllingPlayer, browser)
+      }))
+    },
+
+    /** Whether `browser` holds a Claim on any Party Character. */
+    holdsClaim(browser: string): boolean {
+      return this.claims(browser).some((row) => row.claim === 'yours')
+    },
+
+    /** The browser Claims a Character nobody holds. A taken Character is refused for every browser. */
+    claim(id: string, browser: string): void {
+      const target = claimable(id)
+      if (target.holder !== null) {
+        throw new ClaimRefusedError(`${target.name} is taken`)
+      }
+      db.update(target.table)
+        .set({ controllingPlayer: browser })
+        .where(and(eq(target.table.id, id), isNull(target.table.controllingPlayer)))
+        .run()
+    },
+
+    /** The browser gives up a Claim it holds. */
+    letGo(id: string, browser: string): void {
+      const target = claimable(id)
+      if (target.holder !== browser) throw new ClaimRefusedError(`${target.name} is not yours`)
+      db.update(target.table)
+        .set({ controllingPlayer: null })
+        .where(and(eq(target.table.id, id), eq(target.table.controllingPlayer, browser)))
+        .run()
+    },
+
     /** Saved Characters oldest first, then drafts oldest first. */
     list(): PartyMember[] {
       const saved = characters.list().map((c): PartyMember => ({

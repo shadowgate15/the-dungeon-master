@@ -564,7 +564,7 @@ export function createCharacterService(
      * Validates, then inserts the Character and all its child rows atomically: level 1, alive,
      * controlled by `player` (the solo Player by default), with play state at its defaults.
      */
-    create(input: CharacterInput, { player = SOLO_PLAYER }: { player?: string } = {}): Character {
+    create(input: CharacterInput, { player = SOLO_PLAYER }: { player?: string | null } = {}): Character {
       const p = prepare(input)
       const owner = db.select({ id: campaign.id }).from(campaign).get()
       if (!owner) throw new Error('This database holds no Campaign')

@@ -96,7 +96,8 @@ export function createFloor(db: Database, now: () => number = Date.now) {
       .from(character)
       .all()
       .filter((c) => canAct(c) && inScene(place, c))
-    return [...new Set(actors.map((c) => c.controllingPlayer))]
+    // An unclaimed Character sits out.
+    return [...new Set(actors.map((c) => c.controllingPlayer).filter((p) => p !== null))]
   }
 
   function cleanText(text: unknown): string {
