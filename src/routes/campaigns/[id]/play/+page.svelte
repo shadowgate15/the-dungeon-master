@@ -90,9 +90,15 @@
     })
   }
 
-  // The selected sheet tab is the acting Character: the first in the Scene who can act, until the
-  // Player picks (or a Combat turn locks it).
-  let picked = $state<string | null>(null)
+  // Viewing is separate from acting: the open sheet tab is the viewed Character. The composer acts
+  // as the viewed Character when they're in the Scene, else the last in-Scene pick, else the first
+  // in the Scene who can act (a Combat turn locks it).
+  let viewed = $state<string | null>(null)
+  let lastInScene = $state<string | null>(null)
+  function view(id: string) {
+    viewed = id
+    if (inScene.has(id)) lastInScene = id
+  }
   const inScene = $derived(new Set(scene.data.present.map((c) => c.id)))
   // A tab for a Character elsewhere shows where they are, by Place name.
   const sheets = $derived(
@@ -103,7 +109,11 @@
   )
   const actors = $derived(sheets.filter((s) => s.canAct && inScene.has(s.id)))
   // In a Combat the composer is locked to whoever's turn it is, so picks wait.
-  const acting = $derived(actingCharacter(actors, picked, scene.data.combat))
+  const acting = $derived(actingCharacter(actors, viewed, scene.data.combat, lastInScene))
+  // The sheets are this browser's Claimed Characters, so only those show as elsewhere.
+  const mine = $derived(new Set(party.data.map((s) => s.id)))
+  const elsewhere = $derived(scene.data.elsewhere.filter((c) => mine.has(c.id)))
+  const waiting = $derived(seated && actors.length === 0 && elsewhere.length > 0)
   const turn = $derived(turnOf(scene.data.combat))
   const archived = $derived(data.campaign.status === 'archived')
   const attached = $derived(sessions.data.includes(data.campaign.id))
@@ -162,8 +172,8 @@
   >
     <CharacterSheet
       {sheets}
-      acting={acting?.id ?? null}
-      onselect={(id) => (picked = id)}
+      acting={viewed ?? acting?.id ?? null}
+      onselect={view}
       onlevelup={archived
         ? undefined
         : (id, picks) => attempt(() => levelUp(data.campaign.id, id, picks))}
@@ -216,7 +226,8 @@
           ondone={done}
           onedit={(id, text) => attempt(() => actions.edit(id, text))}
           onwithdraw={(id) => attempt(() => actions.withdraw(id))}
-          elsewhere={scene.data.elsewhere}
+          {elsewhere}
+          {waiting}
           oncut={(id) => attempt(() => actions.cut(id))}
           returned={seated ? floor.data.returned : []}
           onreturned={(ids) => attempt(() => actions.clearReturned(ids))}

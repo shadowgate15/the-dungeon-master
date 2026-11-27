@@ -43,6 +43,17 @@ describe('CharacterSheet', () => {
     await expect.element(page.getByRole('tab', { name: /Bram/ })).toHaveTextContent('the cellar')
   })
 
+  it('opens the tab of a Character elsewhere, labelled with their Place', async () => {
+    let selected = ''
+    render(CharacterSheet, { sheets, acting: 'wren', onselect: (id: string) => (selected = id) })
+
+    const tab = page.getByRole('tab', { name: /Bram/ })
+    await expect.element(tab).toBeEnabled()
+    await tab.click()
+
+    expect(selected).toBe('bram')
+  })
+
   it('only lets Characters who can act be selected', async () => {
     render(CharacterSheet, { sheets, acting: 'wren' })
 

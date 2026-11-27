@@ -251,4 +251,36 @@ describe('FloorComposer with other browsers', () => {
       .element(tray.getByRole('button', { name: /Withdraw Bram/ }))
       .not.toBeInTheDocument()
   })
+
+  it('replaces the composer with a waiting line when none of your Characters is in the Scene', async () => {
+    const oncut = vi.fn()
+    render(FloorComposer, {
+      acting: null,
+      waiting: true,
+      declarations: [],
+      elsewhere: [{ id: 'c-kael', name: 'Kael', whereabouts: 'the cellar' }],
+      oncut,
+      ...handlers()
+    })
+
+    await expect.element(page.getByText('Kael is in the cellar')).toBeVisible()
+    await expect.element(page.getByRole('textbox')).not.toBeInTheDocument()
+    await page.getByRole('button', { name: 'Cut to Kael' }).click()
+    expect(oncut).toHaveBeenCalledWith('c-kael')
+  })
+
+  it("still shows others' open Declarations read-only in the waiting state", async () => {
+    render(FloorComposer, {
+      acting: null,
+      waiting: true,
+      declarations: [{ ...declarations[0], own: false }],
+      elsewhere: [{ id: 'c-kael', name: 'Kael', whereabouts: 'the cellar' }],
+      ...handlers()
+    })
+
+    await expect
+      .element(page.getByRole('list', { name: 'Pending Declarations' }))
+      .toHaveTextContent('I keep my back')
+    await expect.element(page.getByRole('button', { name: /^edit/ })).not.toBeInTheDocument()
+  })
 })
