@@ -142,12 +142,13 @@ export function createToolHost({
       const {
         result,
         skill,
+        after,
         event: logged
       } = tool.run({ ...context, db: tx, stamp: { ...current, eventId } }, parsed.data)
       logEvent(tx, { tool: tool.name, ...logged }, { stamp: current, at, id: eventId })
       const line = activityLine(tool, parsed.data, result, logged.dmOnly ?? false)
       if (line) logActivity(tx, line, { at, afterEvent: eventId })
-      return { result: withSkill(result, skill), changed: timelineChanged }
+      return { result: withSkill({ ...result, ...after?.() }, skill), changed: timelineChanged }
     })
   }
 

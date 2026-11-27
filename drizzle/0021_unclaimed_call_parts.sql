@@ -1,0 +1,1 @@
+ALTER TABLE `call_part` ADD `rolled_by_code` integer DEFAULT false NOT NULL;

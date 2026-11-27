@@ -173,6 +173,9 @@ export function createPlay({
     letGo(campaignId: string, character: string, browser: string): void {
       library.party(campaignId).letGo(character, browser)
       publish({ type: 'claims', campaign: campaignId })
+      // Letting go may leave an unclaimed part as the last one outstanding: code rolls it.
+      const result = library.calls(campaignId).settleUnclaimed(dice(campaignId))
+      if (result) answered(campaignId, result)
     },
 
     /** The DM-pane conversation as `viewer`'s Player sees it. */
