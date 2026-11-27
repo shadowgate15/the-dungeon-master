@@ -128,7 +128,7 @@ The Player's act that closes the open Session. The DM narrates a closing moment,
 _Avoid_: Quit, save, end sitting
 
 **Session summary**:
-A short, past-tense account of what the Characters did and learned in one Session, plus its **open threads**: the unresolved matters the Characters know about. The DM writes it as the Session closes. It holds only what its Audience knows, so it can be shown to their Players, and it is read-only to them. A Session played together has one; a Session in which the Party was split has one per group, which together reach every Character that took part. A Session in which nothing was narrated has none.
+A short, past-tense account of what the Characters did and learned in one Session, plus its **open threads**: the unresolved matters the Characters know about. The DM writes it as the Session closes. It reaches the whole Party, leaves out what was passed to only some Characters, and is read-only to the Players. A Session has one, or none if nothing was narrated.
 _Avoid_: Rolling summary, log, notes, previously
 
 **Scene**:
@@ -168,11 +168,11 @@ The prose the DM sends to the Players: description, outcome, or an NPC speaking 
 _Avoid_: Reply, response, output, message
 
 **Audience**:
-The Characters a Narration, Declaration, Call, Session summary or other entry of play reaches. By default it is the Characters in the Scene when the entry is written, and it never changes afterwards. A Player sees an entry when its Audience includes a Character they have Claimed.
+The Characters a Narration, Declaration, Call, Session summary or other entry of play reaches. By default it is the Party when the entry is written, and it never changes afterwards. A Narration the DM narrows to some Characters is a passed note. A Player sees an entry when its Audience includes a Character they have Claimed.
 _Avoid_: Recipients, viewers, visibility, channel
 
 **Recap**:
-The Narration that opens a Session of a begun Campaign: a few sentences, written fresh in the DM's voice from recent Session summaries, that recall where things stand and hand the floor back to the Players. With the Party split, each group gets its own. It moves no time and answers no Declaration. The first Session after Begin has none.
+The Narration that opens a Session of a begun Campaign: a few sentences, written fresh in the DM's voice from recent Session summaries, that recall where things stand and hand the floor back to the Players. It moves no time and answers no Declaration. The first Session after Begin has none.
 _Avoid_: Previously, summary, intro
 
 **Event log**:
