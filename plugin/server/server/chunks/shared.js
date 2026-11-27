@@ -1,4 +1,4 @@
-// node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/exports/internal/shared.js
+// ../../../node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/exports/internal/shared.js
 /** @import { StandardSchemaV1 } from '@standard-schema/spec' */
 var HttpError = class {
 	/**

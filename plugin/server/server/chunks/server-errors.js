@@ -1,4 +1,4 @@
-// node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/messages/internal/server.js
+// ../../../node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/messages/internal/server.js
 /**
 * @typedef {{ cause?: unknown; stackless?: boolean }} ServerThrowOptions
 */
@@ -30,7 +30,7 @@ function capture_error(fn) {
 		return error;
 	}
 }
-// node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/messages/server-errors.js
+// ../../../node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/messages/server-errors.js
 /** @import { ServerThrowOptions } from './internal/server.js' */
 /**
 * Data returned from action inside `%id%` is not serializable: %message%

@@ -1,5 +1,5 @@
 import { m as env_invalid } from "./server-errors.js";
-// node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/exports/env/index.js
+// ../../../node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/exports/env/index.js
 /** @import { StandardSchemaV1 } from '@standard-schema/spec' */
 /** @import { DefinedEnvVars, EnvVarConfig } from '@sveltejs/kit/env' */
 /**
@@ -84,7 +84,7 @@ var variables = defineEnvVars({
 		schema: optional
 	}
 });
-// node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/utils/format.js
+// ../../../node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/utils/format.js
 /**
 * Joins a list as `a`, `a or b` or `a, b or c`, for use in diagnostics
 * @param {string[]} items
@@ -99,7 +99,7 @@ function join_or(items) {
 function bullet_list(items) {
 	return items.map((item) => `  - ${item}`).join("\n");
 }
-// node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/exports/internal/env.js
+// ../../../node_modules/.pnpm/@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_svelte@5.57.3_@typescript-eslint_8cf52fe09df2de537dd906a98b5e1516/node_modules/@sveltejs/kit/src/exports/internal/env.js
 /** @import { StandardSchemaV1 } from '@standard-schema/spec' */
 /** @import { EnvVarConfig } from '@sveltejs/kit/env' */
 var MISSING = { message: `Value is missing. If it is optional, add a validator declaring it as such.` };
