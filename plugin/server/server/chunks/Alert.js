@@ -1,5 +1,5 @@
 import { o as derived, r as attributes, y as clsx } from "./server2.js";
-import { n as STATUS_CLASSES } from "./status.js";
+import { r as STATUS_CLASSES } from "./Button.js";
 // src/lib/ui/Alert.svelte
 function Alert($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {

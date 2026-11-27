@@ -8,7 +8,7 @@ import { t as Link } from "../../../../../chunks/Link.js";
 import "../../../../../chunks/index-server.js";
 import { n as beforeNavigate, r as goto } from "../../../../../chunks/navigation.js";
 import { t as Alert } from "../../../../../chunks/Alert.js";
-import { i as Button } from "../../../../../chunks/status.js";
+import { t as Button } from "../../../../../chunks/Button.js";
 import { t as Dialog } from "../../../../../chunks/Dialog.js";
 import { s as ABILITY_KEYS } from "../../../../../chunks/schema.js";
 import { A as rollAbilityScores, C as POINT_BUY, D as methodPatch, E as availableValues, F as equipmentGroups, I as fixedEquipment, L as ownedEquipment, M as rollTotals, N as categoryItems, O as pointCost, R as resolveFeatures, S as ABILITY_LABELS, _ as computeSteps, a as cappedScore, d as reconcile, f as resolverDraft, g as STEPS, h as spellsView, i as tryDraftToCharacterInput, j as rollTotal, k as pointsSpent, m as spellPickFlags, o as deriveStats, r as draftToSummaryData, s as LIMITS, t as buildSummary, u as emptyDraft, v as groupIssues, w as STANDARD_ARRAY, x as skillsStepGroups, y as groupLabel } from "../../../../../chunks/summary.js";
@@ -1778,15 +1778,18 @@ function _page($$renderer, $$props) {
 				disabled: archived()
 			},
 			children: ($$renderer) => {
-				Link($$renderer, {
-					href: resolve("/campaigns"),
-					class: "text-sm",
-					children: ($$renderer) => {
-						$$renderer.push(`<!---->All Campaigns`);
-					},
-					$$slots: { default: true }
-				});
-				$$renderer.push(`<!----> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
+				if (data.isHost) {
+					$$renderer.push("<!--[0-->");
+					Link($$renderer, {
+						href: resolve("/campaigns"),
+						class: "text-sm",
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->All Campaigns`);
+						},
+						$$slots: { default: true }
+					});
+				} else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
 				if (data.campaign.status !== "missing") {
 					$$renderer.push("<!--[0-->");
 					DmBadge($$renderer, { attached: attached() });

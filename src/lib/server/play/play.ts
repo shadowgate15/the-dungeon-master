@@ -168,6 +168,12 @@ export function createPlay({
       publish({ type: 'claims', campaign: campaignId })
     },
 
+    /** The Host's browser frees a Character another browser holds; refused for any other browser. */
+    release(campaignId: string, character: string, browser: string): void {
+      library.party(campaignId).release(character, browser)
+      publish({ type: 'claims', campaign: campaignId })
+    },
+
     /** The browser gives up a Claim it holds. */
     letGo(campaignId: string, character: string, browser: string): void {
       library.party(campaignId).letGo(character, browser)

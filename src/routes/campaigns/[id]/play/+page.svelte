@@ -144,9 +144,11 @@
       class="ml-auto text-sm">Journal and Session history</Link
     >
     <Button size="sm" variant="secondary" onclick={() => (seatOpen = true)}>Your Characters</Button>
-    <Button size="sm" variant="secondary" disabled={!attached || archived || ending} onclick={end}
-      >{ending ? 'Ending the session…' : 'End Session'}</Button
-    >
+    {#if data.isHost}
+      <Button size="sm" variant="secondary" disabled={!attached || archived || ending} onclick={end}
+        >{ending ? 'Ending the session…' : 'End Session'}</Button
+      >
+    {/if}
   </header>
 
   <main
@@ -185,7 +187,7 @@
         />
       {/if}
       {#if problem}<Alert variant="danger">{problem}</Alert>{/if}
-      {#if permission.data}
+      {#if data.isHost && permission.data}
         {@const request = permission.data}
         <PermissionCard
           {request}
@@ -209,6 +211,7 @@
           returned={seated ? floor.data.returned : []}
           onreturned={(ids) => attempt(() => actions.clearReturned(ids))}
           away={attached ? null : { folder: data.campaign.path }}
+          isHost={data.isHost}
         />
       {/if}
     </section>
@@ -229,5 +232,6 @@
     {problem}
     onclaim={(id) => attempt(() => seats.claim(id))}
     onletgo={(id) => attempt(() => seats.letGo(id))}
+    onrelease={(id) => attempt(() => seats.release(id))}
   />
 </div>

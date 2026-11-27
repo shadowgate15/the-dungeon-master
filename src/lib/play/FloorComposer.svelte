@@ -26,6 +26,7 @@
     returned = [],
     onreturned = () => {},
     away = null,
+    isHost = true,
     turn = null
   }: {
     /** The acting Character's name, or null when no Character can act. */
@@ -49,6 +50,8 @@
     onreturned?: (ids: string[]) => void
     /** No DM is at the table: the Campaign folder to run `dm` in. */
     away?: { folder: string } | null
+    /** Whether this browser is the Host's: only the Host sees the folder and relaunch command. */
+    isHost?: boolean
     /** In a Combat, whose turn it is: the box is locked to that Character, or blocked for a foe. */
     turn?: string | null
   } = $props()
@@ -195,11 +198,15 @@
       class="flex flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1 text-sm"
     >
       <span class="font-medium">The DM is away.</span>
-      <span class="text-muted">Start a Session to play on; your drafts wait here.</span>
-      <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs"
-        >{relaunch}</code
-      >
-      <Button size="sm" variant="secondary" onclick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
+      {#if isHost}
+        <span class="text-muted">Start a Session to play on; your drafts wait here.</span>
+        <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs"
+          >{relaunch}</code
+        >
+        <Button size="sm" variant="secondary" onclick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
+      {:else}
+        <span class="text-muted">Waiting for the Host to start the DM; your drafts wait here.</span>
+      {/if}
     </div>
   {:else}
     <div class="flex items-center justify-end gap-2">

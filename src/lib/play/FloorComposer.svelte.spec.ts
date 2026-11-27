@@ -183,6 +183,21 @@ describe('FloorComposer for a split Party', () => {
     expect(h.ondone).not.toHaveBeenCalled()
   })
 
+  it('tells a remote browser to wait for the Host, with no folder path or copy button', async () => {
+    render(FloorComposer, {
+      acting: 'Wren',
+      declarations: [],
+      away: { folder: '/home/me/ember-road' },
+      isHost: false,
+      ...handlers()
+    })
+
+    const bar = page.getByRole('status', { name: 'DM away' })
+    await expect.element(bar).toHaveTextContent('Waiting for the Host to start the DM')
+    await expect.element(bar).not.toHaveTextContent('/home/me/ember-road')
+    await expect.element(page.getByRole('button', { name: 'Copy' })).not.toBeInTheDocument()
+  })
+
   it('copies the command that brings the DM back', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
