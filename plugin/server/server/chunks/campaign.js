@@ -114,7 +114,7 @@ function createLiveUpdates({ sessions }) {
 		}
 	};
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/functions/aggregate.js
+// ../implement-spec-383/node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/functions/aggregate.js
 function count(expression) {
 	return sql`count(${expression || sql.raw("*")})`.mapWith(Number);
 }
@@ -139,6 +139,20 @@ function playerLabels(db) {
 		if (browser === "player") return named ? `${HOST} · ${named}` : HOST;
 		return named ?? "a Player";
 	};
+}
+/**
+* The table as the DM reads it: each Player by label (the Host first, then the rest in Party order),
+* then the Characters nobody has Claimed. With no Claims it says so.
+*/
+function whoIsAtTheTable(db) {
+	const rows = db.select({
+		name: character.name,
+		browser: character.controllingPlayer
+	}).from(character).where(ne(character.status, "departed")).orderBy(asc(character.createdAt), asc(character.name)).all();
+	const label = playerLabels(db);
+	const browsers = [...new Set(rows.flatMap((r) => r.browser ? [r.browser] : []))].sort((a, b) => Number(b === SOLO_PLAYER) - Number(a === SOLO_PLAYER));
+	const free = rows.filter((r) => !r.browser).map((r) => r.name);
+	return `Who's at the table: ${[browsers.length ? browsers.map(label).join("; ") : "no one has Claimed yet", ...free.length ? [`unclaimed: ${free.join(", ")}`] : []].join("; ")}.`;
 }
 // src/lib/character/edit.ts
 /**
@@ -2959,6 +2973,15 @@ function currentTurn(db) {
 function partyAudience(db) {
 	return db.select({ id: character.id }).from(character).orderBy(sql`rowid`).all().map((c) => c.id);
 }
+/** The ids of the Characters `viewer`'s browser holds a Claim on: what it may see (ADR 0008). */
+function claimedBy(db, viewer) {
+	return db.select({ id: character.id }).from(character).where(eq(character.controllingPlayer, viewer)).all().map((c) => c.id);
+}
+/**
+* Whether an Audience reaches at least one of the viewer's Claimed Characters. An empty Audience
+* was written before the Party had any Character, so it is everyone's.
+*/
+var reaches = (audience, claimed) => audience.length === 0 || audience.some((id) => claimed.has(id));
 /**
 * The Campaign's current stamp: the open Session (null offline) and the Campaign clock's minute.
 */
@@ -3092,6 +3115,11 @@ function entriesFor(e, shown) {
 	const entry = entryFor(e, shown);
 	return entry ? [entry] : [];
 }
+/** The names of an Audience narrower than the Party, for the "🔒 to" tag; undefined otherwise. */
+function tagFor(audience, party, names) {
+	if (party.every((id) => audience.includes(id))) return void 0;
+	return audience.flatMap((id) => names.has(id) ? [names.get(id)] : []);
+}
 /** One logged Event as a timeline entry, or null for one the timeline does not show. */
 function entryFor(e, shown) {
 	if (e.dmOnly || !SHOWN.has(e.kind)) return null;
@@ -3130,7 +3158,13 @@ function entryFor(e, shown) {
 * with each DM activity line after the Event it follows, plus the awaiting Narration flag. Every
 * entry is built here from Player-safe fields; nothing raw passes through.
 */
-function timeline(db) {
+function timeline(db, viewer) {
+	const claimed = new Set(claimedBy(db, viewer));
+	const party = partyAudience(db);
+	const names = new Map(db.select({
+		id: character.id,
+		name: character.name
+	}).from(character).all().map((c) => [c.id, c.name]));
 	const lines = db.select().from(activityLine).orderBy(asc(activityLine.id)).all();
 	const shown = (handle, name) => typeof handle === "string" && handleKind(handle) === "npc" ? believedName(db, handle) ?? "a stranger" : name;
 	const entries = [];
@@ -3138,6 +3172,7 @@ function timeline(db) {
 	const flushUntil = (eventId) => {
 		while (next < lines.length && lines[next].afterEvent < eventId) {
 			const line = lines[next++];
+			if (!reaches(line.audience, claimed)) continue;
 			entries.push({
 				type: "activity",
 				id: `a${line.id}`,
@@ -3147,13 +3182,18 @@ function timeline(db) {
 	};
 	for (const e of db.select().from(event).orderBy(asc(event.id)).all()) {
 		flushUntil(e.id);
-		entries.push(...entriesFor(e, shown));
+		if (!reaches(e.audience, claimed)) continue;
+		const tag = tagFor(e.audience, party, names);
+		for (const entry of entriesFor(e, shown)) entries.push(tag ? {
+			...entry,
+			audience: tag
+		} : entry);
 	}
 	flushUntil(Infinity);
 	return {
 		entries,
 		awaitingSince: awaitingNarrationSince(db),
-		call: openCallView(db)
+		call: openCallView(db, claimed)
 	};
 }
 // src/lib/server/play/sequences.ts
@@ -3602,9 +3642,10 @@ function playersAtTable(db) {
 	return players.size ? [...players] : [SOLO_PLAYER];
 }
 /** The open Call, Player-safe (no DC, no tier), or null when none is open. */
-function openCallView(db) {
+function openCallView(db, claimed) {
 	const open = openCallRow(db);
 	if (!open) return null;
+	if (claimed && !open.audience.some((id) => claimed.has(id))) return null;
 	const parts = db.select({
 		part: callPart,
 		characterName: character.name
@@ -4185,8 +4226,8 @@ function toPlaySheet(c, levelUp) {
 	};
 }
 /** The play sheet of every saved Character in the Party, oldest first. */
-function playSheets(party) {
-	return party.list().flatMap((m) => m.kind === "character" ? [toPlaySheet(party.character(m.id).character, party.levelUpOffer(m.id))] : []);
+function playSheets(party, viewer) {
+	return party.list().flatMap((m) => m.kind === "character" && (viewer === void 0 || party.character(m.id).character.controllingPlayer === viewer) ? [toPlaySheet(party.character(m.id).character, party.levelUpOffer(m.id))] : []);
 }
 // src/lib/server/play/core-block.ts
 /**
@@ -4303,6 +4344,7 @@ function coreBlock(source) {
 		"# Core block",
 		scenePart(source),
 		partyPart(source),
+		whoIsAtTheTable(source.db),
 		npcsPart(source),
 		combatPart(source),
 		arcPart(source),
@@ -4546,6 +4588,14 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 				claim: claimOf(d.controllingPlayer, browser)
 			}));
 			return [...saved, ...drafts];
+		},
+		/** A saved Character's name and the browser holding it now (null when unclaimed); null for a Draft. */
+		claimOf(id) {
+			const saved = db.select().from(character).where(eq(character.id, id)).get();
+			return saved ? {
+				name: saved.name,
+				holder: saved.controllingPlayer
+			} : null;
 		},
 		/** Whether `browser` holds a Claim on any Party Character. */
 		holdsClaim(browser) {
@@ -5073,8 +5123,9 @@ function sessionsView(db, last) {
 * The Player's Session history: each closed Session with a summary, newest first. It reads only
 * summaries, which are Player-safe, so it cannot leak.
 */
-function sessionHistory(db) {
-	return { sessions: db.select().from(session).where(and(isNotNull(session.closedAt), isNotNull(session.summary))).orderBy(desc(session.number)).all().map((s) => ({
+function sessionHistory(db, viewer) {
+	const claimed = new Set(claimedBy(db, viewer));
+	return { sessions: db.select().from(session).where(and(isNotNull(session.closedAt), isNotNull(session.summary))).orderBy(desc(session.number)).all().filter((s) => reaches(s.summaryAudience ?? [], claimed)).map((s) => ({
 		number: s.number,
 		startedAt: s.startedAt,
 		span: span(db, s.id),
@@ -5449,10 +5500,12 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now, initD
 		record(id) {
 			const db = database(find(id).folder);
 			return {
-				timeline: () => timeline(db),
-				journal: () => journal(db),
+				timeline: (viewer) => timeline(db, viewer),
+				/** When the open turn started waiting on the DM, or null. */
+				awaitingSince: () => awaitingNarrationSince(db),
+				journal: (viewer) => journal(db, viewer),
 				/** The Player's read-only Session history. */
-				sessionHistory: () => sessionHistory(db),
+				sessionHistory: (viewer) => sessionHistory(db, viewer),
 				openSession: (bridge) => openSession(db, now(), bridge),
 				/** The DM's core block. */
 				coreBlock: () => coreBlock({

@@ -3100,6 +3100,25 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		});
 		return outcome;
 	}
+	/**
+	* Tells the DM which Characters a Claims change left with whom: one `claims` event that, like a
+	* spotlight request, doesn't await Narration. Silent while no DM is at the table.
+	*/
+	function claimsChanged(campaignId, characterId) {
+		publish({
+			type: "claims",
+			campaign: campaignId
+		});
+		const folder = folderOf(campaignId);
+		if (!channels.listening(folder)) return;
+		const now = library.party(campaignId).claimOf(characterId);
+		if (!now) return;
+		const { name, holder } = now;
+		channels.send(folder, {
+			content: holder ? `${name} is now played by ${library.labels(campaignId)(holder)}` : `${name} is unclaimed`,
+			meta: { kind: "claims" }
+		});
+	}
 	function answered(campaignId, result) {
 		if (result) channels.send(folderOf(campaignId), callResultEvent(result, library.labels(campaignId)));
 		publish({
@@ -3165,16 +3184,16 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 			return library.record(campaignId).scene();
 		},
 		/** The Journal as `viewer`'s Player sees it. */
-		journal(campaignId, _viewer) {
-			return library.record(campaignId).journal();
+		journal(campaignId, viewer) {
+			return library.record(campaignId).journal(viewer);
 		},
 		/** The read-only Session history as `viewer`'s Player sees it. */
-		sessionHistory(campaignId, _viewer) {
-			return library.record(campaignId).sessionHistory();
+		sessionHistory(campaignId, viewer) {
+			return library.record(campaignId).sessionHistory(viewer);
 		},
 		/** The Party's play sheets as `viewer`'s Player sees them. */
-		sheets(campaignId, _viewer) {
-			return playSheets(library.party(campaignId));
+		sheets(campaignId, viewer) {
+			return playSheets(library.party(campaignId), viewer);
 		},
 		/** Every Party Character with its Claim as `viewer`'s browser sees it (never by whom). */
 		claims(campaignId, viewer) {
@@ -3183,26 +3202,17 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		/** The browser Claims a Character nobody holds; refused for a taken one, the Host's browser included. */
 		claim(campaignId, character, browser) {
 			library.party(campaignId).claim(character, browser);
-			publish({
-				type: "claims",
-				campaign: campaignId
-			});
+			claimsChanged(campaignId, character);
 		},
 		/** The Host's browser frees a Character another browser holds; refused for any other browser. */
 		release(campaignId, character, browser) {
 			library.party(campaignId).release(character, browser);
-			publish({
-				type: "claims",
-				campaign: campaignId
-			});
+			claimsChanged(campaignId, character);
 		},
 		/** The browser gives up a Claim it holds. */
 		letGo(campaignId, character, browser) {
 			library.party(campaignId).letGo(character, browser);
-			publish({
-				type: "claims",
-				campaign: campaignId
-			});
+			claimsChanged(campaignId, character);
 			settle(campaignId, library.floor(campaignId).lose(character));
 			const result = library.calls(campaignId).settleUnclaimed(dice(campaignId));
 			if (result) answered(campaignId, result);
@@ -3303,7 +3313,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		stopCheck(campaignId, again) {
 			const record = library.record(campaignId);
 			const pending = record.pendingCalls();
-			const awaiting = record.timeline().awaitingSince !== null;
+			const awaiting = record.awaitingSince() !== null;
 			if (!pending.length && !awaiting) return { block: false };
 			if (!again) return {
 				block: true,
@@ -3329,8 +3339,8 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 			return library.record(campaignId).coreBlock();
 		},
 		/** The Player's timeline and whether the DM is working on a turn. */
-		timeline(campaignId, _viewer) {
-			return library.record(campaignId).timeline();
+		timeline(campaignId, viewer) {
+			return library.record(campaignId).timeline(viewer);
 		}
 	};
 }

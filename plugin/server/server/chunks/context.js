@@ -1,6 +1,6 @@
 import { g as setContext, h as getContext } from "./server2.js";
 import "./index-server.js";
-// node_modules/.pnpm/@tanstack+query-core@5.105.1/node_modules/@tanstack/query-core/build/modern/subscribable.js
+// ../implement-spec-383/node_modules/.pnpm/@tanstack+query-core@5.105.1/node_modules/@tanstack/query-core/build/modern/subscribable.js
 /**
 * The base class behind everything in Query that you can subscribe to: `QueryCache`, `MutationCache`,
 * the observers, and the `FocusManager`/`OnlineManager` behind `focusManager` and `onlineManager`.
@@ -52,7 +52,7 @@ var Subscribable = class {
 	*/
 	onUnsubscribe() {}
 };
-// node_modules/.pnpm/@tanstack+query-core@5.105.1/node_modules/@tanstack/query-core/build/modern/onlineManager.js
+// ../implement-spec-383/node_modules/.pnpm/@tanstack+query-core@5.105.1/node_modules/@tanstack/query-core/build/modern/onlineManager.js
 /**
 * The `OnlineManager` manages the online state within TanStack Query. It can
 * be used to change the default event listeners or to manually change the
@@ -148,7 +148,7 @@ var OnlineManager = class extends Subscribable {
 * Singleton instance of {@link OnlineManager}, used to manage and observe the online state within TanStack Query.
 */
 var onlineManager = new OnlineManager();
-// node_modules/.pnpm/@tanstack+svelte-query@6.3.7_svelte@5.57.3_@typescript-eslint+types@8.72.1_/node_modules/@tanstack/svelte-query/dist/context.js
+// ../implement-spec-383/node_modules/.pnpm/@tanstack+svelte-query@6.3.7_svelte@5.57.3_@typescript-eslint+types@8.72.1_/node_modules/@tanstack/svelte-query/dist/context.js
 var _contextKey = Symbol("QueryClient");
 /**
 * Retrieves the `QueryClient` set on Svelte's context by `QueryClientProvider` (or by

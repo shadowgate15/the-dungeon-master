@@ -1,7 +1,7 @@
-// node_modules/.pnpm/devalue@5.9.4/node_modules/devalue/src/constants.js
+// ../implement-spec-383/node_modules/.pnpm/devalue@5.9.4/node_modules/devalue/src/constants.js
 var MAX_ARRAY_LEN = 2 ** 32 - 1;
 var MAX_ARRAY_INDEX = MAX_ARRAY_LEN - 1;
-// node_modules/.pnpm/devalue@5.9.4/node_modules/devalue/src/utils.js
+// ../implement-spec-383/node_modules/.pnpm/devalue@5.9.4/node_modules/devalue/src/utils.js
 /** @type {Record<string, string>} */
 var escaped = {
 	"<": "\\u003C",
@@ -128,7 +128,7 @@ function valid_array_indices(array) {
 	keys.length = array_index_cut(keys);
 	return keys;
 }
-// node_modules/.pnpm/devalue@5.9.4/node_modules/devalue/src/uneval.js
+// ../implement-spec-383/node_modules/.pnpm/devalue@5.9.4/node_modules/devalue/src/uneval.js
 var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
 var MIN_STRING_LENGTH = 128;
 var unsafe_chars = /[<\b\f\n\r\t\0\u2028\u2029]/g;
