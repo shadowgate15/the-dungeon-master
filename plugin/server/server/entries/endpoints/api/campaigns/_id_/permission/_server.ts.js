@@ -1,5 +1,5 @@
 import { i as json } from "../../../../../../chunks/exports.js";
-import { a as permissions } from "../../../../../../chunks/bridge.js";
+import { o as permissions } from "../../../../../../chunks/bridge.js";
 import { n as library } from "../../../../../../chunks/campaign.js";
 // src/routes/api/campaigns/[id]/permission/+server.ts
 /** The permission prompt the Campaign's session is waiting on: `{ request }`, null when none. */

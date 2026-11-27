@@ -24,6 +24,11 @@ export const variables = defineEnvVars({
       'The plugin version the launcher started this server from, written to its runtime file so a stale server is restarted.',
     schema: optional
   },
+  DUNGEON_MASTER_LAN: {
+    description:
+      'Set by `dm --lan`: the server listens on every interface (LAN mode) and writes its join URLs to the runtime file. Unset or empty means localhost only.',
+    schema: optional
+  },
   DUNGEON_MASTER_CAMPAIGNS: {
     description: 'Where new Campaign folders are suggested. Default ~/dm-campaigns.',
     schema: optional
