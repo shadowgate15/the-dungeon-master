@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit'
 import { library } from '../campaign/index'
 import { CampaignMissingError, CampaignNotFoundError } from '../campaign/library'
-import { DmOnlyEditError, DraftNotFoundError, type Party } from './party'
+import { ClaimRefusedError, DmOnlyEditError, DraftNotFoundError, type Party } from './party'
 import { CharacterNotFoundError, CharacterValidationError } from './service'
 
 const UNREADABLE = 'The Character could not be read. Try saving again.'
@@ -32,6 +32,7 @@ export function changeParty(
     }
     return change(library.party(campaignId))
   } catch (e) {
+    if (e instanceof ClaimRefusedError) return json({ error: e.message }, { status: 403 })
     if (e instanceof DmOnlyEditError) return json({ error: e.message }, { status: 409 })
     if (e instanceof CharacterValidationError) return json({ error: e.message }, { status: 400 })
     if (
