@@ -245,7 +245,11 @@ describe('history', () => {
 })
 
 describe('Claims lapse when a Session closes', () => {
-  const standing = () => play.claims(campaignId, SOLO_PLAYER).map((row) => row.claim)
+  const standing = () =>
+    play
+      .claims(campaignId, SOLO_PLAYER)
+      .filter((row) => row.kind === 'character')
+      .map((row) => row.claim)
 
   it('clears every Character Claim, after the summary, on End Session', () => {
     play.openSession(campaignId, 'bridge-1')

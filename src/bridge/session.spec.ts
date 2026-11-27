@@ -187,7 +187,7 @@ describe('the browser stream', () => {
   async function browserStream(on: TestGameServer) {
     const res = await fetch(`${on.url}/api/events`)
     expect(res.headers.get('content-type')).toBe('text/event-stream')
-    const messages: unknown[] = []
+    const messages: { type: string }[] = []
     const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader()
     void (async () => {
       let buffer = ''
@@ -209,14 +209,16 @@ describe('the browser stream', () => {
   it('pushes the session attached state as a DM attaches and leaves', async () => {
     const { id } = (await register(server, folder)).body
     const stream = await browserStream(server)
+    // Opening a Session also pushes `claims`, as closing a stopped one may lapse Claims.
+    const sessionMessages = () => stream.messages.filter((m) => m.type === 'session')
 
     const dm = await dmIn(folder)
     await eventually(async () =>
-      expect(stream.messages).toEqual([{ type: 'session', campaign: id, attached: true }])
+      expect(sessionMessages()).toEqual([{ type: 'session', campaign: id, attached: true }])
     )
     await dm.close()
     await eventually(async () =>
-      expect(stream.messages).toEqual([
+      expect(sessionMessages()).toEqual([
         { type: 'session', campaign: id, attached: true },
         { type: 'session', campaign: id, attached: false }
       ])
