@@ -996,6 +996,11 @@ function TakeASeat($$renderer, $$props) {
 	});
 }
 // src/lib/play/Timeline.svelte
+function lock($$renderer, entry) {
+	if (entry.audience) $$renderer.push(`<!--[0--><span class="block text-xs text-muted">🔒 to ${escape_html(entry.audience.join(", "))}</span>`);
+	else $$renderer.push("<!--[-1-->");
+	$$renderer.push(`<!--]-->`);
+}
 function Timeline($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/**
@@ -1034,14 +1039,19 @@ function Timeline($$renderer, $$props) {
 				let entry = each_array_1[$$index_1];
 				if (entry.type === "narration") {
 					$$renderer.push(`<!--[0--><li class="max-w-[85%] self-start rounded-panel bg-raised px-3 py-2 text-sm">`);
+					lock($$renderer, entry);
+					$$renderer.push(`<!----> `);
 					if (entry.recap) $$renderer.push(`<!--[0--><span class="block text-xs font-semibold text-muted uppercase">Previously</span>`);
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--> `);
 					if (entry.voice) $$renderer.push(`<!--[0--><span class="block text-xs font-semibold text-primary">${escape_html(entry.voice)}</span>`);
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
-				} else if (entry.type === "declaration") $$renderer.push(`<!--[1--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm"><span class="block text-xs font-semibold text-muted">${escape_html(entry.character)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
-				else if (entry.type === "error") {
+				} else if (entry.type === "declaration") {
+					$$renderer.push(`<!--[1--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm">`);
+					lock($$renderer, entry);
+					$$renderer.push(`<!----> <span class="block text-xs font-semibold text-muted">${escape_html(entry.character)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
+				} else if (entry.type === "error") {
 					$$renderer.push(`<!--[2--><li class="self-stretch">`);
 					Alert($$renderer, {
 						variant: "danger",
@@ -1052,7 +1062,9 @@ function Timeline($$renderer, $$props) {
 					});
 					$$renderer.push(`<!----></li>`);
 				} else if (entry.type === "roll") {
-					$$renderer.push(`<!--[3--><li class="flex flex-wrap items-baseline gap-x-2 self-end text-sm"><span class="font-medium">${escape_html(entry.character)}</span> <span class="text-muted">${escape_html(entry.what)}</span> <span class="font-mono text-xs text-muted">🎲 ${escape_html(entry.dice.join(" | "))} ${escape_html(signed(entry.modifier))}</span> <span class="font-mono font-semibold">= ${escape_html(entry.total)}</span> `);
+					$$renderer.push(`<!--[3--><li class="flex flex-wrap items-baseline gap-x-2 self-end text-sm">`);
+					lock($$renderer, entry);
+					$$renderer.push(`<!----> <span class="font-medium">${escape_html(entry.character)}</span> <span class="text-muted">${escape_html(entry.what)}</span> <span class="font-mono text-xs text-muted">🎲 ${escape_html(entry.dice.join(" | "))} ${escape_html(signed(entry.modifier))}</span> <span class="font-mono font-semibold">= ${escape_html(entry.total)}</span> `);
 					if (entry.outcome) $$renderer.push(`<!--[0--><span${attr_class(clsx([
 						"success",
 						"hit",
@@ -1066,8 +1078,11 @@ function Timeline($$renderer, $$props) {
 					if (entry.mode !== "normal") $$renderer.push(`<!--[0--><span class="text-xs text-muted italic">(${escape_html(entry.mode)}: ${escape_html(entry.reason)})</span>`);
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--></li>`);
-				} else if (entry.type === "answer") $$renderer.push(`<!--[4--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm"><span class="block text-xs text-muted">${escape_html(entry.question)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
-				else $$renderer.push(`<!--[-1--><li class="self-start text-xs text-muted">⚙ ${escape_html(entry.text)}</li>`);
+				} else if (entry.type === "answer") {
+					$$renderer.push(`<!--[4--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm">`);
+					lock($$renderer, entry);
+					$$renderer.push(`<!----> <span class="block text-xs text-muted">${escape_html(entry.question)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
+				} else $$renderer.push(`<!--[-1--><li class="self-start text-xs text-muted">⚙ ${escape_html(entry.text)}</li>`);
 				$$renderer.push(`<!--]-->`);
 			}
 		} else {

@@ -3,7 +3,7 @@ import { c as play, d as DmAwayError } from "../../../../../chunks/bridge.js";
 import { a as CampaignArchivedError, d as BeginRefusedError, i as sessions, n as library, p as StartOverRefusedError } from "../../../../../chunks/campaign.js";
 // src/routes/campaigns/[id]/begin/+page.server.ts
 /** The Begin step: whether the story can begin, and after Begin the pitch and Start over. */
-var load = ({ params }) => {
+var load = ({ params, locals }) => {
 	const entry = library.get(params.id);
 	if (!entry) error(404, "Campaign not found");
 	if (entry.status === "missing") error(404, "This Campaign's folder is missing");
@@ -16,8 +16,8 @@ var load = ({ params }) => {
 			status: entry.status
 		},
 		creation: library.creation(entry.id),
-		journal: record.journal(),
-		timeline: record.timeline(),
+		journal: record.journal(locals.browser),
+		timeline: record.timeline(locals.browser),
 		conversation: library.conversation(entry.id).list(),
 		attached: sessions.list()
 	};
