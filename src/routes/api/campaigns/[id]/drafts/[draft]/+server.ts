@@ -16,17 +16,17 @@ export const GET: RequestHandler = ({ params }) =>
   }, [[DraftNotFoundError, 404]])
 
 /** Writes the stored draft and the step it is on: 204, or 400/404 `{ error }`. */
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
   const body = await readJson<DraftWrite>(request)
   return changeParty(params.id, body, (party) => {
-    party.writeDraft(params.draft, body!)
+    party.writeDraft(params.draft, body!, locals.browser)
     return new Response(null, { status: 204 })
   })
 }
 
 /** Discards the stored draft: 204, or 400/404 `{ error }`. */
-export const DELETE: RequestHandler = ({ params }) =>
+export const DELETE: RequestHandler = ({ params, locals }) =>
   changeParty(params.id, null, (party) => {
-    party.discardDraft(params.draft)
+    party.discardDraft(params.draft, locals.browser)
     return new Response(null, { status: 204 })
   })

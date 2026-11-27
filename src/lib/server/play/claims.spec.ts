@@ -82,3 +82,62 @@ describe('Claims', () => {
     ])
   })
 })
+
+describe('Claims on Drafts and edits', () => {
+  const party = () => library.party(campaignId)
+
+  it('Claims a Draft for the browser that starts it and shows it as taken to others', () => {
+    const { id } = party().startDraft({ player: GUEST })
+
+    expect(play.claims(campaignId, GUEST)).toMatchObject([{ kind: 'draft', id, claim: 'yours' }])
+    expect(play.claims(campaignId, SOLO_PLAYER)).toMatchObject([
+      { kind: 'draft', id, claim: 'taken' }
+    ])
+  })
+
+  it('keeps the creator’s Claim on the finished Character', () => {
+    const { id } = party().startDraft({ player: GUEST })
+    const saved = party().saveDraft(id, { draft: fighterDraft('Wren'), step: 'review' }, GUEST)
+
+    expect(play.claims(campaignId, GUEST)).toMatchObject([{ id: saved.id, claim: 'yours' }])
+    expect(play.claims(campaignId, SOLO_PLAYER)).toMatchObject([{ id: saved.id, claim: 'taken' }])
+  })
+
+  it('refuses Draft writes, saves and discards from a browser without the Claim, the Host included', () => {
+    const { id } = party().startDraft({ player: GUEST })
+    const write = { draft: fighterDraft('Wren'), step: 'review' as const }
+
+    expect(() => party().writeDraft(id, write, SOLO_PLAYER)).toThrow(ClaimRefusedError)
+    expect(() => party().saveDraft(id, write, SOLO_PLAYER)).toThrow(ClaimRefusedError)
+    expect(() => party().discardDraft(id, SOLO_PLAYER)).toThrow(ClaimRefusedError)
+    expect(party().list()).toHaveLength(1)
+  })
+
+  it('refuses edits, details and level-ups from a browser without the Claim, the Host included', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    play.letGo(campaignId, wren, SOLO_PLAYER)
+    play.claim(campaignId, wren, GUEST)
+
+    expect(() => party().updateCharacter(wren, fighterDraft('Wren'), SOLO_PLAYER)).toThrow(
+      ClaimRefusedError
+    )
+    expect(() => party().updateDetails(wren, { notes: 'Mine.' }, SOLO_PLAYER)).toThrow(
+      ClaimRefusedError
+    )
+    expect(() => party().levelUp(wren, {}, SOLO_PLAYER)).toThrow(ClaimRefusedError)
+    expect(() => party().updateDetails(wren, { notes: 'Mine.' }, 'free-browser')).toThrow(
+      ClaimRefusedError
+    )
+  })
+
+  it('lets the holder edit, and a Host edit once they Claim a freed Character between Sessions', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    play.letGo(campaignId, wren, SOLO_PLAYER)
+    expect(() => party().updateDetails(wren, { notes: 'x' }, SOLO_PLAYER)).toThrow(
+      ClaimRefusedError
+    )
+
+    play.claim(campaignId, wren, SOLO_PLAYER)
+    expect(party().updateDetails(wren, { notes: 'Hers.' }, SOLO_PLAYER).notes).toBe('Hers.')
+  })
+})

@@ -60,13 +60,13 @@ export const load: PageServerLoad = ({ params, url }) => {
 
 export const actions: Actions = {
   /** Starts a draft with the Campaign and opens it in the wizard. */
-  newDraft: ({ params }) => {
+  newDraft: ({ params, locals }) => {
     const entry = library.get(params.id)
     if (!entry) error(404, 'Campaign not found')
     if (entry.status !== 'active') {
       return fail(400, { error: 'An archived or missing Campaign cannot be changed' })
     }
-    const { id } = library.party(entry.id).startDraft()
+    const { id } = library.party(entry.id).startDraft({ player: locals.browser })
     redirect(
       303,
       `${resolve('/campaigns/[id]/party', { id: entry.id })}?draft=${encodeURIComponent(id)}`

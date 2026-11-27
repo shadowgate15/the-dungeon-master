@@ -188,23 +188,47 @@ export function createParty(
     throw new CharacterNotFoundError('Character not found')
   }
 
+  /**
+   * Refuses a write from a browser that does not hold the Claim, the Host included. Without a
+   * `browser` the write is the DM's own (its tools), which no Claim gates.
+   */
+  function requireClaim(id: string, browser: string | undefined) {
+    if (browser === undefined) return
+    const target = claimable(id)
+    if (target.holder !== browser) {
+      throw new ClaimRefusedError(`${target.name || 'This Character'} is not yours: Claim it first`)
+    }
+  }
+
   return {
     /**
      * Every Party Character with its Claim as `browser` sees it: yours, taken (never by whom) or
      * free. Saved Characters oldest first.
      */
     claims(browser: string): ClaimRow[] {
-      return characters.list().map((c) => ({
+      const saved = characters.list().map((c) => ({
         kind: 'character' as const,
         id: c.id,
         name: c.name,
         claim: claimOf(c.controllingPlayer, browser)
       }))
+      const drafts = db
+        .select()
+        .from(characterDraft)
+        .orderBy(asc(characterDraft.createdAt), asc(sql`${characterDraft}.rowid`))
+        .all()
+        .map((d) => ({
+          kind: 'draft' as const,
+          id: d.id,
+          name: (d.data as CharacterDraft).name.trim(),
+          claim: claimOf(d.controllingPlayer, browser)
+        }))
+      return [...saved, ...drafts]
     },
 
     /** Whether `browser` holds a Claim on any Party Character. */
     holdsClaim(browser: string): boolean {
-      return this.claims(browser).some((row) => row.claim === 'yours')
+      return this.claims(browser).some((row) => row.kind === 'character' && row.claim === 'yours')
     },
 
     /** The browser Claims a Character nobody holds. A taken Character is refused for every browser. */
@@ -287,11 +311,13 @@ export function createParty(
     },
 
     /** Replaces the stored draft. Incomplete is fine: a draft is unsaved by definition. */
-    writeDraft(id: string, value: DraftWrite): void {
+    writeDraft(id: string, value: DraftWrite, browser?: string): void {
+      requireClaim(id, browser)
       write(id, value)
     },
 
-    discardDraft(id: string): void {
+    discardDraft(id: string, browser?: string): void {
+      requireClaim(id, browser)
       const deleted = db.delete(characterDraft).where(eq(characterDraft.id, id)).returning().get()
       if (!deleted) throw new DraftNotFoundError('Character draft not found')
     },
@@ -300,7 +326,8 @@ export function createParty(
      * Writes the draft, then saves it into the Party and removes it, in one transaction. Refused,
      * keeping the draft, unless every step is valid.
      */
-    saveDraft(id: string, value: DraftWrite): Character {
+    saveDraft(id: string, value: DraftWrite, browser?: string): Character {
+      requireClaim(id, browser)
       return db.transaction(() => {
         write(id, value)
         const { controllingPlayer } = row(id)
@@ -323,7 +350,8 @@ export function createParty(
      * slots, coin, inventory), so once the Campaign has begun it is refused: play state changes only
      * through the DM's tools.
      */
-    updateCharacter(id: string, draft: CharacterDraft): Character {
+    updateCharacter(id: string, draft: CharacterDraft, browser?: string): Character {
+      requireClaim(id, browser)
       if (begun()) {
         throw new DmOnlyEditError(
           'Rewriting a Character in the wizard resets their play state, so once the Campaign has begun only their notes, personality and appearance can be edited. Ask the DM at the table for anything else.'
@@ -350,7 +378,12 @@ export function createParty(
      * maximum, and the picked cantrips and spells are learned. Play state is kept. Refused without
      * an awarded level, or when the picks do not fit the offer.
      */
-    levelUp(id: string, picks: { cantrips?: string[]; spells?: string[] }): Character {
+    levelUp(
+      id: string,
+      picks: { cantrips?: string[]; spells?: string[] },
+      browser?: string
+    ): Character {
+      requireClaim(id, browser)
       return db.transaction(() => {
         const before = detail(id)
         const offer = offerFor(before)
@@ -396,7 +429,8 @@ export function createParty(
      * Edits a Character's notes, personality, appearance or backstory, leaving play state alone.
      * Backstory after Begin is the DM's while the DM is away.
      */
-    updateDetails(id: string, details: CharacterDetails): Character {
+    updateDetails(id: string, details: CharacterDetails, browser?: string): Character {
+      requireClaim(id, browser)
       const fields = (Object.keys(DETAIL_LIMITS) as (keyof CharacterDetails)[]).filter(
         (f) => details[f] !== undefined
       )
