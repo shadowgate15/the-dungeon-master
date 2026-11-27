@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -139,8 +140,8 @@ describe('the Arc line', () => {
     }
     declare = (...texts) => {
       const floor = library.floor(campaignId)
-      for (const text of texts) floor.send({ character: wren, text })
-      floor.done()
+      for (const text of texts) floor.send({ character: wren, text, player: SOLO_PLAYER })
+      floor.done(SOLO_PLAYER)
       call('narrate', { text: 'The world answers.' })
     }
   })

@@ -138,7 +138,7 @@ export function createFloor(db: Database, now: () => number = Date.now) {
   }
 
   /** The open Floor (empty until something is sent), with `player`'s returned drafts. */
-  function current(player: string = SOLO_PLAYER): OpenFloor {
+  function current(player: string): OpenFloor {
     const floorId = openFloorId()
     if (!floorId) return { declarations: [], returned: returned(player) }
     const declarations = db
@@ -173,11 +173,11 @@ export function createFloor(db: Database, now: () => number = Date.now) {
     send({
       character: characterId,
       text,
-      player = SOLO_PLAYER
+      player
     }: {
       character: string
       text: string
-      player?: string
+      player: string
     }): PendingDeclaration {
       const clean = cleanText(text)
       return db.transaction(() => {
@@ -232,7 +232,7 @@ export function createFloor(db: Database, now: () => number = Date.now) {
      * withdraw any open Call, and the Campaign awaits Narration. An empty Floor closes too, handing the DM the initiative. Refused
      * while the DM is still answering the last Floor.
      */
-    done(player: string = SOLO_PLAYER): DoneOutcome {
+    done(player: string): DoneOutcome {
       return db.transaction((): DoneOutcome => {
         if (awaitingNarrationSince(db) !== null) {
           throw new DmBusyError('The DM is still answering the last turn')
@@ -245,7 +245,7 @@ export function createFloor(db: Database, now: () => number = Date.now) {
           db.update(floor).set({ done }).where(eq(floor.id, floorId)).run()
           return { closed: false }
         }
-        const declarations = current().declarations
+        const declarations = current(SOLO_PLAYER).declarations
         db.update(floor)
           .set({ done, state: 'closed', closedAt: at })
           .where(eq(floor.id, floorId))
