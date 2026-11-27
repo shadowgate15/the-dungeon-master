@@ -72,7 +72,7 @@ describe('Begin', () => {
     ready()
     play.begin(campaignId, SOLO_PLAYER)
     expect(heard).toHaveLength(1)
-    expect(heard[0].meta).toMatchObject({ kind: 'begin', player: 'player' })
+    expect(heard[0].meta).toMatchObject({ kind: 'begin', player: 'Host · Player of Wren' })
     expect(call('creation_state').payload).toMatchObject({ state: 'begun' })
   })
 

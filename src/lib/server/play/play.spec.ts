@@ -53,10 +53,10 @@ describe('Done', () => {
     play.done(campaignId, SOLO_PLAYER)
 
     expect(heard).toHaveLength(1)
-    expect(heard[0].meta).toMatchObject({ kind: 'floor', players: 'player' })
+    expect(heard[0].meta).toMatchObject({ kind: 'floor', players: 'Host · Player of Wren' })
     expect(heard[0].meta.floor_id).toEqual(expect.any(String))
     expect(heard[0].content).toBe(
-      '[d1 Wren · player] I pick the lock.\n[d2 Wren · player] I keep an eye on the street.'
+      '[d1 Wren · Host · Player of Wren] I pick the lock.\n[d2 Wren · Host · Player of Wren] I keep an eye on the street.'
     )
     expect(library.floor(campaignId).current(SOLO_PLAYER).declarations).toEqual([])
   })
@@ -72,7 +72,7 @@ describe('Done', () => {
 
     expect(heard).toHaveLength(1)
     expect(heard[0].content).toBe(
-      '[d1 Wren · player] I pick the lock.\n[d2 Bram · player] I bar the door.'
+      '[d1 Wren · Host · Player of Wren & Bram] I pick the lock.\n[d2 Bram · Host · Player of Wren & Bram] I bar the door.'
     )
   })
 
@@ -82,7 +82,10 @@ describe('Done', () => {
     play.done(campaignId, SOLO_PLAYER)
 
     expect(heard).toEqual([
-      { content: '', meta: expect.objectContaining({ kind: 'floor', players: 'player' }) }
+      {
+        content: 'passed: Host · Player of Wren',
+        meta: expect.objectContaining({ kind: 'floor', players: 'Host · Player of Wren' })
+      }
     ])
     expect(play.timeline(campaignId, SOLO_PLAYER).awaitingSince).toEqual(expect.any(Number))
   })
@@ -250,6 +253,66 @@ describe('End Session', () => {
   })
 })
 
+describe('Player labels on what the DM hears', () => {
+  /** A Character Claimed by `browser`. */
+  function addFor(name: string, browser: string) {
+    const party = library.party(campaignId)
+    const { id } = party.startDraft({ player: browser })
+    return party.saveDraft(id, { draft: fighterDraft(name), step: 'review' }).id
+  }
+
+  it('labels each Player by Claimed Characters and marks the Host on a floor event', () => {
+    const wren = addFor('Wren', SOLO_PLAYER)
+    const ash = addFor('Ash', 'b-1')
+    const bram = addFor('Bram', 'b-1')
+    const kael = addFor('Kael', 'b-2')
+    const floor = library.floor(campaignId)
+    floor.send({ character: wren, text: 'I pick the lock.', player: SOLO_PLAYER })
+    floor.send({ character: ash, text: 'I scout.', player: 'b-1' })
+    play.done(campaignId, 'b-1')
+    play.done(campaignId, 'b-2')
+    play.done(campaignId, SOLO_PLAYER)
+
+    expect(heard).toHaveLength(1)
+    expect(heard[0].content).toBe(
+      '[d1 Wren · Host · Player of Wren] I pick the lock.\n[d2 Ash · Player of Ash & Bram] I scout.\npassed: Player of Kael'
+    )
+    expect(heard[0].meta.players).toBe('Player of Ash & Bram,Player of Kael,Host · Player of Wren')
+    expect(heard[0].content).not.toContain('b-1')
+    void bram
+    void kael
+  })
+
+  it('labels the spotlight request', () => {
+    addFor('Wren', SOLO_PLAYER)
+    const bram = addFor('Bram', 'b-1')
+    call('establish', { type: 'place', name: 'The Docks' })
+    call('establish', { type: 'place', name: 'Drowned Lantern' })
+    call('move', { who: ['char:wren'], to: 'place:drowned-lantern' })
+    call('move', { who: ['char:bram'], to: 'place:the-docks' })
+    call('set_scene', { place: 'place:drowned-lantern' })
+
+    play.spotlight(campaignId, bram, 'b-1')
+
+    expect(heard[0].meta).toEqual({
+      kind: 'spotlight',
+      character: 'char:bram',
+      player: 'Player of Bram'
+    })
+  })
+
+  it('tags creation-chat lines before Begin with the sender\'s Characters or "a Player"', () => {
+    addFor('Wren', 'b-1')
+    play.converse(campaignId, 'Make it grim.', 'b-1')
+    play.converse(campaignId, 'Make it silly.', 'b-2')
+
+    expect(heard.map((e) => e.content)).toEqual([
+      '[Player of Wren] Make it grim.',
+      '[a Player] Make it silly.'
+    ])
+  })
+})
+
 describe('spotlight requests', () => {
   it('asks the DM to cut to a Character elsewhere, without awaiting Narration', () => {
     addFighter('Wren')
@@ -265,7 +328,7 @@ describe('spotlight requests', () => {
     expect(heard).toEqual([
       {
         content: 'Cut to Bram (char:bram), at place:the-docks',
-        meta: { kind: 'spotlight', character: 'char:bram', player: 'player' }
+        meta: { kind: 'spotlight', character: 'char:bram', player: 'Host · Player of Wren & Bram' }
       }
     ])
     expect(play.timeline(campaignId, SOLO_PLAYER).awaitingSince).toBeNull()
@@ -284,8 +347,8 @@ describe('the creation conversation', () => {
 
     expect(heard).toEqual([
       {
-        content: 'Can you help with the premise?',
-        meta: { kind: 'conversation', player: 'player' }
+        content: '[Host] Can you help with the premise?',
+        meta: { kind: 'conversation', player: 'Host' }
       }
     ])
     expect(library.conversation(campaignId).list()).toEqual([

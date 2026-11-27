@@ -114,8 +114,12 @@ describe('start_combat', () => {
 
     expect(heard).toHaveLength(1)
     expect(heard[0].meta).toMatchObject({ kind: 'call_result', call_id: id })
-    expect(heard[0].content).toContain('[Wren · player] Initiative: d20 18 + 2 = 20')
-    expect(heard[0].content).toContain('[Ash · player] Initiative: d20 4 + 3 = 7')
+    expect(heard[0].content).toContain(
+      '[Wren · Host · Player of Wren & Ash] Initiative: d20 18 + 2 = 20'
+    )
+    expect(heard[0].content).toContain(
+      '[Ash · Host · Player of Wren & Ash] Initiative: d20 4 + 3 = 7'
+    )
     expect(heard[0].content).toContain(
       'Order: Wren 20, Goblin 2 17, Goblin 1 12, Ash 7. Round 1: Wren (char:wren) acts.'
     )

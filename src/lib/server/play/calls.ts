@@ -1,3 +1,4 @@
+import type { PlayerLabel } from './labels'
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { canAct } from '#lib/character/acting.ts'
@@ -501,24 +502,26 @@ type Answered = typeof callPart.$inferSelect & { characterName: string | null; k
 export type CallResult = { call: string; players: string[]; parts: Answered[]; after?: string[] }
 
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
-function resultLine(p: Answered): string {
-  if (p.kind === 'reaction') return reactionLine(p)
-  if (p.hitDice) return `[${p.characterName} · ${p.player}] Hit Dice: ${hitDiceText(p.hitDice)}`
-  if (p.sequence) return `[${p.characterName} · ${p.player}] ${sequenceText(p.sequence, p.mode)}`
-  if (p.result === null) return `[${p.player}] ${p.answer}`
+function resultLine(p: Answered, label: PlayerLabel): string {
+  if (p.kind === 'reaction') return reactionLine(p, label)
+  if (p.hitDice)
+    return `[${p.characterName} · ${label(p.player)}] Hit Dice: ${hitDiceText(p.hitDice)}`
+  if (p.sequence)
+    return `[${p.characterName} · ${label(p.player)}] ${sequenceText(p.sequence, p.mode)}`
+  if (p.result === null) return `[${label(p.player)}] ${p.answer}`
   const r = p.result
   const dice = r.dice.length > 1 ? `${r.dice.join('/')} (${p.mode}) kept ${r.kept}` : `${r.kept}`
   const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`
   if (p.kind === 'death_save') {
-    return `[${p.characterName} · ${p.player}] Death save: d20 ${r.kept} → ${p.answer}`
+    return `[${p.characterName} · ${label(p.player)}] Death save: d20 ${r.kept} → ${p.answer}`
   }
   if (p.kind === 'concentration') {
-    return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? 'success' : 'failure'}; ${p.answer}`
+    return `[${p.characterName} · ${label(p.player)}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? 'success' : 'failure'}; ${p.answer}`
   }
   if (p.kind === 'initiative') {
-    return `[${p.characterName} · ${p.player}] Initiative: d20 ${dice} ${modifier} = ${r.total}`
+    return `[${p.characterName} · ${label(p.player)}] Initiative: d20 ${dice} ${modifier} = ${r.total}`
   }
-  return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? 'success' : 'failure'}`
+  return `[${p.characterName} · ${label(p.player)}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? 'success' : 'failure'}`
 }
 
 /** The Player's choice on a reaction Call that passes it. */
@@ -528,8 +531,8 @@ export const PASS = 'Pass'
  * A reaction as the DM hears it: passed, taken (with its attack's rolls), and any reminder that
  * the reaction was already spent. The answer is the choice, then `; ` and the reminder.
  */
-function reactionLine(p: Answered): string {
-  const who = `[${p.characterName} · ${p.player}] ${p.reaction}`
+function reactionLine(p: Answered, label: PlayerLabel): string {
+  const who = `[${p.characterName} · ${label(p.player)}] ${p.reaction}`
   if (p.answer === PASS) return `${who}: passes`
   const [choice, reminder] = (p.answer ?? '').split('; ')
   const taken = p.sequence
@@ -548,10 +551,17 @@ function hitDiceText(spend: HitDiceSpend): string {
 }
 
 /** The `call_result` channel event: one body line per part, in order. */
-export function callResultEvent(result: CallResult): ChannelEvent {
+export function callResultEvent(
+  result: CallResult,
+  label: PlayerLabel = (browser) => browser
+): ChannelEvent {
   return {
-    content: [...result.parts.map(resultLine), ...(result.after ?? [])].join('\n'),
-    meta: { kind: 'call_result', call_id: result.call, players: result.players.join(',') }
+    content: [...result.parts.map((p) => resultLine(p, label)), ...(result.after ?? [])].join('\n'),
+    meta: {
+      kind: 'call_result',
+      call_id: result.call,
+      players: result.players.map(label).join(',')
+    }
   }
 }
 
