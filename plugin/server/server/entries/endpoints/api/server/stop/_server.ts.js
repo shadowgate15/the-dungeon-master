@@ -1,4 +1,4 @@
-import { c as stop } from "../../../../../chunks/bridge.js";
+import { l as stop } from "../../../../../chunks/bridge.js";
 // src/routes/api/server/stop/+server.ts
 /**
 * The UI's stop control: stops the game server, as `dm stop` does. 202; the server exits just

@@ -4,6 +4,7 @@ import { t as useQueryClient } from "./useQueryClient.js";
 import { t as Button } from "./Button.js";
 import "./Alert.js";
 import { t as Textarea } from "./Textarea.js";
+import "./follow.svelte.js";
 // src/lib/campaign/CreationStepper.svelte
 var CREATION_STEPS = [
 	"Seed",

@@ -8,6 +8,7 @@ import { t as Field } from "../../../../../chunks/Field.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
 import { a as createSceneQuery, c as createTimelineQuery, d as levelUp, f as saveDetails, i as createJournalQuery, l as endSession, m as knownBy, n as callActions, p as Journal, r as createFloorQuery, s as createSheetsQuery, t as PlayRequestError, u as floorActions } from "../../../../../chunks/floor-client.js";
 import { t as Alert } from "../../../../../chunks/Alert.js";
+import "../../../../../chunks/follow.svelte.js";
 import { f as createQuery, o as permissionQueryKey } from "../../../../../chunks/messages.js";
 import { t as useQueryClient } from "../../../../../chunks/useQueryClient.js";
 import { t as Link } from "../../../../../chunks/Link.js";

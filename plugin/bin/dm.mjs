@@ -63,7 +63,7 @@ function pluginVersion(pluginRoot) {
   const manifest = path3.join(pluginRoot, ".claude-plugin", "plugin.json");
   return JSON.parse(fs2.readFileSync(manifest, "utf8")).version;
 }
-async function startServer(ctx) {
+async function startServer(ctx, mode) {
   const serverDir = path3.join(ctx.pluginRoot, "server");
   fs2.mkdirSync(ctx.home, { recursive: true });
   const logFile = path3.join(ctx.home, "server.log");
@@ -75,11 +75,14 @@ async function startServer(ctx) {
     stdio: ["ignore", log, log],
     env: {
       ...ctx.env,
+      DUNGEON_MASTER_LAN: "",
       DUNGEON_MASTER_HOME: ctx.home,
       DUNGEON_MASTER_PORT: String(ctx.port),
       DUNGEON_MASTER_VERSION: ctx.version,
       PORT: String(ctx.port),
-      HOST: "127.0.0.1",
+      // LAN mode binds every interface, which still covers loopback for the launcher and bridge.
+      HOST: mode === "lan" ? "0.0.0.0" : "127.0.0.1",
+      ...mode === "lan" ? { DUNGEON_MASTER_LAN: "1" } : {},
       // adapter-node assumes https otherwise, and refuses the UI's form posts as cross-site.
       ORIGIN: uiUrl(ctx.port)
     }
@@ -132,12 +135,14 @@ async function runningServer(ctx) {
 }
 async function ensureServer(ctx, beforeRestart) {
   const running = await runningServer(ctx);
+  const current = running?.mode === "lan" ? "lan" : "local";
+  const wanted = ctx.lan ? "lan" : current;
   if (running) {
-    if (running.version === ctx.version) return running;
+    if (running.version === ctx.version && current === wanted) return running;
     await beforeRestart?.(running);
     await stopServer(ctx, running);
   }
-  return startServer(ctx);
+  return startServer(ctx, wanted);
 }
 function installedPlugins() {
   const run = spawnSync("claude", ["plugin", "list", "--json"], { encoding: "utf8" });
@@ -170,6 +175,13 @@ async function register(runtime, folder) {
     throw new LauncherError(`The game server refused to register ${folder} (${response.status}).`);
   }
   return await response.json();
+}
+function refuseRestartIfAttached(campaign) {
+  if (campaign.attached) {
+    throw new LauncherError(
+      `${campaign.name} already has a DM session at the table. End the Session first.`
+    );
+  }
 }
 function refuseIfAttached(campaign) {
   if (campaign.attached) {
@@ -233,6 +245,7 @@ function installShim() {
   fs2.writeFileSync(shim, SHIM, { mode: 493 });
   fs2.chmodSync(shim, 493);
 }
+var FIREWALL_HINT = "dm: if a device cannot connect, allow incoming connections for node in your firewall.";
 async function runLauncher(args, {
   env = process.env,
   cwd = process.cwd(),
@@ -242,7 +255,10 @@ async function runLauncher(args, {
   if (Number(node.split(".")[0]) < NODE_MINIMUM) {
     return fail(`The Dungeon Master needs Node ${NODE_MINIMUM} or later; this is Node ${node}.`);
   }
+  const lan = args.includes("--lan");
+  args = args.filter((arg) => arg !== "--lan");
   const ctx = {
+    lan,
     pluginRoot,
     version: pluginVersion(pluginRoot),
     home: userStateDir(env),
@@ -255,6 +271,7 @@ async function runLauncher(args, {
       return 0;
     }
     if (args[0] === "stop") {
+      if (lan) return fail("dm stop does not take --lan: stopping the server ends LAN mode.");
       const running = await runningServer(ctx);
       if (!running) {
         process.stdout.write("dm: the game server is not running.\n");
@@ -266,6 +283,10 @@ async function runLauncher(args, {
     }
     if (!fs2.existsSync(campaignDatabasePath(cwd))) {
       const runtime2 = await ensureServer(ctx);
+      if (lan) {
+        printJoinUrls(runtime2);
+        process.stdout.write("dm: Players can join once a Session is live.\n");
+      }
       return fail(
         `${cwd} is not a Campaign folder. Create or open a Campaign in the web UI at ${uiUrl(runtime2.port)}/campaigns, then run dm in its folder.`
       );
@@ -273,7 +294,7 @@ async function runLauncher(args, {
     const pluginId = enabledPluginId();
     const runtime = await ensureServer(
       ctx,
-      async (stale) => refuseIfAttached(await register(stale, cwd))
+      async (stale) => refuseRestartIfAttached(await register(stale, cwd))
     );
     const campaign = await register(runtime, cwd);
     refuseIfAttached(campaign);
@@ -281,11 +302,19 @@ async function runLauncher(args, {
       `dm: ${campaign.name} is at ${uiUrl(runtime.port)}/campaigns/${campaign.id}
 `
     );
+    printJoinUrls(runtime);
     return await runClaude(pluginId, cwd, args);
   } catch (e) {
     if (e instanceof LauncherError) return fail(e.message);
     throw e;
   }
+}
+function printJoinUrls(runtime) {
+  if (runtime.mode !== "lan") return;
+  for (const url of runtime.joinUrls ?? []) process.stdout.write(`${url}
+`);
+  process.stdout.write(`${FIREWALL_HINT}
+`);
 }
 function fail(message) {
   process.stderr.write(`dm: ${message}

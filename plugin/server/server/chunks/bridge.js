@@ -1,4 +1,4 @@
-import { Et as DUNGEON_MASTER_VERSION, H as ENTITY_TYPES, I as belief, J as classTable, L as entity, O as event, Tt as DUNGEON_MASTER_PORT, W as handleKind, X as race, Y as equipment, _ as character, _t as ne, a as createRulesRepository, at as SOLO_PLAYER, ct as and, f as userStateDir, ft as inArray, g as campaign, lt as eq, mt as isNull, ot as asc, q as background, vt as or, wt as DUNGEON_MASTER_HOME, x as characterItem, y as characterDraft, yt as sql, z as fact } from "./seed.js";
+import { Dt as DUNGEON_MASTER_VERSION, Et as DUNGEON_MASTER_PORT, H as ENTITY_TYPES, I as belief, J as classTable, L as entity, O as event, Tt as DUNGEON_MASTER_LAN, W as handleKind, X as race, Y as equipment, _ as character, _t as ne, a as createRulesRepository, at as SOLO_PLAYER, ct as and, f as userStateDir, ft as inArray, g as campaign, lt as eq, mt as isNull, ot as asc, q as background, vt as or, wt as DUNGEON_MASTER_HOME, x as characterItem, y as characterDraft, yt as sql, z as fact } from "./seed.js";
 import { $ as combatState, At as createWorld, B as openCall, Bt as reviseArc, Ct as isBodyArmor, D as createDmChannels, F as callInput, Ft as createArc, G as saveSequence, Gt as readTool, H as attackSequence, Ht as ToolError, I as callResultEvent, It as currentArc, J as logActivity, Jt as parseClock, K as sequenceText, Kt as writeTool, L as cancelPendingCall, Lt as pastArcs, M as DC_BY_TIER, Mt as renderLinks, N as PASS, Nt as resolveLinks, Ot as hpState, P as TIERS, Pt as CurrentArcError, Q as addCombatants, R as createHitDiceCall, Rt as resolveBeat, St as equippable, Tt as loadWizardRules, U as damageSequence, Ut as creationTool, V as saveKey, Vt as PLUGIN_NAME, W as rollAll, Wt as expectVersion, X as nextEventId, Xt as characterRefs, Y as logEvent, Yt as characterHolders, Z as setAwaitingNarration, Zt as SESSION_LIVE_MESSAGE, _ as closeSession, at as startCombat, b as sessionsView, bt as present, c as CampaignNotFoundError, ct as combatant, dt as saveBonus, et as endCombat, f as SeedLockedError, ft as setConditions, g as addConversationLine, gt as ClockBackwardsError, h as refuseLockedSeed, ht as deathSaveCall, i as sessions, it as spendTurnResource, jt as fieldNames, k as ABILITY_NAMES, kt as lintWorld, l as NotACampaignFolderError, lt as incapacitates, m as creationStage, mt as setConcentration, n as library, nt as orderText, ot as applyDamage, pt as concentrate, q as currentStamp, qt as formatClock, r as live, rt as refuseDuringCombat, st as applyHealing, tt as nextTurn, ut as mustAct, v as history, vt as advanceClock, w as returnStrandedDrafts, wt as believedName, xt as scenePlace, y as indexNarration, yt as currentMinute, z as createPendingCall, zt as retireArc } from "./campaign.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
@@ -7,7 +7,40 @@ import { s as ABILITY_KEYS } from "./schema.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
+import { execFileSync } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
+// src/lib/server/lan.ts
+/**
+* Interfaces that carry no address a Player's device can reach: VPN and other tunnels, AirDrop
+* (AWDL, low-latency WLAN), VM and container bridges and virtual ethernet.
+*/
+var UNUSABLE_INTERFACE = /^(utun|awdl|llw|bridge|docker|br-|veth|vboxnet|vmnet|virbr|tun|tap|wg|tailscale|zt|ppp|ipsec|gif|stf)/i;
+/** macOS's Bonjour name for this machine, or undefined when it has none. */
+function macLocalHostName() {
+	try {
+		return execFileSync("scutil", ["--get", "LocalHostName"], { encoding: "utf8" }).trim() || void 0;
+	} catch {
+		return;
+	}
+}
+/**
+* The URLs other devices on the network join at: each usable non-internal IPv4 address, plus
+* `<LocalHostName>.local` on macOS, which survives a DHCP change.
+*/
+function joinUrls({ port, interfaces = os.networkInterfaces(), platform = process.platform, localHostName = macLocalHostName }) {
+	const urls = [];
+	for (const [name, addresses] of Object.entries(interfaces)) {
+		if (UNUSABLE_INTERFACE.test(name)) continue;
+		for (const info of addresses ?? []) {
+			if (info.family !== "IPv4" || info.internal || info.address.startsWith("169.254.")) continue;
+			urls.push(`http://${info.address}:${port}`);
+		}
+	}
+	const hostName = platform === "darwin" ? localHostName() : void 0;
+	if (hostName) urls.push(`http://${hostName}.local:${port}`);
+	return urls;
+}
 // src/lib/server/runtime.ts
 function runtimeFilePath(home) {
 	return path.join(home, "runtime.json");
@@ -3466,13 +3499,17 @@ var bridgeApi = createBridgeApi({
 });
 /** The known localhost port, unless overridden for tests. */
 var port = Number(DUNGEON_MASTER_PORT || 4777);
-/** Writes the runtime file (port, token, pid, version) so the bridge and launcher find this server. */
+/** Whether `dm --lan` started this server on every interface. */
+var lan = Boolean(DUNGEON_MASTER_LAN);
+/** Writes the runtime file (port, token, pid, version, mode, join URLs) so the bridge and launcher find this server. */
 function announceServer() {
 	writeRuntimeFile(userStateDir({ DUNGEON_MASTER_HOME }), {
 		port,
 		token,
 		pid: process.pid,
-		version: DUNGEON_MASTER_VERSION || void 0
+		version: DUNGEON_MASTER_VERSION || void 0,
+		mode: lan ? "lan" : "local",
+		joinUrls: lan ? joinUrls({ port }) : []
 	});
 }
 /**
@@ -3486,6 +3523,6 @@ function stop() {
 		exit: () => setTimeout(() => process.kill(process.pid, "SIGTERM"), 100)
 	});
 }
-export { permissions as a, stop as c, host as i, DmAwayError as l, bridgeApi as n, play as o, channels as r, port as s, announceServer as t };
+export { lan as a, port as c, host as i, stop as l, bridgeApi as n, permissions as o, channels as r, play as s, announceServer as t, DmAwayError as u };
 
 //# sourceMappingURL=bridge.js.map

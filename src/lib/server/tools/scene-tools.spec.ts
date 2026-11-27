@@ -200,4 +200,56 @@ describe('a cut with drafts open', () => {
       library.floor(campaignId).send({ character: bram, text: 'I wave.', player: SOLO_PLAYER })
     ).toThrow(/not in the Scene/)
   })
+  describe('a Call', () => {
+    function twoPartySplit() {
+      addFighter('Wren')
+      addFighter('Bram')
+      establishHarbour()
+      ok('move', { who: ['char:wren'], to: 'place:drowned-lantern' })
+      ok('move', { who: ['char:bram'], to: 'place:the-docks' })
+      ok('set_scene', { place: 'place:drowned-lantern' })
+    }
+
+    it('refuses to ask a Character outside the Scene', () => {
+      twoPartySplit()
+      const result = refused('narrate', {
+        text: 'Bram, listen.',
+        call: {
+          kind: 'check',
+          character: 'char:bram',
+          skill: 'perception',
+          tier: 'easy',
+          reason: 'listening'
+        }
+      })
+      expect(result.message).toMatch(/Bram is not in the Scene/)
+      expect(host.call(folder, 'narrate', { text: 'Wren looks.' }).isError ?? false).toBe(false)
+    })
+
+    it('asks Characters in the Scene as before', () => {
+      twoPartySplit()
+      ok('narrate', {
+        text: 'Wren, listen.',
+        call: {
+          kind: 'check',
+          character: 'char:wren',
+          skill: 'perception',
+          tier: 'easy',
+          reason: 'listening'
+        }
+      })
+    })
+
+    it('refuses a Call that names one Character in the Scene and one elsewhere', () => {
+      twoPartySplit()
+      const result = refused('narrate', {
+        text: 'Both of you.',
+        call: [
+          { kind: 'check', character: 'char:wren', skill: 'perception', tier: 'easy', reason: 'a' },
+          { kind: 'check', character: 'char:bram', skill: 'perception', tier: 'easy', reason: 'b' }
+        ]
+      })
+      expect(result.message).toMatch(/Bram is not in the Scene/)
+    })
+  })
 })

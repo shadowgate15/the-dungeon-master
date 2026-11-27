@@ -38,7 +38,8 @@
       "_useQueryClient.js",
       "_Button.js",
       "_Alert.js",
-      "_Textarea.js"
+      "_Textarea.js",
+      "_follow.svelte.js"
     ]
   },
   "_Dialog.js": {
@@ -164,6 +165,13 @@
       "_server2.js",
       "_messages.js",
       "_useQueryClient.js"
+    ]
+  },
+  "_follow.svelte.js": {
+    "file": "chunks/follow.svelte.js",
+    "name": "follow.svelte",
+    "imports": [
+      "_server2.js"
     ]
   },
   "_forms.js": {
@@ -1028,6 +1036,7 @@
       "_Textarea.js",
       "_floor-client.js",
       "_Alert.js",
+      "_follow.svelte.js",
       "_messages.js",
       "_useQueryClient.js",
       "_Link.js"

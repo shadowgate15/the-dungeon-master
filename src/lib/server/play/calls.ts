@@ -26,7 +26,7 @@ import { ToolError } from '../tools/contract'
 import { orderText, recordInitiative, spendTurnResource } from './combat'
 import { applyDeathSave, rollsDeathSaves } from './death'
 import { logEvent, setAwaitingNarration } from './log'
-import { characterRefs } from './scene'
+import { characterRefs, inScene, scenePlace } from './scene'
 import { nextStep, rollStep, sequenceText } from './sequences'
 
 /**
@@ -181,12 +181,20 @@ export function openCall(
     .returning({ id: call.id })
     .get().id
 
+  const scene = scenePlace(db)
   const parts =
     !Array.isArray(input) && input.kind === 'question'
       ? playersAtTable(db).map((player) => ({ player }))
       : (Array.isArray(input) ? input : [input]).flatMap((check) =>
           [check.character].flat().map((ref) => {
             const who = findCharacter(db, ref)
+            if (!inScene(scene, who)) {
+              throw new ToolError(
+                'not_in_scene',
+                `${who.name} is not in the Scene`,
+                'Move the Scene to where they are first, or call on a Character in the Scene'
+              )
+            }
             return {
               characterId: who.id,
               player: who.controllingPlayer,
