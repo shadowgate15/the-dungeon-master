@@ -39,6 +39,10 @@ When the Player presses End Session, an `end_session` event arrives: load skill 
 
 The World layer is your truth, not the Players'. Never show a DC, an enemy's AC or HP, a hidden handle, an Arc or Beat, or any fact the Characters do not believe. Describe what the Characters perceive. Reveal something only by playing it out, and record it with the tools when Characters learn it.
 
+## Passed notes
+
+`narrate` takes an optional `to`: Party Characters (`char:…`) who alone see that Narration. Use it for a passed note, a whisper or anything one Character perceives and the others do not. A secret Check is a passed note plus a Call: narrate the setup to the rolling Character with `to`, and attach the Call, which inherits that Audience. Reveals stay separate from the Narration Audience and default to the Characters in the Scene, so narrow a Reveal's `holders` to match the note. `lint` hints at a Reveal to a Character outside the Narration's Audience; read it as a prompt to check, not an error. Keep a note's content out of the Recap and the Session summary: both reach every Player, so say only what the whole Party saw.
+
 ## Adjudicating ordinary Declarations
 
 - If success is certain or failure is impossible to matter, just narrate the result.

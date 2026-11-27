@@ -1377,7 +1377,7 @@ function lintWorld(ctx) {
 			}
 		}
 	}
-	findings.push(...retiredFactBeliefs(ctx));
+	findings.push(...retiredFactBeliefs(ctx), ...revealsOutsideAudience(ctx));
 	return {
 		findings,
 		pages: changedPages(ctx, live, all)
@@ -1418,6 +1418,35 @@ function changedPages(ctx, live, all) {
 }
 function pageText({ db }, handle) {
 	return db.select({ text: pageRevision.text }).from(pageRevision).where(eq(pageRevision.handle, handle)).orderBy(desc(pageRevision.id)).get()?.text;
+}
+/**
+* Reveals since the last lint whose new Beliefs belong to a Character the latest Narration
+* before the Reveal did not reach. Reveals keep their default Holders (ADR 0007); this only reads.
+*/
+function revealsOutsideAudience({ db }) {
+	const since = lastLint(db)?.id ?? 0;
+	const characters = new Map(characterHolders(db).map((c) => [c.id, c.handle]));
+	const reveals = db.select().from(event).where(and(eq(event.kind, "beliefs_revealed"), gt(event.id, since))).orderBy(asc(event.id)).all();
+	const findings = [];
+	for (const reveal of reveals) {
+		const narration = db.select({ audience: event.audience }).from(event).where(and(eq(event.kind, "narration"), lt(event.id, reveal.id), sql`coalesce(json_extract(${event.data}, '$.recap'), 0) = 0`)).orderBy(desc(event.id)).get();
+		if (!narration) continue;
+		const ids = Array.isArray(reveal.data?.beliefs) ? reveal.data.beliefs : [];
+		if (!ids.length) continue;
+		const rows = db.select({
+			id: belief.id,
+			holder: belief.holderCharacter
+		}).from(belief).where(inArray(belief.id, ids)).orderBy(asc(belief.id)).all();
+		for (const row of rows) {
+			if (row.holder === null || narration.audience.includes(row.holder)) continue;
+			findings.push({
+				kind: "reveal_outside_audience",
+				holder: characters.get(row.holder) ?? "?",
+				belief: row.id
+			});
+		}
+	}
+	return findings;
 }
 function retiredFactBeliefs({ db }) {
 	const characters = new Map(characterHolders(db).map((c) => [c.id, c.handle]));

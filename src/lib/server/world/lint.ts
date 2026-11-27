@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, gt, isNull } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull, lt } from 'drizzle-orm'
 import { belief, entity, event, fact, pageRevision } from '../db/schema'
 import { characterHolders } from '../knowledge/holders'
 import type { ToolContext } from '../tools/contract'
@@ -25,6 +26,12 @@ export type LintFinding =
     }
   /** A Page linking to an Entity that is retired (not merged: merged links follow the survivor). */
   | { kind: 'retired_link'; handle: string; retired: Named & { reason: string | null } }
+  /**
+   * A hint, never a refusal: a Reveal since the last lint reached a Character outside the
+   * Audience of the Narration before it. Fine for a Reveal the Player will learn another way;
+   * a passed note's content should reach only its Audience (ADR 0008).
+   */
+  | { kind: 'reveal_outside_audience'; holder: string; belief: number }
 
 /** Where an Entity's links live: its Page and its current Facts. */
 type Text = { handle: string; in: 'page' | number; text: string }
@@ -128,7 +135,7 @@ export function lintWorld(ctx: ToolContext) {
       }
     }
   }
-  findings.push(...retiredFactBeliefs(ctx))
+  findings.push(...retiredFactBeliefs(ctx), ...revealsOutsideAudience(ctx))
   return { findings, pages: changedPages(ctx, live, all) }
 }
 
@@ -186,6 +193,54 @@ function pageText({ db }: ToolContext, handle: string): string | undefined {
     .where(eq(pageRevision.handle, handle))
     .orderBy(desc(pageRevision.id))
     .get()?.text
+}
+
+/**
+ * Reveals since the last lint whose new Beliefs belong to a Character the latest Narration
+ * before the Reveal did not reach. Reveals keep their default Holders (ADR 0007); this only reads.
+ */
+function revealsOutsideAudience({ db }: ToolContext): LintFinding[] {
+  const since = lastLint(db)?.id ?? 0
+  const characters = new Map(characterHolders(db).map((c) => [c.id, c.handle]))
+  const reveals = db
+    .select()
+    .from(event)
+    .where(and(eq(event.kind, 'beliefs_revealed'), gt(event.id, since)))
+    .orderBy(asc(event.id))
+    .all()
+  const findings: LintFinding[] = []
+  for (const reveal of reveals) {
+    const narration = db
+      .select({ audience: event.audience })
+      .from(event)
+      .where(
+        and(
+          eq(event.kind, 'narration'),
+          lt(event.id, reveal.id),
+          sql`coalesce(json_extract(${event.data}, '$.recap'), 0) = 0`
+        )
+      )
+      .orderBy(desc(event.id))
+      .get()
+    if (!narration) continue
+    const ids = Array.isArray(reveal.data?.beliefs) ? (reveal.data.beliefs as number[]) : []
+    if (!ids.length) continue
+    const rows = db
+      .select({ id: belief.id, holder: belief.holderCharacter })
+      .from(belief)
+      .where(inArray(belief.id, ids))
+      .orderBy(asc(belief.id))
+      .all()
+    for (const row of rows) {
+      if (row.holder === null || narration.audience.includes(row.holder)) continue
+      findings.push({
+        kind: 'reveal_outside_audience',
+        holder: characters.get(row.holder) ?? '?',
+        belief: row.id
+      })
+    }
+  }
+  return findings
 }
 
 function retiredFactBeliefs({ db }: ToolContext): LintFinding[] {
