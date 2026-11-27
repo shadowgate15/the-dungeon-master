@@ -4,4 +4,6 @@ export type ClaimRow = {
   id: string
   name: string
   claim: 'yours' | 'taken' | 'free'
+  /** Present, and true, only for the Host on a taken Character: the Host may Release it. */
+  releasable?: true
 }

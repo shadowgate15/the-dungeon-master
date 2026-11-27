@@ -13,6 +13,8 @@
     problem?: string | null
     onclaim: (id: string) => void
     onletgo: (id: string) => void
+    /** Host only: frees a taken Character. */
+    onrelease?: (id: string) => void
   }
 
   let {
@@ -22,7 +24,8 @@
     closeHref,
     problem = null,
     onclaim,
-    onletgo
+    onletgo,
+    onrelease
   }: Props = $props()
 
   const seated = $derived(rows.some((r) => r.claim === 'yours'))
@@ -45,7 +48,14 @@
         {:else if row.claim === 'free'}
           <Button size="sm" onclick={() => onclaim(row.id)}>Claim</Button>
         {:else}
-          <span class="text-text-muted text-sm">taken</span>
+          <span class="flex items-center gap-2">
+            <span class="text-text-muted text-sm">taken</span>
+            {#if row.releasable && onrelease}
+              <Button size="sm" variant="secondary" onclick={() => onrelease(row.id)}
+                >Release</Button
+              >
+            {/if}
+          </span>
         {/if}
       </li>
     {:else}

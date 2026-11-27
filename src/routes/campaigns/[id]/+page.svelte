@@ -69,7 +69,9 @@
         disabled: archived
       }}
 >
-  <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
+  {#if data.isHost}
+    <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
+  {/if}
   <header class="space-y-1">
     <div class="flex items-center gap-3">
       <h1 class="font-display text-2xl">{data.campaign.name}</h1>
@@ -103,8 +105,12 @@
     {:else if locked}
       <Alert variant="info">
         The story has begun, so the Seed is locked.
-        <Link href={resolve('/campaigns/[id]/begin', { id: data.campaign.id })}>Start over</Link>
-        (until the first Narration) to change it.
+        {#if data.isHost}
+          <Link href={resolve('/campaigns/[id]/begin', { id: data.campaign.id })}>Start over</Link>
+          (until the first Narration) to change it.
+        {:else}
+          Only the Host can start over.
+        {/if}
       </Alert>
     {/if}
 
@@ -123,11 +129,11 @@
         }}
         oninput={() => (saved = false)}
       >
-        <CampaignSeedCard bind:seed disabled={archived || locked} {dmFields} />
+        <CampaignSeedCard bind:seed disabled={archived || locked || !data.isHost} {dmFields} />
         {#if form && 'error' in form && form.error}
           <Alert variant="danger">{form.error}</Alert>
         {/if}
-        {#if !archived && !locked}
+        {#if !archived && !locked && data.isHost}
           <div class="flex items-center gap-3">
             <Button type="submit">Save Seed</Button>
             {#if saved}<span class="text-sm text-muted">Saved</span>{/if}

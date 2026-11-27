@@ -81,4 +81,43 @@ describe('Claims', () => {
       { type: 'claims', campaign: campaignId }
     ])
   })
+
+  describe('Release', () => {
+    const takenByGuest = () => {
+      const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+      play.letGo(campaignId, wren, SOLO_PLAYER)
+      play.claim(campaignId, wren, GUEST)
+      pushed.length = 0
+      return wren
+    }
+
+    it('lets the Host free a Character another browser holds, so that browser no longer holds it', () => {
+      const wren = takenByGuest()
+
+      play.release(campaignId, wren, SOLO_PLAYER)
+
+      expect(standing(GUEST)).toEqual([['Wren', 'free']])
+      expect(pushed).toEqual([{ type: 'claims', campaign: campaignId }])
+    })
+
+    it('refuses a Release from a browser that is not the Host', () => {
+      const wren = takenByGuest()
+
+      expect(() => play.release(campaignId, wren, 'other-browser')).toThrow(ClaimRefusedError)
+      expect(() => play.release(campaignId, wren, GUEST)).toThrow(ClaimRefusedError)
+      expect(standing(GUEST)).toEqual([['Wren', 'yours']])
+      expect(pushed).toEqual([])
+    })
+
+    it('marks taken rows releasable for the Host only', () => {
+      takenByGuest()
+
+      expect(play.claims(campaignId, SOLO_PLAYER)[0]).toMatchObject({
+        claim: 'taken',
+        releasable: true
+      })
+      expect(play.claims(campaignId, GUEST)[0].releasable).toBeUndefined()
+      expect(play.claims(campaignId, 'other-browser')[0].releasable).toBeUndefined()
+    })
+  })
 })

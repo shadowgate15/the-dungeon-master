@@ -203,6 +203,36 @@ describe('LAN mode', () => {
       expect((await remote('/campaigns')).status).toBe(403)
     })
 
+    it('refuses a remote browser every Host-only act, and leaves the creation chat open', async () => {
+      const refused: [string, string][] = [
+        ['POST', '/campaigns/abc/begin?/begin'],
+        ['POST', '/campaigns/abc/begin?/startOver'],
+        ['POST', '/campaigns/abc?/saveSeed'],
+        ['POST', '/api/campaigns/abc/end-session'],
+        ['PUT', '/api/campaigns/abc/seed'],
+        ['POST', '/api/campaigns/abc/permission'],
+        ['GET', '/api/campaigns/abc/permission']
+      ]
+      for (const [method, path] of refused) {
+        expect((await remote(path, { method })).status, `${method} ${path}`).toBe(403)
+      }
+      for (const [method, path] of [
+        ['GET', '/campaigns/abc/begin'],
+        ['POST', '/api/campaigns/abc/conversation']
+      ]) {
+        expect((await remote(path, { method })).status, `${method} ${path}`).toBe(200)
+      }
+    })
+
+    it('lets the Host do the same acts', async () => {
+      for (const path of ['/api/campaigns/abc/end-session', '/campaigns/abc/begin?/begin']) {
+        expect(
+          (await request(`http://localhost:4777${path}`, { method: 'POST' })).status,
+          path
+        ).toBe(200)
+      }
+    })
+
     it('sends the bare root to the LAN Campaign', async () => {
       const res = await remote('/')
       expect(res.status).toBe(303)
