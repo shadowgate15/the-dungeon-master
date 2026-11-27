@@ -34,3 +34,13 @@ describe('Journal', () => {
     await expect.element(items.nth(1)).toHaveTextContent(/Wren/)
   })
 })
+
+describe('Journal (full page)', () => {
+  it('marks each entry with its Holders when no one is viewing', async () => {
+    render(Journal, { entries: journalEntries })
+
+    const items = page.getByRole('region', { name: 'Mira Voss' }).getByRole('listitem')
+    await expect.element(items.nth(1)).toHaveTextContent(/Wren/)
+    await expect.element(items.nth(0)).toHaveTextContent(/Wren, Kael/)
+  })
+})
