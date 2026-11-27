@@ -1,8 +1,9 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import type { Database } from '../db/connect'
 import { entity } from '../db/schema'
 import { believedName } from '../knowledge/player-names'
-import { callInput, openCall } from '../play/calls'
+import { callInput, callResultEvent, createCalls, openCall } from '../play/calls'
 import { characterRefs } from '../knowledge/holders'
 import { partyAudience, setAwaitingNarration } from '../play/log'
 import { indexNarration } from '../play/sessions'
@@ -98,6 +99,22 @@ export const narrationTools = [
         result: callId
           ? { narrated: true, call: callId, next: 'End your turn: the Players answer the Call' }
           : { narrated: true },
+        // Unclaimed Characters' parts are rolled by code as the Call opens, after the Narration
+        // that asks them. If that was every part, the DM hears the result here, not from a click.
+        after: callId
+          ? () => {
+              const settled = createCalls(ctx.db as Database, () => ctx.now).settleUnclaimed(
+                ctx.dice,
+                true
+              )
+              return settled
+                ? {
+                    call_result: callResultEvent(settled).content,
+                    next: 'The Call was rolled by code: narrate what follows'
+                  }
+                : {}
+            }
+          : undefined,
         event: {
           kind: 'narration',
           audience,

@@ -191,6 +191,9 @@ export function createPlay({
       library.party(campaignId).letGo(character, browser)
       publish({ type: 'claims', campaign: campaignId })
       settle(campaignId, library.floor(campaignId).lose(character))
+      // Letting go may leave an unclaimed part as the last one outstanding: code rolls it.
+      const result = library.calls(campaignId).settleUnclaimed(dice(campaignId))
+      if (result) answered(campaignId, result)
     },
 
     /**

@@ -886,7 +886,8 @@ function PermissionCard($$renderer, $$props) {
 function TakeASeat($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/** Where "Create a Character" goes: the Party wizard. */
-		let { open = void 0, rows, createHref, closeHref, problem = null, onclaim, onletgo } = $$props;
+		/** Host only: frees a taken Character. */
+		let { open = void 0, rows, createHref, closeHref, problem = null, onclaim, onletgo, onrelease } = $$props;
 		const seated = derived(() => rows.some((r) => r.claim === "yours"));
 		let $$settled = true;
 		let $$inner_renderer;
@@ -932,7 +933,22 @@ function TakeASeat($$renderer, $$props) {
 									},
 									$$slots: { default: true }
 								});
-							} else $$renderer.push(`<!--[-1--><span class="text-text-muted text-sm">taken</span>`);
+							} else {
+								$$renderer.push(`<!--[-1--><span class="flex items-center gap-2"><span class="text-text-muted text-sm">taken</span> `);
+								if (row.releasable && onrelease) {
+									$$renderer.push("<!--[0-->");
+									Button($$renderer, {
+										size: "sm",
+										variant: "secondary",
+										onclick: () => onrelease(row.id),
+										children: ($$renderer) => {
+											$$renderer.push(`<!---->Release`);
+										},
+										$$slots: { default: true }
+									});
+								} else $$renderer.push("<!--[-1-->");
+								$$renderer.push(`<!--]--></span>`);
+							}
 							$$renderer.push(`<!--]--></li>`);
 						}
 					} else $$renderer.push(`<!--[!--><li class="text-text-muted text-sm">The Party has no Characters yet.</li>`);
@@ -1314,6 +1330,7 @@ function _page($$renderer, $$props) {
 				problem,
 				onclaim: (id) => attempt(() => seats.claim(id)),
 				onletgo: (id) => attempt(() => seats.letGo(id)),
+				onrelease: (id) => attempt(() => seats.release(id)),
 				get open() {
 					return seatOpen;
 				},

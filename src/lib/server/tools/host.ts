@@ -142,6 +142,7 @@ export function createToolHost({
       const {
         result,
         skill,
+        after,
         event: logged
       } = tool.run({ ...context, db: tx, stamp: { ...current, eventId } }, parsed.data)
       logEvent(tx, { tool: tool.name, ...logged }, { stamp: current, at, id: eventId })
@@ -152,7 +153,7 @@ export function createToolHost({
         tool.name === 'close_session'
           ? [...timelineChanged, { type: 'claims', campaign: campaignId }]
           : timelineChanged
-      return { result: withSkill(result, skill), changed }
+      return { result: withSkill({ ...result, ...after?.() }, skill), changed }
     })
   }
 

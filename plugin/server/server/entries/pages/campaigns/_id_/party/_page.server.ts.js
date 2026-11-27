@@ -1,7 +1,7 @@
 import { a as redirect, n as fail, t as error } from "../../../../../chunks/exports.js";
 import { ft as resolve } from "../../../../../chunks/internal.js";
 import "../../../../../chunks/paths.js";
-import { D as DraftNotFoundError, Dt as loadWizardRules, Ot as CharacterNotFoundError, i as sessions, n as library } from "../../../../../chunks/campaign.js";
+import { D as DraftNotFoundError, Ot as loadWizardRules, i as sessions, kt as CharacterNotFoundError, n as library } from "../../../../../chunks/campaign.js";
 // src/routes/campaigns/[id]/party/+page.server.ts
 /**
 * The Party step: the Campaign's saved Characters and drafts. `?draft=<id>` opens a stored draft
@@ -71,11 +71,11 @@ var load = ({ params, url }) => {
 };
 var actions = { 
 /** Starts a draft with the Campaign and opens it in the wizard. */
-newDraft: ({ params }) => {
+newDraft: ({ params, locals }) => {
 	const entry = library.get(params.id);
 	if (!entry) error(404, "Campaign not found");
 	if (entry.status !== "active") return fail(400, { error: "An archived or missing Campaign cannot be changed" });
-	const { id } = library.party(entry.id).startDraft();
+	const { id } = library.party(entry.id).startDraft({ player: locals.browser });
 	redirect(303, `${resolve("/campaigns/[id]/party", { id: entry.id })}?draft=${encodeURIComponent(id)}`);
 } };
 export { actions, load };
