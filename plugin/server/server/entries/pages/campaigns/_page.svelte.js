@@ -8,7 +8,7 @@ import { n as createSessionsQuery, t as DmBadge } from "../../../chunks/DmBadge.
 import { t as Link } from "../../../chunks/Link.js";
 import "../../../chunks/forms.js";
 import { t as Alert } from "../../../chunks/Alert.js";
-import { i as Button, n as STATUS_CLASSES, t as NEUTRAL_CLASSES } from "../../../chunks/status.js";
+import { n as NEUTRAL_CLASSES, r as STATUS_CLASSES, t as Button } from "../../../chunks/Button.js";
 import { t as Dialog } from "../../../chunks/Dialog.js";
 import { t as Field } from "../../../chunks/Field.js";
 import { t as TextInput } from "../../../chunks/TextInput.js";

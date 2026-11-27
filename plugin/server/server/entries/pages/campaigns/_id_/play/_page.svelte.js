@@ -2,7 +2,7 @@ import { ft as resolve } from "../../../../../chunks/internal.js";
 import { S as escape_html, a as bind_props, c as ensure_array_like, l as head, n as attr_style, o as derived, p as stringify, r as attributes, t as attr_class, v as attr, y as clsx } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/paths.js";
 import { n as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
-import { i as Button } from "../../../../../chunks/status.js";
+import { t as Button } from "../../../../../chunks/Button.js";
 import { t as Badge } from "../../../../../chunks/Badge.js";
 import { t as Checkbox } from "../../../../../chunks/Checkbox.js";
 import { t as Field } from "../../../../../chunks/Field.js";
@@ -531,7 +531,7 @@ function FloorComposer($$renderer, $$props) {
 		* the DM back replaces the send controls; drafting stays open. A pure view; the console wires the
 		* callbacks to the server.
 		*/
-		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false, elsewhere = [], oncut = () => {}, returned = [], onreturned = () => {}, away = null, turn = null } = $$props;
+		let { acting, declarations, onsend, ondone, onedit, onwithdraw, awaiting = false, disabled = false, elsewhere = [], oncut = () => {}, returned = [], onreturned = () => {}, away = null, isHost = true, turn = null } = $$props;
 		/** The folder, quoted for a POSIX shell when it needs it. */
 		const quoted = (folder) => /^[\w@%+=:,./-]+$/.test(folder) ? folder : `'${folder.replaceAll("'", `'\\''`)}'`;
 		const relaunch = derived(() => away ? `cd ${quoted(away.folder)} && dm` : "");
@@ -652,17 +652,21 @@ function FloorComposer($$renderer, $$props) {
 			} else $$renderer.push("<!--[-1-->");
 			$$renderer.push(`<!--]--> `);
 			if (away) {
-				$$renderer.push(`<!--[0--><div role="status" aria-label="DM away" class="flex flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1 text-sm"><span class="font-medium">The DM is away.</span> <span class="text-muted">Start a Session to play on; your drafts wait here.</span> <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs">${escape_html(relaunch())}</code> `);
-				Button($$renderer, {
-					size: "sm",
-					variant: "secondary",
-					onclick: copy,
-					children: ($$renderer) => {
-						$$renderer.push(`<!---->${escape_html(copied ? "Copied" : "Copy")}`);
-					},
-					$$slots: { default: true }
-				});
-				$$renderer.push(`<!----></div>`);
+				$$renderer.push(`<!--[0--><div role="status" aria-label="DM away" class="flex flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1 text-sm"><span class="font-medium">The DM is away.</span> `);
+				if (isHost) {
+					$$renderer.push(`<!--[0--><span class="text-muted">Start a Session to play on; your drafts wait here.</span> <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs">${escape_html(relaunch())}</code> `);
+					Button($$renderer, {
+						size: "sm",
+						variant: "secondary",
+						onclick: copy,
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->${escape_html(copied ? "Copied" : "Copy")}`);
+						},
+						$$slots: { default: true }
+					});
+					$$renderer.push(`<!---->`);
+				} else $$renderer.push(`<!--[-1--><span class="text-muted">Waiting for the Host to start the DM; your drafts wait here.</span>`);
+				$$renderer.push(`<!--]--></div>`);
 			} else {
 				$$renderer.push(`<!--[-1--><div class="flex items-center justify-end gap-2"><span class="mr-auto text-xs text-muted">Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span> `);
 				Button($$renderer, {
@@ -1093,17 +1097,20 @@ function _page($$renderer, $$props) {
 			$$slots: { default: true }
 		});
 		$$renderer.push(`<!----> `);
-		Button($$renderer, {
-			size: "sm",
-			variant: "secondary",
-			disabled: !attached() || archived() || ending,
-			onclick: end,
-			children: ($$renderer) => {
-				$$renderer.push(`<!---->${escape_html(ending ? "Ending the session…" : "End Session")}`);
-			},
-			$$slots: { default: true }
-		});
-		$$renderer.push(`<!----></header> <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]" aria-label="Play console">`);
+		if (data.isHost) {
+			$$renderer.push("<!--[0-->");
+			Button($$renderer, {
+				size: "sm",
+				variant: "secondary",
+				disabled: !attached() || archived() || ending,
+				onclick: end,
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->${escape_html(ending ? "Ending the session…" : "End Session")}`);
+				},
+				$$slots: { default: true }
+			});
+		} else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]--></header> <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]" aria-label="Play console">`);
 		CharacterSheet($$renderer, {
 			sheets: sheets(),
 			acting: acting()?.id ?? null,
@@ -1140,7 +1147,7 @@ function _page($$renderer, $$props) {
 			});
 		} else $$renderer.push("<!--[-1-->");
 		$$renderer.push(`<!--]--> `);
-		if (permission.data) {
+		if (data.isHost && permission.data) {
 			$$renderer.push("<!--[0-->");
 			const request = permission.data;
 			PermissionCard($$renderer, {
@@ -1173,7 +1180,8 @@ function _page($$renderer, $$props) {
 				oncut: (id) => attempt(() => actions.cut(id)),
 				returned: floor.data.returned,
 				onreturned: (ids) => attempt(() => actions.clearReturned(ids)),
-				away: attached() ? null : { folder: data.campaign.path }
+				away: attached() ? null : { folder: data.campaign.path },
+				isHost: data.isHost
 			});
 		}
 		$$renderer.push(`<!--]--></section> `);

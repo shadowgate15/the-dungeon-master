@@ -1,4 +1,5 @@
 import { t as error } from "../../../../../chunks/exports.js";
+import "../../../../../chunks/enums2.js";
 import { i as sessions, n as library } from "../../../../../chunks/campaign.js";
 import { c as play, s as permissions } from "../../../../../chunks/bridge.js";
 // src/routes/campaigns/[id]/play/+page.server.ts
@@ -19,7 +20,7 @@ var load = ({ params, locals }) => {
 		timeline: play.timeline(entry.id, locals.browser),
 		scene: play.scene(entry.id, locals.browser),
 		journal: play.journal(entry.id, locals.browser),
-		permission: permissions.pending(entry.id),
+		permission: locals.browser === "player" ? permissions.pending(entry.id) : null,
 		attached: sessions.list()
 	};
 };

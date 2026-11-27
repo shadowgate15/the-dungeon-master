@@ -1,7 +1,7 @@
 import { S as escape_html, c as ensure_array_like, f as spread_props, t as attr_class, v as attr, y as clsx } from "./server2.js";
 import { c as seedQueryKey, f as createQuery, n as conversationQueryKey, r as draftQueryKey } from "./messages.js";
 import { t as useQueryClient } from "./useQueryClient.js";
-import { i as Button } from "./status.js";
+import { t as Button } from "./Button.js";
 import "./Alert.js";
 import { t as Textarea } from "./Textarea.js";
 import "./follow.svelte.js";

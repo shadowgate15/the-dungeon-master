@@ -1,6 +1,6 @@
 import { S as escape_html, a as bind_props, r as attributes, y as clsx } from "./server2.js";
 import "./index-server.js";
-import { i as Button } from "./status.js";
+import { t as Button } from "./Button.js";
 // src/lib/ui/Dialog.svelte
 function Dialog($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
