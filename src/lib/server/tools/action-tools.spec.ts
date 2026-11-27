@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -77,7 +78,7 @@ function addGoblin(name: string): string {
   return handle
 }
 
-const timeline = () => play.timeline(campaignId)
+const timeline = () => play.timeline(campaignId, SOLO_PLAYER)
 const openCall = () => timeline().call!
 
 describe('a Character attack', () => {
@@ -102,12 +103,12 @@ describe('a Character attack', () => {
     })
 
     load([20, 15])
-    play.roll(campaignId, id, part.id)
+    play.roll(campaignId, id, part.id, SOLO_PLAYER)
     expect(heard).toEqual([])
     expect(openCall().parts[0]).toMatchObject({ answered: false, next: 'damage' })
 
     load([8, 5])
-    play.roll(campaignId, id, part.id)
+    play.roll(campaignId, id, part.id, SOLO_PLAYER)
 
     expect(heard).toHaveLength(1)
     expect(heard[0].meta).toEqual({ kind: 'call_result', call_id: id, players: 'player' })
@@ -150,9 +151,9 @@ describe('a Character attack', () => {
     const part = openCall().parts[0]
 
     load([20, 20])
-    play.roll(campaignId, id, part.id)
+    play.roll(campaignId, id, part.id, SOLO_PLAYER)
     load([8, 1], [8, 1])
-    play.roll(campaignId, id, part.id)
+    play.roll(campaignId, id, part.id, SOLO_PLAYER)
 
     const rolls = timeline().entries.filter((e) => e.type === 'roll')
     expect(rolls.map((r) => r.type === 'roll' && r.outcome)).toEqual(['critical hit', null])
@@ -171,7 +172,7 @@ describe('a Character attack', () => {
     ok('narrate', { text: 'Wren fires.', call: id })
 
     load([20, 3])
-    play.roll(campaignId, id, openCall().parts[0].id)
+    play.roll(campaignId, id, openCall().parts[0].id, SOLO_PLAYER)
 
     expect(heard).toHaveLength(1)
     expect(heard[0].content).toContain('d20 3 + 4 = 7 vs AC 15 → miss')
@@ -347,9 +348,9 @@ describe('cast', () => {
     expect(part).toMatchObject({ character: 'Ilyra', label: 'Fire Bolt attack', next: 'to hit' })
 
     load([20, 12])
-    play.roll(campaignId, id, part.id)
+    play.roll(campaignId, id, part.id, SOLO_PLAYER)
     load([10, 6])
-    play.roll(campaignId, id, part.id)
+    play.roll(campaignId, id, part.id, SOLO_PLAYER)
 
     expect(heard[0].content).toBe(
       `[Ilyra · player] Fire Bolt attack on Grik (${grik}): d20 12 + 5 = 17 vs AC 15 → hit; damage 1d10: 6 = 6 fire → Grik 1/7 HP (near death)`
@@ -410,7 +411,7 @@ describe('force_save', () => {
     expect(JSON.stringify(openCall())).not.toMatch(/\b13\b|\bdc\b/i)
 
     load([20, 5])
-    play.roll(campaignId, forced.pending_call, part.id)
+    play.roll(campaignId, forced.pending_call, part.id, SOLO_PLAYER)
 
     expect(heard[0].content).toBe(
       '[Wren · player] Dexterity save (char:wren): d20 5 + 2 = 7 vs DC 13 → failure; takes 6 fire, is prone → Wren 6/12 HP (bloodied)'
@@ -589,9 +590,9 @@ describe('what the Player sees', () => {
     expect(JSON.stringify(playSheets(library.party(campaignId)))).not.toContain('Grik')
 
     load([20, 16])
-    play.roll(campaignId, id, openCall().parts[0].id)
+    play.roll(campaignId, id, openCall().parts[0].id, SOLO_PLAYER)
     load([8, 2])
-    play.roll(campaignId, id, openCall().parts[0].id)
+    play.roll(campaignId, id, openCall().parts[0].id, SOLO_PLAYER)
 
     expect(seen()).not.toMatch(hidden)
     expect(seen()).toContain('"state":"bloodied"')

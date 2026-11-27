@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -160,8 +161,10 @@ describe('Sessions with no Narration', () => {
 describe('recap', () => {
   it('leaves awaiting Narration set and is not taken for an answer', () => {
     play.openSession(campaignId, 'bridge-1')
-    library.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })
-    play.done(campaignId)
+    library
+      .floor(campaignId)
+      .send({ character: wren, text: 'I pick the lock.', player: SOLO_PLAYER })
+    play.done(campaignId, SOLO_PLAYER)
 
     ok('narrate', { text: 'Previously, the harbour office…', recap: true })
 
