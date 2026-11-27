@@ -1,6 +1,5 @@
 import { and, asc, eq, max, sql } from 'drizzle-orm'
 import { canAct } from '#lib/character/acting.ts'
-import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import type { OpenFloor, PendingDeclaration, TableBrowser } from '#lib/play/floor.ts'
 import type { Database, Queryable } from '../db/connect'
 import { campaign, character, declaration, floor, returnedDraft } from '../db/schema'
