@@ -77,7 +77,23 @@ test('a browser with no Claim takes a seat, Claims a Character and plays a turn'
   await page.getByRole('button', { name: 'Done' }).click()
   await expect(page.getByText('The lock clicks open.')).toBeVisible()
 
-  // Letting go of the last Claim brings the dialog back.
+  // End Session lapses every Claim, and the dialog comes back.
+  dm.script({
+    on: 'end_session',
+    run: async () => {
+      await dm!.call('narrate', { text: 'The harbour bell tolls midnight.' })
+      await dm!.call('close_session', { summary: 'Wren picked the lock.', threads: [] })
+    }
+  })
+  await page.getByRole('button', { name: 'End Session' }).click()
+  await dm.settled()
+  await expect(seat).toBeVisible()
+  await expect(seat.getByRole('button', { name: 'Sit down' })).toBeDisabled()
+
+  // Claiming again at the next Session, then letting go of the last Claim, brings the dialog back.
+  await seat.getByRole('button', { name: 'Claim' }).click()
+  await seat.getByRole('button', { name: 'Sit down' }).click()
+  await expect(seat).toBeHidden()
   await page.getByRole('button', { name: 'Your Characters' }).click()
   await seat.getByRole('button', { name: 'Let go' }).click()
   await expect(seat).toBeVisible()

@@ -3,7 +3,7 @@ import type { SessionHistory } from '#lib/play/sessions.ts'
 import type { Queryable } from '../db/connect'
 import { event, session } from '../db/schema'
 import { ToolError } from '../tools/contract'
-import { currentSession, hasNarration, partyAudience } from './log'
+import { currentSession, hasNarration, lapseClaims, partyAudience } from './log'
 
 type SessionRow = typeof session.$inferSelect
 
@@ -71,6 +71,7 @@ export function closeSession(
     })
     .where(eq(session.id, target.id))
     .run()
+  lapseClaims(db)
   return written
     ? { session: target.number, summarised: true }
     : {

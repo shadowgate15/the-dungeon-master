@@ -243,3 +243,36 @@ describe('history', () => {
     expect(ok('history', { limit: 2 }).events).toHaveLength(2)
   })
 })
+
+describe('Claims lapse when a Session closes', () => {
+  const standing = () => play.claims(campaignId, SOLO_PLAYER).map((row) => row.claim)
+
+  it('clears every Character Claim, after the summary, on End Session', () => {
+    play.openSession(campaignId, 'bridge-1')
+    const draft = library.party(campaignId).startDraft({ player: 'guest' })
+    ok('narrate', { text: 'The lock clicks open.' })
+    expect(standing()).toEqual(['yours'])
+
+    ok('close_session', { summary, threads: [] })
+
+    expect(standing()).toEqual(['free'])
+    expect(library.party(campaignId).draft(draft.id).controllingPlayer).toBe('guest')
+  })
+
+  it('clears them when a stopped Session is closed as the next one opens', () => {
+    play.openSession(campaignId, 'bridge-1') // stopped without Narration: closes on the next open
+    play.openSession(campaignId, 'bridge-2')
+
+    expect(standing()).toEqual(['free'])
+  })
+
+  it('clears them on the catch-up close of an older Session', () => {
+    play.openSession(campaignId, 'bridge-1')
+    ok('narrate', { text: 'The lock clicks open.' })
+    play.openSession(campaignId, 'bridge-2')
+
+    ok('close_session', { summary, threads: [], session: 1 })
+
+    expect(standing()).toEqual(['free'])
+  })
+})
