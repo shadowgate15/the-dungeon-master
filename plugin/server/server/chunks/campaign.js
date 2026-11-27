@@ -113,7 +113,7 @@ function createLiveUpdates({ sessions }) {
 		}
 	};
 }
-// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/functions/aggregate.js
+// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/functions/aggregate.js
 function count(expression) {
 	return sql`count(${expression || sql.raw("*")})`.mapWith(Number);
 }
@@ -3357,8 +3357,10 @@ function openCall(db, input, { at, openedBy }) {
 		openedBy,
 		createdAt: at
 	}).returning({ id: call.id }).get().id;
+	const scene = scenePlace(db);
 	(!Array.isArray(input) && input.kind === "question" ? playersAtTable(db).map((player) => ({ player })) : (Array.isArray(input) ? input : [input]).flatMap((check) => [check.character].flat().map((ref) => {
 		const who = findCharacter(db, ref);
+		if (!inScene(scene, who)) throw new ToolError("not_in_scene", `${who.name} is not in the Scene`, "Move the Scene to where they are first, or call on a Character in the Scene");
 		return {
 			characterId: who.id,
 			player: who.controllingPlayer,
