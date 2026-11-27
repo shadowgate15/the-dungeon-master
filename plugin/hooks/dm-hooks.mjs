@@ -61,6 +61,12 @@ async function runHook(name, input2, env = process.env) {
       }
     };
   }
+  if (name === "band") {
+    const runtime = readRuntimeFile(userStateDir(env));
+    if (!runtime) return void 0;
+    const lines = runtime.mode === "lan" && runtime.joinUrls?.length ? runtime.joinUrls : [`http://localhost:${runtime.port}`];
+    return { lines };
+  }
   if (name === "stop") {
     const check = await api(env, "stop-check", {
       method: "POST",
