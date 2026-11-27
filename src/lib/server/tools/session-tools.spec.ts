@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -146,7 +147,7 @@ describe('Sessions with no Narration', () => {
       summarised: false
     })
     expect(ok('sessions').sessions).toEqual([])
-    expect(library.record(campaignId).sessionHistory().sessions).toEqual([])
+    expect(library.record(campaignId).sessionHistory('player').sessions).toEqual([])
   })
 
   it('close on their own when the next Session opens', () => {
@@ -160,14 +161,16 @@ describe('Sessions with no Narration', () => {
 describe('recap', () => {
   it('leaves awaiting Narration set and is not taken for an answer', () => {
     play.openSession(campaignId, 'bridge-1')
-    library.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })
-    play.done(campaignId)
+    library
+      .floor(campaignId)
+      .send({ character: wren, text: 'I pick the lock.', player: SOLO_PLAYER })
+    play.done(campaignId, SOLO_PLAYER)
 
     ok('narrate', { text: 'Previously, the harbour office…', recap: true })
 
-    expect(library.record(campaignId).timeline().awaitingSince).not.toBeNull()
+    expect(library.record(campaignId).timeline('player').awaitingSince).not.toBeNull()
     ok('narrate', { text: 'The lock clicks open.' })
-    expect(library.record(campaignId).timeline().awaitingSince).toBeNull()
+    expect(library.record(campaignId).timeline('player').awaitingSince).toBeNull()
   })
 
   it('shows as a recap Narration in the timeline and leaves the in-fiction minute alone', () => {
@@ -176,7 +179,7 @@ describe('recap', () => {
 
     ok('narrate', { text: 'Previously, the harbour office…', recap: true })
 
-    expect(library.record(campaignId).timeline().entries).toEqual([
+    expect(library.record(campaignId).timeline('player').entries).toEqual([
       expect.objectContaining({ type: 'narration', recap: true })
     ])
     expect(host.events(folder).at(-1)?.minute).toBe(before)
@@ -199,7 +202,7 @@ describe('recap', () => {
         call: { kind: 'question', text: 'Ready?' }
       }).code
     ).toBe('invalid_input')
-    expect(library.record(campaignId).timeline().entries).toEqual([])
+    expect(library.record(campaignId).timeline('player').entries).toEqual([])
   })
 
   it('is due once per Session after one with a summary', () => {
@@ -238,5 +241,42 @@ describe('history', () => {
     expect(ok('history', { about: 'npc:mira-voss' }).events).toHaveLength(2)
     expect(ok('history', { since: all[1].id }).events).toHaveLength(1)
     expect(ok('history', { limit: 2 }).events).toHaveLength(2)
+  })
+})
+
+describe('Claims lapse when a Session closes', () => {
+  const standing = () =>
+    play
+      .claims(campaignId, SOLO_PLAYER)
+      .filter((row) => row.kind === 'character')
+      .map((row) => row.claim)
+
+  it('clears every Character Claim, after the summary, on End Session', () => {
+    play.openSession(campaignId, 'bridge-1')
+    const draft = library.party(campaignId).startDraft({ player: 'guest' })
+    ok('narrate', { text: 'The lock clicks open.' })
+    expect(standing()).toEqual(['yours'])
+
+    ok('close_session', { summary, threads: [] })
+
+    expect(standing()).toEqual(['free'])
+    expect(library.party(campaignId).draft(draft.id).controllingPlayer).toBe('guest')
+  })
+
+  it('clears them when a stopped Session is closed as the next one opens', () => {
+    play.openSession(campaignId, 'bridge-1') // stopped without Narration: closes on the next open
+    play.openSession(campaignId, 'bridge-2')
+
+    expect(standing()).toEqual(['free'])
+  })
+
+  it('clears them on the catch-up close of an older Session', () => {
+    play.openSession(campaignId, 'bridge-1')
+    ok('narrate', { text: 'The lock clicks open.' })
+    play.openSession(campaignId, 'bridge-2')
+
+    ok('close_session', { summary, threads: [], session: 1 })
+
+    expect(standing()).toEqual(['free'])
   })
 })

@@ -107,6 +107,14 @@ export const event = sqliteTable('event', {
   data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
   /** DM-only events (Arc and Beat changes) never reach the Player. */
   dmOnly: integer('dm_only', { mode: 'boolean' }).notNull().default(false),
+  /**
+   * The Characters who can see it: a list of Character ids written once and never recomputed
+   * (ADR 0008). The default is the Party's Characters when it was written.
+   */
+  audience: text('audience', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'`),
   createdAt: integer('created_at').notNull()
 })
 
@@ -141,8 +149,8 @@ export const character = sqliteTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     campaignId: campaignOwner(),
-    /** The Player who controls this Character; exactly one, transferable. */
-    controllingPlayer: text('controlling_player').notNull(),
+    /** The browser that Claims this Character; null while it is unclaimed. */
+    controllingPlayer: text('controlling_player'),
     status: text('status', { enum: CHARACTER_STATUSES }).notNull().default('alive'),
     /** The Character's Entity version: bumped by every edit, named in change notices. */
     version: integer('version').notNull().default(1),
@@ -314,7 +322,7 @@ export const characterDraft = sqliteTable('character_draft', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   campaignId: campaignOwner(),
-  controllingPlayer: text('controlling_player').notNull(),
+  controllingPlayer: text('controlling_player'),
   data: text('data', { mode: 'json' }).$type<unknown>().notNull(),
   /** The wizard step the draft was last on. */
   step: text('step').$type<StepId>().notNull(),
@@ -397,6 +405,8 @@ export const session = sqliteTable('session', {
   startedAt: integer('started_at').notNull(),
   closedAt: integer('closed_at'),
   summary: text('summary'),
+  /** Who can read the summary (ADR 0008); null until it is written. */
+  summaryAudience: text('summary_audience', { mode: 'json' }).$type<string[]>(),
   threads: text('threads', { mode: 'json' }).$type<string[]>()
 })
 
@@ -409,6 +419,14 @@ export const activityLine = sqliteTable('activity_line', {
   sessionId: text('session_id'),
   afterEvent: integer('after_event').notNull(),
   text: text('text').notNull(),
+  /**
+   * The Characters who can see it: a list of Character ids written once and never recomputed
+   * (ADR 0008). The default is the Party's Characters when it was written.
+   */
+  audience: text('audience', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'`),
   createdAt: integer('created_at').notNull()
 })
 
@@ -451,6 +469,14 @@ export const call = sqliteTable('call', {
   choices: text('choices', { mode: 'json' }).$type<string[]>().notNull().default([]),
   /** The Event (a Narration) that opened it. */
   openedBy: integer('opened_by'),
+  /**
+   * The Characters who can see it: a list of Character ids written once and never recomputed
+   * (ADR 0008). The default is the Party's Characters when it was written.
+   */
+  audience: text('audience', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'`),
   createdAt: integer('created_at').notNull(),
   closedAt: integer('closed_at')
 })
@@ -565,7 +591,9 @@ export const callPart = sqliteTable(
     /** A reaction's name, such as `Opportunity attack`; the Call's choices take it or pass. */
     reaction: text('reaction'),
     answer: text('answer'),
-    answeredAt: integer('answered_at')
+    answeredAt: integer('answered_at'),
+    /** Rolled by code because its Character was unclaimed; the DM hears it marked so. */
+    rolledByCode: integer('rolled_by_code', { mode: 'boolean' }).notNull().default(false)
   },
   (t) => [index('call_part_call_idx').on(t.callId)]
 )

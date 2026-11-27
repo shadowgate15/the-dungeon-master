@@ -1,12 +1,12 @@
 <script lang="ts">
   import Button from '#lib/ui/Button.svelte'
   import Textarea from '#lib/ui/Textarea.svelte'
-  import type { PendingDeclaration, ReturnedDraft } from './floor'
+  import type { FloorDeclaration, ReturnedDraft } from './floor'
   import type { SceneView } from './scene'
 
   /**
    * The pinned composer: the open Floor's pending tray above a box that adds a Declaration for the
-   * acting Character. Every tray entry can be edited or withdrawn until the Floor closes. Done
+   * acting Character. Every tray entry of this browser's can be edited or withdrawn until the Floor closes; other browsers' entries show read-only. Done
    * closes the Floor (empty or not); Ctrl+Enter is Send & Done. While the DM is answering, drafting
    * stays open but Done waits. While the DM is away, a "DM away" bar with the command that brings
    * the DM back replaces the send controls; drafting stays open. A pure view; the console wires the
@@ -26,11 +26,13 @@
     returned = [],
     onreturned = () => {},
     away = null,
-    turn = null
+    isHost = true,
+    turn = null,
+    waiting = false
   }: {
     /** The acting Character's name, or null when no Character can act. */
     acting: string | null
-    declarations: PendingDeclaration[]
+    declarations: FloorDeclaration[]
     onsend: (text: string) => void
     /** Done; `text` is a Declaration to send first (Send & Done), or null. */
     ondone: (text: string | null) => void
@@ -49,8 +51,12 @@
     onreturned?: (ids: string[]) => void
     /** No DM is at the table: the Campaign folder to run `dm` in. */
     away?: { folder: string } | null
+    /** Whether this browser is the Host's: only the Host sees the folder and relaunch command. */
+    isHost?: boolean
     /** In a Combat, whose turn it is: the box is locked to that Character, or blocked for a foe. */
     turn?: string | null
+    /** None of this browser's Characters is in the Scene: a waiting line replaces the box. */
+    waiting?: boolean
   } = $props()
 
   /** The folder, quoted for a POSIX shell when it needs it. */
@@ -81,7 +87,7 @@
   const prompt = $derived(
     acting ? `What does ${acting} do?` : turn ? `It is ${turn}'s turn` : 'No Character can act'
   )
-  const label = (d: PendingDeclaration) => `${d.characterName}: ${d.text}`
+  const label = (d: FloorDeclaration) => `${d.characterName}: ${d.text}`
 
   function send() {
     const text = draft.trim()
@@ -145,7 +151,7 @@
                 <Button size="sm" type="submit">Save</Button>
               </div>
             </form>
-          {:else if away}
+          {:else if away || !d.own}
             <span class="flex-1 whitespace-pre-wrap">{d.text}</span>
           {:else}
             <span class="flex-1 whitespace-pre-wrap">{d.text}</span>
@@ -167,16 +173,29 @@
   {#if turn}
     <p class="text-xs font-medium">{turn}'s turn</p>
   {/if}
-  <Textarea
-    size="sm"
-    rows={2}
-    bind:value={draft}
-    {onkeydown}
-    disabled={blocked}
-    aria-label={prompt}
-    placeholder={prompt}
-  />
-  {#if elsewhere.length}
+  {#if waiting}
+    <ul class="flex flex-col gap-1 text-sm" aria-label="Waiting">
+      {#each elsewhere as c (c.id)}
+        <li class="flex items-center gap-2 text-muted">
+          <span>{c.name} is {c.whereabouts ? `in ${c.whereabouts}` : 'elsewhere'}</span>
+          {#if !away}
+            <button class="underline" onclick={() => oncut(c.id)}>Cut to {c.name}</button>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  {:else}
+    <Textarea
+      size="sm"
+      rows={2}
+      bind:value={draft}
+      {onkeydown}
+      disabled={blocked}
+      aria-label={prompt}
+      placeholder={prompt}
+    />
+  {/if}
+  {#if elsewhere.length && !waiting}
     <ul class="flex flex-wrap gap-2 text-xs" aria-label="Elsewhere">
       {#each elsewhere as c (c.id)}
         <li class="flex items-center gap-1 rounded-control bg-surface px-2 py-1 text-muted">
@@ -195,13 +214,17 @@
       class="flex flex-wrap items-center gap-2 rounded-control bg-surface px-2 py-1 text-sm"
     >
       <span class="font-medium">The DM is away.</span>
-      <span class="text-muted">Start a Session to play on; your drafts wait here.</span>
-      <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs"
-        >{relaunch}</code
-      >
-      <Button size="sm" variant="secondary" onclick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
+      {#if isHost}
+        <span class="text-muted">Start a Session to play on; your drafts wait here.</span>
+        <code class="ml-auto rounded-control bg-raised px-1.5 py-0.5 font-mono text-xs"
+          >{relaunch}</code
+        >
+        <Button size="sm" variant="secondary" onclick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
+      {:else}
+        <span class="text-muted">Waiting for the Host to start the DM; your drafts wait here.</span>
+      {/if}
     </div>
-  {:else}
+  {:else if !waiting}
     <div class="flex items-center justify-end gap-2">
       <span class="mr-auto text-xs text-muted"
         >Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span

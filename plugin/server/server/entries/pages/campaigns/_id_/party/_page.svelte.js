@@ -1,9 +1,9 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
-import { _ as attr, c as ensure_array_like, l as head, o as derived, t as attr_class, u as props_id, v as clsx, x as escape_html } from "../../../../../chunks/server2.js";
+import { S as escape_html, c as ensure_array_like, l as head, o as derived, t as attr_class, u as props_id, v as attr, y as clsx } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/forms.js";
 import "../../../../../chunks/paths.js";
-import { a as CreationStepper, i as Panel, n as createDraftQuery, t as CreationPage } from "../../../../../chunks/CreationPage.js";
-import { n as Badge, r as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
+import { i as CreationStepper, n as createDraftQuery, t as CreationPage } from "../../../../../chunks/CreationPage.js";
+import { t as Badge } from "../../../../../chunks/Badge.js";
 import { t as Link } from "../../../../../chunks/Link.js";
 import "../../../../../chunks/index-server.js";
 import { n as beforeNavigate, r as goto } from "../../../../../chunks/navigation.js";
@@ -17,6 +17,8 @@ import { t as Field } from "../../../../../chunks/Field.js";
 import { t as Select } from "../../../../../chunks/Select.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
 import { t as TextInput } from "../../../../../chunks/TextInput.js";
+import { t as Panel } from "../../../../../chunks/Panel.js";
+import { n as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
 // src/lib/campaign/PartyList.svelte
 function PartyList($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -1776,15 +1778,18 @@ function _page($$renderer, $$props) {
 				disabled: archived()
 			},
 			children: ($$renderer) => {
-				Link($$renderer, {
-					href: resolve("/campaigns"),
-					class: "text-sm",
-					children: ($$renderer) => {
-						$$renderer.push(`<!---->All Campaigns`);
-					},
-					$$slots: { default: true }
-				});
-				$$renderer.push(`<!----> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
+				if (data.isHost) {
+					$$renderer.push("<!--[0-->");
+					Link($$renderer, {
+						href: resolve("/campaigns"),
+						class: "text-sm",
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->All Campaigns`);
+						},
+						$$slots: { default: true }
+					});
+				} else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
 				if (data.campaign.status !== "missing") {
 					$$renderer.push("<!--[0-->");
 					DmBadge($$renderer, { attached: attached() });

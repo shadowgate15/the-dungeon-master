@@ -7,10 +7,8 @@
   import { connectLiveUpdates } from '#lib/live/client.ts'
   import type { LayoutProps } from './$types'
 
-  import ThemeToggle from '#lib/theme/ThemeToggle.svelte'
-  import StopServer from '#lib/server-control/StopServer.svelte'
+  import AppHeader from '#lib/ui/AppHeader.svelte'
   import { page } from '$app/state'
-  import { resolve } from '$app/paths'
 
   let { children, data }: LayoutProps = $props()
 
@@ -24,16 +22,18 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-<header class="flex h-12 items-center justify-end gap-4 border-b border-border px-4">
-  <StopServer />
-  <a href={resolve('/credits')} class="text-sm underline">Credits</a>
-  <ThemeToggle theme={data.theme} redirectTo={page.url.pathname + page.url.search} />
-</header>
+<AppHeader
+  lan={data.lan}
+  isHost={data.isHost}
+  joinUrls={data.joinUrls}
+  theme={data.theme}
+  redirectTo={page.url.pathname + page.url.search}
+/>
 
 <QueryClientProvider client={queryClient}>
   {@render children()}
 
-  {#if dev}
+  {#if dev && data.isHost}
     {#await import('#lib/dev/ReportIssue.svelte') then { default: ReportIssue }}
       <ReportIssue url={page.url.href} route={page.route.id} params={page.params} />
     {/await}

@@ -1,9 +1,9 @@
 import { n as fail, t as error } from "../../../../../chunks/exports.js";
-import { l as DmAwayError, o as play } from "../../../../../chunks/bridge.js";
+import { c as play, d as DmAwayError } from "../../../../../chunks/bridge.js";
 import { a as CampaignArchivedError, d as BeginRefusedError, i as sessions, n as library, p as StartOverRefusedError } from "../../../../../chunks/campaign.js";
 // src/routes/campaigns/[id]/begin/+page.server.ts
 /** The Begin step: whether the story can begin, and after Begin the pitch and Start over. */
-var load = ({ params }) => {
+var load = ({ params, locals }) => {
 	const entry = library.get(params.id);
 	if (!entry) error(404, "Campaign not found");
 	if (entry.status === "missing") error(404, "This Campaign's folder is missing");
@@ -16,16 +16,16 @@ var load = ({ params }) => {
 			status: entry.status
 		},
 		creation: library.creation(entry.id),
-		journal: record.journal(),
-		timeline: record.timeline(),
+		journal: record.journal(locals.browser),
+		timeline: record.timeline(locals.browser),
 		conversation: library.conversation(entry.id).list(),
 		attached: sessions.list()
 	};
 };
 var actions = {
-	begin: ({ params }) => {
+	begin: ({ params, locals }) => {
 		try {
-			play.begin(params.id);
+			play.begin(params.id, locals.browser);
 		} catch (e) {
 			if (e instanceof DmAwayError) return fail(409, { error: e.message });
 			if (e instanceof BeginRefusedError || e instanceof CampaignArchivedError) return fail(400, { error: e.message });

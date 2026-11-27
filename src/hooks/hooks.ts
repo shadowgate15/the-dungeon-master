@@ -19,7 +19,7 @@ export type HookInput = {
   source?: 'startup' | 'resume' | 'clear' | 'compact'
 }
 
-export type HookName = 'pre-tool-use' | 'stop' | 'session-start'
+export type HookName = 'pre-tool-use' | 'stop' | 'session-start' | 'band'
 
 /** The Campaign folder the session runs in, or undefined outside one. */
 function campaignFolder(input: HookInput, env: Env): string | undefined {
@@ -63,6 +63,17 @@ export async function runHook(
         permissionDecisionReason: 'A game tool of The Dungeon Master'
       }
     }
+  }
+
+  if (name === 'band') {
+    // What the mod band shows: the same runtime file `dm` prints its URLs from.
+    const runtime = readRuntimeFile(userStateDir(env))
+    if (!runtime) return undefined
+    const lines =
+      runtime.mode === 'lan' && runtime.joinUrls?.length
+        ? runtime.joinUrls
+        : [`http://localhost:${runtime.port}`]
+    return { lines }
   }
 
   if (name === 'stop') {

@@ -97,8 +97,8 @@ export const combatTools = [
       "Move to the next turn in initiative order, into the next round after the last. The new combatant's action, bonus action and reaction are fresh. Run NPC and Creature turns yourself; on a Character's turn the Player's composer is locked to them. A Character at 0 HP rolls a Death save instead: the result carries its pending_call for your closing narrate.",
     input: z.strictObject({}),
     activity: null,
-    run: ({ db, now }) => {
-      const { round, current } = nextTurn(db)
+    run: ({ db, dice, now }) => {
+      const { round, current, notes } = nextTurn(db, dice)
       const state = combatState(db)
       const deathSave = current && deathSaveCall(db, current.handle, now)
       return {
@@ -108,6 +108,7 @@ export const combatTools = [
           resources:
             'action, bonus action and reaction are fresh (a reminder, not a rule code enforces)',
           order: state.order,
+          notes,
           ...(deathSave && {
             pending_call: deathSave,
             death_save: `${current.name} is at 0 HP and rolls a Death save this turn: attach the Call with your closing narrate(text, call: "${deathSave}")`

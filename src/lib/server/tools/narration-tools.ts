@@ -1,9 +1,11 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import type { Database } from '../db/connect'
 import { entity } from '../db/schema'
 import { believedName } from '../knowledge/player-names'
-import { callInput, openCall } from '../play/calls'
-import { setAwaitingNarration } from '../play/log'
+import { callInput, callResultEvent, createCalls, openCall } from '../play/calls'
+import { characterRefs } from '../knowledge/holders'
+import { partyAudience, setAwaitingNarration } from '../play/log'
 import { indexNarration } from '../play/sessions'
 import { ToolError, writeTool, type ToolContext } from './contract'
 
@@ -14,6 +16,34 @@ function speaker({ db }: ToolContext, handle: string) {
     throw ToolError.unknownHandle(handle)
   }
   return found
+}
+
+/**
+ * The Audience of a Narration: the Party's Characters, or only those `to` names (a passed note).
+ * An empty list or a handle that is not a Party Character is refused (ADR 0008).
+ */
+function audienceOf(ctx: ToolContext, to: string[] | undefined): string[] {
+  if (to === undefined) return partyAudience(ctx.db)
+  if (to.length === 0) {
+    throw new ToolError(
+      'invalid_input',
+      '`to` names nobody, so no Character would read it',
+      'Name at least one Party Character, or leave `to` out to narrate to the whole Party'
+    )
+  }
+  const party = characterRefs(ctx.db)
+  const ids = to.map((handle) => {
+    const found = party.find((c) => c.handle === handle)
+    if (!found) {
+      throw new ToolError(
+        'not_in_party',
+        `${handle} is not a Party Character`,
+        'Pass Party Character handles (char:<name>) in `to`'
+      )
+    }
+    return found.row.id
+  })
+  return [...new Set(ids)]
 }
 
 /** Telling the Players what happens. */
@@ -38,10 +68,17 @@ export const narrationTools = [
         .describe(
           'Ask the Players: inline {kind: "check", character, skill | save, tier, adv?, reason} (or a list of them, one roll per Character) or {kind: "question", text, choices?}. A Call ends your turn; its call_result wakes you.'
         ),
+      to: z
+        .array(z.string().min(1))
+        .optional()
+        .describe(
+          'A passed note: Character handles (char:<name>) that alone read this Narration. Replaces the default of the whole Party; never empty. A Call it raises can ask only these Characters.'
+        ),
       recap: z.boolean().optional().describe('The opening recap of a Session')
     }),
     activity: null,
-    run: (ctx, { text, voice, voice_label, call, recap = false }) => {
+    run: (ctx, { text, voice, voice_label, call, recap = false, to }) => {
+      const audience = audienceOf(ctx, recap ? undefined : to)
       if (recap && call !== undefined) {
         throw new ToolError(
           'invalid_input',
@@ -57,13 +94,30 @@ export const narrationTools = [
       const callId =
         call === undefined
           ? null
-          : openCall(ctx.db, call, { at: ctx.now, openedBy: ctx.stamp.eventId })
+          : openCall(ctx.db, call, { at: ctx.now, openedBy: ctx.stamp.eventId, audience })
       return {
         result: callId
           ? { narrated: true, call: callId, next: 'End your turn: the Players answer the Call' }
           : { narrated: true },
+        // Unclaimed Characters' parts are rolled by code as the Call opens, after the Narration
+        // that asks them. If that was every part, the DM hears the result here, not from a click.
+        after: callId
+          ? () => {
+              const settled = createCalls(ctx.db as Database, () => ctx.now).settleUnclaimed(
+                ctx.dice,
+                true
+              )
+              return settled
+                ? {
+                    call_result: callResultEvent(settled).content,
+                    next: 'The Call was rolled by code: narrate what follows'
+                  }
+                : {}
+            }
+          : undefined,
         event: {
           kind: 'narration',
+          audience,
           summary: npc ? `${npc.name}: ${text}` : text,
           data: {
             text,

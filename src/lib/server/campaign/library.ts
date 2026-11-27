@@ -3,6 +3,7 @@ import path from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { Database } from '../db/connect'
 import { campaign } from '../db/schema'
+import { playerLabels, type PlayerLabel } from '../play/labels'
 import { createParty, type Party } from '../character/party'
 import { createFloor, type Floor } from '../floor/floor'
 import { journal } from '../knowledge/journal'
@@ -10,7 +11,7 @@ import { coreBlock } from '../play/core-block'
 import { cancelPendingCall, createCalls, unattachedCalls, type Calls } from '../play/calls'
 import { sessionHistory } from '../play/sessions'
 import { logChange, openingNotice } from '../play/notices'
-import { logEvent, openSession, timeline } from '../play/log'
+import { awaitingNarrationSince, logEvent, openSession, timeline } from '../play/log'
 import { playerScene, spotlightRequest } from '../play/scene'
 import { openSeededDatabase } from '../rules/seed'
 import {
@@ -260,6 +261,11 @@ export function createCampaignLibrary({
       }
     },
 
+    /** Names a browser as the DM hears it, by the Characters it Claims now. */
+    labels(id: string): PlayerLabel {
+      return playerLabels(database(find(id).folder))
+    },
+
     /** The Campaign's Characters and Character drafts. */
     party(id: string): Party {
       return createParty(database(find(id).folder), now, { attended: () => live(id) })
@@ -279,10 +285,12 @@ export function createCampaignLibrary({
     record(id: string) {
       const db = database(find(id).folder)
       return {
-        timeline: () => timeline(db),
-        journal: () => journal(db),
+        timeline: (viewer: string) => timeline(db, viewer),
+        /** When the open turn started waiting on the DM, or null. */
+        awaitingSince: () => awaitingNarrationSince(db),
+        journal: (viewer: string) => journal(db, viewer),
         /** The Player's read-only Session history. */
-        sessionHistory: () => sessionHistory(db),
+        sessionHistory: (viewer: string) => sessionHistory(db, viewer),
         openSession: (bridge?: string) => openSession(db, now(), bridge),
         /** The DM's core block. */
         coreBlock: () => coreBlock({ party: createParty(db, now), db }),

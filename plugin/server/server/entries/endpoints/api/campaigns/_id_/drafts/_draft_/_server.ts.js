@@ -1,5 +1,5 @@
 import { i as json } from "../../../../../../../chunks/exports.js";
-import { E as DraftNotFoundError, n as library } from "../../../../../../../chunks/campaign.js";
+import { D as DraftNotFoundError, n as library } from "../../../../../../../chunks/campaign.js";
 import { n as withCampaign } from "../../../../../../../chunks/http.js";
 import { n as readJson, t as changeParty } from "../../../../../../../chunks/respond.js";
 // src/routes/api/campaigns/[id]/drafts/[draft]/+server.ts
@@ -13,16 +13,16 @@ var GET = ({ params }) => withCampaign(() => {
 	});
 }, [[DraftNotFoundError, 404]]);
 /** Writes the stored draft and the step it is on: 204, or 400/404 `{ error }`. */
-var PUT = async ({ params, request }) => {
+var PUT = async ({ params, request, locals }) => {
 	const body = await readJson(request);
 	return changeParty(params.id, body, (party) => {
-		party.writeDraft(params.draft, body);
+		party.writeDraft(params.draft, body, locals.browser);
 		return new Response(null, { status: 204 });
 	});
 };
 /** Discards the stored draft: 204, or 400/404 `{ error }`. */
-var DELETE = ({ params }) => changeParty(params.id, null, (party) => {
-	party.discardDraft(params.draft);
+var DELETE = ({ params, locals }) => changeParty(params.id, null, (party) => {
+	party.discardDraft(params.draft, locals.browser);
 	return new Response(null, { status: 204 });
 });
 export { DELETE, GET, PUT };

@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { tempDir } from '../testing/temp-dir'
@@ -32,15 +33,17 @@ it('a DM attaching opens a Session, and one play turn runs Floor to Narration wi
   dm = await startFakeDm({ folder, home })
   await server.whenListening(folder)
 
-  server.library.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })
+  server.library
+    .floor(campaignId)
+    .send({ character: wren, text: 'I pick the lock.', player: SOLO_PLAYER })
   dm.script({
     on: 'floor',
     run: async (event) => {
-      expect(event.content).toBe('[d1 Wren · player] I pick the lock.')
+      expect(event.content).toBe('[d1 Wren · Host · Player of Wren] I pick the lock.')
       expect((await dm!.call('narrate', { text: 'The lock clicks open.' })).isError).toBe(false)
     }
   })
-  server.play.done(campaignId)
+  server.play.done(campaignId, SOLO_PLAYER)
   await dm.settled()
 
   // The offline Character save is logged with no Session; the turn is in the Session.
@@ -48,6 +51,6 @@ it('a DM attaching opens a Session, and one play turn runs Floor to Narration wi
   expect(added).toMatchObject({ kind: 'change', session: null })
   expect(logged.map((e) => e.kind)).toEqual(['declaration', 'narration'])
   expect(logged.every((e) => e.session !== null && e.session === logged[0].session)).toBe(true)
-  expect(server.play.timeline(campaignId).awaitingSince).toBeNull()
+  expect(server.play.timeline(campaignId, SOLO_PLAYER).awaitingSince).toBeNull()
   await dm.close()
 })

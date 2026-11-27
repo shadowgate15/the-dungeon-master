@@ -1,13 +1,14 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
-import { l as head, o as derived, x as escape_html } from "../../../../../chunks/server2.js";
+import { S as escape_html, l as head, o as derived } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/forms.js";
 import "../../../../../chunks/paths.js";
-import { a as CreationStepper, i as Panel, t as CreationPage } from "../../../../../chunks/CreationPage.js";
-import { r as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
-import { c as createTimelineQuery, i as createJournalQuery, p as Journal } from "../../../../../chunks/floor-client.js";
+import { i as CreationStepper, t as CreationPage } from "../../../../../chunks/CreationPage.js";
+import { n as createSessionsQuery, t as DmBadge } from "../../../../../chunks/DmBadge.js";
+import { h as Journal, o as createJournalQuery, u as createTimelineQuery } from "../../../../../chunks/floor-client.js";
 import { t as Alert } from "../../../../../chunks/Alert.js";
 import { t as Button } from "../../../../../chunks/Button.js";
 import { t as Link } from "../../../../../chunks/Link.js";
+import { t as Panel } from "../../../../../chunks/Panel.js";
 // src/routes/campaigns/[id]/begin/+page.svelte
 function _page($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -39,15 +40,18 @@ function _page($$renderer, $$props) {
 				disabled: archived()
 			},
 			children: ($$renderer) => {
-				Link($$renderer, {
-					href: resolve("/campaigns"),
-					class: "text-sm",
-					children: ($$renderer) => {
-						$$renderer.push(`<!---->All Campaigns`);
-					},
-					$$slots: { default: true }
-				});
-				$$renderer.push(`<!----> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
+				if (data.isHost) {
+					$$renderer.push("<!--[0-->");
+					Link($$renderer, {
+						href: resolve("/campaigns"),
+						class: "text-sm",
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->All Campaigns`);
+						},
+						$$slots: { default: true }
+					});
+				} else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
 				DmBadge($$renderer, { attached: attached() });
 				$$renderer.push(`<!----> `);
 				Link($$renderer, {
@@ -124,18 +128,26 @@ function _page($$renderer, $$props) {
 							$$slots: { default: true }
 						});
 						$$renderer.push(`<!----> first.</p>`);
-					} else if (!attached()) $$renderer.push(`<!--[2--><p class="text-sm text-muted">The DM is away. Run <code>dm</code> in ${escape_html(data.campaign.path)} to Begin.</p>`);
-					else $$renderer.push("<!--[-1-->");
-					$$renderer.push(`<!--]--> <form method="POST" action="?/begin">`);
-					Button($$renderer, {
-						type: "submit",
-						disabled: state() !== "ready" || !attached() || archived(),
-						children: ($$renderer) => {
-							$$renderer.push(`<!---->Begin`);
-						},
-						$$slots: { default: true }
-					});
-					$$renderer.push(`<!----></form></div>`);
+					} else if (!attached()) {
+						$$renderer.push(`<!--[2--><p class="text-sm text-muted">`);
+						if (data.isHost) $$renderer.push(`<!--[0-->The DM is away. Run <code>dm</code> in ${escape_html(data.campaign.path)} to Begin.`);
+						else $$renderer.push(`<!--[-1-->Waiting for the Host to start the DM.`);
+						$$renderer.push(`<!--]--></p>`);
+					} else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--> `);
+					if (data.isHost) {
+						$$renderer.push(`<!--[0--><form method="POST" action="?/begin">`);
+						Button($$renderer, {
+							type: "submit",
+							disabled: state() !== "ready" || !attached() || archived(),
+							children: ($$renderer) => {
+								$$renderer.push(`<!---->Begin`);
+							},
+							$$slots: { default: true }
+						});
+						$$renderer.push(`<!----></form>`);
+					} else $$renderer.push(`<!--[-1--><p class="text-sm text-muted">The Host begins the story.</p>`);
+					$$renderer.push(`<!--]--></div>`);
 				} else {
 					$$renderer.push("<!--[-1-->");
 					Panel($$renderer, {
@@ -160,7 +172,7 @@ function _page($$renderer, $$props) {
 							},
 							$$slots: { default: true }
 						});
-					} else if (!archived()) {
+					} else if (!archived() && data.isHost) {
 						$$renderer.push(`<!--[1--><form method="POST" action="?/startOver">`);
 						Button($$renderer, {
 							type: "submit",

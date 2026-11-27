@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -44,7 +45,7 @@ describe('change notices', () => {
     play.openSession(campaignId)
     library.saveSeed(campaignId, COMPLETE_SEED as never)
 
-    play.done(campaignId)
+    play.done(campaignId, SOLO_PLAYER)
 
     expect(heard).toHaveLength(1)
     expect(heard[0].content).toContain('Changed outside the DM:')
@@ -55,10 +56,10 @@ describe('change notices', () => {
     addCharacter(library, campaignId, fighterDraft('Wren'))
     play.openSession(campaignId)
     library.saveSeed(campaignId, COMPLETE_SEED as never)
-    play.done(campaignId)
+    play.done(campaignId, SOLO_PLAYER)
     createToolHost({ library, tools: gameTools }).call(folder, 'narrate', { text: 'Dust.' })
 
-    play.done(campaignId)
+    play.done(campaignId, SOLO_PLAYER)
 
     expect(heard).toHaveLength(2)
     expect(heard[1].content).not.toContain('Changed outside the DM')
@@ -71,7 +72,7 @@ describe('change notices', () => {
       .party(campaignId)
       .updateCharacter(wren, { ...fighterDraft('Wren'), personality: 'Wry.' })
 
-    play.done(campaignId)
+    play.done(campaignId, SOLO_PLAYER)
 
     expect(heard[0].content).toMatch(/^- char:wren v2: the Player edited Wren$/m)
     expect(heard[0].content).toContain('Party:\n- Wren (char:wren): HP 12/12')
@@ -83,7 +84,7 @@ describe('change notices', () => {
     library.saveSeed(campaignId, COMPLETE_SEED as never)
     play.openSession(campaignId)
 
-    play.done(campaignId)
+    play.done(campaignId, SOLO_PLAYER)
 
     expect(heard[0].content).not.toContain('Changed outside the DM')
   })
@@ -113,7 +114,7 @@ describe('changed since last Session', () => {
     play.openSession(campaignId)
 
     expect(play.sessionStart(campaignId)).not.toContain('Changed since last Session')
-    play.done(campaignId)
+    play.done(campaignId, SOLO_PLAYER)
     expect(heard[0].content).not.toContain('Changed')
   })
 
@@ -123,7 +124,7 @@ describe('changed since last Session', () => {
 
   it('asks for a Floor still awaiting Narration to be answered after the recap', () => {
     addCharacter(library, campaignId, fighterDraft('Wren'))
-    play.done(campaignId)
+    play.done(campaignId, SOLO_PLAYER)
 
     expect(play.sessionStart(campaignId)).toMatch(/awaits Narration.*after the recap/)
   })

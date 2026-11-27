@@ -1,20 +1,5 @@
-import { o as derived, r as attributes, v as clsx } from "./server2.js";
-// src/lib/ui/status.ts
-/** Status colour classes shared by Alert, Toast and Badge. */
-var STATUS_CLASSES = {
-	info: "bg-info-bg text-info border-info",
-	success: "bg-success-bg text-success border-success",
-	warning: "bg-warning-bg text-warning border-warning",
-	danger: "bg-danger-bg text-danger border-danger"
-};
-/** Same colours with the border dropped, for compact pills. */
-var STATUS_CLASSES_BORDERLESS = {
-	info: "bg-info-bg text-info border-transparent",
-	success: "bg-success-bg text-success border-transparent",
-	warning: "bg-warning-bg text-warning border-transparent",
-	danger: "bg-danger-bg text-danger border-transparent"
-};
-var NEUTRAL_CLASSES = "bg-raised text-text border-border";
+import { o as derived, r as attributes, y as clsx } from "./server2.js";
+import { r as STATUS_CLASSES } from "./Button.js";
 // src/lib/ui/Alert.svelte
 function Alert($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -33,6 +18,6 @@ function Alert($$renderer, $$props) {
 		$$renderer.push(`<!----></div>`);
 	});
 }
-export { STATUS_CLASSES_BORDERLESS as i, NEUTRAL_CLASSES as n, STATUS_CLASSES as r, Alert as t };
+export { Alert as t };
 
 //# sourceMappingURL=Alert.js.map

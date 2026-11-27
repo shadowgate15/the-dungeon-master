@@ -112,13 +112,30 @@ exit \${STUB_CLAUDE_EXIT:-0}
     },
 
     /** The game server's runtime file, if one is written. */
-    runtime(): { port: number; token: string; pid: number; version?: string } | undefined {
+    runtime():
+      | {
+          port: number
+          token: string
+          pid: number
+          version?: string
+          mode?: string
+          joinUrls?: string[]
+        }
+      | undefined {
       const file = path.join(home, 'runtime.json')
       return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : undefined
     },
 
     /** What the fake server recorded about how it was started. */
-    serverStart(): { cwd: string; argv: string[]; origin?: string } {
+    serverStart(): {
+      cwd: string
+      argv: string[]
+      execArgv: string[]
+      origin?: string
+      protocolHeader?: string
+      host?: string
+      lan?: string
+    } {
       return JSON.parse(fs.readFileSync(path.join(home, 'fake-server-start.json'), 'utf8'))
     },
 
@@ -162,7 +179,7 @@ import http from 'node:http'
 import path from 'node:path'
 const home = process.env.DUNGEON_MASTER_HOME
 const token = 'fake-' + process.pid
-fs.writeFileSync(path.join(home, 'fake-server-start.json'), JSON.stringify({ cwd: process.cwd(), argv: process.argv, origin: process.env.ORIGIN }))
+fs.writeFileSync(path.join(home, 'fake-server-start.json'), JSON.stringify({ cwd: process.cwd(), argv: process.argv, execArgv: process.execArgv, origin: process.env.ORIGIN, protocolHeader: process.env.PROTOCOL_HEADER, host: process.env.HOST, lan: process.env.DUNGEON_MASTER_LAN }))
 const server = http.createServer(async (req, res) => {
   if (req.headers.authorization !== 'Bearer ' + token) return res.writeHead(401).end()
   if (req.method === 'GET' && req.url === '/api/bridge/tools') {
@@ -181,7 +198,9 @@ const server = http.createServer(async (req, res) => {
 })
 server.listen(Number(process.env.PORT), process.env.HOST, () => {
   fs.writeFileSync(path.join(home, 'runtime.json'), JSON.stringify({
-    port: Number(process.env.DUNGEON_MASTER_PORT), token, pid: process.pid, version: process.env.DUNGEON_MASTER_VERSION
+    port: Number(process.env.DUNGEON_MASTER_PORT), token, pid: process.pid, version: process.env.DUNGEON_MASTER_VERSION,
+    mode: process.env.DUNGEON_MASTER_LAN ? 'lan' : 'local',
+    joinUrls: process.env.DUNGEON_MASTER_LAN ? ['http://192.168.1.5:' + process.env.DUNGEON_MASTER_PORT, 'http://fixture.local:' + process.env.DUNGEON_MASTER_PORT] : []
   }))
 })
 `
@@ -439,5 +458,117 @@ describe('dm', () => {
     )
     expect(f.dm(['install-shim'], { env: { HOME: user } }).code).toBe(0)
     expect(fs.readFileSync(shim, 'utf8')).toContain('bin/dm.mjs')
+  })
+})
+
+describe('dm --lan', () => {
+  it('starts a fresh server on all interfaces in LAN mode and strips --lan from claude', async () => {
+    const f = await setup()
+    f.makeCampaign()
+    const run = f.dm(['--lan', '--resume'])
+    expect(run.code).toBe(0)
+    expect(f.serverStart().host).toBe('0.0.0.0')
+    expect(f.runtime()!.mode).toBe('lan')
+    expect(f.claudeCalls().at(-1)!.argv).not.toContain('--lan')
+    expect(f.claudeCalls().at(-1)!.argv.at(-1)).toBe('--resume')
+    const after = f.dm(['--resume', '--lan'])
+    expect(after.code).toBe(0)
+    expect(f.claudeCalls().at(-1)!.argv).not.toContain('--lan')
+  })
+
+  it("leaves the origin to each request's own Host: no fixed ORIGIN, the protocol read from a header", async () => {
+    const f = await setup()
+    f.makeCampaign()
+    f.dm(['--lan'])
+    const start = f.serverStart()
+    expect(start.origin).toBeUndefined()
+    expect(start.protocolHeader).toBe('x-forwarded-proto')
+    expect(start.execArgv.join(' ')).toContain('--import=data:text/javascript')
+  })
+
+  it('prints the join URLs one per line, then one firewall hint, before claude starts', async () => {
+    const f = await setup()
+    f.makeCampaign()
+    const { stdout } = f.dm(['--lan'])
+    const port = f.runtime()!.port
+    const lines = stdout.split('\n')
+    expect(lines).toContain(`http://192.168.1.5:${port}`)
+    expect(lines).toContain(`http://fixture.local:${port}`)
+    expect(stdout.match(/firewall/gi)).toHaveLength(1)
+  })
+
+  it('starts localhost-only without --lan and prints no firewall hint', async () => {
+    const f = await setup()
+    f.makeCampaign()
+    const { stdout } = f.dm()
+    expect(f.serverStart().host).toBe('127.0.0.1')
+    expect(f.runtime()!.mode).toBe('local')
+    expect(stdout).not.toMatch(/firewall/i)
+  })
+
+  it('is an error for dm stop', async () => {
+    const f = await setup()
+    const run = f.dm(['stop', '--lan'])
+    expect(run.code).toBe(1)
+    expect(run.stderr).toMatch(/--lan/)
+  })
+
+  it('is reused as-is by a plain dm', async () => {
+    const f = await setup()
+    f.makeCampaign()
+    f.dm(['--lan'])
+    const first = f.runtime()!.pid
+    expect(f.dm().code).toBe(0)
+    expect(f.runtime()!.pid).toBe(first)
+    expect(f.runtime()!.mode).toBe('lan')
+  })
+
+  it('keeps the mode through a restart for a plugin update', async () => {
+    const f = await setup({ version: '1.0.0' })
+    f.makeCampaign()
+    f.dm(['--lan'])
+    const stale = f.runtime()!.pid
+    f.track(stale)
+    f.setVersion('1.1.0')
+    expect(f.dm().code).toBe(0)
+    expect(f.runtime()!.pid).not.toBe(stale)
+    expect(f.runtime()!.mode).toBe('lan')
+  })
+
+  it('restarts a running localhost server into LAN mode', async () => {
+    const f = await setup()
+    f.makeCampaign()
+    f.dm()
+    const local = f.runtime()!.pid
+    f.track(local)
+    expect(f.dm(['--lan']).code).toBe(0)
+    expect(f.runtime()!.pid).not.toBe(local)
+    expect(f.runtime()!.mode).toBe('lan')
+    expect(alive(local)).toBe(false)
+  })
+
+  it('refuses to restart into LAN mode while a Campaign is attached', async () => {
+    const f = await setup()
+    f.makeCampaign()
+    f.dm()
+    const local = f.runtime()!.pid
+    f.track(local)
+    fs.writeFileSync(path.join(f.home, 'attached'), '')
+    const run = f.dm(['--lan'])
+    expect(run.code).toBe(1)
+    expect(run.stderr).toMatch(/end the Session first/i)
+    expect(alive(local)).toBe(true)
+    expect(f.runtime()!.mode).toBe('local')
+  })
+
+  it('outside a Campaign folder starts or restarts in LAN mode and says Players can join once a Session is live', async () => {
+    const f = await setup()
+    f.dm()
+    const local = f.runtime()!.pid
+    f.track(local)
+    const run = f.dm(['--lan'], { cwd: f.tmp })
+    expect(f.runtime()!.mode).toBe('lan')
+    expect(alive(local)).toBe(false)
+    expect(run.stdout + run.stderr).toMatch(/once a Session is live/)
   })
 })

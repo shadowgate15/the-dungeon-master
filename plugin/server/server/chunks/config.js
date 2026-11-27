@@ -75,6 +75,10 @@ var variables = defineEnvVars({
 		description: "The plugin version the launcher started this server from, written to its runtime file so a stale server is restarted.",
 		schema: optional
 	},
+	DUNGEON_MASTER_LAN: {
+		description: "Set by `dm --lan`: the server listens on every interface (LAN mode) and writes its join URLs to the runtime file. Unset or empty means localhost only.",
+		schema: optional
+	},
 	DUNGEON_MASTER_CAMPAIGNS: {
 		description: "Where new Campaign folders are suggested. Default ~/dm-campaigns.",
 		schema: optional
@@ -150,6 +154,7 @@ function set_env(env) {
 	dynamic_private_env.DUNGEON_MASTER_HOME = validate(variables, env.DUNGEON_MASTER_HOME, "DUNGEON_MASTER_HOME", issues);
 	dynamic_private_env.DUNGEON_MASTER_PORT = validate(variables, env.DUNGEON_MASTER_PORT, "DUNGEON_MASTER_PORT", issues);
 	dynamic_private_env.DUNGEON_MASTER_VERSION = validate(variables, env.DUNGEON_MASTER_VERSION, "DUNGEON_MASTER_VERSION", issues);
+	dynamic_private_env.DUNGEON_MASTER_LAN = validate(variables, env.DUNGEON_MASTER_LAN, "DUNGEON_MASTER_LAN", issues);
 	dynamic_private_env.DUNGEON_MASTER_CAMPAIGNS = validate(variables, env.DUNGEON_MASTER_CAMPAIGNS, "DUNGEON_MASTER_CAMPAIGNS", issues);
 	handle_issues(issues);
 }

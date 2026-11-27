@@ -12,7 +12,7 @@ The tools own every number here: what a rest restores, how long it takes, what a
 1. **Can they rest?** Decide in the fiction whether the place and time allow it. If danger is near, say so, or let the rest be interrupted by playing out what interrupts it.
 2. **Who rests.** Name the resting Characters by handle. NPCs rest when you say so; they need no tool.
 3. **Call `rest(kind, who)`** with `short` or `long`. The clock moves inside the call; do not call `advance_time` for the same hours.
-4. **A short rest's Call.** When anyone resting is hurt and has Hit Dice left, the result carries a `pending_call`. Attach it to your Narration of the rest with `narrate(text, call: id)`. Each Player says how many Hit Dice to spend and the code rolls. When the `call_result` arrives, narrate the rest's end from it.
+4. **A short rest's Call.** When anyone resting is hurt and has Hit Dice left, the result carries a `pending_call`. Attach it to your Narration of the rest with `narrate(text, call: id)`. Each resting Character's Player says how many Hit Dice to spend and the code rolls. When the `call_result` arrives, narrate the rest's end from it.
 5. **A long rest** returns no Call. Narrate the hours passing, then what the Characters wake to.
 6. **Interrupted rests.** If something breaks the rest, play it out first and only call `rest` for a rest that actually happened. A rest the fiction cut short did not happen.
 

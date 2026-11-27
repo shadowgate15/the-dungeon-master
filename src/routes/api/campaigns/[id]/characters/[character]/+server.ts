@@ -9,10 +9,10 @@ import type { RequestHandler } from './$types'
  * Replaces a saved Character's choices from the edit wizard's draft: `{ id }` or 400/404 `{ error }`;
  * 409 after Begin while the DM is away (it resets play state).
  */
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
   const body = await readJson<CharacterDraft>(request)
   return changeParty(params.id, body, (party) =>
-    json({ id: party.updateCharacter(params.character, body!).id })
+    json({ id: party.updateCharacter(params.character, body!, locals.browser).id })
   )
 }
 
@@ -20,10 +20,10 @@ export const PUT: RequestHandler = async ({ params, request }) => {
  * Edits a Character's notes, personality, appearance or backstory, leaving play state alone:
  * `{ id, version }`, 400/404 `{ error }`, or 409 for a backstory edit after Begin while the DM is away.
  */
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
   const body = await readJson<CharacterDetails>(request)
   return changeParty(params.id, body, (party) => {
-    const updated = party.updateDetails(params.character, body!)
+    const updated = party.updateDetails(params.character, body!, locals.browser)
     // Every open play sheet shows the change.
     live.publish({ type: 'timeline', campaign: params.id })
     return json({ id: updated.id, version: updated.version })

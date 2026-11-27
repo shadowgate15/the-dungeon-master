@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -56,52 +57,52 @@ const ready = () => {
 describe('Begin', () => {
   it('is refused while the Seed is incomplete', () => {
     addCharacter(library, campaignId, fighterDraft('Wren'))
-    expect(() => play.begin(campaignId)).toThrow(BeginRefusedError)
+    expect(() => play.begin(campaignId, SOLO_PLAYER)).toThrow(BeginRefusedError)
     expect(heard).toEqual([])
   })
 
   it('is refused until a Character is saved', () => {
     library.saveSeed(campaignId, completeSeed)
-    library.party(campaignId).startDraft()
-    expect(() => play.begin(campaignId)).toThrow(BeginRefusedError)
+    library.party(campaignId).startDraft({ player: SOLO_PLAYER })
+    expect(() => play.begin(campaignId, SOLO_PLAYER)).toThrow(BeginRefusedError)
     expect(heard).toEqual([])
   })
 
   it('wakes the DM with one begin event once the Seed is complete and a Character saved', () => {
     ready()
-    play.begin(campaignId)
+    play.begin(campaignId, SOLO_PLAYER)
     expect(heard).toHaveLength(1)
-    expect(heard[0].meta).toMatchObject({ kind: 'begin', player: 'player' })
+    expect(heard[0].meta).toMatchObject({ kind: 'begin', player: 'Host · Player of Wren' })
     expect(call('creation_state').payload).toMatchObject({ state: 'begun' })
   })
 
   it('needs a DM at the table', () => {
     ready()
     const away = createPlay({ library, channels: createChannels(), publish: () => {} })
-    expect(() => away.begin(campaignId)).toThrow(DmAwayError)
+    expect(() => away.begin(campaignId, SOLO_PLAYER)).toThrow(DmAwayError)
     expect(call('creation_state').payload).toMatchObject({ state: 'ready' })
   })
 
   it('is refused once the story has begun', () => {
     ready()
-    play.begin(campaignId)
-    expect(() => play.begin(campaignId)).toThrow(BeginRefusedError)
+    play.begin(campaignId, SOLO_PLAYER)
+    expect(() => play.begin(campaignId, SOLO_PLAYER)).toThrow(BeginRefusedError)
     expect(heard).toHaveLength(1)
   })
 
   it('logs nothing and leaves nothing awaiting Narration', () => {
     ready()
     const before = host.events(folder).length
-    play.begin(campaignId)
+    play.begin(campaignId, SOLO_PLAYER)
     expect(host.events(folder)).toHaveLength(before)
-    expect(library.record(campaignId).timeline().awaitingSince).toBeNull()
+    expect(library.record(campaignId).timeline('player').awaitingSince).toBeNull()
   })
 })
 
 describe('the Seed lock', () => {
   it('refuses the Player’s Seed edits after Begin', () => {
     ready()
-    play.begin(campaignId)
+    play.begin(campaignId, SOLO_PLAYER)
     expect(() =>
       library.saveSeed(campaignId, { ...completeSeed, premise: 'Something else.' })
     ).toThrow(SeedLockedError)
@@ -110,7 +111,7 @@ describe('the Seed lock', () => {
 
   it('refuses the DM’s set_seed after Begin', () => {
     ready()
-    play.begin(campaignId)
+    play.begin(campaignId, SOLO_PLAYER)
     const { version } = call('seed').payload
     const result = call('set_seed', { version, premise: 'Something else.' })
     expect(result).toMatchObject({ isError: true, payload: { code: 'seed_locked' } })
@@ -151,14 +152,14 @@ function build() {
 describe('Start over', () => {
   it('discards the World and the Arc and unlocks the Seed before the first Narration', () => {
     ready()
-    play.begin(campaignId)
+    play.begin(campaignId, SOLO_PLAYER)
     build()
 
     play.startOver(campaignId)
 
     expect(call('creation_state').payload).toMatchObject({ state: 'ready' })
     expect(call('search', { query: 'Oren' }).payload).toMatchObject({ results: [] })
-    expect(library.record(campaignId).journal().entries).toEqual([])
+    expect(library.record(campaignId).journal('player').entries).toEqual([])
     expect(
       call('create_arc', {
         title: 'A New Arc',
@@ -174,7 +175,7 @@ describe('Start over', () => {
 
   it('works with the DM away', () => {
     ready()
-    play.begin(campaignId)
+    play.begin(campaignId, SOLO_PLAYER)
     const away = createPlay({ library, channels: createChannels(), publish: () => {} })
     away.startOver(campaignId)
     expect(call('creation_state').payload).toMatchObject({ state: 'ready' })
@@ -182,7 +183,7 @@ describe('Start over', () => {
 
   it('is refused after the first Narration of play', () => {
     ready()
-    play.begin(campaignId)
+    play.begin(campaignId, SOLO_PLAYER)
     build()
     call('narrate', { text: 'The road out of Ashford is quiet.' })
     expect(() => play.startOver(campaignId)).toThrow(StartOverRefusedError)
@@ -198,11 +199,11 @@ describe('Start over', () => {
 describe('what the Player sees after Begin', () => {
   it('is the pitch as their Characters’ Beliefs, and no Arc content anywhere', () => {
     ready()
-    play.begin(campaignId)
+    play.begin(campaignId, SOLO_PLAYER)
     build()
     call('narrate', { text: 'The road out of Ashford is quiet.' })
 
-    const journal = library.record(campaignId).journal()
+    const journal = library.record(campaignId).journal('player')
     expect(journal.entries).toEqual([
       expect.objectContaining({
         text: expect.stringContaining('A relic must cross the burning hills'),
@@ -211,8 +212,8 @@ describe('what the Player sees after Begin', () => {
     ])
     const payloads = JSON.stringify([
       journal,
-      library.record(campaignId).timeline(),
-      play.scene(campaignId),
+      library.record(campaignId).timeline('player'),
+      play.scene(campaignId, SOLO_PLAYER),
       pushed
     ])
     expect(payloads).not.toMatch(/Ember Relic|Ambush|cult|arc/i)
@@ -220,12 +221,12 @@ describe('what the Player sees after Begin', () => {
 
   it('has a timeline that starts with the first Narration after Begin', () => {
     ready()
-    play.begin(campaignId)
+    play.begin(campaignId, SOLO_PLAYER)
     build()
-    expect(library.record(campaignId).timeline().entries).toEqual([])
+    expect(library.record(campaignId).timeline('player').entries).toEqual([])
 
     call('narrate', { text: 'The road out of Ashford is quiet.' })
-    expect(library.record(campaignId).timeline().entries).toEqual([
+    expect(library.record(campaignId).timeline('player').entries).toEqual([
       expect.objectContaining({ type: 'narration', text: 'The road out of Ashford is quiet.' })
     ])
   })

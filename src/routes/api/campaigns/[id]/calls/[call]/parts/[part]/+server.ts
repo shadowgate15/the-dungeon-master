@@ -12,7 +12,7 @@ import type { RequestHandler } from './$types'
  * the DM is woken. 409 `{ error }` when the Call is no longer open or the DM is away; 400 for a refused answer or an
  * archived Campaign; 404 for an unknown Campaign.
  */
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
   const body = (await request.json().catch(() => undefined)) as
     { roll?: unknown; answer?: unknown } | undefined
   if (!body || (body.roll !== true && typeof body.answer !== 'string')) {
@@ -22,8 +22,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
     assertPlayable(library, params.id)
     const outcome =
       body.roll === true
-        ? play.roll(params.id, params.call, params.part)
-        : play.answer(params.id, params.call, params.part, body.answer as string)
+        ? play.roll(params.id, params.call, params.part, locals.browser)
+        : play.answer(params.id, params.call, params.part, body.answer as string, locals.browser)
     return json(outcome)
   }, [
     [CallClosedError, 409],

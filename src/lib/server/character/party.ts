@@ -1,4 +1,4 @@
-import { asc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { changedDraftFields, emptyDraft, type CharacterDraft } from '#lib/character/draft.ts'
 import { detailToDraft } from '#lib/character/edit.ts'
 import { BACKSTORY_MAX, SOLO_PLAYER, TEXT_MAX, type CharacterStatus } from '#lib/character/enums.ts'
@@ -8,6 +8,7 @@ import {
   MAX_LEVEL,
   type LevelUpOffer
 } from '#lib/character/level-up.ts'
+import type { ClaimRow } from '#lib/play/claims.ts'
 import { tryDraftToCharacterInput } from '#lib/character/save.ts'
 import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
 import { STEPS, type StepId } from '#lib/character/steps.ts'
@@ -47,6 +48,9 @@ const DETAIL_LIMITS = {
 const listed = (words: string[]) =>
   words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`
 
+/** A Claim the browser may not make or give up: the Character is taken, or not the browser's. */
+export class ClaimRefusedError extends Error {}
+
 /** The Campaign has no draft with this id. */
 export class DraftNotFoundError extends Error {}
 
@@ -65,7 +69,8 @@ export type PartyMember =
 /** A stored Character draft. */
 export type StoredDraft = {
   id: string
-  controllingPlayer: string
+  /** The browser that Claims the draft; null while it is unclaimed. */
+  controllingPlayer: string | null
   draft: CharacterDraft
   step: StepId
   /** Bumped by every write that changes the draft; the DM's writes must pass it. */
@@ -168,7 +173,140 @@ export function createParty(
     return mapped
   }
 
+  const claimOf = (holder: string | null, browser: string): ClaimRow['claim'] =>
+    holder === null ? 'free' : holder === browser ? 'yours' : 'taken'
+
+  /** The Character or draft with this id, as the table to write its Claim to. */
+  function claimable(id: string) {
+    const saved = db.select().from(character).where(eq(character.id, id)).get()
+    if (saved) return { table: character, holder: saved.controllingPlayer, name: saved.name }
+    const draft = db.select().from(characterDraft).where(eq(characterDraft.id, id)).get()
+    if (draft) {
+      const name = (draft.data as CharacterDraft).name.trim()
+      return { table: characterDraft, holder: draft.controllingPlayer, name }
+    }
+    throw new CharacterNotFoundError('Character not found')
+  }
+
+  /**
+   * Refuses a write from a browser that does not hold the Claim, the Host included. Without a
+   * `browser` the write is the DM's own (its tools), which no Claim gates.
+   */
+  function requireClaim(id: string, browser: string | undefined) {
+    if (browser === undefined) return
+    const target = claimable(id)
+    if (target.holder !== browser) {
+      throw new ClaimRefusedError(`${target.name || 'This Character'} is not yours: Claim it first`)
+    }
+  }
+
   return {
+    /**
+     * Every Party Character with its Claim as `browser` sees it: yours, taken (never by whom) or
+     * free. Saved Characters oldest first.
+     */
+    claims(browser: string): ClaimRow[] {
+      const saved = characters.list().map((c) => ({
+        kind: 'character' as const,
+        id: c.id,
+        name: c.name,
+        claim: claimOf(c.controllingPlayer, browser),
+        ...(browser === SOLO_PLAYER && claimOf(c.controllingPlayer, browser) === 'taken'
+          ? { releasable: true as const }
+          : {}),
+        ...(c.status === 'departed' ? { departed: true as const } : {})
+      }))
+      const drafts = db
+        .select()
+        .from(characterDraft)
+        .orderBy(asc(characterDraft.createdAt), asc(sql`${characterDraft}.rowid`))
+        .all()
+        .map((d) => ({
+          kind: 'draft' as const,
+          id: d.id,
+          name: (d.data as CharacterDraft).name.trim(),
+          claim: claimOf(d.controllingPlayer, browser)
+        }))
+      return [...saved, ...drafts]
+    },
+
+    /** A saved Character's name and the browser holding it now (null when unclaimed); null for a Draft. */
+    claimOf(id: string): { name: string; holder: string | null } | null {
+      const saved = db.select().from(character).where(eq(character.id, id)).get()
+      return saved ? { name: saved.name, holder: saved.controllingPlayer } : null
+    },
+
+    /** Whether `browser` holds a Claim on any Party Character. */
+    holdsClaim(browser: string): boolean {
+      return this.claims(browser).some((row) => row.kind === 'character' && row.claim === 'yours')
+    },
+
+    /** The browser Claims a Character nobody holds. A taken Character is refused for every browser. */
+    claim(id: string, browser: string): void {
+      const target = claimable(id)
+      if (target.holder !== null) {
+        throw new ClaimRefusedError(`${target.name} is taken`)
+      }
+      if (target.table === character && characters.get(id)?.status === 'departed') {
+        throw new ClaimRefusedError(`${target.name} has departed: Rejoin instead`)
+      }
+      db.update(target.table)
+        .set({ controllingPlayer: browser })
+        .where(and(eq(target.table.id, id), isNull(target.table.controllingPlayer)))
+        .run()
+    },
+
+    /**
+     * The browser's Character leaves the Party: the status is set here, and the Claim is dropped.
+     * Needs the Claim and a live Session (the caller checks for the DM).
+     */
+    depart(id: string, browser: string): void {
+      const target = claimable(id)
+      if (target.holder !== browser) throw new ClaimRefusedError(`${target.name} is not yours`)
+      if (characters.get(id)?.status !== 'alive') {
+        throw new ClaimRefusedError(`${target.name} cannot depart`)
+      }
+      db.update(character)
+        .set({ status: 'departed', controllingPlayer: null })
+        .where(eq(character.id, id))
+        .run()
+    },
+
+    /**
+     * A departed Character comes back to the Party and the browser Claims it, with or without a
+     * Session. With no DM at the table the next opening says so.
+     */
+    rejoin(id: string, browser: string): void {
+      const target = claimable(id)
+      if (target.table !== character || characters.get(id)?.status !== 'departed') {
+        throw new ClaimRefusedError(`${target.name} has not departed`)
+      }
+      if (target.holder !== null) throw new ClaimRefusedError(`${target.name} is taken`)
+      db.update(character)
+        .set({ status: 'alive', controllingPlayer: browser })
+        .where(eq(character.id, id))
+        .run()
+      noteChange(id, `${target.name} rejoined the Party`)
+    },
+
+    /** The browser gives up a Claim it holds. */
+    letGo(id: string, browser: string): void {
+      const target = claimable(id)
+      if (target.holder !== browser) throw new ClaimRefusedError(`${target.name} is not yours`)
+      db.update(target.table)
+        .set({ controllingPlayer: null })
+        .where(and(eq(target.table.id, id), eq(target.table.controllingPlayer, browser)))
+        .run()
+    },
+
+    /** The Host frees a Character another browser holds. Refused for any other browser. */
+    release(id: string, browser: string): void {
+      if (browser !== SOLO_PLAYER)
+        throw new ClaimRefusedError('Only the Host can Release a Character')
+      const target = claimable(id)
+      db.update(target.table).set({ controllingPlayer: null }).where(eq(target.table.id, id)).run()
+    },
+
     /** Saved Characters oldest first, then drafts oldest first. */
     list(): PartyMember[] {
       const saved = characters.list().map((c): PartyMember => ({
@@ -227,11 +365,13 @@ export function createParty(
     },
 
     /** Replaces the stored draft. Incomplete is fine: a draft is unsaved by definition. */
-    writeDraft(id: string, value: DraftWrite): void {
+    writeDraft(id: string, value: DraftWrite, browser?: string): void {
+      requireClaim(id, browser)
       write(id, value)
     },
 
-    discardDraft(id: string): void {
+    discardDraft(id: string, browser?: string): void {
+      requireClaim(id, browser)
       const deleted = db.delete(characterDraft).where(eq(characterDraft.id, id)).returning().get()
       if (!deleted) throw new DraftNotFoundError('Character draft not found')
     },
@@ -240,7 +380,8 @@ export function createParty(
      * Writes the draft, then saves it into the Party and removes it, in one transaction. Refused,
      * keeping the draft, unless every step is valid.
      */
-    saveDraft(id: string, value: DraftWrite): Character {
+    saveDraft(id: string, value: DraftWrite, browser?: string): Character {
+      requireClaim(id, browser)
       return db.transaction(() => {
         write(id, value)
         const { controllingPlayer } = row(id)
@@ -263,7 +404,8 @@ export function createParty(
      * slots, coin, inventory), so once the Campaign has begun it is refused: play state changes only
      * through the DM's tools.
      */
-    updateCharacter(id: string, draft: CharacterDraft): Character {
+    updateCharacter(id: string, draft: CharacterDraft, browser?: string): Character {
+      requireClaim(id, browser)
       if (begun()) {
         throw new DmOnlyEditError(
           'Rewriting a Character in the wizard resets their play state, so once the Campaign has begun only their notes, personality and appearance can be edited. Ask the DM at the table for anything else.'
@@ -290,7 +432,12 @@ export function createParty(
      * maximum, and the picked cantrips and spells are learned. Play state is kept. Refused without
      * an awarded level, or when the picks do not fit the offer.
      */
-    levelUp(id: string, picks: { cantrips?: string[]; spells?: string[] }): Character {
+    levelUp(
+      id: string,
+      picks: { cantrips?: string[]; spells?: string[] },
+      browser?: string
+    ): Character {
+      requireClaim(id, browser)
       return db.transaction(() => {
         const before = detail(id)
         const offer = offerFor(before)
@@ -336,7 +483,8 @@ export function createParty(
      * Edits a Character's notes, personality, appearance or backstory, leaving play state alone.
      * Backstory after Begin is the DM's while the DM is away.
      */
-    updateDetails(id: string, details: CharacterDetails): Character {
+    updateDetails(id: string, details: CharacterDetails, browser?: string): Character {
+      requireClaim(id, browser)
       const fields = (Object.keys(DETAIL_LIMITS) as (keyof CharacterDetails)[]).filter(
         (f) => details[f] !== undefined
       )

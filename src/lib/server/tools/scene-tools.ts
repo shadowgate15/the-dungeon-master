@@ -10,6 +10,7 @@ import {
   characterRefs,
   ClockBackwardsError,
   currentMinute,
+  floorsWaited,
   present,
   scenePlace
 } from '../play/scene'
@@ -71,7 +72,8 @@ function sceneView(db: Queryable) {
     elsewhere: elsewhere.map((c) => ({
       handle: c.handle,
       name: c.row.name,
-      whereabouts: c.row.whereabouts
+      whereabouts: c.row.whereabouts,
+      floorsWaited: c.row.whereabouts ? floorsWaited(db, c.handle, c.row.whereabouts) : 0
     }))
   }
 }

@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import type { Queryable } from '../db/connect'
 import { character, type DeathSaves } from '../db/schema'
 import { createPendingCall } from './calls'
@@ -142,7 +143,7 @@ export function deathSaveCall(db: Queryable, handle: string, at: number): string
   if (!ref || !rollsDeathSaves(ref.row)) return null
   return createPendingCall(
     db,
-    [{ characterId: ref.row.id, player: ref.row.controllingPlayer, sequence: null }],
+    [{ characterId: ref.row.id, player: ref.row.controllingPlayer ?? SOLO_PLAYER, sequence: null }],
     at,
     'death_save'
   )

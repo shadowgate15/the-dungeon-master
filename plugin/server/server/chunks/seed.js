@@ -1,6 +1,7 @@
 import { t as dynamic_private_env } from "./config.js";
 import { a as SCALES, n as LENGTHS, o as TECH_LEVELS, r as MAGIC_LEVELS, s as TONES, t as GENRE_FLAVORS } from "./enums.js";
 import { a as rulesDataset$1, i as PROFICIENCY_REFERENCE_TYPES, n as CHOICE_KINDS, r as CHOICE_OWNER_TYPES, s as ABILITY_KEYS, t as BACKGROUND_OPTION_KINDS } from "./schema.js";
+import { i as CHARACTER_STATUSES, n as ALIGNMENTS, s as PICK_SOURCES, t as ABILITY_METHODS } from "./enums2.js";
 import crypto$1 from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -22,6 +23,7 @@ var DATABASE_URL = dynamic_private_env.DATABASE_URL;
 var DUNGEON_MASTER_HOME = dynamic_private_env.DUNGEON_MASTER_HOME;
 var DUNGEON_MASTER_PORT = dynamic_private_env.DUNGEON_MASTER_PORT;
 var DUNGEON_MASTER_VERSION = dynamic_private_env.DUNGEON_MASTER_VERSION;
+var DUNGEON_MASTER_LAN = dynamic_private_env.DUNGEON_MASTER_LAN;
 var DUNGEON_MASTER_CAMPAIGNS = dynamic_private_env.DUNGEON_MASTER_CAMPAIGNS;
 // node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/entity.js
 var entityKind = Symbol.for("drizzle:entityKind");
@@ -4075,43 +4077,6 @@ var SQLiteTransaction = class extends BaseSQLiteDatabase {
 		throw new TransactionRollbackError();
 	}
 };
-// src/lib/character/enums.ts
-/** The nine alignments; slugs match the Rules Data alignments. NULL means unspecified. */
-var ALIGNMENTS = [
-	"lawful-good",
-	"neutral-good",
-	"chaotic-good",
-	"lawful-neutral",
-	"neutral",
-	"chaotic-neutral",
-	"lawful-evil",
-	"neutral-evil",
-	"chaotic-evil"
-];
-/** Ability Score Methods; slugs match the app-authored Rules Data rows. */
-var ABILITY_METHODS = [
-	"standard-array",
-	"point-buy",
-	"roll"
-];
-/** Where a stored skill or spell pick comes from. */
-var PICK_SOURCES = [
-	"class",
-	"race",
-	"background"
-];
-/** A Character's status. The Party is every Character who has not departed. */
-var CHARACTER_STATUSES = [
-	"alive",
-	"dead",
-	"departed"
-];
-/** The one Player of a solo Campaign; every Character and draft names its Controlling Player. */
-var SOLO_PLAYER = "player";
-/** The seeded app-authored background that requires the custom_background_* fields. */
-var CUSTOM_BACKGROUND_SLUG = "custom";
-var BACKSTORY_MAX = 2e3;
-var CUSTOM_BACKGROUND_FEATURE_MAX = 1e3;
 // src/lib/server/db/rules-schema.ts
 /**
 * Rules Data: the SRD 5.1 reference content, read-only to the app and seeded from the committed
@@ -4905,6 +4870,11 @@ var event = sqliteTable("event", {
 	data: text("data", { mode: "json" }).$type(),
 	/** DM-only events (Arc and Beat changes) never reach the Player. */
 	dmOnly: integer("dm_only", { mode: "boolean" }).notNull().default(false),
+	/**
+	* The Characters who can see it: a list of Character ids written once and never recomputed
+	* (ADR 0008). The default is the Party's Characters when it was written.
+	*/
+	audience: text("audience", { mode: "json" }).$type().notNull().default(sql`'[]'`),
 	createdAt: integer("created_at").notNull()
 });
 var ref = (name, target) => integer(name).notNull().references(target, { onDelete: "restrict" });
@@ -4920,8 +4890,8 @@ var campaignOwner = () => text("campaign_id").notNull().references(() => campaig
 var character = sqliteTable("character", {
 	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
 	campaignId: campaignOwner(),
-	/** The Player who controls this Character; exactly one, transferable. */
-	controllingPlayer: text("controlling_player").notNull(),
+	/** The browser that Claims this Character; null while it is unclaimed. */
+	controllingPlayer: text("controlling_player"),
 	status: text("status", { enum: CHARACTER_STATUSES }).notNull().default("alive"),
 	/** The Character's Entity version: bumped by every edit, named in change notices. */
 	version: integer("version").notNull().default(1),
@@ -5055,7 +5025,7 @@ var characterItem = sqliteTable("character_item", {
 var characterDraft = sqliteTable("character_draft", {
 	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
 	campaignId: campaignOwner(),
-	controllingPlayer: text("controlling_player").notNull(),
+	controllingPlayer: text("controlling_player"),
 	data: text("data", { mode: "json" }).$type().notNull(),
 	/** The wizard step the draft was last on. */
 	step: text("step").$type().notNull(),
@@ -5122,6 +5092,8 @@ var session = sqliteTable("session", {
 	startedAt: integer("started_at").notNull(),
 	closedAt: integer("closed_at"),
 	summary: text("summary"),
+	/** Who can read the summary (ADR 0008); null until it is written. */
+	summaryAudience: text("summary_audience", { mode: "json" }).$type(),
 	threads: text("threads", { mode: "json" }).$type()
 });
 /**
@@ -5133,6 +5105,11 @@ var activityLine = sqliteTable("activity_line", {
 	sessionId: text("session_id"),
 	afterEvent: integer("after_event").notNull(),
 	text: text("text").notNull(),
+	/**
+	* The Characters who can see it: a list of Character ids written once and never recomputed
+	* (ADR 0008). The default is the Party's Characters when it was written.
+	*/
+	audience: text("audience", { mode: "json" }).$type().notNull().default(sql`'[]'`),
 	createdAt: integer("created_at").notNull()
 });
 /**
@@ -5175,6 +5152,11 @@ var call = sqliteTable("call", {
 	choices: text("choices", { mode: "json" }).$type().notNull().default([]),
 	/** The Event (a Narration) that opened it. */
 	openedBy: integer("opened_by"),
+	/**
+	* The Characters who can see it: a list of Character ids written once and never recomputed
+	* (ADR 0008). The default is the Party's Characters when it was written.
+	*/
+	audience: text("audience", { mode: "json" }).$type().notNull().default(sql`'[]'`),
 	createdAt: integer("created_at").notNull(),
 	closedAt: integer("closed_at")
 });
@@ -5211,7 +5193,9 @@ var callPart = sqliteTable("call_part", {
 	/** A reaction's name, such as `Opportunity attack`; the Call's choices take it or pass. */
 	reaction: text("reaction"),
 	answer: text("answer"),
-	answeredAt: integer("answered_at")
+	answeredAt: integer("answered_at"),
+	/** Rolled by code because its Character was unclaimed; the DM hears it marked so. */
+	rolledByCode: integer("rolled_by_code", { mode: "boolean" }).notNull().default(false)
 }, (t) => [index("call_part_call_idx").on(t.callId)]);
 /**
 * An NPC's own combat state, once its stat block is first used: current HP (starting at the stat
@@ -7367,6 +7351,6 @@ function openSeededDatabase(file) {
 	seedRulesData(db);
 	return db;
 }
-export { subclass as $, npcCombat as A, pageRevision as B, characterSpell as C, DUNGEON_MASTER_CAMPAIGNS as Ct, declaration as D, conversationMessage as E, DUNGEON_MASTER_VERSION as Et, beat as F, abilityScoreMethod as G, ENTITY_TYPES as H, belief as I, classTable as J, alignment as K, entity as L, session as M, act as N, event as O, arc as P, spell as Q, entityAlias as R, characterSkill as S, DATABASE_URL as St, combatant as T, DUNGEON_MASTER_PORT as Tt, NPC_STATUSES as U, worldLink as V, handleKind as W, race as X, equipment as Y, skill as Z, character as _, ne as _t, createRulesRepository as a, SOLO_PLAYER as at, characterEquipment as b, Column as bt, abilities_default as c, and as ct, defaultCampaignRoot as d, gte as dt, subrace as et, userStateDir as f, inArray as ft, campaign as g, lt as gt, callPart as h, like as ht, openDatabase as i, CUSTOM_BACKGROUND_SLUG as it, returnedDraft as j, floor as k, campaignDatabasePath as l, eq as lt, call as m, isNull as mt, seedRulesData as n, BACKSTORY_MAX as nt, loadRulesDataset as o, asc as ot, activityLine as p, isNotNull as pt, background as q, migrateDatabase as r, CUSTOM_BACKGROUND_FEATURE_MAX as rt, skills_default as s, desc as st, openSeededDatabase as t, ABILITY_METHODS as tt, canonicalFolder as u, gt as ut, characterChoice as v, or as vt, combat as w, DUNGEON_MASTER_HOME as wt, characterItem as x, is as xt, characterDraft as y, sql as yt, fact as z };
+export { subclass as $, npcCombat as A, pageRevision as B, characterSpell as C, declaration as D, conversationMessage as E, beat as F, abilityScoreMethod as G, ENTITY_TYPES as H, belief as I, classTable as J, alignment as K, entity as L, session as M, act as N, event as O, arc as P, spell as Q, entityAlias as R, characterSkill as S, DUNGEON_MASTER_VERSION as St, combatant as T, NPC_STATUSES as U, worldLink as V, handleKind as W, race as X, equipment as Y, skill as Z, character as _, DATABASE_URL as _t, createRulesRepository as a, gt as at, characterEquipment as b, DUNGEON_MASTER_LAN as bt, abilities_default as c, isNotNull as ct, defaultCampaignRoot as d, lt as dt, subrace as et, userStateDir as f, ne as ft, campaign as g, is as gt, callPart as h, Column as ht, openDatabase as i, eq as it, returnedDraft as j, floor as k, campaignDatabasePath as l, isNull as lt, call as m, sql as mt, seedRulesData as n, desc as nt, loadRulesDataset as o, gte as ot, activityLine as p, or as pt, background as q, migrateDatabase as r, and as rt, skills_default as s, inArray as st, openSeededDatabase as t, asc as tt, canonicalFolder as u, like as ut, characterChoice as v, DUNGEON_MASTER_CAMPAIGNS as vt, combat as w, characterItem as x, DUNGEON_MASTER_PORT as xt, characterDraft as y, DUNGEON_MASTER_HOME as yt, fact as z };
 
 //# sourceMappingURL=seed.js.map

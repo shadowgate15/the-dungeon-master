@@ -1,7 +1,14 @@
 import { randomBytes } from 'node:crypto'
-import { DUNGEON_MASTER_HOME, DUNGEON_MASTER_PORT, DUNGEON_MASTER_VERSION } from '$app/env/private'
+import {
+  DUNGEON_MASTER_HOME,
+  DUNGEON_MASTER_LAN,
+  DUNGEON_MASTER_PORT,
+  DUNGEON_MASTER_VERSION
+} from '$app/env/private'
 import { library, live, sessions } from '../campaign'
 import { userStateDir } from '../campaign/paths'
+import { joinUrls } from '../lan'
+import { lanAccess } from '../lan-access'
 import { stopServer, writeRuntimeFile } from '../runtime'
 import { gameTools } from '../tools'
 import { createToolHost } from '../tools/host'
@@ -39,13 +46,24 @@ export const bridgeApi = createBridgeApi({
 /** The known localhost port, unless overridden for tests. */
 export const port = Number(DUNGEON_MASTER_PORT || 4777)
 
-/** Writes the runtime file (port, token, pid, version) so the bridge and launcher find this server. */
+/** Whether `dm --lan` started this server on every interface. */
+export const lan = Boolean(DUNGEON_MASTER_LAN)
+lanAccess.set({ lan })
+
+/** What the UI shows about LAN mode: whether it is on, and where other devices join. */
+export function lanStatus() {
+  return { lan, joinUrls: lan ? joinUrls({ port }) : [] }
+}
+
+/** Writes the runtime file (port, token, pid, version, mode, join URLs) so the bridge and launcher find this server. */
 export function announceServer() {
   writeRuntimeFile(userStateDir({ DUNGEON_MASTER_HOME }), {
     port,
     token,
     pid: process.pid,
-    version: DUNGEON_MASTER_VERSION || undefined
+    version: DUNGEON_MASTER_VERSION || undefined,
+    mode: lan ? 'lan' : 'local',
+    joinUrls: lan ? joinUrls({ port }) : []
   })
 }
 

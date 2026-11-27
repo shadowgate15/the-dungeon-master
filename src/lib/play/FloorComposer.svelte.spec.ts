@@ -183,6 +183,21 @@ describe('FloorComposer for a split Party', () => {
     expect(h.ondone).not.toHaveBeenCalled()
   })
 
+  it('tells a remote browser to wait for the Host, with no folder path or copy button', async () => {
+    render(FloorComposer, {
+      acting: 'Wren',
+      declarations: [],
+      away: { folder: '/home/me/ember-road' },
+      isHost: false,
+      ...handlers()
+    })
+
+    const bar = page.getByRole('status', { name: 'DM away' })
+    await expect.element(bar).toHaveTextContent('Waiting for the Host to start the DM')
+    await expect.element(bar).not.toHaveTextContent('/home/me/ember-road')
+    await expect.element(page.getByRole('button', { name: 'Copy' })).not.toBeInTheDocument()
+  })
+
   it('copies the command that brings the DM back', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
@@ -212,5 +227,60 @@ describe('FloorComposer for a split Party', () => {
     const box = page.getByRole('textbox', { name: "It is Goblin 1's turn" })
     await expect.element(box).toBeDisabled()
     await expect.element(page.getByRole('button', { name: 'Send' })).toBeDisabled()
+  })
+})
+
+describe('FloorComposer with other browsers', () => {
+  it("shows another browser's Declaration read-only, and only your own can be changed", async () => {
+    render(FloorComposer, {
+      acting: 'Wren',
+      declarations: [
+        { ...declarations[0], own: true },
+        { ...declarations[1], own: false }
+      ],
+      ...handlers()
+    })
+
+    const tray = page.getByRole('list', { name: 'Pending Declarations' })
+    await expect
+      .element(tray.getByRole('listitem').nth(1))
+      .toHaveTextContent(/Bram\s*I bar the door/)
+    await expect.element(tray.getByRole('button', { name: /Edit Wren/ })).toBeVisible()
+    await expect.element(tray.getByRole('button', { name: /Edit Bram/ })).not.toBeInTheDocument()
+    await expect
+      .element(tray.getByRole('button', { name: /Withdraw Bram/ }))
+      .not.toBeInTheDocument()
+  })
+
+  it('replaces the composer with a waiting line when none of your Characters is in the Scene', async () => {
+    const oncut = vi.fn()
+    render(FloorComposer, {
+      acting: null,
+      waiting: true,
+      declarations: [],
+      elsewhere: [{ id: 'c-kael', name: 'Kael', whereabouts: 'the cellar' }],
+      oncut,
+      ...handlers()
+    })
+
+    await expect.element(page.getByText('Kael is in the cellar')).toBeVisible()
+    await expect.element(page.getByRole('textbox')).not.toBeInTheDocument()
+    await page.getByRole('button', { name: 'Cut to Kael' }).click()
+    expect(oncut).toHaveBeenCalledWith('c-kael')
+  })
+
+  it("still shows others' open Declarations read-only in the waiting state", async () => {
+    render(FloorComposer, {
+      acting: null,
+      waiting: true,
+      declarations: [{ ...declarations[0], own: false }],
+      elsewhere: [{ id: 'c-kael', name: 'Kael', whereabouts: 'the cellar' }],
+      ...handlers()
+    })
+
+    await expect
+      .element(page.getByRole('list', { name: 'Pending Declarations' }))
+      .toHaveTextContent('I keep my back')
+    await expect.element(page.getByRole('button', { name: /^edit/ })).not.toBeInTheDocument()
   })
 })

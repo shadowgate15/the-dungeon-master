@@ -8,7 +8,8 @@ import { lastLint } from '../world/lint'
 import { hpState } from '#lib/play/hp-state.ts'
 import { pendingCalls } from './calls'
 import { initiativeOrder, liveCombat, waitingOnInitiative } from './combat'
-import { characterRefs, currentMinute, present } from './scene'
+import { characterRefs, currentMinute, floorsWaited, present } from './scene'
+import { whoIsAtTheTable } from './labels'
 import { playSheets } from './sheets'
 
 /**
@@ -47,7 +48,24 @@ export function scenePart({ db }: CoreBlockSource): string {
   }
   const pending = pendingCalls(db)
   if (pending.length) lines.push(`Pending Calls: ${pending.join(', ')}.`)
+  lines.push(...awayLines(db))
   return lines.join('\n')
+}
+
+/** One line per group of Characters away from the Scene (same Place): the Floors it has waited. */
+function awayLines(db: Queryable): string[] {
+  const groups = new Map<string, { who: string[]; waited: number }>()
+  for (const c of present(db).elsewhere) {
+    const at = c.row.whereabouts ?? 'no known Place'
+    const group = groups.get(at) ?? { who: [], waited: 0 }
+    group.who.push(`${c.row.name} (${c.handle})`)
+    group.waited = Math.max(group.waited, c.row.whereabouts ? floorsWaited(db, c.handle, at) : 0)
+    groups.set(at, group)
+  }
+  return [...groups].map(
+    ([at, g]) =>
+      `Away: ${g.who.join(', ')} at ${at}, waited ${plural(g.waited, 'Floor', 'Floors')}.`
+  )
 }
 
 const plural = (n: number, word: string, many: string) => `${n} ${n === 1 ? word : many}`
@@ -178,6 +196,7 @@ export function coreBlock(source: CoreBlockSource): string {
     '# Core block',
     scenePart(source),
     partyPart(source),
+    whoIsAtTheTable(source.db),
     npcsPart(source),
     combatPart(source),
     arcPart(source),

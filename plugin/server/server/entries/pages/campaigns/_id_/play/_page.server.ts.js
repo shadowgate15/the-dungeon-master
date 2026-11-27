@@ -1,9 +1,10 @@
 import { t as error } from "../../../../../chunks/exports.js";
-import { O as playSheets, i as sessions, n as library } from "../../../../../chunks/campaign.js";
-import { a as permissions, o as play } from "../../../../../chunks/bridge.js";
+import "../../../../../chunks/enums2.js";
+import { i as sessions, n as library } from "../../../../../chunks/campaign.js";
+import { c as play, s as permissions } from "../../../../../chunks/bridge.js";
 // src/routes/campaigns/[id]/play/+page.server.ts
 /** The play console: the Party's sheets, the open Floor, the timeline, the Journal and any permission prompt, begun or not. */
-var load = ({ params }) => {
+var load = ({ params, locals }) => {
 	const entry = library.get(params.id);
 	if (!entry) error(404, "Campaign not found");
 	if (entry.status === "missing") error(404, "This Campaign's folder is missing");
@@ -14,12 +15,13 @@ var load = ({ params }) => {
 			path: entry.path,
 			status: entry.status
 		},
-		sheets: playSheets(library.party(entry.id)),
-		floor: library.floor(entry.id).current(),
-		timeline: play.timeline(entry.id),
-		scene: play.scene(entry.id),
-		journal: library.record(entry.id).journal(),
-		permission: permissions.pending(entry.id),
+		claims: play.claims(entry.id, locals.browser),
+		sheets: play.sheets(entry.id, locals.browser),
+		floor: play.openFloor(entry.id, locals.browser),
+		timeline: play.timeline(entry.id, locals.browser),
+		scene: play.scene(entry.id, locals.browser),
+		journal: play.journal(entry.id, locals.browser),
+		permission: locals.browser === "player" ? permissions.pending(entry.id) : null,
 		attached: sessions.list()
 	};
 };

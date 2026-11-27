@@ -1,8 +1,11 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import { execFile } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tempDir } from '../testing/temp-dir'
 import { addCharacter, fighterDraft } from '../lib/server/character/test-characters'
+import { readRuntimeFile, writeRuntimeFile } from '../lib/server/runtime'
 import { startTestGameServer, type TestGameServer } from '../testing/game-server'
 
 vi.setConfig({ testTimeout: 20_000 })
@@ -48,8 +51,10 @@ function hook(event: string, input: Record<string, unknown>): Promise<unknown> {
 function closeFloor() {
   server.channels.listen(folder, () => {})
   const wren = addCharacter(server.library, campaignId, fighterDraft('Wren'))
-  server.library.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })
-  server.play.done(campaignId)
+  server.library
+    .floor(campaignId)
+    .send({ character: wren, text: 'I pick the lock.', player: SOLO_PLAYER })
+  server.play.done(campaignId, SOLO_PLAYER)
 }
 
 describe('PreToolUse', () => {
@@ -91,7 +96,7 @@ describe('Stop', () => {
     const out = await hook('stop', { hook_event_name: 'Stop', stop_hook_active: true })
 
     expect(out).toBeNull()
-    expect(server.play.timeline(campaignId).entries.at(-1)).toMatchObject({
+    expect(server.play.timeline(campaignId, SOLO_PLAYER).entries.at(-1)).toMatchObject({
       type: 'error',
       text: expect.stringContaining('without a Narration')
     })
@@ -141,6 +146,29 @@ describe('SessionStart', () => {
   })
 })
 
+describe('Band', () => {
+  const band = () => hook('band', { hook_event_name: 'Band' })
+
+  it('shows the localhost URL in solo play', async () => {
+    const { port } = readRuntimeFile(home)!
+    expect(await band()).toEqual({ lines: [`http://localhost:${port}`] })
+  })
+
+  it('shows the join URLs in LAN mode', async () => {
+    const runtime = readRuntimeFile(home)!
+    const joinUrls = ['http://192.168.1.20:4000', 'http://table.local:4000']
+    writeRuntimeFile(home, { ...runtime, mode: 'lan', joinUrls })
+
+    expect(await band()).toEqual({ lines: joinUrls })
+  })
+
+  it('draws nothing when the server is not running', async () => {
+    await server.stop()
+    fs.rmSync(path.join(home, 'runtime.json'), { force: true })
+    expect(await band()).toBeNull()
+  })
+})
+
 describe('outside a Campaign folder', () => {
   it('every hook is inert', async () => {
     closeFloor()
@@ -148,7 +176,8 @@ describe('outside a Campaign folder', () => {
     const inputs = {
       'pre-tool-use': { hook_event_name: 'PreToolUse', tool_name: GAME_TOOL },
       stop: { hook_event_name: 'Stop', stop_hook_active: false },
-      'session-start': { hook_event_name: 'SessionStart', source: 'startup' }
+      'session-start': { hook_event_name: 'SessionStart', source: 'startup' },
+      band: { hook_event_name: 'Band' }
     }
 
     for (const [event, input] of Object.entries(inputs)) {

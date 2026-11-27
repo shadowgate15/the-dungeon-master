@@ -1,7 +1,9 @@
-import { Et as DUNGEON_MASTER_VERSION, H as ENTITY_TYPES, I as belief, J as classTable, L as entity, O as event, Tt as DUNGEON_MASTER_PORT, W as handleKind, X as race, Y as equipment, _ as character, _t as ne, a as createRulesRepository, at as SOLO_PLAYER, ct as and, f as userStateDir, ft as inArray, g as campaign, lt as eq, mt as isNull, ot as asc, q as background, vt as or, wt as DUNGEON_MASTER_HOME, x as characterItem, y as characterDraft, yt as sql, z as fact } from "./seed.js";
-import { $ as combatState, At as createWorld, B as openCall, Bt as reviseArc, Ct as isBodyArmor, D as createDmChannels, F as callInput, Ft as createArc, G as saveSequence, Gt as readTool, H as attackSequence, Ht as ToolError, I as callResultEvent, It as currentArc, J as logActivity, Jt as parseClock, K as sequenceText, Kt as writeTool, L as cancelPendingCall, Lt as pastArcs, M as DC_BY_TIER, Mt as renderLinks, N as PASS, Nt as resolveLinks, Ot as hpState, P as TIERS, Pt as CurrentArcError, Q as addCombatants, R as createHitDiceCall, Rt as resolveBeat, St as equippable, Tt as loadWizardRules, U as damageSequence, Ut as creationTool, V as saveKey, Vt as PLUGIN_NAME, W as rollAll, Wt as expectVersion, X as nextEventId, Xt as characterRefs, Y as logEvent, Yt as characterHolders, Z as setAwaitingNarration, Zt as SESSION_LIVE_MESSAGE, _ as closeSession, at as startCombat, b as sessionsView, bt as present, c as CampaignNotFoundError, ct as combatant, dt as saveBonus, et as endCombat, f as SeedLockedError, ft as setConditions, g as addConversationLine, gt as ClockBackwardsError, h as refuseLockedSeed, ht as deathSaveCall, i as sessions, it as spendTurnResource, jt as fieldNames, k as ABILITY_NAMES, kt as lintWorld, l as NotACampaignFolderError, lt as incapacitates, m as creationStage, mt as setConcentration, n as library, nt as orderText, ot as applyDamage, pt as concentrate, q as currentStamp, qt as formatClock, r as live, rt as refuseDuringCombat, st as applyHealing, tt as nextTurn, ut as mustAct, v as history, vt as advanceClock, w as returnStrandedDrafts, wt as believedName, xt as scenePlace, y as indexNarration, yt as currentMinute, z as createPendingCall, zt as retireArc } from "./campaign.js";
-import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
+import { H as ENTITY_TYPES, I as belief, J as classTable, L as entity, O as event, St as DUNGEON_MASTER_VERSION, W as handleKind, X as race, Y as equipment, _ as character, a as createRulesRepository, bt as DUNGEON_MASTER_LAN, f as userStateDir, ft as ne, g as campaign, it as eq, lt as isNull, mt as sql, pt as or, q as background, rt as and, st as inArray, tt as asc, x as characterItem, xt as DUNGEON_MASTER_PORT, y as characterDraft, yt as DUNGEON_MASTER_HOME, z as fact } from "./seed.js";
+import { $ as partyAudience, $t as characterHolders, A as ABILITY_NAMES, B as createHitDiceCall, Bt as currentArc, Ct as advanceClock, Dt as scenePlace, Et as present, F as TIERS, Ft as fieldNames, G as damageSequence, Gt as PLUGIN_NAME, H as openCall, Ht as resolveBeat, I as callInput, It as renderLinks, J as sequenceText, Jt as expectVersion, K as rollAll, Kt as ToolError, L as callResultEvent, Lt as resolveLinks, Mt as hpState, N as DC_BY_TIER, Nt as lintWorld, O as createDmChannels, Ot as believedName, P as PASS, Pt as createWorld, Q as nextEventId, Qt as parseClock, R as cancelPendingCall, Rt as CurrentArcError, Tt as floorsWaited, U as saveKey, Ut as retireArc, V as createPendingCall, Vt as pastArcs, W as attackSequence, Wt as reviseArc, X as logActivity, Xt as writeTool, Y as currentStamp, Yt as readTool, Z as logEvent, Zt as formatClock, _ as closeSession, _t as setConcentration, at as orderText, b as sessionsView, bt as deathSaveCall, c as CampaignNotFoundError, ct as startCombat, dt as combatant, en as characterRefs, et as setAwaitingNarration, f as SeedLockedError, ft as incapacitates, g as addConversationLine, gt as concentrate, h as refuseLockedSeed, ht as setConditions, i as sessions, it as nextTurn, k as playSheets, kt as loadWizardRules, l as NotACampaignFolderError, lt as applyDamage, m as creationStage, mt as saveBonus, n as library, nt as combatState, ot as refuseDuringCombat, pt as mustAct, q as saveSequence, qt as creationTool, r as live, rt as endCombat, st as spendTurnResource, tn as SESSION_LIVE_MESSAGE, tt as addCombatants, ut as applyHealing, v as history, vt as equippable, w as returnStrandedDrafts, wt as currentMinute, xt as ClockBackwardsError, y as indexNarration, yt as isBodyArmor, z as createCalls, zt as createArc } from "./campaign.js";
+import { n as joinUrls } from "./lan.js";
 import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
+import { t as lanAccess } from "./lan-access.js";
+import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
 import { M as rollTotals, T as arrangementProblem, b as lengthIssue, d as reconcile, l as changedDraftFields, u as emptyDraft } from "./summary.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -830,8 +832,8 @@ var combatTools = [
 		description: "Move to the next turn in initiative order, into the next round after the last. The new combatant's action, bonus action and reaction are fresh. Run NPC and Creature turns yourself; on a Character's turn the Player's composer is locked to them. A Character at 0 HP rolls a Death save instead: the result carries its pending_call for your closing narrate.",
 		input: strictObject({}),
 		activity: null,
-		run: ({ db, now }) => {
-			const { round, current } = nextTurn(db);
+		run: ({ db, dice, now }) => {
+			const { round, current, notes } = nextTurn(db, dice);
 			const state = combatState(db);
 			const deathSave = current && deathSaveCall(db, current.handle, now);
 			return {
@@ -843,6 +845,7 @@ var combatTools = [
 					},
 					resources: "action, bonus action and reaction are fresh (a reminder, not a rule code enforces)",
 					order: state.order,
+					notes,
 					...deathSave && {
 						pending_call: deathSave,
 						death_save: `${current.name} is at 0 HP and rolls a Death save this turn: attach the Call with your closing narrate(text, call: "${deathSave}")`
@@ -2136,6 +2139,21 @@ function speaker({ db }, handle) {
 	if (!found || found.type !== "npc" || found.retiredAt !== null) throw ToolError.unknownHandle(handle);
 	return found;
 }
+/**
+* The Audience of a Narration: the Party's Characters, or only those `to` names (a passed note).
+* An empty list or a handle that is not a Party Character is refused (ADR 0008).
+*/
+function audienceOf(ctx, to) {
+	if (to === void 0) return partyAudience(ctx.db);
+	if (to.length === 0) throw new ToolError("invalid_input", "`to` names nobody, so no Character would read it", "Name at least one Party Character, or leave `to` out to narrate to the whole Party");
+	const party = characterRefs(ctx.db);
+	const ids = to.map((handle) => {
+		const found = party.find((c) => c.handle === handle);
+		if (!found) throw new ToolError("not_in_party", `${handle} is not a Party Character`, "Pass Party Character handles (char:<name>) in `to`");
+		return found.row.id;
+	});
+	return [...new Set(ids)];
+}
 /** Telling the Players what happens. */
 var narrationTools = [writeTool({
 	name: "narrate",
@@ -2145,10 +2163,12 @@ var narrationTools = [writeTool({
 		voice: string().min(1).optional().describe("NPC handle, when an NPC speaks"),
 		voice_label: string().trim().min(1).optional().describe("What the Players see for a speaker their Characters do not know by name, such as \"the hooded man\""),
 		call: callInput.optional().describe("Ask the Players: inline {kind: \"check\", character, skill | save, tier, adv?, reason} (or a list of them, one roll per Character) or {kind: \"question\", text, choices?}. A Call ends your turn; its call_result wakes you."),
+		to: array(string().min(1)).optional().describe("A passed note: Character handles (char:<name>) that alone read this Narration. Replaces the default of the whole Party; never empty. A Call it raises can ask only these Characters."),
 		recap: boolean().optional().describe("The opening recap of a Session")
 	}),
 	activity: null,
-	run: (ctx, { text, voice, voice_label, call, recap = false }) => {
+	run: (ctx, { text, voice, voice_label, call, recap = false, to }) => {
+		const audience = audienceOf(ctx, recap ? void 0 : to);
 		if (recap && call !== void 0) throw new ToolError("invalid_input", "A recap answers nothing, so it cannot ask a Call", "Narrate the recap on its own, then ask the Call in the next narrate");
 		const npc = voice === void 0 ? void 0 : speaker(ctx, voice);
 		if (!recap) {
@@ -2157,7 +2177,8 @@ var narrationTools = [writeTool({
 		}
 		const callId = call === void 0 ? null : openCall(ctx.db, call, {
 			at: ctx.now,
-			openedBy: ctx.stamp.eventId
+			openedBy: ctx.stamp.eventId,
+			audience
 		});
 		return {
 			result: callId ? {
@@ -2165,8 +2186,16 @@ var narrationTools = [writeTool({
 				call: callId,
 				next: "End your turn: the Players answer the Call"
 			} : { narrated: true },
+			after: callId ? () => {
+				const settled = createCalls(ctx.db, () => ctx.now).settleUnclaimed(ctx.dice, true);
+				return settled ? {
+					call_result: callResultEvent(settled).content,
+					next: "The Call was rolled by code: narrate what follows"
+				} : {};
+			} : void 0,
 			event: {
 				kind: "narration",
+				audience,
 				summary: npc ? `${npc.name}: ${text}` : text,
 				data: {
 					text,
@@ -2259,7 +2288,8 @@ function sceneView(db) {
 		elsewhere: elsewhere.map((c) => ({
 			handle: c.handle,
 			name: c.row.name,
-			whereabouts: c.row.whereabouts
+			whereabouts: c.row.whereabouts,
+			floorsWaited: c.row.whereabouts ? floorsWaited(db, c.handle, c.row.whereabouts) : 0
 		}))
 	};
 }
@@ -2945,7 +2975,7 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 		return db.transaction((tx) => {
 			const current = stamp(tx);
 			const eventId = nextEventId(tx);
-			const { result, skill, event: logged } = tool.run({
+			const { result, skill, after, event: logged } = tool.run({
 				...context,
 				db: tx,
 				stamp: {
@@ -2966,9 +2996,16 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 				at,
 				afterEvent: eventId
 			});
+			const changed = tool.name === "close_session" ? [...timelineChanged, {
+				type: "claims",
+				campaign: campaignId
+			}] : timelineChanged;
 			return {
-				result: withSkill(result, skill),
-				changed: timelineChanged
+				result: withSkill({
+					...result,
+					...after?.()
+				}, skill),
+				changed
 			};
 		});
 	}
@@ -3019,13 +3056,15 @@ var DM_AWAY_MESSAGE = "The DM is away. Run dm in the Campaign folder to start a 
 * send order (`[d1 Wren · player] picks the lock`). An empty body hands the DM the initiative.
 * `withdrawn_call` names the open Call the Declarations withdrew.
 */
-function floorEvent(closed) {
+function floorEvent(closed, label) {
+	const declared = new Set(closed.declarations.map((d) => d.player));
+	const passed = closed.players.filter((p) => !declared.has(p)).map(label);
 	return {
-		content: closed.declarations.map((d, i) => `[d${i + 1} ${d.characterName} · ${d.player}] ${d.text}`).join("\n"),
+		content: [...closed.declarations.map((d, i) => `[d${i + 1} ${d.characterName} · ${label(d.player)}] ${d.text}`), ...passed.length ? [`passed: ${passed.join(", ")}`] : []].join("\n"),
 		meta: {
 			kind: "floor",
 			floor_id: closed.floor,
-			players: closed.players.join(","),
+			players: closed.players.map(label).join(","),
 			...closed.withdrawnCall ? { withdrawn_call: closed.withdrawnCall } : {}
 		}
 	};
@@ -3049,8 +3088,40 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		if (!channels.listening(folder)) throw new DmAwayError(DM_AWAY_MESSAGE);
 		return folder;
 	}
+	/** Tells the DM and the browsers what a Done (or a lost Character) did to the Floor. */
+	function settle(campaignId, outcome) {
+		if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome, library.labels(campaignId)));
+		publish({
+			type: "floor",
+			campaign: campaignId
+		});
+		if (outcome.closed) publish({
+			type: "timeline",
+			campaign: campaignId
+		});
+		return outcome;
+	}
+	/**
+	* Tells the DM which Characters a Claims change left with whom: one `claims` event that, like a
+	* spotlight request, doesn't await Narration. Silent while no DM is at the table.
+	*/
+	function claimsChanged(campaignId, characterId) {
+		publish({
+			type: "claims",
+			campaign: campaignId
+		});
+		const folder = folderOf(campaignId);
+		if (!channels.listening(folder)) return;
+		const now = library.party(campaignId).claimOf(characterId);
+		if (!now) return;
+		const { name, holder } = now;
+		channels.send(folder, {
+			content: holder ? `${name} is now played by ${library.labels(campaignId)(holder)}` : `${name} is unclaimed`,
+			meta: { kind: "claims" }
+		});
+	}
 	function answered(campaignId, result) {
-		if (result) channels.send(folderOf(campaignId), callResultEvent(result));
+		if (result) channels.send(folderOf(campaignId), callResultEvent(result, library.labels(campaignId)));
 		publish({
 			type: "timeline",
 			campaign: campaignId
@@ -3071,25 +3142,24 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* The Player presses Done. When it closes the Floor, the DM gets exactly one floor event and
 		* the Campaign awaits Narration.
 		*/
-		done(campaignId, player = SOLO_PLAYER) {
+		done(campaignId, player) {
 			atTable(campaignId);
-			const outcome = library.floor(campaignId).done(player);
-			if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome));
+			return settle(campaignId, library.floor(campaignId).done(player));
+		},
+		/** Not done yet: the Player takes Done back until the Floor closes. */
+		undone(campaignId, player) {
+			atTable(campaignId);
+			library.floor(campaignId).undone(player);
 			publish({
 				type: "floor",
 				campaign: campaignId
 			});
-			if (outcome.closed) publish({
-				type: "timeline",
-				campaign: campaignId
-			});
-			return outcome;
 		},
 		/**
 		* The Player clicks one roll of the open Call; code rolls it. The roll that completes the Call
 		* wakes the DM with one call_result event and sets awaiting Narration.
 		*/
-		roll(campaignId, callId, partId, player = SOLO_PLAYER) {
+		roll(campaignId, callId, partId, player) {
 			atTable(campaignId);
 			return answered(campaignId, library.calls(campaignId).roll(callId, partId, dice(campaignId), player));
 		},
@@ -3097,7 +3167,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* The Player answers a question Call, or says how many Hit Dice to spend (code rolls them);
 		* the last answer wakes the DM like a roll does.
 		*/
-		answer(campaignId, callId, partId, text, player = SOLO_PLAYER) {
+		answer(campaignId, callId, partId, text, player) {
 			atTable(campaignId);
 			return answered(campaignId, library.calls(campaignId).answer(callId, partId, text, player, dice(campaignId)));
 		},
@@ -3105,31 +3175,75 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* A Player's "Cut to <Name>": one spotlight channel event to the DM. Doesn't await Narration.
 		* Refused (`SpotlightRefusedError`) for a Character who is already in the Scene.
 		*/
-		spotlight(campaignId, character, player = SOLO_PLAYER) {
+		spotlight(campaignId, character, player) {
 			const folder = atTable(campaignId);
-			const request = library.record(campaignId).spotlight(character, player);
+			const request = library.record(campaignId).spotlight(character, library.labels(campaignId)(player));
 			channels.send(folder, request);
 		},
 		/** The Scene as the Player's rail shows it. */
-		scene(campaignId) {
+		scene(campaignId, _viewer) {
 			return library.record(campaignId).scene();
+		},
+		/** The Journal as `viewer`'s Player sees it. */
+		journal(campaignId, viewer) {
+			return library.record(campaignId).journal(viewer);
+		},
+		/** The read-only Session history as `viewer`'s Player sees it. */
+		sessionHistory(campaignId, viewer) {
+			return library.record(campaignId).sessionHistory(viewer);
+		},
+		/** The Party's play sheets as `viewer`'s Player sees them. */
+		sheets(campaignId, viewer) {
+			return playSheets(library.party(campaignId), viewer);
+		},
+		/** Every Party Character with its Claim as `viewer`'s browser sees it (never by whom). */
+		claims(campaignId, viewer) {
+			return library.party(campaignId).claims(viewer);
+		},
+		/** The browser Claims a Character nobody holds; refused for a taken one, the Host's browser included. */
+		claim(campaignId, character, browser) {
+			library.party(campaignId).claim(character, browser);
+			claimsChanged(campaignId, character);
+		},
+		/** The Host's browser frees a Character another browser holds; refused for any other browser. */
+		release(campaignId, character, browser) {
+			library.party(campaignId).release(character, browser);
+			claimsChanged(campaignId, character);
+		},
+		/** The browser gives up a Claim it holds. */
+		letGo(campaignId, character, browser) {
+			library.party(campaignId).letGo(character, browser);
+			claimsChanged(campaignId, character);
+			settle(campaignId, library.floor(campaignId).lose(character));
+			const result = library.calls(campaignId).settleUnclaimed(dice(campaignId));
+			if (result) answered(campaignId, result);
+		},
+		/** The DM-pane conversation as `viewer`'s Player sees it. */
+		conversation(campaignId, _viewer) {
+			return library.conversation(campaignId).list();
+		},
+		/** The open Floor with `viewer`'s returned drafts, to read: it works with the DM away. */
+		openFloor(campaignId, viewer) {
+			return library.floor(campaignId).current(viewer);
 		},
 		/**
 		* The Player writes in the DM pane: the message is kept for the pane and reaches the DM as one
 		* conversation event. It is out of fiction, so it never touches the Floor or the Event log.
 		*/
-		converse(campaignId, text, player = SOLO_PLAYER) {
+		converse(campaignId, text, player) {
 			const folder = folderOf(campaignId);
 			if (!channels.listening(folder)) throw new DmAwayError("The DM is away. Run dm in the Campaign folder to ask for help.");
 			const message = library.conversation(campaignId).add({
 				text,
 				player
 			});
+			const who = library.labels(campaignId)(player);
+			const content = library.creation(campaignId).state === "begun" ? text : `[${who}] ${text}`;
 			channels.send(folder, {
-				content: text,
+				content,
 				meta: {
 					kind: "conversation",
-					player
+					player: who
 				}
 			});
 			publish({
@@ -3142,7 +3256,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* The Player presses Begin: the Seed locks and the DM gets one begin event, which it hands to
 		* `builder`. It needs a DM at the table, and it doesn't set awaiting Narration.
 		*/
-		begin(campaignId, player = SOLO_PLAYER) {
+		begin(campaignId, player) {
 			const folder = folderOf(campaignId);
 			if (!channels.listening(folder)) throw new DmAwayError("The DM is away. Run dm in the Campaign folder, then press Begin.");
 			library.begin(campaignId);
@@ -3150,7 +3264,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 				content: "The Player pressed Begin. Hand the Seed and the Party to builder to create the World and the first Arc, then open play.",
 				meta: {
 					kind: "begin",
-					player
+					player: library.labels(campaignId)(player)
 				}
 			});
 			publish({
@@ -3185,7 +3299,12 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* its own Session.
 		*/
 		openSession(campaignId, bridge) {
-			return library.record(campaignId).openSession(bridge);
+			const opened = library.record(campaignId).openSession(bridge);
+			publish({
+				type: "claims",
+				campaign: campaignId
+			});
+			return opened;
 		},
 		/**
 		* The Stop hook asks whether the DM may end its turn. It may not while a closed Floor awaits
@@ -3195,7 +3314,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		stopCheck(campaignId, again) {
 			const record = library.record(campaignId);
 			const pending = record.pendingCalls();
-			const awaiting = record.timeline().awaitingSince !== null;
+			const awaiting = record.awaitingSince() !== null;
 			if (!pending.length && !awaiting) return { block: false };
 			if (!again) return {
 				block: true,
@@ -3221,8 +3340,8 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 			return library.record(campaignId).coreBlock();
 		},
 		/** The Player's timeline and whether the DM is working on a turn. */
-		timeline(campaignId) {
-			return library.record(campaignId).timeline();
+		timeline(campaignId, viewer) {
+			return library.record(campaignId).timeline(viewer);
 		}
 	};
 }
@@ -3361,6 +3480,7 @@ function createBridgeApi({ library, host, channels, sessions, permissions, play,
 			if (!folder) return json({ error: "folder is required" }, 400);
 			try {
 				const { id, name } = library.register(folder);
+				lanAccess.set({ campaign: id });
 				return json({
 					id,
 					name,
@@ -3466,13 +3586,25 @@ var bridgeApi = createBridgeApi({
 });
 /** The known localhost port, unless overridden for tests. */
 var port = Number(DUNGEON_MASTER_PORT || 4777);
-/** Writes the runtime file (port, token, pid, version) so the bridge and launcher find this server. */
+/** Whether `dm --lan` started this server on every interface. */
+var lan = Boolean(DUNGEON_MASTER_LAN);
+lanAccess.set({ lan });
+/** What the UI shows about LAN mode: whether it is on, and where other devices join. */
+function lanStatus() {
+	return {
+		lan,
+		joinUrls: lan ? joinUrls({ port }) : []
+	};
+}
+/** Writes the runtime file (port, token, pid, version, mode, join URLs) so the bridge and launcher find this server. */
 function announceServer() {
 	writeRuntimeFile(userStateDir({ DUNGEON_MASTER_HOME }), {
 		port,
 		token,
 		pid: process.pid,
-		version: DUNGEON_MASTER_VERSION || void 0
+		version: DUNGEON_MASTER_VERSION || void 0,
+		mode: lan ? "lan" : "local",
+		joinUrls: lan ? joinUrls({ port }) : []
 	});
 }
 /**
@@ -3486,6 +3618,6 @@ function stop() {
 		exit: () => setTimeout(() => process.kill(process.pid, "SIGTERM"), 100)
 	});
 }
-export { permissions as a, stop as c, host as i, DmAwayError as l, bridgeApi as n, play as o, channels as r, port as s, announceServer as t };
+export { lan as a, play as c, DmAwayError as d, host as i, port as l, bridgeApi as n, lanStatus as o, channels as r, permissions as s, announceServer as t, stop as u };
 
 //# sourceMappingURL=bridge.js.map

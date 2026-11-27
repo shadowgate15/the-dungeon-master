@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -81,7 +82,7 @@ const status = (name: string) => {
     .find((m) => m.name === name)
   return member?.kind === 'character' ? member.status : null
 }
-const timeline = () => play.timeline(campaignId)
+const timeline = () => play.timeline(campaignId, SOLO_PLAYER)
 
 describe('a Character at 0 HP', () => {
   it('falls Unconscious, cannot act, and starts with no Death save tallies', () => {
@@ -139,7 +140,7 @@ describe('a Character at 0 HP', () => {
 function rollInitiative(id: string, ...d20s: number[]) {
   for (const [i, part] of timeline().call!.parts.entries()) {
     load([20, d20s[i]])
-    play.roll(campaignId, id, part.id)
+    play.roll(campaignId, id, part.id, SOLO_PLAYER)
   }
 }
 
@@ -166,7 +167,7 @@ function deathSave(turn: { pending_call: string }, face?: number) {
   ok('narrate', { text: 'Wren lies still.', call: turn.pending_call })
   const open = timeline().call!
   if (face !== undefined) load([20, face])
-  play.roll(campaignId, open.id, open.parts[0].id)
+  play.roll(campaignId, open.id, open.parts[0].id, SOLO_PLAYER)
 }
 
 describe('a Death save', () => {
@@ -183,7 +184,9 @@ describe('a Death save', () => {
   it('succeeds on 10 or more and fails below, a d20 with no modifier', () => {
     deathSave(downedOnTheirTurn(), 10)
     expect(sheet('Wren').deathSaves).toEqual({ successes: 1, failures: 0, stable: false })
-    expect(heard[0].content).toContain('[Wren · player] Death save: d20 10 → success')
+    expect(heard[0].content).toContain(
+      '[Wren · Host · Player of Wren] Death save: d20 10 → success (1 success, 0 failures)'
+    )
 
     deathSave(ok('next_turn') && ok('next_turn'), 9)
     expect(sheet('Wren').deathSaves).toEqual({ successes: 1, failures: 1, stable: false })
@@ -369,9 +372,9 @@ describe('concentration', () => {
       parts: [{ character: 'Ash', label: 'Constitution save' }]
     })
     load([20, 8])
-    play.roll(campaignId, open.id, open.parts[0].id)
+    play.roll(campaignId, open.id, open.parts[0].id, SOLO_PLAYER)
     expect(heard[0].content).toContain(
-      '[Ash · player] Constitution save: d20 8 + 1 = 9 vs DC 10 → failure; concentration on detect-magic ends'
+      '[Ash · Host · Player of Ash] Constitution save: d20 8 + 1 = 9 vs DC 10 → failure; concentration on detect-magic ends'
     )
     expect(sheet('Ash').concentration).toBeNull()
   })
@@ -396,7 +399,7 @@ describe('concentration', () => {
 
     const open = timeline().call!
     load([20, 15])
-    play.roll(campaignId, open.id, open.parts[0].id)
+    play.roll(campaignId, open.id, open.parts[0].id, SOLO_PLAYER)
     expect(heard.at(-1)!.content).toContain(`Pending Calls to attach: ${second}`)
     ok('narrate', { text: 'Ash holds on.', call: second })
     expect(timeline().call).toMatchObject({ kind: 'concentration' })
@@ -409,7 +412,7 @@ describe('concentration', () => {
     ok('narrate', { text: 'The bolt bites.', call: hit.concentration_calls[0] })
     const open = timeline().call!
     load([20, 9])
-    play.roll(campaignId, open.id, open.parts[0].id)
+    play.roll(campaignId, open.id, open.parts[0].id, SOLO_PLAYER)
     expect(sheet('Ash').concentration).toBe('detect-magic')
   })
 
@@ -484,32 +487,34 @@ describe('a reaction', () => {
 
   it('is not rolled until it is taken', () => {
     const { open } = offered()
-    expect(() => play.roll(campaignId, open.id, open.parts[0].id)).toThrow(/take it or pass/)
+    expect(() => play.roll(campaignId, open.id, open.parts[0].id, SOLO_PLAYER)).toThrow(
+      /take it or pass/
+    )
   })
 
   it('once taken, rolls to hit and damage through the normal roll path', () => {
     const { grik, open } = offered()
     const part = open.parts[0].id
-    play.answer(campaignId, open.id, part, 'Attack')
+    play.answer(campaignId, open.id, part, 'Attack', SOLO_PLAYER)
     expect(timeline().call!.parts[0]).toMatchObject({ offer: null, next: 'to hit' })
     expect(heard).toEqual([])
 
     load([20, 15])
-    play.roll(campaignId, open.id, part)
+    play.roll(campaignId, open.id, part, SOLO_PLAYER)
     load([8, 5])
-    play.roll(campaignId, open.id, part)
+    play.roll(campaignId, open.id, part, SOLO_PLAYER)
 
     expect(heard).toHaveLength(1)
     expect(heard[0].content).toBe(
-      `[Wren · player] Opportunity attack, taken: Crossbow, light attack on Grik (${grik}): d20 15 + 4 = 19 vs AC 15 → hit; damage 1d8+2: 5 + 2 = 7 piercing → Grik 0/7 HP (down); Grik dies`
+      `[Wren · Host · Player of Wren] Opportunity attack, taken: Crossbow, light attack on Grik (${grik}): d20 15 + 4 = 19 vs AC 15 → hit; damage 1d8+2: 5 + 2 = 7 piercing → Grik 0/7 HP (down); Grik dies`
     )
     expect(timeline().call).toBeNull()
   })
 
   it('passed, rolls nothing and the DM hears so', () => {
     const { open } = offered()
-    play.answer(campaignId, open.id, open.parts[0].id, 'Pass')
-    expect(heard[0].content).toBe('[Wren · player] Opportunity attack: passes')
+    play.answer(campaignId, open.id, open.parts[0].id, 'Pass', SOLO_PLAYER)
+    expect(heard[0].content).toBe('[Wren · Host · Player of Wren] Opportunity attack: passes')
     expect(timeline().call).toBeNull()
   })
 
@@ -523,8 +528,8 @@ describe('a reaction', () => {
     ok('narrate', { text: 'The arrow flies at Ash.', call: id })
     const open = timeline().call!
     expect(open.parts[0].offer).toEqual(['Step in', 'Pass'])
-    play.answer(campaignId, open.id, open.parts[0].id, 'Step in')
-    expect(heard[0].content).toBe('[Wren · player] Shield ally: takes it (Step in)')
+    play.answer(campaignId, open.id, open.parts[0].id, 'Step in', SOLO_PLAYER)
+    expect(heard[0].content).toBe('[Wren · Host · Player of Wren] Shield ally: takes it (Step in)')
   })
 
   it("spends the Character's reaction in a Combat", () => {
@@ -543,12 +548,12 @@ describe('a reaction', () => {
       ok('narrate', { text: 'Again!', call: id })
       const open = timeline().call!
       heard = []
-      play.answer(campaignId, open.id, open.parts[0].id, 'Take')
+      play.answer(campaignId, open.id, open.parts[0].id, 'Take', SOLO_PLAYER)
       return heard[0].content
     }
-    expect(brace()).toBe('[Wren · player] Brace: takes it (Take)')
+    expect(brace()).toBe('[Wren · Host · Player of Wren] Brace: takes it (Take)')
     expect(brace()).toBe(
-      '[Wren · player] Brace: takes it (Take)\nWren has already used a reaction this turn (a reminder: go on if the fiction allows it)'
+      '[Wren · Host · Player of Wren] Brace: takes it (Take)\nWren has already used a reaction this turn (a reminder: go on if the fiction allows it)'
     )
   })
 

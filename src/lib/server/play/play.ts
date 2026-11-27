@@ -1,4 +1,3 @@
-import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import type { LiveMessage } from '#lib/live/messages.ts'
 import type { SceneView } from '#lib/play/scene.ts'
 import type { Timeline } from '#lib/play/timeline.ts'
@@ -7,6 +6,8 @@ import type { Sessions } from '../bridge/sessions'
 import { CampaignNotFoundError, type CampaignLibrary } from '../campaign/library'
 import { campaignDice, type Dice } from '../dice'
 import type { DoneOutcome, Floor } from '../floor/floor'
+import { type PlayerLabel } from './labels'
+import { playSheets } from './sheets'
 import { callResultEvent, type CallResult } from './calls'
 
 export { DmBusyError } from '../floor/floor'
@@ -33,15 +34,23 @@ type Options = {
  * send order (`[d1 Wren · player] picks the lock`). An empty body hands the DM the initiative.
  * `withdrawn_call` names the open Call the Declarations withdrew.
  */
-export function floorEvent(closed: Extract<DoneOutcome, { closed: true }>): ChannelEvent {
+export function floorEvent(
+  closed: Extract<DoneOutcome, { closed: true }>,
+  label: PlayerLabel
+): ChannelEvent {
+  const declared = new Set(closed.declarations.map((d) => d.player))
+  const passed = closed.players.filter((p) => !declared.has(p)).map(label)
   return {
-    content: closed.declarations
-      .map((d, i) => `[d${i + 1} ${d.characterName} · ${d.player}] ${d.text}`)
-      .join('\n'),
+    content: [
+      ...closed.declarations.map(
+        (d, i) => `[d${i + 1} ${d.characterName} · ${label(d.player)}] ${d.text}`
+      ),
+      ...(passed.length ? [`passed: ${passed.join(', ')}`] : [])
+    ].join('\n'),
     meta: {
       kind: 'floor',
       floor_id: closed.floor,
-      players: closed.players.join(','),
+      players: closed.players.map(label).join(','),
       ...(closed.withdrawnCall ? { withdrawn_call: closed.withdrawnCall } : {})
     }
   }
@@ -73,8 +82,37 @@ export function createPlay({
     return folder
   }
 
+  /** Tells the DM and the browsers what a Done (or a lost Character) did to the Floor. */
+  function settle(campaignId: string, outcome: DoneOutcome): DoneOutcome {
+    if (outcome.closed)
+      channels.send(folderOf(campaignId), floorEvent(outcome, library.labels(campaignId)))
+    publish({ type: 'floor', campaign: campaignId })
+    if (outcome.closed) publish({ type: 'timeline', campaign: campaignId })
+    return outcome
+  }
+
+  /**
+   * Tells the DM which Characters a Claims change left with whom: one `claims` event that, like a
+   * spotlight request, doesn't await Narration. Silent while no DM is at the table.
+   */
+  function claimsChanged(campaignId: string, characterId: string) {
+    publish({ type: 'claims', campaign: campaignId })
+    const folder = folderOf(campaignId)
+    if (!channels.listening(folder)) return
+    const now = library.party(campaignId).claimOf(characterId)
+    if (!now) return
+    const { name, holder } = now
+    channels.send(folder, {
+      content: holder
+        ? `${name} is now played by ${library.labels(campaignId)(holder)}`
+        : `${name} is unclaimed`,
+      meta: { kind: 'claims' }
+    })
+  }
+
   function answered(campaignId: string, result: CallResult | null): { complete: boolean } {
-    if (result) channels.send(folderOf(campaignId), callResultEvent(result))
+    if (result)
+      channels.send(folderOf(campaignId), callResultEvent(result, library.labels(campaignId)))
     publish({ type: 'timeline', campaign: campaignId })
     return { complete: result !== null }
   }
@@ -95,20 +133,23 @@ export function createPlay({
      * The Player presses Done. When it closes the Floor, the DM gets exactly one floor event and
      * the Campaign awaits Narration.
      */
-    done(campaignId: string, player: string = SOLO_PLAYER): DoneOutcome {
+    done(campaignId: string, player: string): DoneOutcome {
       atTable(campaignId)
-      const outcome = library.floor(campaignId).done(player)
-      if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome))
+      return settle(campaignId, library.floor(campaignId).done(player))
+    },
+
+    /** Not done yet: the Player takes Done back until the Floor closes. */
+    undone(campaignId: string, player: string): void {
+      atTable(campaignId)
+      library.floor(campaignId).undone(player)
       publish({ type: 'floor', campaign: campaignId })
-      if (outcome.closed) publish({ type: 'timeline', campaign: campaignId })
-      return outcome
     },
 
     /**
      * The Player clicks one roll of the open Call; code rolls it. The roll that completes the Call
      * wakes the DM with one call_result event and sets awaiting Narration.
      */
-    roll(campaignId: string, callId: string, partId: string, player: string = SOLO_PLAYER) {
+    roll(campaignId: string, callId: string, partId: string, player: string) {
       atTable(campaignId)
       const result = library.calls(campaignId).roll(callId, partId, dice(campaignId), player)
       return answered(campaignId, result)
@@ -118,13 +159,7 @@ export function createPlay({
      * The Player answers a question Call, or says how many Hit Dice to spend (code rolls them);
      * the last answer wakes the DM like a roll does.
      */
-    answer(
-      campaignId: string,
-      callId: string,
-      partId: string,
-      text: string,
-      player: string = SOLO_PLAYER
-    ) {
+    answer(campaignId: string, callId: string, partId: string, text: string, player: string) {
       atTable(campaignId)
       const result = library
         .calls(campaignId)
@@ -136,28 +171,116 @@ export function createPlay({
      * A Player's "Cut to <Name>": one spotlight channel event to the DM. Doesn't await Narration.
      * Refused (`SpotlightRefusedError`) for a Character who is already in the Scene.
      */
-    spotlight(campaignId: string, character: string, player: string = SOLO_PLAYER): void {
+    spotlight(campaignId: string, character: string, player: string): void {
       const folder = atTable(campaignId)
-      const request = library.record(campaignId).spotlight(character, player)
+      const request = library
+        .record(campaignId)
+        .spotlight(character, library.labels(campaignId)(player))
       channels.send(folder, request)
     },
 
     /** The Scene as the Player's rail shows it. */
-    scene(campaignId: string): SceneView {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the Scene stays unfiltered
+    scene(campaignId: string, _viewer: string): SceneView {
       return library.record(campaignId).scene()
+    },
+
+    /** The Journal as `viewer`'s Player sees it. */
+    journal(campaignId: string, viewer: string) {
+      return library.record(campaignId).journal(viewer)
+    },
+
+    /** The read-only Session history as `viewer`'s Player sees it. */
+    sessionHistory(campaignId: string, viewer: string) {
+      return library.record(campaignId).sessionHistory(viewer)
+    },
+
+    /** The Party's play sheets as `viewer`'s Player sees them. */
+    sheets(campaignId: string, viewer: string) {
+      return playSheets(library.party(campaignId), viewer)
+    },
+
+    /** Every Party Character with its Claim as `viewer`'s browser sees it (never by whom). */
+    claims(campaignId: string, viewer: string) {
+      return library.party(campaignId).claims(viewer)
+    },
+
+    /** The browser Claims a Character nobody holds; refused for a taken one, the Host's browser included. */
+    claim(campaignId: string, character: string, browser: string): void {
+      library.party(campaignId).claim(character, browser)
+      claimsChanged(campaignId, character)
+    },
+
+    /** The Host's browser frees a Character another browser holds; refused for any other browser. */
+    release(campaignId: string, character: string, browser: string): void {
+      library.party(campaignId).release(character, browser)
+      claimsChanged(campaignId, character)
+    },
+
+    /** The browser gives up a Claim it holds. */
+    letGo(campaignId: string, character: string, browser: string): void {
+      library.party(campaignId).letGo(character, browser)
+      claimsChanged(campaignId, character)
+      settle(campaignId, library.floor(campaignId).lose(character))
+      // Letting go may leave an unclaimed part as the last one outstanding: code rolls it.
+      const result = library.calls(campaignId).settleUnclaimed(dice(campaignId))
+      if (result) answered(campaignId, result)
+    },
+
+    /**
+     * The browser's Character departs: the status is set at once, the Claim dropped, its
+     * Declarations withdrawn from the open Floor, and the DM told. Needs a live Session.
+     */
+    depart(campaignId: string, character: string, browser: string): void {
+      const folder = atTable(campaignId)
+      const party = library.party(campaignId)
+      const name = party.claims(browser).find((r) => r.id === character)?.name ?? 'A Character'
+      party.depart(character, browser)
+      publish({ type: 'claims', campaign: campaignId })
+      settle(campaignId, library.floor(campaignId).lose(character))
+      channels.send(folder, {
+        content: `${name} departed the Party and is no longer played.`,
+        meta: { kind: 'claims' }
+      })
+    },
+
+    /** A departed Character comes back and the browser Claims it, with or without a Session. */
+    rejoin(campaignId: string, character: string, browser: string): void {
+      const party = library.party(campaignId)
+      const name = party.claims(browser).find((r) => r.id === character)?.name ?? 'A Character'
+      party.rejoin(character, browser)
+      publish({ type: 'claims', campaign: campaignId })
+      channels.send(folderOf(campaignId), {
+        content: `${name} rejoined the Party.`,
+        meta: { kind: 'claims' }
+      })
+    },
+
+    /** The DM-pane conversation as `viewer`'s Player sees it. */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the pane is not per Claim
+    conversation(campaignId: string, _viewer: string) {
+      return library.conversation(campaignId).list()
+    },
+
+    /** The open Floor with `viewer`'s returned drafts, to read: it works with the DM away. */
+    openFloor(campaignId: string, viewer: string) {
+      return library.floor(campaignId).current(viewer)
     },
 
     /**
      * The Player writes in the DM pane: the message is kept for the pane and reaches the DM as one
      * conversation event. It is out of fiction, so it never touches the Floor or the Event log.
      */
-    converse(campaignId: string, text: string, player: string = SOLO_PLAYER) {
+    converse(campaignId: string, text: string, player: string) {
       const folder = folderOf(campaignId)
       if (!channels.listening(folder)) {
         throw new DmAwayError('The DM is away. Run dm in the Campaign folder to ask for help.')
       }
       const message = library.conversation(campaignId).add({ text, player })
-      channels.send(folder, { content: text, meta: { kind: 'conversation', player } })
+      const who = library.labels(campaignId)(player)
+      // Before Begin the DM reads the creation chat as a table, so each line names its sender.
+      const content = library.creation(campaignId).state === 'begun' ? text : `[${who}] ${text}`
+      channels.send(folder, { content, meta: { kind: 'conversation', player: who } })
       publish({ type: 'conversation', campaign: campaignId })
       return message
     },
@@ -166,7 +289,7 @@ export function createPlay({
      * The Player presses Begin: the Seed locks and the DM gets one begin event, which it hands to
      * `builder`. It needs a DM at the table, and it doesn't set awaiting Narration.
      */
-    begin(campaignId: string, player: string = SOLO_PLAYER): void {
+    begin(campaignId: string, player: string): void {
       const folder = folderOf(campaignId)
       if (!channels.listening(folder)) {
         throw new DmAwayError('The DM is away. Run dm in the Campaign folder, then press Begin.')
@@ -175,7 +298,7 @@ export function createPlay({
       channels.send(folder, {
         content:
           'The Player pressed Begin. Hand the Seed and the Party to builder to create the World and the first Arc, then open play.',
-        meta: { kind: 'begin', player }
+        meta: { kind: 'begin', player: library.labels(campaignId)(player) }
       })
       publish({ type: 'seed', campaign: campaignId })
     },
@@ -203,7 +326,10 @@ export function createPlay({
      * its own Session.
      */
     openSession(campaignId: string, bridge?: string): { id: string; number: number } {
-      return library.record(campaignId).openSession(bridge)
+      const opened = library.record(campaignId).openSession(bridge)
+      // Closing a stopped Session as this one opens may have lapsed Claims.
+      publish({ type: 'claims', campaign: campaignId })
+      return opened
     },
 
     /**
@@ -214,7 +340,7 @@ export function createPlay({
     stopCheck(campaignId: string, again: boolean): { block: boolean; reason?: string } {
       const record = library.record(campaignId)
       const pending = record.pendingCalls()
-      const awaiting = record.timeline().awaitingSince !== null
+      const awaiting = record.awaitingSince() !== null
       if (!pending.length && !awaiting) return { block: false }
       if (!again) {
         const reasons = [
@@ -249,8 +375,8 @@ export function createPlay({
     },
 
     /** The Player's timeline and whether the DM is working on a turn. */
-    timeline(campaignId: string): Timeline {
-      return library.record(campaignId).timeline()
+    timeline(campaignId: string, viewer: string): Timeline {
+      return library.record(campaignId).timeline(viewer)
     }
   }
 }

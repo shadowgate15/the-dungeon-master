@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -139,8 +140,8 @@ describe('the Arc line', () => {
     }
     declare = (...texts) => {
       const floor = library.floor(campaignId)
-      for (const text of texts) floor.send({ character: wren, text })
-      floor.done()
+      for (const text of texts) floor.send({ character: wren, text, player: SOLO_PLAYER })
+      floor.done(SOLO_PLAYER)
       call('narrate', { text: 'The world answers.' })
     }
   })
@@ -215,5 +216,84 @@ describe('the Arc line', () => {
     call('retire_arc', { version: 2, reason: 'It no longer fits.' })
     declare('Four.')
     expect(arcLine()).toBe('Arc: No current Arc. Declarations since the last Beat change: 1.\n')
+  })
+})
+
+describe('Who’s at the table', () => {
+  it('names each Player by their Characters, marks the Host and lists unclaimed Characters', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    addCharacter(library, campaignId, fighterDraft('Ash'))
+    const bram = addCharacter(library, campaignId, fighterDraft('Bram'))
+    library.party(campaignId).letGo(bram, SOLO_PLAYER)
+    library.party(campaignId).letGo(wren, SOLO_PLAYER)
+    library.party(campaignId).claim(wren, 'guest')
+
+    const block = library.record(campaignId).coreBlock()
+
+    expect(block).toContain(
+      "Who's at the table: Host · Player of Ash; Player of Wren; unclaimed: Bram."
+    )
+  })
+
+  it('says nobody has Claimed yet when a Session opens with no Claims', () => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    library.party(campaignId).letGo(wren, SOLO_PLAYER)
+
+    expect(library.record(campaignId).opening()).toContain(
+      "Who's at the table: no one has Claimed yet; unclaimed: Wren."
+    )
+  })
+})
+
+describe('Floors waited by the Characters away from the Scene', () => {
+  let call: (name: string, args?: Record<string, unknown>) => Record<string, unknown>
+  let floorsPass: (n: number) => void
+
+  beforeEach(() => {
+    const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
+    addCharacter(library, campaignId, fighterDraft('Bram'))
+    const host = createToolHost({ library, tools: gameTools })
+    call = (name, args = {}) => {
+      const result = host.call(folder, name, args)
+      expect(result.isError ?? false).toBe(false)
+      return JSON.parse(result.content[0].text)
+    }
+    floorsPass = (n) => {
+      for (let i = 0; i < n; i++) {
+        const floor = library.floor(campaignId)
+        floor.send({ character: wren, text: 'I wait.', player: SOLO_PLAYER })
+        floor.done(SOLO_PLAYER)
+        call('narrate', { text: 'Time passes.' })
+      }
+    }
+    call('establish', { type: 'place', name: 'Cellar', fields: { exits: [] } })
+    call('establish', { type: 'place', name: 'Hall', fields: { exits: [] } })
+    call('move', { who: ['char:wren'], to: 'place:hall' })
+    call('set_scene', { place: 'place:hall' })
+  })
+
+  it('counts the Floors an away group has waited, in the core block and the scene result', () => {
+    call('move', { who: ['char:bram'], to: 'place:cellar' })
+    floorsPass(2)
+
+    expect(library.record(campaignId).coreBlock()).toContain(
+      'Away: Bram (char:bram) at place:cellar, waited 2 Floors.'
+    )
+    const away = (call('scene').elsewhere as { handle: string; floorsWaited: number }[]).find(
+      (c) => c.handle === 'char:bram'
+    )
+    expect(away?.floorsWaited).toBe(2)
+  })
+
+  it('counts from when the Scene left them behind, and restarts after a cut to them', () => {
+    call('move', { who: ['char:bram'], to: 'place:hall' })
+    floorsPass(3)
+    call('move', { who: ['char:bram'], to: 'place:cellar' })
+    call('set_scene', { place: 'place:hall' })
+    floorsPass(1)
+    expect(library.record(campaignId).coreBlock()).toContain('waited 1 Floor.')
+
+    call('set_scene', { place: 'place:cellar' })
+    expect(library.record(campaignId).coreBlock()).not.toContain('Away: Bram')
   })
 })

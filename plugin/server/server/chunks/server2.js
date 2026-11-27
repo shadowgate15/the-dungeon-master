@@ -266,7 +266,6 @@ var BLOCK_OPEN = `<!--[-->`;
 var BLOCK_OPEN_ELSE = `<!--[!-->`;
 var BLOCK_CLOSE = `<!--]-->`;
 var EMPTY_COMMENT = `<!---->`;
-// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/utils.js
 var VOID_ELEMENT_NAMES = [
 	"area",
 	"base",
@@ -1351,6 +1350,13 @@ var SSRState = class {
 		}
 	}
 };
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/blocks/html.js
+/**
+* @param {string} value
+*/
+function html(value) {
+	return "<!---->" + String(value ?? "") + "<!---->";
+}
 // node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/index.js
 var INVALID_ATTR_NAME_CHAR_REGEX = /[\s'">/=\u{FDD0}-\u{FDEF}\u{FFFE}\u{FFFF}\u{1FFFE}\u{1FFFF}\u{2FFFE}\u{2FFFF}\u{3FFFE}\u{3FFFF}\u{4FFFE}\u{4FFFF}\u{5FFFE}\u{5FFFF}\u{6FFFE}\u{6FFFF}\u{7FFFE}\u{7FFFF}\u{8FFFE}\u{8FFFF}\u{9FFFE}\u{9FFFF}\u{AFFFE}\u{AFFFF}\u{BFFFE}\u{BFFFF}\u{CFFFE}\u{CFFFF}\u{DFFFE}\u{DFFFF}\u{EFFFE}\u{EFFFF}\u{FFFFE}\u{FFFFF}\u{10FFFE}\u{10FFFF}]/u;
 /**
@@ -1553,6 +1559,6 @@ function derived(fn) {
 		return updated_value;
 	};
 }
-export { attr as _, bind_props as a, run as b, ensure_array_like as c, render as d, spread_props as f, ssr_context as g, setContext as h, await_block as i, head as l, getContext as m, attr_style as n, derived as o, stringify as p, attributes as r, element as s, attr_class as t, props_id as u, clsx as v, escape_html as x, noop as y };
+export { escape_html as S, ssr_context as _, bind_props as a, noop as b, ensure_array_like as c, render as d, spread_props as f, setContext as g, getContext as h, await_block as i, head as l, html as m, attr_style as n, derived as o, stringify as p, attributes as r, element as s, attr_class as t, props_id as u, attr as v, run as x, clsx as y };
 
 //# sourceMappingURL=server2.js.map

@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -7,6 +8,7 @@ import type { CampaignLibrary } from '../campaign/library'
 import { addCharacter, fighterDraft, wizardDraft } from '../character/test-characters'
 import { createDice } from '../dice'
 import { createPlay, type Play } from '../play/play'
+import { playSheets } from '../play/sheets'
 import { gameTools } from '.'
 import { createToolHost, type ToolHost } from './host'
 
@@ -69,14 +71,14 @@ const addWren = () => addCharacter(library, campaignId, fighterDraft('Wren'))
 /** Ash: a High Elf Wizard, Dex 16 with the racial bonus (initiative +3). */
 const addAsh = () => addCharacter(library, campaignId, wizardDraft('Ash'))
 
-const timeline = () => play.timeline(campaignId)
-const combatView = () => play.scene(campaignId).combat
+const timeline = () => play.timeline(campaignId, SOLO_PLAYER)
+const combatView = () => play.scene(campaignId, SOLO_PLAYER).combat
 
 /** Rolls every open initiative part in order, one d20 face each. */
 function rollInitiative(id: string, ...d20s: number[]) {
   for (const [i, part] of timeline().call!.parts.entries()) {
     load([20, d20s[i]])
-    play.roll(campaignId, id, part.id)
+    play.roll(campaignId, id, part.id, SOLO_PLAYER)
   }
 }
 
@@ -113,8 +115,12 @@ describe('start_combat', () => {
 
     expect(heard).toHaveLength(1)
     expect(heard[0].meta).toMatchObject({ kind: 'call_result', call_id: id })
-    expect(heard[0].content).toContain('[Wren · player] Initiative: d20 18 + 2 = 20')
-    expect(heard[0].content).toContain('[Ash · player] Initiative: d20 4 + 3 = 7')
+    expect(heard[0].content).toContain(
+      '[Wren · Host · Player of Wren & Ash] Initiative: d20 18 + 2 = 20'
+    )
+    expect(heard[0].content).toContain(
+      '[Ash · Host · Player of Wren & Ash] Initiative: d20 4 + 3 = 7'
+    )
     expect(heard[0].content).toContain(
       'Order: Wren 20, Goblin 2 17, Goblin 1 12, Ash 7. Round 1: Wren (char:wren) acts.'
     )
@@ -188,7 +194,7 @@ describe('Creatures', () => {
     ok('damage', { target: 'creature:goblin-1', amount: 4, type: 'piercing' })
     const goblin = combatView()!.order.find((c) => c.name === 'Goblin 1')
     expect(goblin).toMatchObject({ kind: 'creature', state: 'bloodied' })
-    expect(JSON.stringify(play.scene(campaignId))).not.toMatch(/creature:|"hp"|maxHp/)
+    expect(JSON.stringify(play.scene(campaignId, SOLO_PLAYER))).not.toMatch(/creature:|"hp"|maxHp/)
   })
 
   it('vanish at end_combat, and the rounds go onto the clock rounded up to a minute', () => {
@@ -273,8 +279,10 @@ describe('the Floor in Combat', () => {
     const { pending_call: id } = ok('start_combat', { combatants: ['char:wren', 'monster:goblin'] })
     ok('narrate', { text: 'Roll for initiative!', call: id })
 
-    library.floor(campaignId).send({ character: wren, text: 'I draw my sword.' })
-    play.done(campaignId)
+    library
+      .floor(campaignId)
+      .send({ character: wren, text: 'I draw my sword.', player: SOLO_PLAYER })
+    play.done(campaignId, SOLO_PLAYER)
 
     expect(timeline().call).toMatchObject({ id, kind: 'initiative' })
     rollInitiative(id, 18)
@@ -284,18 +292,18 @@ describe('the Floor in Combat', () => {
   it('takes Declarations only for the Character whose turn it is', () => {
     const ash = addAsh()
     fight([10], 18) // Wren 20, Goblin 1 12; Ash isn't fighting.
-    const wren = play.scene(campaignId).present.find((c) => c.name === 'Wren')!.id
+    const wren = play.scene(campaignId, SOLO_PLAYER).present.find((c) => c.name === 'Wren')!.id
     const floor = library.floor(campaignId)
 
-    floor.send({ character: wren, text: 'I swing at the goblin.' })
-    expect(() => floor.send({ character: ash, text: 'I cast a spell.' })).toThrow(
-      "It is Wren's turn"
-    )
+    floor.send({ character: wren, text: 'I swing at the goblin.', player: SOLO_PLAYER })
+    expect(() =>
+      floor.send({ character: ash, text: 'I cast a spell.', player: SOLO_PLAYER })
+    ).toThrow("It is Wren's turn")
 
     ok('next_turn')
-    expect(() => floor.send({ character: wren, text: 'I swing again.' })).toThrow(
-      "It is Goblin 1's turn"
-    )
+    expect(() =>
+      floor.send({ character: wren, text: 'I swing again.', player: SOLO_PLAYER })
+    ).toThrow("It is Goblin 1's turn")
   })
 })
 
@@ -340,5 +348,63 @@ describe('action economy', () => {
     expect(
       ok('attack', { actor: 'creature:goblin-1', target: 'char:wren', with: 'scimitar' }).reminder
     ).toBeUndefined()
+  })
+})
+
+describe('an unclaimed Character in Combat', () => {
+  /** Wren with no Claim: nobody plays her. */
+  const addUnclaimedWren = () => {
+    const id = addWren()
+    library.party(campaignId).letGo(id, SOLO_PLAYER)
+    return id
+  }
+  /** Starts Wren against a goblin; faces are Wren's d20, then the goblin's. */
+  const start = (wren: number, goblin: number) => {
+    load([20, wren], [20, goblin])
+    return ok('start_combat', { combatants: ['char:wren', 'monster:goblin'] })
+  }
+
+  it('has its initiative rolled by code, with no initiative Call', () => {
+    addUnclaimedWren()
+    const started = start(18, 10)
+
+    expect(started.pending_call ?? null).toBeNull()
+    expect(started.rolled).toContain('Wren initiative: d20 18 + 2 = 20')
+    expect(combatView()).toMatchObject({ round: 1, waiting: [] })
+  })
+
+  it('has its turn skipped with a note, from the first round on', () => {
+    addUnclaimedWren()
+    const started = start(18, 10)
+    expect(started.rolled).toContain('Wren is unclaimed: no action')
+    expect(combatView()!.order.find((c) => c.current)?.name).toBe('Goblin 1')
+
+    const next = ok('next_turn')
+    expect(next).toMatchObject({ round: 2, turn: { handle: 'creature:goblin-1' } })
+    expect(next.notes).toContain('Wren is unclaimed: no action')
+  })
+
+  it('has its Death save rolled by code on its turn', () => {
+    addUnclaimedWren()
+    start(18, 10)
+    ok('damage', { target: 'char:wren', amount: 12, type: 'slashing' })
+
+    load([20, 12])
+    const next = ok('next_turn')
+    expect(next.pending_call ?? null).toBeNull()
+    expect(next.notes.join(' ')).toContain('Wren is unclaimed: no action')
+    expect(next.notes.join(' ')).toContain('Death save: d20 12 → success')
+    const sheet = playSheets(library.party(campaignId)).find((s) => s.name === 'Wren')!
+    expect(sheet.deathSaves).toEqual({ successes: 1, failures: 0, stable: false })
+  })
+
+  it('plays its turn when Claimed before it comes', () => {
+    const id = addUnclaimedWren()
+    start(10, 18)
+    library.party(campaignId).claim(id, SOLO_PLAYER)
+
+    const next = ok('next_turn')
+    expect(next).toMatchObject({ round: 1, turn: { handle: 'char:wren' } })
+    expect(next.notes).toEqual([])
   })
 })

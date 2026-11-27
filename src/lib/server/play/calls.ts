@@ -1,3 +1,4 @@
+import type { PlayerLabel } from './labels'
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { canAct } from '#lib/character/acting.ts'
@@ -25,8 +26,8 @@ import type { Dice } from '../dice'
 import { ToolError } from '../tools/contract'
 import { orderText, recordInitiative, spendTurnResource } from './combat'
 import { applyDeathSave, rollsDeathSaves } from './death'
-import { logEvent, setAwaitingNarration } from './log'
-import { characterRefs } from './scene'
+import { logEvent, partyAudience, setAwaitingNarration } from './log'
+import { characterRefs, inScene, scenePlace } from './scene'
 import { nextStep, rollStep, sequenceText } from './sequences'
 
 /**
@@ -151,6 +152,16 @@ function labelOf(
   return null
 }
 
+/** Refuses a Call that asks a Character its Narration's Audience leaves out (ADR 0008). */
+function requireInAudience(who: { id: string; name: string }, audience: string[]) {
+  if (audience.includes(who.id)) return
+  throw new ToolError(
+    'not_in_audience',
+    `${who.name} is not in this Narration's Audience, so it cannot ask them for a roll`,
+    'Add them to `to`, or narrate without `to`, or call on a Character the Narration reaches'
+  )
+}
+
 /**
  * Opens a Call in the Narration's transaction. A Call ends the turn; only one is open at a time.
  * Returns its id.
@@ -158,7 +169,11 @@ function labelOf(
 export function openCall(
   db: Queryable,
   input: CallInput,
-  { at, openedBy }: { at: number; openedBy: number | null }
+  {
+    at,
+    openedBy,
+    audience = partyAudience(db)
+  }: { at: number; openedBy: number | null; audience?: string[] }
 ): string {
   if (openCallRow(db)) {
     throw new ToolError(
@@ -167,7 +182,7 @@ export function openCall(
       'Wait for its call_result, or narrate without a call'
     )
   }
-  if (typeof input === 'string') return attachPending(db, input, openedBy)
+  if (typeof input === 'string') return attachPending(db, input, openedBy, audience)
   const id = db
     .insert(call)
     .values({
@@ -176,20 +191,31 @@ export function openCall(
       text: !Array.isArray(input) && input.kind === 'question' ? input.text : null,
       choices: !Array.isArray(input) && input.kind === 'question' ? (input.choices ?? []) : [],
       openedBy,
+      audience,
       createdAt: at
     })
     .returning({ id: call.id })
     .get().id
 
+  const scene = scenePlace(db)
   const parts =
     !Array.isArray(input) && input.kind === 'question'
       ? playersAtTable(db).map((player) => ({ player }))
       : (Array.isArray(input) ? input : [input]).flatMap((check) =>
           [check.character].flat().map((ref) => {
             const who = findCharacter(db, ref)
+            requireInAudience(who, audience)
+            if (!inScene(scene, who)) {
+              throw new ToolError(
+                'not_in_scene',
+                `${who.name} is not in the Scene`,
+                'Move the Scene to where they are first, or call on a Character in the Scene'
+              )
+            }
             return {
               characterId: who.id,
-              player: who.controllingPlayer,
+              // Until a pending part follows its Character (not the browser), an unclaimed one is the Host's.
+              player: who.controllingPlayer ?? SOLO_PLAYER,
               skill: check.skill ?? null,
               save: check.save ?? null,
               tier: check.tier,
@@ -208,10 +234,22 @@ export function openCall(
 }
 
 /** Opens a pending Call an action tool made: the Narration attaching it shows it to the Players. */
-function attachPending(db: Queryable, id: string, openedBy: number | null): string {
+function attachPending(
+  db: Queryable,
+  id: string,
+  openedBy: number | null,
+  audience: string[]
+): string {
+  const asked = db
+    .select({ id: character.id, name: character.name })
+    .from(callPart)
+    .innerJoin(character, eq(character.id, callPart.characterId))
+    .where(and(eq(callPart.callId, id)))
+    .all()
+  for (const who of asked) requireInAudience(who, audience)
   const attached = db
     .update(call)
-    .set({ state: 'open', openedBy })
+    .set({ state: 'open', openedBy, audience })
     .where(and(eq(call.id, id), eq(call.state, 'pending')))
     .returning({ id: call.id })
     .get()
@@ -262,6 +300,7 @@ export function createPendingCall(
       text: prompt?.text ?? null,
       choices: prompt?.choices ?? [],
       state: 'pending',
+      audience: partyAudience(db),
       createdAt: at
     })
     .returning({ id: call.id })
@@ -306,6 +345,7 @@ export function createHitDiceCall(db: Queryable, parts: HitDicePart[], at: numbe
       kind: 'hit_dice',
       state: 'pending',
       text: 'How many Hit Dice do you spend?',
+      audience: partyAudience(db),
       createdAt: at
     })
     .returning({ id: call.id })
@@ -396,14 +436,16 @@ function playersAtTable(db: Queryable): string[] {
       .all()
       .filter(canAct)
       .map((c) => c.controllingPlayer)
+      .filter((p) => p !== null)
   )
   return players.size ? [...players] : [SOLO_PLAYER]
 }
 
 /** The open Call, Player-safe (no DC, no tier), or null when none is open. */
-export function openCallView(db: Queryable): OpenCall | null {
+export function openCallView(db: Queryable, claimed?: ReadonlySet<string>): OpenCall | null {
   const open = openCallRow(db)
   if (!open) return null
+  if (claimed && !open.audience.some((id) => claimed.has(id))) return null
   const parts = db
     .select({ part: callPart, characterName: character.name })
     .from(callPart)
@@ -460,25 +502,37 @@ type Answered = typeof callPart.$inferSelect & { characterName: string | null; k
 /** A completed Call: every part answered. `after` adds lines, such as the Combat's order. */
 export type CallResult = { call: string; players: string[]; parts: Answered[]; after?: string[] }
 
+/** What the DM hears a part rolled by code was marked with. */
+export const ROLLED_BY_CODE = '(unclaimed: rolled by code)'
+
+/** Who rolled a part, as the DM hears it: the Character and its Player, or just the Character when code rolled it. */
+const tag = (p: Answered, label: PlayerLabel) =>
+  p.rolledByCode ? `[${p.characterName}]` : `[${p.characterName} · ${label(p.player)}]`
+
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
-function resultLine(p: Answered): string {
-  if (p.kind === 'reaction') return reactionLine(p)
-  if (p.hitDice) return `[${p.characterName} · ${p.player}] Hit Dice: ${hitDiceText(p.hitDice)}`
-  if (p.sequence) return `[${p.characterName} · ${p.player}] ${sequenceText(p.sequence, p.mode)}`
-  if (p.result === null) return `[${p.player}] ${p.answer}`
+function resultLine(p: Answered, label: PlayerLabel): string {
+  const line = describePart(p, label)
+  return p.rolledByCode ? `${line} ${ROLLED_BY_CODE}` : line
+}
+
+function describePart(p: Answered, label: PlayerLabel): string {
+  if (p.kind === 'reaction') return reactionLine(p, label)
+  if (p.hitDice) return `${tag(p, label)} Hit Dice: ${hitDiceText(p.hitDice)}`
+  if (p.sequence) return `${tag(p, label)} ${sequenceText(p.sequence, p.mode)}`
+  if (p.result === null) return `[${label(p.player)}] ${p.answer}`
   const r = p.result
   const dice = r.dice.length > 1 ? `${r.dice.join('/')} (${p.mode}) kept ${r.kept}` : `${r.kept}`
   const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`
   if (p.kind === 'death_save') {
-    return `[${p.characterName} · ${p.player}] Death save: d20 ${r.kept} → ${p.answer}`
+    return `${tag(p, label)} Death save: d20 ${r.kept} → ${p.answer}`
   }
   if (p.kind === 'concentration') {
-    return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? 'success' : 'failure'}; ${p.answer}`
+    return `${tag(p, label)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? 'success' : 'failure'}; ${p.answer}`
   }
   if (p.kind === 'initiative') {
-    return `[${p.characterName} · ${p.player}] Initiative: d20 ${dice} ${modifier} = ${r.total}`
+    return `${tag(p, label)} Initiative: d20 ${dice} ${modifier} = ${r.total}`
   }
-  return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? 'success' : 'failure'}`
+  return `${tag(p, label)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? 'success' : 'failure'}`
 }
 
 /** The Player's choice on a reaction Call that passes it. */
@@ -488,8 +542,8 @@ export const PASS = 'Pass'
  * A reaction as the DM hears it: passed, taken (with its attack's rolls), and any reminder that
  * the reaction was already spent. The answer is the choice, then `; ` and the reminder.
  */
-function reactionLine(p: Answered): string {
-  const who = `[${p.characterName} · ${p.player}] ${p.reaction}`
+function reactionLine(p: Answered, label: PlayerLabel): string {
+  const who = `${tag(p, label)} ${p.reaction}`
   if (p.answer === PASS) return `${who}: passes`
   const [choice, reminder] = (p.answer ?? '').split('; ')
   const taken = p.sequence
@@ -508,10 +562,17 @@ function hitDiceText(spend: HitDiceSpend): string {
 }
 
 /** The `call_result` channel event: one body line per part, in order. */
-export function callResultEvent(result: CallResult): ChannelEvent {
+export function callResultEvent(
+  result: CallResult,
+  label: PlayerLabel = (browser) => browser
+): ChannelEvent {
   return {
-    content: [...result.parts.map(resultLine), ...(result.after ?? [])].join('\n'),
-    meta: { kind: 'call_result', call_id: result.call, players: result.players.join(',') }
+    content: [...result.parts.map((p) => resultLine(p, label)), ...(result.after ?? [])].join('\n'),
+    meta: {
+      kind: 'call_result',
+      call_id: result.call,
+      players: result.players.map(label).join(',')
+    }
   }
 }
 
@@ -538,10 +599,26 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     return stat?.status === 'ok' ? stat.value.modifier : 0
   }
 
+  /**
+   * Who may answer a part: a Character's part belongs to the Character, so to whoever Claims it
+   * now; a question part has no Character and stays with the browser it was addressed to.
+   */
+  function ownerOf(part: typeof callPart.$inferSelect): string | null {
+    if (!part.characterId) return part.player
+    return (
+      db
+        .select({ player: character.controllingPlayer })
+        .from(character)
+        .where(eq(character.id, part.characterId))
+        .get()?.player ?? null
+    )
+  }
+
   function answer(
     callId: string,
     partId: string,
-    player: string,
+    /** The browser answering; null when code answers for an unclaimed Character. */
+    player: string | null,
     resolve: (
       part: typeof callPart.$inferSelect,
       kind: CallKind
@@ -569,13 +646,23 @@ export function createCalls(db: Database, now: () => number = Date.now) {
           )
           .get()
       if (!part) throw new CallClosedError('That Call is no longer open')
-      if (part.player !== player) throw new CallRefusedError('That roll is not yours')
+      if (player !== null && ownerOf(part) !== player) {
+        throw new CallRefusedError('That roll is not yours')
+      }
       const { values, event, finished = true } = resolve(part, open.kind)
       db.update(callPart)
-        .set({ ...values, answeredAt: finished ? at : null })
+        .set({
+          ...values,
+          answeredAt: finished ? at : null,
+          ...(player === null && { rolledByCode: true })
+        })
         .where(eq(callPart.id, partId))
         .run()
-      logEvent(db, { tool: 'call', ...event, data: { call: callId, ...event.data } }, { at })
+      logEvent(
+        db,
+        { tool: 'call', ...event, data: { call: callId, ...event.data }, audience: open.audience },
+        { at }
+      )
 
       const parts = db
         .select({ part: callPart, characterName: character.name })
@@ -589,7 +676,7 @@ export function createCalls(db: Database, now: () => number = Date.now) {
       db.update(call).set({ state: 'answered', closedAt: at }).where(eq(call.id, callId)).run()
       const result: CallResult = {
         call: callId,
-        players: [...new Set(parts.map((p) => p.player))],
+        players: [...new Set(parts.filter((p) => !p.rolledByCode).map((p) => p.player))],
         parts,
         after: [...(open.kind === 'initiative' ? [orderText(db)] : []), ...waitingLine(db)]
       }
@@ -600,7 +687,8 @@ export function createCalls(db: Database, now: () => number = Date.now) {
           kind: 'call_result',
           summary: callResultEvent(result).content,
           data: { call: callId },
-          dmOnly: true
+          dmOnly: true,
+          audience: open.audience
         },
         { at }
       )
@@ -769,6 +857,73 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     }
   }
 
+  /** Rolls one part in code: a sequence's next step, a Death save, or a d20 Check. */
+  function rollPart(
+    part: typeof callPart.$inferSelect,
+    kind: CallKind,
+    dice: Dice,
+    player: string
+  ) {
+    const characterId = part.characterId!
+    if (part.sequence) return rollSequenceStep(part, dice, player)
+    if (kind === 'death_save') return rollDeathSave(part, dice, player)
+    const modifier = modifierFor(characterId, part, kind)
+    const d20 =
+      part.mode === 'normal'
+        ? dice.rollD20()
+        : dice.rollD20({ mode: part.mode, reason: part.reason ?? '' })
+    const total = d20.kept + modifier
+    const result: CheckResult = {
+      dice: d20.dice,
+      kept: d20.kept,
+      modifier,
+      total,
+      success: total >= (part.dc ?? 0)
+    }
+    const name =
+      db.select({ name: character.name }).from(character).where(eq(character.id, characterId)).get()
+        ?.name ?? ''
+    const what = labelOf(part, kind) ?? ''
+    if (kind === 'initiative') {
+      const handle = characterRefs(db).find((c) => c.row.id === characterId)?.handle
+      if (handle) recordInitiative(db, handle, total, dice)
+      return {
+        values: { result },
+        event: {
+          kind: 'roll',
+          summary: `${name} ${what}: ${total}`,
+          data: {
+            part: part.id,
+            characterName: name,
+            player,
+            what,
+            mode: part.mode,
+            reason: part.reason,
+            ...result,
+            outcome: null
+          }
+        }
+      }
+    }
+    const kept = kind === 'concentration' && keepConcentration(characterId, result.success)
+    return {
+      values: { result, ...(kept && { answer: kept }) },
+      event: {
+        kind: 'roll',
+        summary: `${name} ${what}: ${total} (${result.success ? 'success' : 'failure'})`,
+        data: {
+          part: part.id,
+          characterName: name,
+          player,
+          what,
+          mode: part.mode,
+          reason: part.reason,
+          ...result
+        }
+      }
+    }
+  }
+
   /** A Character's derived HP maximum. */
   function maxHp(characterId: string): number | null {
     const detail = createCharacterService(db, now).get(characterId)
@@ -780,6 +935,61 @@ export function createCalls(db: Database, now: () => number = Date.now) {
     return stats.hitPoints.status === 'ok' ? stats.hitPoints.value : null
   }
 
+  /**
+   * Code answers a part for its unclaimed Character: a straight roll with no choices, a reaction
+   * passed, Hit Dice spent at none. A roll sequence is rolled to its end.
+   */
+  function rollByCode(callId: string, partId: string, dice: Dice): CallResult | null {
+    for (;;) {
+      const result = answer(callId, partId, null, (part, kind) => {
+        if (part.hitDice) return spendHitDice(part, part.hitDice, '0', dice)
+        if (kind === 'reaction') {
+          const { choices } = db.select().from(call).where(eq(call.id, callId)).get()!
+          return chooseReaction(part, choices, PASS)
+        }
+        return rollPart(part, kind, dice, part.player)
+      })
+      const left = db.select().from(callPart).where(eq(callPart.id, partId)).get()
+      if (!left || left.answeredAt !== null) return result
+    }
+  }
+
+  /**
+   * Rolls for the open Call's unclaimed Characters. On `opening` every unclaimed part is rolled;
+   * after that a part whose Claim lapsed waits for the next Claimant, and is rolled only when it is
+   * the last part outstanding. Returns the Call's result when this completes it.
+   */
+  function settleUnclaimed(dice: Dice, opening = false): CallResult | null {
+    return db.transaction(() => {
+      let result: CallResult | null = null
+      for (;;) {
+        const open = openCallRow(db)
+        if (!open) return result
+        const unanswered = db
+          .select({ part: callPart, owner: character.controllingPlayer })
+          .from(callPart)
+          .innerJoin(character, eq(character.id, callPart.characterId))
+          .where(and(eq(callPart.callId, open.id), isNull(callPart.answeredAt)))
+          .orderBy(asc(callPart.position))
+          .all()
+        const outstanding = db
+          .select({ id: callPart.id })
+          .from(callPart)
+          .where(and(eq(callPart.callId, open.id), isNull(callPart.answeredAt)))
+          .all().length
+        const next = unanswered.find(({ owner }) => owner === null)
+        if (!next || !(opening || outstanding === 1)) return result
+        result = rollByCode(open.id, next.part.id, dice) ?? result
+      }
+    })
+  }
+
+  /** A Player's answer, then code's roll for an unclaimed part it left as the last one outstanding. */
+  function settled(dice: Dice | undefined, answered: CallResult | null): CallResult | null {
+    if (answered || !dice) return answered
+    return settleUnclaimed(dice)
+  }
+
   return {
     /** The open Call, Player-safe. */
     open: () => openCallView(db),
@@ -788,106 +998,57 @@ export function createCalls(db: Database, now: () => number = Date.now) {
      * Rolls one Check part in code for its Controlling Player; returns the Call's result when this
      * roll completes it, null otherwise.
      */
-    roll(callId: string, partId: string, dice: Dice, player: string = SOLO_PLAYER) {
-      return answer(callId, partId, player, (part, kind) => {
-        if (!part.characterId) throw new CallRefusedError('That part is a question: answer it')
-        if (part.hitDice) throw new CallRefusedError('Say how many Hit Dice to spend')
-        if (kind === 'reaction' && part.answer === null) {
-          throw new CallRefusedError(`${part.reaction}: take it or pass first`)
-        }
-        if (part.sequence) return rollSequenceStep(part, dice, player)
-        if (kind === 'death_save') return rollDeathSave(part, dice, player)
-        const modifier = modifierFor(part.characterId, part, kind)
-        const d20 =
-          part.mode === 'normal'
-            ? dice.rollD20()
-            : dice.rollD20({ mode: part.mode, reason: part.reason ?? '' })
-        const total = d20.kept + modifier
-        const result: CheckResult = {
-          dice: d20.dice,
-          kept: d20.kept,
-          modifier,
-          total,
-          success: total >= (part.dc ?? 0)
-        }
-        const name =
-          db
-            .select({ name: character.name })
-            .from(character)
-            .where(eq(character.id, part.characterId))
-            .get()?.name ?? ''
-        const what = labelOf(part, kind) ?? ''
-        if (kind === 'initiative') {
-          const handle = characterRefs(db).find((c) => c.row.id === part.characterId)?.handle
-          if (handle) recordInitiative(db, handle, total)
-          return {
-            values: { result },
-            event: {
-              kind: 'roll',
-              summary: `${name} ${what}: ${total}`,
-              data: {
-                part: partId,
-                characterName: name,
-                player,
-                what,
-                mode: part.mode,
-                reason: part.reason,
-                ...result,
-                outcome: null
-              }
-            }
+    roll(callId: string, partId: string, dice: Dice, player: string) {
+      return settled(
+        dice,
+        answer(callId, partId, player, (part, kind) => {
+          if (!part.characterId) throw new CallRefusedError('That part is a question: answer it')
+          if (part.hitDice) throw new CallRefusedError('Say how many Hit Dice to spend')
+          if (kind === 'reaction' && part.answer === null) {
+            throw new CallRefusedError(`${part.reaction}: take it or pass first`)
           }
-        }
-        const kept = kind === 'concentration' && keepConcentration(part.characterId, result.success)
-        return {
-          values: { result, ...(kept && { answer: kept }) },
-          event: {
-            kind: 'roll',
-            summary: `${name} ${what}: ${total} (${result.success ? 'success' : 'failure'})`,
-            data: {
-              part: partId,
-              characterName: name,
-              player,
-              what,
-              mode: part.mode,
-              reason: part.reason,
-              ...result
-            }
-          }
-        }
-      })
+          return rollPart(part, kind, dice, player)
+        })
+      )
     },
+
+    /**
+     * Rolls for the open Call's unclaimed Characters; `opening` when the Call has just opened.
+     * Returns the Call's result when that completes it.
+     */
+    settleUnclaimed,
 
     /**
      * Answers a question part (with choices, the answer must be one of them), or a Hit Dice part
      * with how many to spend, which code then rolls with `dice`.
      */
-    answer(
-      callId: string,
-      partId: string,
-      text: string,
-      player: string = SOLO_PLAYER,
-      dice?: Dice
-    ) {
+    answer(callId: string, partId: string, text: string, player: string, dice?: Dice) {
       const clean = text.trim()
-      return answer(callId, partId, player, (part, kind) => {
-        if (part.hitDice) return spendHitDice(part, part.hitDice, clean, dice)
-        const { choices, text: question } = db.select().from(call).where(eq(call.id, callId)).get()!
-        if (kind === 'reaction') return chooseReaction(part, choices, clean)
-        if (part.characterId) throw new CallRefusedError('That part is a Check: roll it')
-        if (!clean) throw new CallRefusedError('Give an answer')
-        if (choices.length && !choices.includes(clean)) {
-          throw new CallRefusedError(`Answer with one of: ${choices.join(', ')}`)
-        }
-        return {
-          values: { answer: clean },
-          event: {
-            kind: 'answer',
-            summary: `${player}: ${clean}`,
-            data: { part: partId, player, question, text: clean }
+      return settled(
+        dice,
+        answer(callId, partId, player, (part, kind) => {
+          if (part.hitDice) return spendHitDice(part, part.hitDice, clean, dice)
+          const { choices, text: question } = db
+            .select()
+            .from(call)
+            .where(eq(call.id, callId))
+            .get()!
+          if (kind === 'reaction') return chooseReaction(part, choices, clean)
+          if (part.characterId) throw new CallRefusedError('That part is a Check: roll it')
+          if (!clean) throw new CallRefusedError('Give an answer')
+          if (choices.length && !choices.includes(clean)) {
+            throw new CallRefusedError(`Answer with one of: ${choices.join(', ')}`)
           }
-        }
-      })
+          return {
+            values: { answer: clean },
+            event: {
+              kind: 'answer',
+              summary: `${player}: ${clean}`,
+              data: { part: partId, player, question, text: clean }
+            }
+          }
+        })
+      )
     }
   }
 }

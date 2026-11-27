@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -78,7 +79,7 @@ const addIlyra = () => addCharacter(library, campaignId, wizardDraft('Ilyra'))
 
 const sheet = (name: string) => playSheets(library.party(campaignId)).find((s) => s.name === name)!
 const minute = () => ok('scene').minute as number
-const timeline = () => play.timeline(campaignId)
+const timeline = () => play.timeline(campaignId, SOLO_PLAYER)
 
 describe('a long rest', () => {
   it('restores HP, slots, feature uses and Hit Dice, ends temporary HP, and moves the clock 8 hours', () => {
@@ -138,13 +139,19 @@ describe('a short rest', () => {
     ])
 
     load([10, 4])
-    play.answer(campaignId, id, open.parts[0].id, '1')
+    play.answer(campaignId, id, open.parts[0].id, '1', SOLO_PLAYER)
 
     expect(sheet('Wren').hp.current).toBe(11)
     expect(sheet('Wren').hitDice).toEqual({ die: 10, total: 1, spent: 1 })
     expect(heard).toHaveLength(1)
-    expect(heard[0].meta).toEqual({ kind: 'call_result', call_id: id, players: 'player' })
-    expect(heard[0].content).toBe('[Wren · player] Hit Dice: spent 1 d10: 4 + 2 = 6 HP → 11/12 HP')
+    expect(heard[0].meta).toEqual({
+      kind: 'call_result',
+      call_id: id,
+      players: 'Host · Player of Wren & Ilyra'
+    })
+    expect(heard[0].content).toBe(
+      '[Wren · Host · Player of Wren & Ilyra] Hit Dice: spent 1 d10: 4 + 2 = 6 HP → 11/12 HP'
+    )
   })
 
   it('refuses to spend more Hit Dice than are left', () => {
@@ -153,9 +160,9 @@ describe('a short rest', () => {
     const { pending_call: id } = ok('rest', { kind: 'short', who: ['char:wren'] })
     ok('narrate', { text: 'You rest.', call: id })
     const part = timeline().call!.parts[0]
-    expect(() => play.answer(campaignId, id, part.id, '2')).toThrow(/0 to 1/)
-    play.answer(campaignId, id, part.id, '0')
-    expect(heard[0].content).toBe('[Wren · player] Hit Dice: spent none')
+    expect(() => play.answer(campaignId, id, part.id, '2', SOLO_PLAYER)).toThrow(/0 to 1/)
+    play.answer(campaignId, id, part.id, '0', SOLO_PLAYER)
+    expect(heard[0].content).toBe('[Wren · Host · Player of Wren] Hit Dice: spent none')
     expect(sheet('Wren').hp.current).toBe(5)
   })
 

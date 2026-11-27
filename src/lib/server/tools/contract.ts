@@ -96,10 +96,20 @@ export type ToolEvent = {
   summary: string
   data?: Record<string, unknown>
   dmOnly?: boolean
+  /** Who can see it; the Party's Characters when left out (ADR 0008). */
+  audience?: string[]
 }
 
 /** A tool's output; `skill` names a plugin skill (unprefixed) the DM must load next. */
-type Output = { result: Record<string, unknown>; skill?: string }
+type Output = {
+  result: Record<string, unknown>
+  skill?: string
+  /**
+   * Runs in the same transaction once the call's Event is logged, for writes that must come after
+   * it on the Timeline; what it returns is merged into the result the DM reads.
+   */
+  after?: () => Record<string, unknown>
+}
 
 /**
  * The Player-safe `⚙ DM …` line for one successful call (without the `⚙`), or null for none. It

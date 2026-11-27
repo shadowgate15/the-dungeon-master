@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -57,7 +58,7 @@ function ok(name: string, args: Record<string, unknown> = {}): any {
 
 const lastNarration = () =>
   play
-    .timeline(campaignId)
+    .timeline(campaignId, SOLO_PLAYER)
     .entries.filter((e) => e.type === 'narration')
     .at(-1)
 
@@ -65,7 +66,7 @@ describe('an NPC’s voice', () => {
   it('is unnamed until a Character knows the NPC, then shows the name they know', () => {
     ok('narrate', { text: '“Move along.”', voice: 'npc:vizier-maul' })
     expect(lastNarration()).toMatchObject({ voice: null })
-    expect(JSON.stringify(play.timeline(campaignId))).not.toContain('Vizier Maul')
+    expect(JSON.stringify(play.timeline(campaignId, SOLO_PLAYER))).not.toContain('Vizier Maul')
 
     ok('reveal', { of: 'npc:vizier-maul', holders: ['char:wren'] })
     ok('narrate', { text: '“I said move.”', voice: 'npc:vizier-maul' })
@@ -84,15 +85,15 @@ describe('an NPC’s voice', () => {
 
 describe('the Scene', () => {
   it('names a Place only once a Character knows it', () => {
-    expect(play.scene(campaignId)).toMatchObject({
+    expect(play.scene(campaignId, SOLO_PLAYER)).toMatchObject({
       place: { name: 'an unfamiliar place' },
       elsewhere: [{ name: 'Bram', whereabouts: 'an unfamiliar place' }]
     })
-    expect(JSON.stringify(play.timeline(campaignId))).not.toContain('The Docks')
+    expect(JSON.stringify(play.timeline(campaignId, SOLO_PLAYER))).not.toContain('The Docks')
 
     ok('reveal', { of: 'place:the-docks', holders: ['char:wren'] })
     ok('reveal', { of: 'place:drowned-lantern', holders: ['char:bram'] })
-    expect(play.scene(campaignId)).toMatchObject({
+    expect(play.scene(campaignId, SOLO_PLAYER)).toMatchObject({
       place: { name: 'The Docks' },
       elsewhere: [{ whereabouts: 'Drowned Lantern' }]
     })
@@ -104,12 +105,14 @@ describe('the initiative order', () => {
     const started = ok('start_combat', { combatants: ['char:wren', 'npc:vizier-maul'] })
     ok('narrate', { text: 'Steel rings out.', call: started.pending_call })
 
-    const combat = play.scene(campaignId).combat!
+    const combat = play.scene(campaignId, SOLO_PLAYER).combat!
     expect(combat.order.map((c) => c.name)).toEqual(['a stranger'])
-    expect(JSON.stringify(play.scene(campaignId))).not.toContain('Vizier Maul')
-    expect(JSON.stringify(play.timeline(campaignId))).not.toContain('Vizier Maul')
+    expect(JSON.stringify(play.scene(campaignId, SOLO_PLAYER))).not.toContain('Vizier Maul')
+    expect(JSON.stringify(play.timeline(campaignId, SOLO_PLAYER))).not.toContain('Vizier Maul')
 
     ok('reveal', { of: 'npc:vizier-maul', holders: ['char:wren'] })
-    expect(play.scene(campaignId).combat!.order.map((c) => c.name)).toEqual(['Vizier Maul'])
+    expect(play.scene(campaignId, SOLO_PLAYER).combat!.order.map((c) => c.name)).toEqual([
+      'Vizier Maul'
+    ])
   })
 })

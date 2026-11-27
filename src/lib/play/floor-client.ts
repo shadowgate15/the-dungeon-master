@@ -6,6 +6,7 @@ import {
   type NonUndefinedGuard
 } from '@tanstack/svelte-query'
 import {
+  claimsQueryKey,
   floorQueryKey,
   journalQueryKey,
   sessionHistoryQueryKey,
@@ -13,6 +14,7 @@ import {
   sheetsQueryKey,
   timelineQueryKey
 } from '#lib/live/messages.ts'
+import type { ClaimRow } from './claims'
 import type { OpenFloor, PendingDeclaration } from './floor'
 import type { Journal } from './journal'
 import type { PlaySheet } from './sheet'
@@ -177,6 +179,12 @@ export function floorActions(campaign: () => string) {
       await call(campaignPath(campaign(), 'floor/done'), {
         method: 'POST'
       })
+    },
+    /** Not done yet: takes Done back until the Floor closes. */
+    async undone(): Promise<void> {
+      await call(campaignPath(campaign(), 'floor/done'), {
+        method: 'DELETE'
+      })
     }
   }
 }
@@ -206,5 +214,45 @@ export function callActions(campaign: () => string) {
     roll: (call: string, part: string) => post(call, part, { roll: true }),
     /** Answers a question Call. */
     answer: (call: string, part: string, answer: string) => post(call, part, { answer })
+  }
+}
+
+/** The Party's Claims as this browser sees them; a `claims` live message refreshes them. */
+export const createClaimsQuery = (campaign: () => string, initial: () => ClaimRow[]) =>
+  campaignQuery(claimsQueryKey, 'claims', 'The Claims could not be loaded', campaign, initial)
+
+/** Claim and Let go from the Take a seat dialog; throws the server's refusal. */
+export function claimActions(campaign: () => string) {
+  const queryClient = useQueryClient()
+  async function change(url: string, init: RequestInit) {
+    const res = await fetch(url, init)
+    // A refused Claim (taken meanwhile) still needs the fresh listing.
+    await queryClient.invalidateQueries({ queryKey: claimsQueryKey(campaign()) })
+    if (!res.ok) throw await refusal(res, 'The Claim could not be changed')
+  }
+  return {
+    claim: (character: string) =>
+      change(campaignPath(campaign(), 'claims'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ character })
+      }),
+    letGo: (character: string) =>
+      change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}`), {
+        method: 'DELETE'
+      }),
+    depart: (character: string) =>
+      change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}/depart`), {
+        method: 'POST'
+      }),
+    rejoin: (character: string) =>
+      change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}/rejoin`), {
+        method: 'POST'
+      }),
+    /** The Host frees a Character another browser holds. */
+    release: (character: string) =>
+      change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}/release`), {
+        method: 'POST'
+      })
   }
 }
