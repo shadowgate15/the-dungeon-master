@@ -43,7 +43,9 @@
         disabled: archived
       }}
 >
-  <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
+  {#if data.isHost}
+    <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
+  {/if}
   <header class="space-y-1">
     <div class="flex items-center gap-3">
       <h1 class="font-display text-2xl">{data.campaign.name}</h1>

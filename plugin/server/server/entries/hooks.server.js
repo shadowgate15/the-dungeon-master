@@ -28,7 +28,7 @@ var handle = async ({ event, resolve }) => {
 				status: 303,
 				headers: { location: `/campaigns/${campaign}` }
 			});
-			if (!remoteMayReach(url.pathname, campaign)) return new Response("Forbidden", { status: 403 });
+			if (!remoteMayReach(url.pathname, campaign, request.method)) return new Response("Forbidden", { status: 403 });
 			event.locals.browser = remoteBrowserId(event.cookies);
 		}
 	} else event.locals.browser = SOLO_PLAYER;
