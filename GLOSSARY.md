@@ -152,7 +152,7 @@ A d20 roll plus a Character's modifier for one skill or saving throw, against a 
 _Avoid_: Roll request, skill roll, test
 
 **Call**:
-The DM's open request to a Player: a Check or Roll sequence to roll, or a question, optionally with choices. One Call can ask for different rolls from several Characters at once, and the DM continues only once all are answered. It is kept in the Scene, so it survives a reload. Answering it lets the DM continue; a Floor closed with Declarations on it withdraws it.
+The DM's open request to a Player: a Check or Roll sequence to roll, or a question, optionally with choices. One Call can ask for different rolls from several Characters at once, and the DM continues only once all are answered. It asks only Characters in the Scene: to ask one who is elsewhere, the spotlight moves there first. It is kept in the Scene, so it survives a reload. Answering it lets the DM continue; a Floor closed with Declarations on it withdraws it.
 _Avoid_: Prompt, pending roll, modal, interrupt
 
 **Roll sequence**:
