@@ -31,7 +31,8 @@ beforeEach(() => {
   const channels = createChannels()
   heard = []
   pushed = []
-  channels.listen(folder, (e) => heard.push(e))
+  // `claims` events are heard separately (play.spec.ts); these specs read the turn's events.
+  channels.listen(folder, (e) => e.meta.kind !== 'claims' && heard.push(e))
   const publish = (m: LiveMessage) => pushed.push(m)
   const dice = createCampaignDice(1)
   host = createToolHost({ library, tools: gameTools, publish, dice: (id) => dice.for(id) })

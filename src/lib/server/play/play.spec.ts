@@ -17,6 +17,7 @@ let play: Play
 let folder: string
 let campaignId: string
 let heard: ChannelEvent[]
+let claimsHeard: ChannelEvent[]
 let pushed: LiveMessage[]
 
 beforeEach(() => {
@@ -27,7 +28,9 @@ beforeEach(() => {
   const channels = createChannels()
   heard = []
   pushed = []
-  channels.listen(folder, (e) => heard.push(e))
+  claimsHeard = []
+  // `claims` events are kept apart: they never await Narration and the turn's specs ignore them.
+  channels.listen(folder, (e) => (e.meta.kind === 'claims' ? claimsHeard : heard).push(e))
   const publish = (m: LiveMessage) => pushed.push(m)
   host = createToolHost({ library, tools: gameTools, publish })
   play = createPlay({ library, channels, publish })
@@ -501,5 +504,61 @@ describe('the DM away', () => {
     const away = awayPlay()
     expect(away.timeline(campaignId, SOLO_PLAYER).entries).toEqual([])
     expect(away.scene(campaignId, SOLO_PLAYER)).toBeDefined()
+  })
+})
+
+describe('claims events', () => {
+  const GUEST = 'guest-browser'
+
+  it('tells the DM on Let go, Claim and Release, without awaiting Narration', () => {
+    const wren = addFighter('Wren')
+    const bram = addFighter('Bram')
+    play.letGo(campaignId, bram, SOLO_PLAYER)
+    claimsHeard.length = 0
+
+    play.claim(campaignId, bram, GUEST)
+    play.release(campaignId, bram, SOLO_PLAYER)
+    play.letGo(campaignId, wren, SOLO_PLAYER)
+
+    expect(claimsHeard.map((e) => e.content)).toEqual([
+      'Bram is now played by Player of Bram',
+      'Bram is unclaimed',
+      'Wren is unclaimed'
+    ])
+    expect(library.record(campaignId).timeline(SOLO_PLAYER).awaitingSince).toBeNull()
+  })
+
+  it('stays quiet when no DM is at the table', () => {
+    const wren = addFighter('Wren')
+    const away = createPlay({ library, channels: createChannels(), publish: () => {} })
+
+    expect(() => away.letGo(campaignId, wren, SOLO_PLAYER)).not.toThrow()
+    expect(heard).toEqual([])
+  })
+})
+
+describe('a Session with no Claims at open', () => {
+  it('opens at once, runs a Floor for the one who Claimed, and takes a latecomer at the next Floor', () => {
+    const wren = addFighter('Wren')
+    const bram = addFighter('Bram')
+    play.letGo(campaignId, wren, SOLO_PLAYER)
+    play.letGo(campaignId, bram, SOLO_PLAYER)
+
+    expect(play.openSession(campaignId).number).toBe(1)
+    expect(play.sessionStart(campaignId)).toContain(
+      "Who's at the table: no one has Claimed yet; unclaimed: Wren, Bram."
+    )
+
+    play.claim(campaignId, wren, SOLO_PLAYER)
+    library.floor(campaignId).send({ character: wren, text: 'I look around.', player: SOLO_PLAYER })
+    expect(play.done(campaignId, SOLO_PLAYER).closed).toBe(true)
+    expect(heard[0].content).toContain('I look around.')
+
+    call('narrate', { text: 'The room is quiet.' })
+    // The latecomer arrives after the Floor closed and decides at the next one.
+    play.claim(campaignId, bram, 'late-browser')
+    library.floor(campaignId).send({ character: bram, text: 'I join in.', player: 'late-browser' })
+    expect(play.done(campaignId, SOLO_PLAYER).closed).toBe(false)
+    expect(play.done(campaignId, 'late-browser').closed).toBe(true)
   })
 })

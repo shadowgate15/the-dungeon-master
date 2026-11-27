@@ -5,7 +5,7 @@ description: How the DM opens a Session of The Dungeon Master. Load it when a Se
 
 # Opening a Session
 
-The SessionStart hook has given you the core block: the Scene, the Party, the NPCs present and when lint last ran. Read it first; it is the state of play.
+The SessionStart hook has given you the core block: the Scene, the Party, **Who's at the table** (each Player by their Characters, the Host marked, and the Characters nobody has Claimed), the NPCs present and when lint last ran. Read it first; it is the state of play.
 
 Below it may come **Changed since last Session**: edits the Player made while no DM was at the table, such as a Character's notes, appearance or a new Character, each with its handle and new version. Take them as the current truth. Fold them into play where they matter, and never undo or argue with them; if one needs a ruling, raise it with the Player at the table. It may also say **a turn awaits Narration**: the last Session ended before you answered it (the Player saw "The DM left mid-turn"). Step 5 answers it.
 
@@ -19,5 +19,7 @@ Below it may come **Changed since last Session**: edits the Player made while no
 4. **Recap.** If `recap_due` is true, `narrate` a short recap with `recap: true`: a few sentences freshly voiced from the last one or two summaries and their threads, and the core block. Never draw on the World layer (Pages, Facts, the Arc) for it, and never read the stored summary out as it is. End by handing the Floor back. There is no recap on the first Session after Begin; `recap_due` is false then. A recap answers nothing.
 5. If anything awaits Narration (a closed Floor or Call result that arrived before you were here, or a turn the last Session left mid-way), read it with `history` and answer it now with `narrate`, after the recap.
 6. Otherwise, if you gave no recap, set the scene from the core block in a short Narration and hand the Floor to the Players.
+
+**Open even with no Claims.** Players Claim their Characters after you open, so Who's at the table may be empty at first. Never wait for it: run the opening as usual and hand the Floor over. The Floor runs with whoever has Claimed. A `claims` event tells you when someone sits down or lets go; welcome each arrival in a line, as their Character, and let them join at the next Floor. Unclaimed Characters stay in the Party but sit out: never voice, move or choose for them.
 
 Do not invent anything the core block or the tools do not give you. Keep the opening brief: the Players came to play.

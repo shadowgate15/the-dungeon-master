@@ -91,6 +91,25 @@ export function createPlay({
     return outcome
   }
 
+  /**
+   * Tells the DM which Characters a Claims change left with whom: one `claims` event that, like a
+   * spotlight request, doesn't await Narration. Silent while no DM is at the table.
+   */
+  function claimsChanged(campaignId: string, characterId: string) {
+    publish({ type: 'claims', campaign: campaignId })
+    const folder = folderOf(campaignId)
+    if (!channels.listening(folder)) return
+    const now = library.party(campaignId).claimOf(characterId)
+    if (!now) return
+    const { name, holder } = now
+    channels.send(folder, {
+      content: holder
+        ? `${name} is now played by ${library.labels(campaignId)(holder)}`
+        : `${name} is unclaimed`,
+      meta: { kind: 'claims' }
+    })
+  }
+
   function answered(campaignId: string, result: CallResult | null): { complete: boolean } {
     if (result)
       channels.send(folderOf(campaignId), callResultEvent(result, library.labels(campaignId)))
@@ -189,19 +208,19 @@ export function createPlay({
     /** The browser Claims a Character nobody holds; refused for a taken one, the Host's browser included. */
     claim(campaignId: string, character: string, browser: string): void {
       library.party(campaignId).claim(character, browser)
-      publish({ type: 'claims', campaign: campaignId })
+      claimsChanged(campaignId, character)
     },
 
     /** The Host's browser frees a Character another browser holds; refused for any other browser. */
     release(campaignId: string, character: string, browser: string): void {
       library.party(campaignId).release(character, browser)
-      publish({ type: 'claims', campaign: campaignId })
+      claimsChanged(campaignId, character)
     },
 
     /** The browser gives up a Claim it holds. */
     letGo(campaignId: string, character: string, browser: string): void {
       library.party(campaignId).letGo(character, browser)
-      publish({ type: 'claims', campaign: campaignId })
+      claimsChanged(campaignId, character)
       settle(campaignId, library.floor(campaignId).lose(character))
       // Letting go may leave an unclaimed part as the last one outstanding: code rolls it.
       const result = library.calls(campaignId).settleUnclaimed(dice(campaignId))

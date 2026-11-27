@@ -140,6 +140,20 @@ function playerLabels(db) {
 		return named ?? "a Player";
 	};
 }
+/**
+* The table as the DM reads it: each Player by label (the Host first, then the rest in Party order),
+* then the Characters nobody has Claimed. With no Claims it says so.
+*/
+function whoIsAtTheTable(db) {
+	const rows = db.select({
+		name: character.name,
+		browser: character.controllingPlayer
+	}).from(character).where(ne(character.status, "departed")).orderBy(asc(character.createdAt), asc(character.name)).all();
+	const label = playerLabels(db);
+	const browsers = [...new Set(rows.flatMap((r) => r.browser ? [r.browser] : []))].sort((a, b) => Number(b === SOLO_PLAYER) - Number(a === SOLO_PLAYER));
+	const free = rows.filter((r) => !r.browser).map((r) => r.name);
+	return `Who's at the table: ${[browsers.length ? browsers.map(label).join("; ") : "no one has Claimed yet", ...free.length ? [`unclaimed: ${free.join(", ")}`] : []].join("; ")}.`;
+}
 // src/lib/character/edit.ts
 /**
 * Turns the stored rows of one choice group back into the player's pick: the first option whose
@@ -4330,6 +4344,7 @@ function coreBlock(source) {
 		"# Core block",
 		scenePart(source),
 		partyPart(source),
+		whoIsAtTheTable(source.db),
 		npcsPart(source),
 		combatPart(source),
 		arcPart(source),
@@ -4573,6 +4588,14 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 				claim: claimOf(d.controllingPlayer, browser)
 			}));
 			return [...saved, ...drafts];
+		},
+		/** A saved Character's name and the browser holding it now (null when unclaimed); null for a Draft. */
+		claimOf(id) {
+			const saved = db.select().from(character).where(eq(character.id, id)).get();
+			return saved ? {
+				name: saved.name,
+				holder: saved.controllingPlayer
+			} : null;
 		},
 		/** Whether `browser` holds a Claim on any Party Character. */
 		holdsClaim(browser) {
