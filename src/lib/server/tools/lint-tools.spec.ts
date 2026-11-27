@@ -231,13 +231,13 @@ describe('lint itself', () => {
       search: ok('search', { query: 'Salt Docks' })
     })
     const before = snapshot()
-    const timeline = library.record(campaignId).timeline()
+    const timeline = library.record(campaignId).timeline('player')
     const eventsBefore = host.events(folder).length
 
     const lint = ok('lint')
 
     expect(lint.findings.length).toBeGreaterThan(0)
-    expect(library.record(campaignId).timeline()).toEqual(timeline)
+    expect(library.record(campaignId).timeline('player')).toEqual(timeline)
     expect(snapshot()).toEqual(before)
     expect(host.events(folder).slice(eventsBefore)).toMatchObject([
       { tool: 'lint', kind: 'lint_ran', dmOnly: true }

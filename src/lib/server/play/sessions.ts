@@ -3,7 +3,7 @@ import type { SessionHistory } from '#lib/play/sessions.ts'
 import type { Queryable } from '../db/connect'
 import { event, session } from '../db/schema'
 import { ToolError } from '../tools/contract'
-import { currentSession, hasNarration, lapseClaims, partyAudience } from './log'
+import { claimedBy, currentSession, hasNarration, lapseClaims, partyAudience, reaches } from './log'
 
 type SessionRow = typeof session.$inferSelect
 
@@ -133,7 +133,8 @@ export function sessionsView(db: Queryable, last?: number) {
  * The Player's Session history: each closed Session with a summary, newest first. It reads only
  * summaries, which are Player-safe, so it cannot leak.
  */
-export function sessionHistory(db: Queryable): SessionHistory {
+export function sessionHistory(db: Queryable, viewer: string): SessionHistory {
+  const claimed = new Set(claimedBy(db, viewer))
   return {
     sessions: db
       .select()
@@ -141,6 +142,7 @@ export function sessionHistory(db: Queryable): SessionHistory {
       .where(and(isNotNull(session.closedAt), isNotNull(session.summary)))
       .orderBy(desc(session.number))
       .all()
+      .filter((s) => reaches(s.summaryAudience ?? [], claimed))
       .map((s) => ({
         number: s.number,
         startedAt: s.startedAt,

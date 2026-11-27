@@ -526,7 +526,7 @@ function FloorComposer($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/**
 		* The pinned composer: the open Floor's pending tray above a box that adds a Declaration for the
-		* acting Character. Every tray entry can be edited or withdrawn until the Floor closes. Done
+		* acting Character. Every tray entry of this browser's can be edited or withdrawn until the Floor closes; other browsers' entries show read-only. Done
 		* closes the Floor (empty or not); Ctrl+Enter is Send & Done. While the DM is answering, drafting
 		* stays open but Done waits. While the DM is away, a "DM away" bar with the command that brings
 		* the DM back replaces the send controls; drafting stays open. A pure view; the console wires the
@@ -613,7 +613,7 @@ function FloorComposer($$renderer, $$props) {
 							$$slots: { default: true }
 						});
 						$$renderer.push(`<!----></div></form>`);
-					} else if (away) $$renderer.push(`<!--[1--><span class="flex-1 whitespace-pre-wrap">${escape_html(d.text)}</span>`);
+					} else if (away || !d.own) $$renderer.push(`<!--[1--><span class="flex-1 whitespace-pre-wrap">${escape_html(d.text)}</span>`);
 					else $$renderer.push(`<!--[-1--><span class="flex-1 whitespace-pre-wrap">${escape_html(d.text)}</span> <button class="text-xs text-muted underline"${attr("aria-label", `Edit ${stringify(label(d))}`)}>edit</button> <button class="text-xs text-muted underline"${attr("aria-label", `Withdraw ${stringify(label(d))}`)}>withdraw</button>`);
 					$$renderer.push(`<!--]--></li>`);
 				}
@@ -700,6 +700,69 @@ function FloorComposer($$renderer, $$props) {
 			$$render_inner($$inner_renderer);
 		} while (!$$settled);
 		$$renderer.subsume($$inner_renderer);
+	});
+}
+// src/lib/play/TableStrip.svelte
+function TableStrip($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		/**
+		* The table strip above the composer: every browser with a Character in the Scene, named by those
+		* Characters ("You (Wren)", "Bram & Kael") and marked deciding or Done ✓, plus the unclaimed
+		* Characters who sit out. Your own chip offers Not done yet while Done; the Host sees Release per
+		* Character on the other browsers' chips. A pure view; the console wires the callbacks.
+		*/
+		let { browsers, unclaimed, isHost, onundone, onrelease } = $$props;
+		const names = (b) => {
+			const joined = b.characters.map((c) => c.name).join(" & ");
+			return b.own ? `You (${joined})` : joined;
+		};
+		if (browsers.length || unclaimed.length) {
+			$$renderer.push(`<!--[0--><ul class="flex flex-wrap gap-2 text-xs" aria-label="The table"><!--[-->`);
+			const each_array = ensure_array_like(browsers);
+			for (let i = 0, $$length = each_array.length; i < $$length; i++) {
+				let b = each_array[i];
+				$$renderer.push(`<li class="flex items-center gap-2 rounded-control bg-surface px-2 py-1"><span class="font-medium">${escape_html(names(b))}</span> <span${attr_class(clsx(b.done ? "text-success" : "text-muted"))}>${escape_html(b.done ? "Done ✓" : "deciding")}</span> `);
+				if (b.own && b.done) {
+					$$renderer.push("<!--[0-->");
+					Button($$renderer, {
+						size: "sm",
+						variant: "ghost",
+						onclick: onundone,
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->Not done yet`);
+						},
+						$$slots: { default: true }
+					});
+				} else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--> `);
+				if (isHost && !b.own) {
+					$$renderer.push(`<!--[0--><!--[-->`);
+					const each_array_1 = ensure_array_like(b.characters);
+					for (let $$index = 0, $$length = each_array_1.length; $$index < $$length; $$index++) {
+						let c = each_array_1[$$index];
+						Button($$renderer, {
+							size: "sm",
+							variant: "ghost",
+							onclick: () => onrelease(c.id),
+							children: ($$renderer) => {
+								$$renderer.push(`<!---->Release ${escape_html(c.name)}`);
+							},
+							$$slots: { default: true }
+						});
+					}
+					$$renderer.push(`<!--]-->`);
+				} else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--></li>`);
+			}
+			$$renderer.push(`<!--]--> <!--[-->`);
+			const each_array_2 = ensure_array_like(unclaimed);
+			for (let $$index_2 = 0, $$length = each_array_2.length; $$index_2 < $$length; $$index_2++) {
+				let c = each_array_2[$$index_2];
+				$$renderer.push(`<li class="rounded-control bg-surface px-2 py-1 text-muted">${escape_html(c.name)} · unclaimed, sits out</li>`);
+			}
+			$$renderer.push(`<!--]--></ul>`);
+		} else $$renderer.push("<!--[-1-->");
+		$$renderer.push(`<!--]-->`);
 	});
 }
 // src/lib/play/RailCard.svelte
@@ -996,6 +1059,11 @@ function TakeASeat($$renderer, $$props) {
 	});
 }
 // src/lib/play/Timeline.svelte
+function lock($$renderer, entry) {
+	if (entry.audience) $$renderer.push(`<!--[0--><span class="block text-xs text-muted">🔒 to ${escape_html(entry.audience.join(", "))}</span>`);
+	else $$renderer.push("<!--[-1-->");
+	$$renderer.push(`<!--]-->`);
+}
 function Timeline($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/**
@@ -1034,14 +1102,19 @@ function Timeline($$renderer, $$props) {
 				let entry = each_array_1[$$index_1];
 				if (entry.type === "narration") {
 					$$renderer.push(`<!--[0--><li class="max-w-[85%] self-start rounded-panel bg-raised px-3 py-2 text-sm">`);
+					lock($$renderer, entry);
+					$$renderer.push(`<!----> `);
 					if (entry.recap) $$renderer.push(`<!--[0--><span class="block text-xs font-semibold text-muted uppercase">Previously</span>`);
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--> `);
 					if (entry.voice) $$renderer.push(`<!--[0--><span class="block text-xs font-semibold text-primary">${escape_html(entry.voice)}</span>`);
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
-				} else if (entry.type === "declaration") $$renderer.push(`<!--[1--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm"><span class="block text-xs font-semibold text-muted">${escape_html(entry.character)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
-				else if (entry.type === "error") {
+				} else if (entry.type === "declaration") {
+					$$renderer.push(`<!--[1--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm">`);
+					lock($$renderer, entry);
+					$$renderer.push(`<!----> <span class="block text-xs font-semibold text-muted">${escape_html(entry.character)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
+				} else if (entry.type === "error") {
 					$$renderer.push(`<!--[2--><li class="self-stretch">`);
 					Alert($$renderer, {
 						variant: "danger",
@@ -1052,7 +1125,9 @@ function Timeline($$renderer, $$props) {
 					});
 					$$renderer.push(`<!----></li>`);
 				} else if (entry.type === "roll") {
-					$$renderer.push(`<!--[3--><li class="flex flex-wrap items-baseline gap-x-2 self-end text-sm"><span class="font-medium">${escape_html(entry.character)}</span> <span class="text-muted">${escape_html(entry.what)}</span> <span class="font-mono text-xs text-muted">🎲 ${escape_html(entry.dice.join(" | "))} ${escape_html(signed(entry.modifier))}</span> <span class="font-mono font-semibold">= ${escape_html(entry.total)}</span> `);
+					$$renderer.push(`<!--[3--><li class="flex flex-wrap items-baseline gap-x-2 self-end text-sm">`);
+					lock($$renderer, entry);
+					$$renderer.push(`<!----> <span class="font-medium">${escape_html(entry.character)}</span> <span class="text-muted">${escape_html(entry.what)}</span> <span class="font-mono text-xs text-muted">🎲 ${escape_html(entry.dice.join(" | "))} ${escape_html(signed(entry.modifier))}</span> <span class="font-mono font-semibold">= ${escape_html(entry.total)}</span> `);
 					if (entry.outcome) $$renderer.push(`<!--[0--><span${attr_class(clsx([
 						"success",
 						"hit",
@@ -1066,8 +1141,11 @@ function Timeline($$renderer, $$props) {
 					if (entry.mode !== "normal") $$renderer.push(`<!--[0--><span class="text-xs text-muted italic">(${escape_html(entry.mode)}: ${escape_html(entry.reason)})</span>`);
 					else $$renderer.push("<!--[-1-->");
 					$$renderer.push(`<!--]--></li>`);
-				} else if (entry.type === "answer") $$renderer.push(`<!--[4--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm"><span class="block text-xs text-muted">${escape_html(entry.question)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
-				else $$renderer.push(`<!--[-1--><li class="self-start text-xs text-muted">⚙ ${escape_html(entry.text)}</li>`);
+				} else if (entry.type === "answer") {
+					$$renderer.push(`<!--[4--><li class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm">`);
+					lock($$renderer, entry);
+					$$renderer.push(`<!----> <span class="block text-xs text-muted">${escape_html(entry.question)}</span> <span class="whitespace-pre-wrap">${escape_html(entry.text)}</span></li>`);
+				} else $$renderer.push(`<!--[-1--><li class="self-start text-xs text-muted">⚙ ${escape_html(entry.text)}</li>`);
 				$$renderer.push(`<!--]-->`);
 			}
 		} else {
@@ -1298,6 +1376,17 @@ function _page($$renderer, $$props) {
 				});
 			} else {
 				$$renderer.push("<!--[-1-->");
+				if (seated()) {
+					$$renderer.push("<!--[0-->");
+					TableStrip($$renderer, {
+						browsers: floor.data.browsers,
+						unclaimed: floor.data.unclaimed,
+						isHost: data.isHost,
+						onundone: () => attempt(() => actions.undone()),
+						onrelease: (id) => attempt(() => seats.release(id))
+					});
+				} else $$renderer.push("<!--[-1-->");
+				$$renderer.push(`<!--]--> `);
 				FloorComposer($$renderer, {
 					acting: acting()?.name ?? null,
 					turn: turn()?.name ?? null,
@@ -1314,6 +1403,7 @@ function _page($$renderer, $$props) {
 					away: attached() ? null : { folder: data.campaign.path },
 					isHost: data.isHost
 				});
+				$$renderer.push(`<!---->`);
 			}
 			$$renderer.push(`<!--]--></section> `);
 			Rail($$renderer, {

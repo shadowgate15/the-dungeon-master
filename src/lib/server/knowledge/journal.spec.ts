@@ -34,7 +34,7 @@ function ok(name: string, args: Record<string, unknown>): any {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-const journal = () => library.record(campaignId).journal()
+const journal = () => library.record(campaignId).journal('player')
 
 describe('the Journal', () => {
   it("is empty until the Player's Characters learn something", () => {

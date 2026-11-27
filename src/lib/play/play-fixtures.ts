@@ -1,6 +1,6 @@
 import type { PlaySheet } from './sheet'
 import type { JournalEntry } from './journal'
-import type { PendingDeclaration } from './floor'
+import type { FloorDeclaration } from './floor'
 import type { OpenCall } from './call'
 import type { TimelineEntry } from './timeline'
 import type { SessionSummary } from './sessions'
@@ -105,15 +105,23 @@ export const sheets: PlaySheet[] = [
   }
 ]
 
-export const declarations: PendingDeclaration[] = [
+export const declarations: FloorDeclaration[] = [
   {
     id: 'd1',
     character: 'wren',
     characterName: 'Wren',
     player: 'player',
-    text: 'I keep my back to the stairs.'
+    text: 'I keep my back to the stairs.',
+    own: true
   },
-  { id: 'd2', character: 'bram', characterName: 'Bram', player: 'player', text: 'I bar the door.' }
+  {
+    id: 'd2',
+    character: 'bram',
+    characterName: 'Bram',
+    player: 'player',
+    text: 'I bar the door.',
+    own: true
+  }
 ]
 
 /** A short play turn, for the timeline. */

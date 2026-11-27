@@ -76,7 +76,7 @@ describe('creation_state', () => {
   it('logs nothing and adds no DM-activity line', () => {
     call('creation_state')
     expect(host.events(folder)).toEqual([])
-    expect(library.record(campaignId).timeline().entries).toEqual([])
+    expect(library.record(campaignId).timeline('player').entries).toEqual([])
   })
 })
 
@@ -118,7 +118,7 @@ describe('set_seed', () => {
   it('keeps creation out of the Event log and the timeline', () => {
     call('set_seed', { version: 1, premise: 'Escort a relic.' })
     expect(host.events(folder)).toEqual([])
-    expect(library.record(campaignId).timeline().entries).toEqual([])
+    expect(library.record(campaignId).timeline('player').entries).toEqual([])
     expect(pushed).not.toContainEqual({ type: 'timeline', campaign: campaignId })
   })
 })

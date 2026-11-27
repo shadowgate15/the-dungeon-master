@@ -2980,6 +2980,15 @@ function currentTurn(db) {
 function partyAudience(db) {
 	return db.select({ id: character.id }).from(character).orderBy(sql`rowid`).all().map((c) => c.id);
 }
+/** The ids of the Characters `viewer`'s browser holds a Claim on: what it may see (ADR 0008). */
+function claimedBy(db, viewer) {
+	return db.select({ id: character.id }).from(character).where(eq(character.controllingPlayer, viewer)).all().map((c) => c.id);
+}
+/**
+* Whether an Audience reaches at least one of the viewer's Claimed Characters. An empty Audience
+* was written before the Party had any Character, so it is everyone's.
+*/
+var reaches = (audience, claimed) => audience.length === 0 || audience.some((id) => claimed.has(id));
 /**
 * The Campaign's current stamp: the open Session (null offline) and the Campaign clock's minute.
 */
@@ -3113,6 +3122,11 @@ function entriesFor(e, shown) {
 	const entry = entryFor(e, shown);
 	return entry ? [entry] : [];
 }
+/** The names of an Audience narrower than the Party, for the "🔒 to" tag; undefined otherwise. */
+function tagFor(audience, party, names) {
+	if (party.every((id) => audience.includes(id))) return void 0;
+	return audience.flatMap((id) => names.has(id) ? [names.get(id)] : []);
+}
 /** One logged Event as a timeline entry, or null for one the timeline does not show. */
 function entryFor(e, shown) {
 	if (e.dmOnly || !SHOWN.has(e.kind)) return null;
@@ -3151,7 +3165,13 @@ function entryFor(e, shown) {
 * with each DM activity line after the Event it follows, plus the awaiting Narration flag. Every
 * entry is built here from Player-safe fields; nothing raw passes through.
 */
-function timeline(db) {
+function timeline(db, viewer) {
+	const claimed = new Set(claimedBy(db, viewer));
+	const party = partyAudience(db);
+	const names = new Map(db.select({
+		id: character.id,
+		name: character.name
+	}).from(character).all().map((c) => [c.id, c.name]));
 	const lines = db.select().from(activityLine).orderBy(asc(activityLine.id)).all();
 	const shown = (handle, name) => typeof handle === "string" && handleKind(handle) === "npc" ? believedName(db, handle) ?? "a stranger" : name;
 	const entries = [];
@@ -3159,6 +3179,7 @@ function timeline(db) {
 	const flushUntil = (eventId) => {
 		while (next < lines.length && lines[next].afterEvent < eventId) {
 			const line = lines[next++];
+			if (!reaches(line.audience, claimed)) continue;
 			entries.push({
 				type: "activity",
 				id: `a${line.id}`,
@@ -3168,13 +3189,18 @@ function timeline(db) {
 	};
 	for (const e of db.select().from(event).orderBy(asc(event.id)).all()) {
 		flushUntil(e.id);
-		entries.push(...entriesFor(e, shown));
+		if (!reaches(e.audience, claimed)) continue;
+		const tag = tagFor(e.audience, party, names);
+		for (const entry of entriesFor(e, shown)) entries.push(tag ? {
+			...entry,
+			audience: tag
+		} : entry);
 	}
 	flushUntil(Infinity);
 	return {
 		entries,
 		awaitingSince: awaitingNarrationSince(db),
-		call: openCallView(db)
+		call: openCallView(db, claimed)
 	};
 }
 // src/lib/server/play/sequences.ts
@@ -3623,9 +3649,10 @@ function playersAtTable(db) {
 	return players.size ? [...players] : [SOLO_PLAYER];
 }
 /** The open Call, Player-safe (no DC, no tier), or null when none is open. */
-function openCallView(db) {
+function openCallView(db, claimed) {
 	const open = openCallRow(db);
 	if (!open) return null;
+	if (claimed && !open.audience.some((id) => claimed.has(id))) return null;
 	const parts = db.select({
 		part: callPart,
 		characterName: character.name
@@ -4206,8 +4233,8 @@ function toPlaySheet(c, levelUp) {
 	};
 }
 /** The play sheet of every saved Character in the Party, oldest first. */
-function playSheets(party) {
-	return party.list().flatMap((m) => m.kind === "character" ? [toPlaySheet(party.character(m.id).character, party.levelUpOffer(m.id))] : []);
+function playSheets(party, viewer) {
+	return party.list().flatMap((m) => m.kind === "character" && (viewer === void 0 || party.character(m.id).character.controllingPlayer === viewer) ? [toPlaySheet(party.character(m.id).character, party.levelUpOffer(m.id))] : []);
 }
 // src/lib/server/play/core-block.ts
 /**
@@ -4832,9 +4859,12 @@ function createFloor(db, now = Date.now) {
 		if (trimmed.length > 2e3) throw new DeclarationRefusedError(`Keep a Declaration under ${DECLARATION_MAX} characters`);
 		return trimmed;
 	}
-	function pending(id) {
+	/** `id` is on the open Floor and `player` sent it; another browser's can only be read. */
+	function pending(id, player) {
 		const floorId = openFloorId();
-		if (!(floorId && db.select({ id: declaration.id }).from(declaration).where(and(eq(declaration.id, id), eq(declaration.floorId, floorId))).get())) throw new DeclarationNotFoundError("Declaration not found on the open Floor");
+		const found = floorId && db.select({ player: declaration.player }).from(declaration).where(and(eq(declaration.id, id), eq(declaration.floorId, floorId))).get();
+		if (!found) throw new DeclarationNotFoundError("Declaration not found on the open Floor");
+		if (found.player !== player) throw new DeclarationRefusedError("That is another Player's Declaration");
 	}
 	/** `player`'s drafts a cut sent back to the composer, oldest first. */
 	function returned(player) {
@@ -4845,11 +4875,40 @@ function createFloor(db, now = Date.now) {
 			text: returnedDraft.text
 		}).from(returnedDraft).innerJoin(character, eq(character.id, returnedDraft.characterId)).where(eq(returnedDraft.player, player)).orderBy(asc(returnedDraft.createdAt), asc(sql`${returnedDraft}.rowid`)).all();
 	}
+	/** Who is at the table for `viewer`: each browser's in-Scene Characters, and the unclaimed. */
+	function table(viewer, done) {
+		const place = scenePlace(db);
+		const inPlay = db.select().from(character).all().filter((c) => canAct(c) && inScene(place, c));
+		const byBrowser = /* @__PURE__ */ new Map();
+		for (const c of inPlay) {
+			const owner = c.controllingPlayer;
+			if (owner === null) continue;
+			const seat = byBrowser.get(owner) ?? {
+				own: owner === viewer,
+				characters: [],
+				done: done.includes(owner)
+			};
+			seat.characters.push({
+				id: c.id,
+				name: c.name
+			});
+			byBrowser.set(owner, seat);
+		}
+		return {
+			browsers: [...byBrowser.values()],
+			unclaimed: inPlay.filter((c) => c.controllingPlayer === null).map((c) => ({
+				id: c.id,
+				name: c.name
+			}))
+		};
+	}
 	/** The open Floor (empty until something is sent), with `player`'s returned drafts. */
 	function current(player) {
 		const floorId = openFloorId();
+		const seats = table(player, floorId ? db.select().from(floor).where(eq(floor.id, floorId)).get().done : []);
 		if (!floorId) return {
 			declarations: [],
+			...seats,
 			returned: returned(player)
 		};
 		return {
@@ -4859,7 +4918,11 @@ function createFloor(db, now = Date.now) {
 				characterName: character.name,
 				player: declaration.player,
 				text: declaration.text
-			}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all(),
+			}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all().map((d) => ({
+				...d,
+				own: d.player === player
+			})),
+			...seats,
 			returned: returned(player)
 		};
 	}
@@ -4868,7 +4931,13 @@ function createFloor(db, now = Date.now) {
 		const done = db.select().from(floor).where(eq(floor.id, floorId)).get().done;
 		const table = playersAtTable();
 		if (table.length === 0 || !table.every((p) => done.includes(p))) return { closed: false };
-		const declarations = current(SOLO_PLAYER).declarations;
+		const declarations = db.select({
+			id: declaration.id,
+			character: declaration.characterId,
+			characterName: character.name,
+			player: declaration.player,
+			text: declaration.text
+		}).from(declaration).innerJoin(character, eq(character.id, declaration.characterId)).where(eq(declaration.floorId, floorId)).orderBy(asc(declaration.position)).all();
 		db.update(floor).set({
 			state: "closed",
 			closedAt: at
@@ -4976,18 +5045,18 @@ function createFloor(db, now = Date.now) {
 				return closeIfReady(floorId, now());
 			});
 		},
-		/** Rewrites a Declaration still on the open Floor. */
-		edit(id, text) {
+		/** Rewrites a Declaration `player` sent that is still on the open Floor. */
+		edit(id, text, player) {
 			const clean = cleanText(text);
-			pending(id);
+			pending(id, player);
 			db.update(declaration).set({
 				text: clean,
 				updatedAt: now()
 			}).where(eq(declaration.id, id)).run();
 		},
-		/** Takes a Declaration back off the open Floor. */
-		withdraw(id) {
-			pending(id);
+		/** Takes a Declaration `player` sent back off the open Floor. */
+		withdraw(id, player) {
+			pending(id, player);
 			db.delete(declaration).where(eq(declaration.id, id)).run();
 		}
 	};
@@ -5110,8 +5179,9 @@ function sessionsView(db, last) {
 * The Player's Session history: each closed Session with a summary, newest first. It reads only
 * summaries, which are Player-safe, so it cannot leak.
 */
-function sessionHistory(db) {
-	return { sessions: db.select().from(session).where(and(isNotNull(session.closedAt), isNotNull(session.summary))).orderBy(desc(session.number)).all().map((s) => ({
+function sessionHistory(db, viewer) {
+	const claimed = new Set(claimedBy(db, viewer));
+	return { sessions: db.select().from(session).where(and(isNotNull(session.closedAt), isNotNull(session.summary))).orderBy(desc(session.number)).all().filter((s) => reaches(s.summaryAudience ?? [], claimed)).map((s) => ({
 		number: s.number,
 		startedAt: s.startedAt,
 		span: span(db, s.id),
@@ -5486,10 +5556,12 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now, initD
 		record(id) {
 			const db = database(find(id).folder);
 			return {
-				timeline: () => timeline(db),
-				journal: () => journal(db),
+				timeline: (viewer) => timeline(db, viewer),
+				/** When the open turn started waiting on the DM, or null. */
+				awaitingSince: () => awaitingNarrationSince(db),
+				journal: (viewer) => journal(db, viewer),
 				/** The Player's read-only Session history. */
-				sessionHistory: () => sessionHistory(db),
+				sessionHistory: (viewer) => sessionHistory(db, viewer),
 				openSession: (bridge) => openSession(db, now(), bridge),
 				/** The DM's core block. */
 				coreBlock: () => coreBlock({

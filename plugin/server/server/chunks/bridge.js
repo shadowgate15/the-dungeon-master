@@ -3166,16 +3166,16 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 			return library.record(campaignId).scene();
 		},
 		/** The Journal as `viewer`'s Player sees it. */
-		journal(campaignId, _viewer) {
-			return library.record(campaignId).journal();
+		journal(campaignId, viewer) {
+			return library.record(campaignId).journal(viewer);
 		},
 		/** The read-only Session history as `viewer`'s Player sees it. */
-		sessionHistory(campaignId, _viewer) {
-			return library.record(campaignId).sessionHistory();
+		sessionHistory(campaignId, viewer) {
+			return library.record(campaignId).sessionHistory(viewer);
 		},
 		/** The Party's play sheets as `viewer`'s Player sees them. */
-		sheets(campaignId, _viewer) {
-			return playSheets(library.party(campaignId));
+		sheets(campaignId, viewer) {
+			return playSheets(library.party(campaignId), viewer);
 		},
 		/** Every Party Character with its Claim as `viewer`'s browser sees it (never by whom). */
 		claims(campaignId, viewer) {
@@ -3304,7 +3304,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		stopCheck(campaignId, again) {
 			const record = library.record(campaignId);
 			const pending = record.pendingCalls();
-			const awaiting = record.timeline().awaitingSince !== null;
+			const awaiting = record.awaitingSince() !== null;
 			if (!pending.length && !awaiting) return { block: false };
 			if (!again) return {
 				block: true,
@@ -3330,8 +3330,8 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 			return library.record(campaignId).coreBlock();
 		},
 		/** The Player's timeline and whether the DM is working on a turn. */
-		timeline(campaignId, _viewer) {
-			return library.record(campaignId).timeline();
+		timeline(campaignId, viewer) {
+			return library.record(campaignId).timeline(viewer);
 		}
 	};
 }

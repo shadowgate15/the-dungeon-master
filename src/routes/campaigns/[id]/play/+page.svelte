@@ -5,6 +5,7 @@
   import CallCard from '#lib/play/CallCard.svelte'
   import CharacterSheet from '#lib/play/CharacterSheet.svelte'
   import FloorComposer from '#lib/play/FloorComposer.svelte'
+  import TableStrip from '#lib/play/TableStrip.svelte'
   import Rail from '#lib/play/Rail.svelte'
   import { actingCharacter, turnOf } from '#lib/play/combat.ts'
   import { knownBy } from '#lib/play/journal.ts'
@@ -197,6 +198,15 @@
       {#if archived}
         <Alert variant="warning">This Campaign is archived. Restore it to play.</Alert>
       {:else}
+        {#if seated}
+          <TableStrip
+            browsers={floor.data.browsers}
+            unclaimed={floor.data.unclaimed}
+            isHost={data.isHost}
+            onundone={() => attempt(() => actions.undone())}
+            onrelease={(id) => attempt(() => seats.release(id))}
+          />
+        {/if}
         <FloorComposer
           acting={acting?.name ?? null}
           turn={turn?.name ?? null}
