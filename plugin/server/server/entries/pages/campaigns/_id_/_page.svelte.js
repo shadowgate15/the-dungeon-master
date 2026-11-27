@@ -10,7 +10,7 @@ import { t as Textarea } from "../../../../chunks/Textarea.js";
 import { t as TextInput } from "../../../../chunks/TextInput.js";
 import { a as missingSeedFields, i as emptyCampaignSeed } from "../../../../chunks/seed2.js";
 import { i as CreationStepper, r as createSeedQuery, t as CreationPage } from "../../../../chunks/CreationPage.js";
-import { i as Button } from "../../../../chunks/status.js";
+import { t as Button } from "../../../../chunks/Button.js";
 import { t as Link } from "../../../../chunks/Link.js";
 import { t as Panel } from "../../../../chunks/Panel.js";
 import { n as createSessionsQuery, t as DmBadge } from "../../../../chunks/DmBadge.js";
@@ -258,15 +258,18 @@ function _page($$renderer, $$props) {
 					disabled: archived()
 				},
 				children: ($$renderer) => {
-					Link($$renderer, {
-						href: resolve("/campaigns"),
-						class: "text-sm",
-						children: ($$renderer) => {
-							$$renderer.push(`<!---->All Campaigns`);
-						},
-						$$slots: { default: true }
-					});
-					$$renderer.push(`<!----> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
+					if (data.isHost) {
+						$$renderer.push("<!--[0-->");
+						Link($$renderer, {
+							href: resolve("/campaigns"),
+							class: "text-sm",
+							children: ($$renderer) => {
+								$$renderer.push(`<!---->All Campaigns`);
+							},
+							$$slots: { default: true }
+						});
+					} else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--> <header class="space-y-1"><div class="flex items-center gap-3"><h1 class="font-display text-2xl">${escape_html(data.campaign.name)}</h1> `);
 					if (data.campaign.status !== "missing") {
 						$$renderer.push("<!--[0-->");
 						DmBadge($$renderer, { attached: attached() });
@@ -317,14 +320,18 @@ function _page($$renderer, $$props) {
 								variant: "info",
 								children: ($$renderer) => {
 									$$renderer.push(`<!---->The story has begun, so the Seed is locked. `);
-									Link($$renderer, {
-										href: resolve("/campaigns/[id]/begin", { id: data.campaign.id }),
-										children: ($$renderer) => {
-											$$renderer.push(`<!---->Start over`);
-										},
-										$$slots: { default: true }
-									});
-									$$renderer.push(`<!----> (until the first Narration) to change it.`);
+									if (data.isHost) {
+										$$renderer.push("<!--[0-->");
+										Link($$renderer, {
+											href: resolve("/campaigns/[id]/begin", { id: data.campaign.id }),
+											children: ($$renderer) => {
+												$$renderer.push(`<!---->Start over`);
+											},
+											$$slots: { default: true }
+										});
+										$$renderer.push(`<!----> (until the first Narration) to change it.`);
+									} else $$renderer.push(`<!--[-1-->Only the Host can start over.`);
+									$$renderer.push(`<!--]-->`);
 								},
 								$$slots: { default: true }
 							});
@@ -335,7 +342,7 @@ function _page($$renderer, $$props) {
 							children: ($$renderer) => {
 								$$renderer.push(`<form method="POST" action="?/saveSeed" class="space-y-3">`);
 								CampaignSeedCard($$renderer, {
-									disabled: archived() || locked(),
+									disabled: archived() || locked() || !data.isHost,
 									dmFields: dmFields(),
 									get seed() {
 										return seed;
@@ -357,7 +364,7 @@ function _page($$renderer, $$props) {
 									});
 								} else $$renderer.push("<!--[-1-->");
 								$$renderer.push(`<!--]--> `);
-								if (!archived() && !locked()) {
+								if (!archived() && !locked() && data.isHost) {
 									$$renderer.push(`<!--[0--><div class="flex items-center gap-3">`);
 									Button($$renderer, {
 										type: "submit",
