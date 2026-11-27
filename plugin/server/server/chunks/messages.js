@@ -3,7 +3,7 @@ import { _ as resolveQueryValue, a as notifyManager, b as timeUntilStale, d as i
 import { a as Subscribable, t as getIsRestoringContext } from "./context.js";
 import { t as onDestroy } from "./index-server.js";
 import { t as useQueryClient } from "./useQueryClient.js";
-// ../../../node_modules/.pnpm/@tanstack+query-core@5.105.1/node_modules/@tanstack/query-core/build/modern/queryObserver.js
+// node_modules/.pnpm/@tanstack+query-core@5.105.1/node_modules/@tanstack/query-core/build/modern/queryObserver.js
 /**
 * A `QueryObserver` watches a single query in the `QueryCache` and computes a
 * `QueryObserverResult` from its state, recomputing and notifying subscribers
@@ -514,7 +514,7 @@ function shouldFetchOptionally(query, prevQuery, options, prevOptions) {
 function isStale(query, options) {
 	return resolveQueryValue(options.enabled, query) !== false && query.isStaleByTime(resolveQueryValue(options.staleTime, query));
 }
-// ../../../node_modules/.pnpm/@tanstack+svelte-query@6.3.7_svelte@5.57.3_@typescript-eslint+types@8.72.1_/node_modules/@tanstack/svelte-query/dist/useIsRestoring.js
+// node_modules/.pnpm/@tanstack+svelte-query@6.3.7_svelte@5.57.3_@typescript-eslint+types@8.72.1_/node_modules/@tanstack/svelte-query/dist/useIsRestoring.js
 /**
 * If you are using `PersistQueryClientProvider`, you can also use the `useIsRestoring` function alongside it to
 * check if a restore is currently in progress. `createQuery` and friends also check this internally to avoid
@@ -633,7 +633,7 @@ function brand(fn) {
 function isBranded(fn) {
 	return Boolean(fn[lazyBrand]);
 }
-// ../../../node_modules/.pnpm/@tanstack+svelte-query@6.3.7_svelte@5.57.3_@typescript-eslint+types@8.72.1_/node_modules/@tanstack/svelte-query/dist/createBaseQuery.svelte.js
+// node_modules/.pnpm/@tanstack+svelte-query@6.3.7_svelte@5.57.3_@typescript-eslint+types@8.72.1_/node_modules/@tanstack/svelte-query/dist/createBaseQuery.svelte.js
 function createBaseQuery(options, Observer, queryClient) {
 	/** Load query client */
 	const client = derived(() => useQueryClient(queryClient?.()));
@@ -663,7 +663,7 @@ function createBaseQuery(options, Observer, queryClient) {
 	} catch (e) {}
 	return query;
 }
-// ../../../node_modules/.pnpm/@tanstack+svelte-query@6.3.7_svelte@5.57.3_@typescript-eslint+types@8.72.1_/node_modules/@tanstack/svelte-query/dist/createQuery.js
+// node_modules/.pnpm/@tanstack+svelte-query@6.3.7_svelte@5.57.3_@typescript-eslint+types@8.72.1_/node_modules/@tanstack/svelte-query/dist/createQuery.js
 function createQuery(options, queryClient) {
 	return createBaseQuery(options, QueryObserver, queryClient);
 }

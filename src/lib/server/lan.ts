@@ -46,3 +46,15 @@ export function joinUrls({
   if (hostName) urls.push(`http://${hostName}.local:${port}`)
   return urls
 }
+
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]'])
+
+/** Whether a request's Host header names this machine, i.e. the Host's own browser. */
+export function isLocalHost(host: string | null): boolean {
+  if (!host) return false
+  try {
+    return LOCAL_HOSTNAMES.has(new URL(`http://${host}`).hostname)
+  } catch {
+    return false
+  }
+}

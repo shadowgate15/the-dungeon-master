@@ -1,7 +1,7 @@
 import { i as json } from "../../../../../../chunks/exports.js";
 import { n as library } from "../../../../../../chunks/campaign.js";
 import { n as withCampaign, t as assertPlayable } from "../../../../../../chunks/http.js";
-import { s as play, u as DmAwayError } from "../../../../../../chunks/bridge.js";
+import { c as play, d as DmAwayError } from "../../../../../../chunks/bridge.js";
 // src/routes/api/campaigns/[id]/end-session/+server.ts
 /**
 * The Player presses End Session: the DM gets an `end_session` event and closes the Session.

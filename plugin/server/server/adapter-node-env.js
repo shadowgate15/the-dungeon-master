@@ -1,6 +1,6 @@
 import process from "node:process";
 import { env_prefix } from "../adapter-node.js";
-// ../../../node_modules/.pnpm/@sveltejs+adapter-node@6.0.5_@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_sve_28bfda2a64ecb3848bd230f6779c8da2/node_modules/@sveltejs/adapter-node/src/env.js
+// node_modules/.pnpm/@sveltejs+adapter-node@6.0.5_@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_sve_28bfda2a64ecb3848bd230f6779c8da2/node_modules/@sveltejs/adapter-node/src/env.js
 var expected = /* @__PURE__ */ new Set([
 	"SOCKET_PATH",
 	"HOST",

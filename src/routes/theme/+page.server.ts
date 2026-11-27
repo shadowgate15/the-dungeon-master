@@ -17,7 +17,12 @@ export const actions = {
     const form = await request.formData()
     const theme = form.get('theme')
     if (isStoredTheme(theme)) {
-      cookies.set(THEME_COOKIE, theme, { path: '/', maxAge: ONE_YEAR, sameSite: 'lax' })
+      cookies.set(THEME_COOKIE, theme, {
+        path: '/',
+        maxAge: ONE_YEAR,
+        sameSite: 'lax',
+        secure: false
+      })
     } else {
       cookies.delete(THEME_COOKIE, { path: '/' })
     }

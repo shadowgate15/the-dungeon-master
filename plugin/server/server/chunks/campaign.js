@@ -114,7 +114,7 @@ function createLiveUpdates({ sessions }) {
 		}
 	};
 }
-// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/functions/aggregate.js
+// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/functions/aggregate.js
 function count(expression) {
 	return sql`count(${expression || sql.raw("*")})`.mapWith(Number);
 }

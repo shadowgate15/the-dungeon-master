@@ -1,5 +1,5 @@
 import { i as json } from "../../../../../../chunks/exports.js";
-import { s as play } from "../../../../../../chunks/bridge.js";
+import { c as play } from "../../../../../../chunks/bridge.js";
 import { n as withCampaign } from "../../../../../../chunks/http.js";
 // src/routes/api/campaigns/[id]/sessions/+server.ts
 /**
