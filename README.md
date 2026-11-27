@@ -47,6 +47,8 @@ Requirements: [Claude Code](https://claude.com/claude-code) and Node 26 or later
 
    `dm` starts the game server if it isn't running (or restarts one left over from an older plugin version), registers the folder and starts `claude` with the plugin's `dm` agent. The terminal shows Claude Code's trust, MCP consent and dev-channels prompts. Play happens in the browser. Run outside a Campaign folder, `dm` starts the server and points you to the web UI.
 
+   For a table on the same network, run `dm --lan` instead. The Host's header then shows an "Open on LAN" badge with a Join panel (URLs and QR codes) for other devices.
+
 5. End the Session with End Session in the UI. To stop the game server, run `dm stop` or press Stop server in the UI's header.
 
 Outside a Campaign folder, the plugin's hooks and bridge do nothing, so ordinary Claude Code sessions are unaffected.
@@ -59,7 +61,8 @@ Outside a Campaign folder, the plugin's hooks and bridge do nothing, so ordinary
 
 ## Current focus
 
-- Solo play: one human Player, with Claude as the DM. The data model carries `player` everywhere so more can join later.
+- Play at one table: a Host runs the game on their machine and can play alone with Claude as the DM, or open it to others on the same network. The data model carries `player` everywhere.
+- LAN multiplayer: `dm --lan` listens on every interface. The Host's header shows an "Open on LAN" badge, and a Join panel lists the join URLs with QR codes for other devices on the network. Hosting beyond the LAN is not a goal.
 - A web play console: the Character sheet, a timeline of Narration and Declarations, rolls and Calls, and a right rail with the clock, the Scene, initiative and what the acting Character knows.
 - D&D 5e on the SRD 5.1.
 
@@ -67,7 +70,6 @@ Outside a Campaign folder, the plugin's hooks and bridge do nothing, so ordinary
 
 - Map and richer visuals
 - Voice
-- Multiplayer
 - Hosting and accounts
 - Pre-written adventure modules
 - The 2024 rules

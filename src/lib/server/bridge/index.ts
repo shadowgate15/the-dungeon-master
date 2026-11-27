@@ -48,6 +48,11 @@ export const port = Number(DUNGEON_MASTER_PORT || 4777)
 /** Whether `dm --lan` started this server on every interface. */
 export const lan = Boolean(DUNGEON_MASTER_LAN)
 
+/** What the UI shows about LAN mode: whether it is on, and where other devices join. */
+export function lanStatus() {
+  return { lan, joinUrls: lan ? joinUrls({ port }) : [] }
+}
+
 /** Writes the runtime file (port, token, pid, version, mode, join URLs) so the bridge and launcher find this server. */
 export function announceServer() {
   writeRuntimeFile(userStateDir({ DUNGEON_MASTER_HOME }), {

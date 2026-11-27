@@ -1,4 +1,4 @@
-import { h as setContext, m as getContext } from "./server2.js";
+import { g as setContext, h as getContext } from "./server2.js";
 import "./index-server.js";
 // node_modules/.pnpm/@tanstack+query-core@5.105.1/node_modules/@tanstack/query-core/build/modern/subscribable.js
 /**

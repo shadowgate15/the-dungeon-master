@@ -1,1 +1,1 @@
-export { t as announceServer } from "./bridge.js";
+export { t as announceServer, o as lanStatus } from "./bridge.js";
