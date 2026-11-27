@@ -1,6 +1,6 @@
 import { $ as subclass, A as npcCombat, B as pageRevision, C as characterSpell, D as declaration, E as conversationMessage, F as beat, G as abilityScoreMethod, H as ENTITY_TYPES, I as belief, J as classTable, K as alignment, L as entity, M as session, N as act, O as event, P as arc, Q as spell, R as entityAlias, S as characterSkill, T as combatant$1, U as NPC_STATUSES, V as worldLink, W as handleKind, X as race, Y as equipment, Z as skill, _ as character, a as createRulesRepository, at as gt, b as characterEquipment, c as abilities_default, ct as isNotNull, d as defaultCampaignRoot, dt as lt, et as subrace, f as userStateDir, ft as ne, g as campaign, gt as is, h as callPart, ht as Column, it as eq, j as returnedDraft, k as floor, l as campaignDatabasePath, lt as isNull, m as call, mt as sql, nt as desc, o as loadRulesDataset, ot as gte, p as activityLine, pt as or, q as background, rt as and, s as skills_default, st as inArray, t as openSeededDatabase, tt as asc, u as canonicalFolder, ut as like, v as characterChoice, vt as DUNGEON_MASTER_CAMPAIGNS, w as combat, x as characterItem, y as characterDraft, yt as DUNGEON_MASTER_HOME, z as fact } from "./seed.js";
-import { F as equipmentGroups, P as equipmentGroupKeys, R as resolveFeatures, c as WIZARD_RULES_KEYS, f as resolverDraft, g as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, p as classSpellOptions, t as buildSummary, u as emptyDraft } from "./summary.js";
 import { a as CUSTOM_BACKGROUND_FEATURE_MAX, c as SOLO_PLAYER, r as BACKSTORY_MAX, t as ABILITY_METHODS } from "./enums2.js";
+import { F as equipmentGroups, P as equipmentGroupKeys, R as resolveFeatures, c as WIZARD_RULES_KEYS, f as resolverDraft, g as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, p as classSpellOptions, t as buildSummary, u as emptyDraft } from "./summary.js";
 import { _ as prettifyError, c as literal, f as strictObject, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { a as missingSeedFields, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
@@ -120,6 +120,25 @@ function count(expression) {
 }
 function max(expression) {
 	return sql`max(${expression})`.mapWith(is(expression, Column) ? expression : String);
+}
+/** What the DM hears for the localhost browser. */
+var HOST = "Host";
+/**
+* Names each Player by the Characters their browser Claims right now (`Player of Wren & Ash`),
+* marking the Host's localhost browser (`Host · Player of Wren`, or just `Host` with no Claims).
+* A browser with no Claims that isn't the Host is `a Player`. Read when the event is sent.
+*/
+function playerLabels(db) {
+	const held = db.select({
+		name: character.name,
+		browser: character.controllingPlayer
+	}).from(character).where(and(isNotNull(character.controllingPlayer), ne(character.status, "departed"))).orderBy(asc(character.createdAt), asc(character.name)).all();
+	return (browser) => {
+		const names = held.filter((c) => c.browser === browser).map((c) => c.name);
+		const named = names.length ? `Player of ${names.join(" & ")}` : null;
+		if (browser === "player") return named ? `${HOST} · ${named}` : HOST;
+		return named ?? "a Player";
+	};
 }
 // src/lib/character/edit.ts
 /**
@@ -3636,24 +3655,24 @@ var CallRefusedError = class extends Error {};
 /** What the DM hears a part rolled by code was marked with. */
 var ROLLED_BY_CODE = "(unclaimed: rolled by code)";
 /** Who rolled a part, as the DM hears it: the Character and its Player, or just the Character when code rolled it. */
-var tag = (p) => p.rolledByCode ? `[${p.characterName}]` : `[${p.characterName} · ${p.player}]`;
+var tag = (p, label) => p.rolledByCode ? `[${p.characterName}]` : `[${p.characterName} · ${label(p.player)}]`;
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
-function resultLine(p) {
-	const line = describePart(p);
+function resultLine(p, label) {
+	const line = describePart(p, label);
 	return p.rolledByCode ? `${line} ${ROLLED_BY_CODE}` : line;
 }
-function describePart(p) {
-	if (p.kind === "reaction") return reactionLine(p);
-	if (p.hitDice) return `${tag(p)} Hit Dice: ${hitDiceText(p.hitDice)}`;
-	if (p.sequence) return `${tag(p)} ${sequenceText(p.sequence, p.mode)}`;
-	if (p.result === null) return `[${p.player}] ${p.answer}`;
+function describePart(p, label) {
+	if (p.kind === "reaction") return reactionLine(p, label);
+	if (p.hitDice) return `${tag(p, label)} Hit Dice: ${hitDiceText(p.hitDice)}`;
+	if (p.sequence) return `${tag(p, label)} ${sequenceText(p.sequence, p.mode)}`;
+	if (p.result === null) return `[${label(p.player)}] ${p.answer}`;
 	const r = p.result;
 	const dice = r.dice.length > 1 ? `${r.dice.join("/")} (${p.mode}) kept ${r.kept}` : `${r.kept}`;
 	const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`;
-	if (p.kind === "death_save") return `${tag(p)} Death save: d20 ${r.kept} → ${p.answer}`;
-	if (p.kind === "concentration") return `${tag(p)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? "success" : "failure"}; ${p.answer}`;
-	if (p.kind === "initiative") return `${tag(p)} Initiative: d20 ${dice} ${modifier} = ${r.total}`;
-	return `${tag(p)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? "success" : "failure"}`;
+	if (p.kind === "death_save") return `${tag(p, label)} Death save: d20 ${r.kept} → ${p.answer}`;
+	if (p.kind === "concentration") return `${tag(p, label)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? "success" : "failure"}; ${p.answer}`;
+	if (p.kind === "initiative") return `${tag(p, label)} Initiative: d20 ${dice} ${modifier} = ${r.total}`;
+	return `${tag(p, label)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? "success" : "failure"}`;
 }
 /** The Player's choice on a reaction Call that passes it. */
 var PASS = "Pass";
@@ -3661,8 +3680,8 @@ var PASS = "Pass";
 * A reaction as the DM hears it: passed, taken (with its attack's rolls), and any reminder that
 * the reaction was already spent. The answer is the choice, then `; ` and the reminder.
 */
-function reactionLine(p) {
-	const who = `${tag(p)} ${p.reaction}`;
+function reactionLine(p, label) {
+	const who = `${tag(p, label)} ${p.reaction}`;
 	if (p.answer === "Pass") return `${who}: passes`;
 	const [choice, reminder] = (p.answer ?? "").split("; ");
 	const taken = p.sequence ? `${who}, taken: ${sequenceText(p.sequence, p.mode)}` : `${who}: takes it (${choice})`;
@@ -3677,13 +3696,13 @@ function hitDiceText(spend) {
 	return `spent ${rolls.length} d${spend.die}: ${rolls.join(" + ")}${modifier} = ${spend.healed} HP → ${spend.after.hp}/${spend.after.max} HP`;
 }
 /** The `call_result` channel event: one body line per part, in order. */
-function callResultEvent(result) {
+function callResultEvent(result, label = (browser) => browser) {
 	return {
-		content: [...result.parts.map(resultLine), ...result.after ?? []].join("\n"),
+		content: [...result.parts.map((p) => resultLine(p, label)), ...result.after ?? []].join("\n"),
 		meta: {
 			kind: "call_result",
 			call_id: result.call,
-			players: result.players.join(",")
+			players: result.players.map(label).join(",")
 		}
 	};
 }
@@ -5409,6 +5428,10 @@ function createCampaignLibrary({ home, live = () => false, now = Date.now, initD
 					author: "player"
 				}, now())
 			};
+		},
+		/** Names a browser as the DM hears it, by the Characters it Claims now. */
+		labels(id) {
+			return playerLabels(database(find(id).folder));
 		},
 		/** The Campaign's Characters and Character drafts. */
 		party(id) {

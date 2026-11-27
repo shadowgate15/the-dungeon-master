@@ -3055,13 +3055,15 @@ var DM_AWAY_MESSAGE = "The DM is away. Run dm in the Campaign folder to start a 
 * send order (`[d1 Wren · player] picks the lock`). An empty body hands the DM the initiative.
 * `withdrawn_call` names the open Call the Declarations withdrew.
 */
-function floorEvent(closed) {
+function floorEvent(closed, label) {
+	const declared = new Set(closed.declarations.map((d) => d.player));
+	const passed = closed.players.filter((p) => !declared.has(p)).map(label);
 	return {
-		content: closed.declarations.map((d, i) => `[d${i + 1} ${d.characterName} · ${d.player}] ${d.text}`).join("\n"),
+		content: [...closed.declarations.map((d, i) => `[d${i + 1} ${d.characterName} · ${label(d.player)}] ${d.text}`), ...passed.length ? [`passed: ${passed.join(", ")}`] : []].join("\n"),
 		meta: {
 			kind: "floor",
 			floor_id: closed.floor,
-			players: closed.players.join(","),
+			players: closed.players.map(label).join(","),
 			...closed.withdrawnCall ? { withdrawn_call: closed.withdrawnCall } : {}
 		}
 	};
@@ -3087,7 +3089,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 	}
 	/** Tells the DM and the browsers what a Done (or a lost Character) did to the Floor. */
 	function settle(campaignId, outcome) {
-		if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome));
+		if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome, library.labels(campaignId)));
 		publish({
 			type: "floor",
 			campaign: campaignId
@@ -3099,7 +3101,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		return outcome;
 	}
 	function answered(campaignId, result) {
-		if (result) channels.send(folderOf(campaignId), callResultEvent(result));
+		if (result) channels.send(folderOf(campaignId), callResultEvent(result, library.labels(campaignId)));
 		publish({
 			type: "timeline",
 			campaign: campaignId
@@ -3155,7 +3157,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		*/
 		spotlight(campaignId, character, player) {
 			const folder = atTable(campaignId);
-			const request = library.record(campaignId).spotlight(character, player);
+			const request = library.record(campaignId).spotlight(character, library.labels(campaignId)(player));
 			channels.send(folder, request);
 		},
 		/** The Scene as the Player's rail shows it. */
@@ -3224,11 +3226,13 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 				text,
 				player
 			});
+			const who = library.labels(campaignId)(player);
+			const content = library.creation(campaignId).state === "begun" ? text : `[${who}] ${text}`;
 			channels.send(folder, {
-				content: text,
+				content,
 				meta: {
 					kind: "conversation",
-					player
+					player: who
 				}
 			});
 			publish({
@@ -3249,7 +3253,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 				content: "The Player pressed Begin. Hand the Seed and the Party to builder to create the World and the first Arc, then open play.",
 				meta: {
 					kind: "begin",
-					player
+					player: library.labels(campaignId)(player)
 				}
 			});
 			publish({

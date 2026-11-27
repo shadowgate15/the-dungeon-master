@@ -143,8 +143,8 @@
     "name": "campaign",
     "imports": [
       "_seed.js",
-      "_summary.js",
       "_enums2.js",
+      "_summary.js",
       "_schemas.js",
       "_schema.js",
       "_seed2.js"
