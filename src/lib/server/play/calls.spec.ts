@@ -347,10 +347,14 @@ describe('an unclaimed Character in a Call', () => {
     play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)
 
     expect(heard).toHaveLength(1)
-    expect(heard[0].meta).toEqual({ kind: 'call_result', call_id: id, players: 'player' })
+    expect(heard[0].meta).toEqual({
+      kind: 'call_result',
+      call_id: id,
+      players: 'Host · Player of Wren'
+    })
     const lines = heard[0].content.split('\n')
     expect(lines).toHaveLength(2)
-    expect(lines[0]).toMatch(/^\[Wren · player\] /)
+    expect(lines[0]).toMatch(/^\[Wren · Host · Player of Wren\] /)
     expect(lines[0]).not.toContain('unclaimed')
     expect(lines[1]).toMatch(
       /^\[Bram\] Perception check: .* vs DC 10 \(easy\).* \(unclaimed: rolled by code\)$/
@@ -419,7 +423,7 @@ describe('a Call across browsers', () => {
     play.roll(campaignId, id, parts[1].id, GUEST)
 
     expect(heard).toHaveLength(1)
-    expect(heard[0].meta?.players).toBe(`player,${GUEST}`)
+    expect(heard[0].meta?.players).toBe('Host · Player of Wren,Player of Bram')
     expect(heard[0].content).not.toContain('unclaimed')
   })
 
