@@ -229,3 +229,26 @@ describe('FloorComposer for a split Party', () => {
     await expect.element(page.getByRole('button', { name: 'Send' })).toBeDisabled()
   })
 })
+
+describe('FloorComposer with other browsers', () => {
+  it("shows another browser's Declaration read-only, and only your own can be changed", async () => {
+    render(FloorComposer, {
+      acting: 'Wren',
+      declarations: [
+        { ...declarations[0], own: true },
+        { ...declarations[1], own: false }
+      ],
+      ...handlers()
+    })
+
+    const tray = page.getByRole('list', { name: 'Pending Declarations' })
+    await expect
+      .element(tray.getByRole('listitem').nth(1))
+      .toHaveTextContent(/Bram\s*I bar the door/)
+    await expect.element(tray.getByRole('button', { name: /Edit Wren/ })).toBeVisible()
+    await expect.element(tray.getByRole('button', { name: /Edit Bram/ })).not.toBeInTheDocument()
+    await expect
+      .element(tray.getByRole('button', { name: /Withdraw Bram/ }))
+      .not.toBeInTheDocument()
+  })
+})

@@ -1,12 +1,12 @@
 <script lang="ts">
   import Button from '#lib/ui/Button.svelte'
   import Textarea from '#lib/ui/Textarea.svelte'
-  import type { PendingDeclaration, ReturnedDraft } from './floor'
+  import type { FloorDeclaration, ReturnedDraft } from './floor'
   import type { SceneView } from './scene'
 
   /**
    * The pinned composer: the open Floor's pending tray above a box that adds a Declaration for the
-   * acting Character. Every tray entry can be edited or withdrawn until the Floor closes. Done
+   * acting Character. Every tray entry of this browser's can be edited or withdrawn until the Floor closes; other browsers' entries show read-only. Done
    * closes the Floor (empty or not); Ctrl+Enter is Send & Done. While the DM is answering, drafting
    * stays open but Done waits. While the DM is away, a "DM away" bar with the command that brings
    * the DM back replaces the send controls; drafting stays open. A pure view; the console wires the
@@ -31,7 +31,7 @@
   }: {
     /** The acting Character's name, or null when no Character can act. */
     acting: string | null
-    declarations: PendingDeclaration[]
+    declarations: FloorDeclaration[]
     onsend: (text: string) => void
     /** Done; `text` is a Declaration to send first (Send & Done), or null. */
     ondone: (text: string | null) => void
@@ -84,7 +84,7 @@
   const prompt = $derived(
     acting ? `What does ${acting} do?` : turn ? `It is ${turn}'s turn` : 'No Character can act'
   )
-  const label = (d: PendingDeclaration) => `${d.characterName}: ${d.text}`
+  const label = (d: FloorDeclaration) => `${d.characterName}: ${d.text}`
 
   function send() {
     const text = draft.trim()
@@ -148,7 +148,7 @@
                 <Button size="sm" type="submit">Save</Button>
               </div>
             </form>
-          {:else if away}
+          {:else if away || !d.own}
             <span class="flex-1 whitespace-pre-wrap">{d.text}</span>
           {:else}
             <span class="flex-1 whitespace-pre-wrap">{d.text}</span>

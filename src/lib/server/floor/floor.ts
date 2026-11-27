@@ -1,7 +1,7 @@
 import { and, asc, eq, max, sql } from 'drizzle-orm'
 import { canAct } from '#lib/character/acting.ts'
 import { SOLO_PLAYER } from '#lib/character/enums.ts'
-import type { OpenFloor, PendingDeclaration } from '#lib/play/floor.ts'
+import type { OpenFloor, PendingDeclaration, TableBrowser } from '#lib/play/floor.ts'
 import type { Database, Queryable } from '../db/connect'
 import { campaign, character, declaration, floor, returnedDraft } from '../db/schema'
 import { withdrawOpenCall } from '../play/calls'
@@ -110,16 +110,20 @@ export function createFloor(db: Database, now: () => number = Date.now) {
     return trimmed
   }
 
-  function pending(id: string) {
+  /** `id` is on the open Floor and `player` sent it; another browser's can only be read. */
+  function pending(id: string, player: string) {
     const floorId = openFloorId()
     const found =
       floorId &&
       db
-        .select({ id: declaration.id })
+        .select({ player: declaration.player })
         .from(declaration)
         .where(and(eq(declaration.id, id), eq(declaration.floorId, floorId)))
         .get()
     if (!found) throw new DeclarationNotFoundError('Declaration not found on the open Floor')
+    if (found.player !== player) {
+      throw new DeclarationRefusedError("That is another Player's Declaration")
+    }
   }
 
   /** `player`'s drafts a cut sent back to the composer, oldest first. */
@@ -138,10 +142,40 @@ export function createFloor(db: Database, now: () => number = Date.now) {
       .all()
   }
 
+  /** Who is at the table for `viewer`: each browser's in-Scene Characters, and the unclaimed. */
+  function table(viewer: string, done: string[]) {
+    const place = scenePlace(db)
+    const inPlay = db
+      .select()
+      .from(character)
+      .all()
+      .filter((c) => canAct(c) && inScene(place, c))
+    const byBrowser = new Map<string, TableBrowser>()
+    for (const c of inPlay) {
+      const owner = c.controllingPlayer
+      if (owner === null) continue
+      const seat = byBrowser.get(owner) ?? {
+        own: owner === viewer,
+        characters: [],
+        done: done.includes(owner)
+      }
+      seat.characters.push({ id: c.id, name: c.name })
+      byBrowser.set(owner, seat)
+    }
+    return {
+      browsers: [...byBrowser.values()],
+      unclaimed: inPlay
+        .filter((c) => c.controllingPlayer === null)
+        .map((c) => ({ id: c.id, name: c.name }))
+    }
+  }
+
   /** The open Floor (empty until something is sent), with `player`'s returned drafts. */
   function current(player: string): OpenFloor {
     const floorId = openFloorId()
-    if (!floorId) return { declarations: [], returned: returned(player) }
+    const done = floorId ? db.select().from(floor).where(eq(floor.id, floorId)).get()!.done : []
+    const seats = table(player, done)
+    if (!floorId) return { declarations: [], ...seats, returned: returned(player) }
     const declarations = db
       .select({
         id: declaration.id,
@@ -155,7 +189,8 @@ export function createFloor(db: Database, now: () => number = Date.now) {
       .where(eq(declaration.floorId, floorId))
       .orderBy(asc(declaration.position))
       .all()
-    return { declarations, returned: returned(player) }
+      .map((d) => ({ ...d, own: d.player === player }))
+    return { declarations, ...seats, returned: returned(player) }
   }
 
   /** Closes the open Floor when every browser at the table is Done; an empty table waits. */
@@ -163,7 +198,19 @@ export function createFloor(db: Database, now: () => number = Date.now) {
     const done = db.select().from(floor).where(eq(floor.id, floorId)).get()!.done
     const table = playersAtTable()
     if (table.length === 0 || !table.every((p) => done.includes(p))) return { closed: false }
-    const declarations = current(SOLO_PLAYER).declarations
+    const declarations = db
+      .select({
+        id: declaration.id,
+        character: declaration.characterId,
+        characterName: character.name,
+        player: declaration.player,
+        text: declaration.text
+      })
+      .from(declaration)
+      .innerJoin(character, eq(character.id, declaration.characterId))
+      .where(eq(declaration.floorId, floorId))
+      .orderBy(asc(declaration.position))
+      .all()
     db.update(floor).set({ state: 'closed', closedAt: at }).where(eq(floor.id, floorId)).run()
     for (const d of declarations) {
       logEvent(
@@ -308,19 +355,19 @@ export function createFloor(db: Database, now: () => number = Date.now) {
       })
     },
 
-    /** Rewrites a Declaration still on the open Floor. */
-    edit(id: string, text: string): void {
+    /** Rewrites a Declaration `player` sent that is still on the open Floor. */
+    edit(id: string, text: string, player: string): void {
       const clean = cleanText(text)
-      pending(id)
+      pending(id, player)
       db.update(declaration)
         .set({ text: clean, updatedAt: now() })
         .where(eq(declaration.id, id))
         .run()
     },
 
-    /** Takes a Declaration back off the open Floor. */
-    withdraw(id: string): void {
-      pending(id)
+    /** Takes a Declaration `player` sent back off the open Floor. */
+    withdraw(id: string, player: string): void {
+      pending(id, player)
       db.delete(declaration).where(eq(declaration.id, id)).run()
     }
   }
