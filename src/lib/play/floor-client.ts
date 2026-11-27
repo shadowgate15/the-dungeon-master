@@ -241,6 +241,14 @@ export function claimActions(campaign: () => string) {
       change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}`), {
         method: 'DELETE'
       }),
+    depart: (character: string) =>
+      change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}/depart`), {
+        method: 'POST'
+      }),
+    rejoin: (character: string) =>
+      change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}/rejoin`), {
+        method: 'POST'
+      }),
     /** The Host frees a Character another browser holds. */
     release: (character: string) =>
       change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}/release`), {

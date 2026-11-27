@@ -13,6 +13,10 @@
     problem?: string | null
     onclaim: (id: string) => void
     onletgo: (id: string) => void
+    /** Whether a DM is at the table: Depart needs a live Session. */
+    attended?: boolean
+    ondepart?: (id: string) => void
+    onrejoin?: (id: string) => void
     /** Host only: frees a taken Character. */
     onrelease?: (id: string) => void
   }
@@ -25,6 +29,9 @@
     problem = null,
     onclaim,
     onletgo,
+    attended = true,
+    ondepart,
+    onrejoin,
     onrelease
   }: Props = $props()
 
@@ -44,7 +51,22 @@
       <li class="flex items-center justify-between gap-3 rounded-panel border border-border p-2">
         <span>{row.name}</span>
         {#if row.claim === 'yours'}
-          <Button size="sm" variant="secondary" onclick={() => onletgo(row.id)}>Let go</Button>
+          <span class="flex items-center gap-2">
+            {#if ondepart}
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!attended}
+                title={attended
+                  ? undefined
+                  : 'Depart needs a live Session: run dm in the Campaign folder'}
+                onclick={() => ondepart(row.id)}>Depart</Button
+              >
+            {/if}
+            <Button size="sm" variant="secondary" onclick={() => onletgo(row.id)}>Let go</Button>
+          </span>
+        {:else if row.departed && row.claim === 'free'}
+          <Button size="sm" onclick={() => onrejoin?.(row.id)}>Rejoin</Button>
         {:else if row.claim === 'free'}
           <Button size="sm" onclick={() => onclaim(row.id)}>Claim</Button>
         {:else}
