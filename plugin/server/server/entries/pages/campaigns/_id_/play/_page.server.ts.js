@@ -1,6 +1,6 @@
 import { t as error } from "../../../../../chunks/exports.js";
 import { i as sessions, n as library } from "../../../../../chunks/campaign.js";
-import { o as permissions, s as play } from "../../../../../chunks/bridge.js";
+import { c as play, s as permissions } from "../../../../../chunks/bridge.js";
 // src/routes/campaigns/[id]/play/+page.server.ts
 /** The play console: the Party's sheets, the open Floor, the timeline, the Journal and any permission prompt, begun or not. */
 var load = ({ params, locals }) => {

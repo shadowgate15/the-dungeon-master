@@ -1,4 +1,4 @@
-import { s as play } from "../../../../../../../chunks/bridge.js";
+import { c as play } from "../../../../../../../chunks/bridge.js";
 import { n as withCampaign } from "../../../../../../../chunks/http.js";
 import { Dt as CharacterNotFoundError, T as ClaimRefusedError } from "../../../../../../../chunks/campaign.js";
 // src/routes/api/campaigns/[id]/claims/[character]/+server.ts

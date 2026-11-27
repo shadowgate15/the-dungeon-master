@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { joinUrls } from './lan'
+import { isLocalHost, joinUrls } from './lan'
 
 type Ifaces = Parameters<typeof joinUrls>[0]['interfaces']
 
@@ -58,5 +58,15 @@ describe('joinUrls', () => {
     expect(
       joinUrls({ interfaces, port: 9, platform: 'darwin', localHostName: () => undefined })
     ).toEqual(['http://10.0.0.5:9'])
+  })
+})
+
+describe('isLocalHost', () => {
+  it('recognises the machine itself and nothing else', () => {
+    expect(isLocalHost('localhost:4777')).toBe(true)
+    expect(isLocalHost('127.0.0.1:4777')).toBe(true)
+    expect(isLocalHost('[::1]:4777')).toBe(true)
+    expect(isLocalHost('192.168.1.20:4777')).toBe(false)
+    expect(isLocalHost(null)).toBe(false)
   })
 })

@@ -85,7 +85,8 @@
     "#lib/*": "./src/lib/*"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.2"
+    "better-sqlite3": "^13.0.2",
+    "uqr": "^0.1.3"
   },
   "lint-staged": {
     "*": "prettier --write --ignore-unknown",

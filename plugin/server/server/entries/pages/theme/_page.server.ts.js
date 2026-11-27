@@ -12,7 +12,8 @@ var actions = { default: async ({ request, cookies }) => {
 	if (isStoredTheme(theme)) cookies.set(THEME_COOKIE, theme, {
 		path: "/",
 		maxAge: ONE_YEAR,
-		sameSite: "lax"
+		sameSite: "lax",
+		secure: false
 	});
 	else cookies.delete(THEME_COOKIE, { path: "/" });
 	redirect(303, safePath(form.get("redirectTo")));

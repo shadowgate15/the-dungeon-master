@@ -1,7 +1,7 @@
-import { _ as attr, c as ensure_array_like, f as spread_props, r as attributes, s as element, t as attr_class, v as clsx, x as escape_html } from "./server2.js";
+import { S as escape_html, c as ensure_array_like, f as spread_props, t as attr_class, v as attr, y as clsx } from "./server2.js";
 import { i as draftQueryKey, l as seedQueryKey, p as createQuery, r as conversationQueryKey } from "./messages.js";
 import { t as useQueryClient } from "./useQueryClient.js";
-import { t as Button } from "./Button.js";
+import { i as Button } from "./status.js";
 import "./Alert.js";
 import { t as Textarea } from "./Textarea.js";
 import "./follow.svelte.js";
@@ -40,25 +40,6 @@ function CreationStepper($$renderer, $$props) {
 		}
 		$$renderer.push(`<!--]--></ol></nav>`);
 	});
-}
-// src/lib/ui/Panel.svelte
-function Panel($$renderer, $$props) {
-	/** Region name and visible heading. */
-	/** Heading level; pick the one that fits the page outline. */
-	let { title, level = 2, class: className, children, $$slots, $$events, ...rest } = $$props;
-	$$renderer.push(`<section${attributes({
-		"aria-label": title,
-		class: clsx(["space-y-2 rounded-panel border border-border bg-surface p-4 text-text shadow-raised", className]),
-		...rest
-	})}>`);
-	element($$renderer, `h${level}`, () => {
-		$$renderer.push(` class="font-display text-lg"`);
-	}, () => {
-		$$renderer.push(`${escape_html(title)}`);
-	});
-	$$renderer.push(` `);
-	children?.($$renderer);
-	$$renderer.push(`<!----></section>`);
 }
 // src/lib/creation/client.ts
 var api = (campaign) => `/api/campaigns/${encodeURIComponent(campaign)}`;
@@ -197,6 +178,6 @@ function CreationPage($$renderer, $$props) {
 	} else $$renderer.push("<!--[-1-->");
 	$$renderer.push(`<!--]--></div>`);
 }
-export { CreationStepper as a, Panel as i, createDraftQuery as n, createSeedQuery as r, CreationPage as t };
+export { CreationStepper as i, createDraftQuery as n, createSeedQuery as r, CreationPage as t };
 
 //# sourceMappingURL=CreationPage.js.map

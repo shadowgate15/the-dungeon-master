@@ -1,5 +1,5 @@
 import { ft as resolve } from "../../../../../chunks/internal.js";
-import { _ as attr, c as ensure_array_like, l as head, p as stringify, x as escape_html } from "../../../../../chunks/server2.js";
+import { S as escape_html, c as ensure_array_like, l as head, p as stringify, v as attr } from "../../../../../chunks/server2.js";
 import "../../../../../chunks/paths.js";
 import { c as createSessionHistoryQuery, h as Journal, o as createJournalQuery } from "../../../../../chunks/floor-client.js";
 import { t as Link } from "../../../../../chunks/Link.js";

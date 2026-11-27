@@ -1,7 +1,7 @@
 import { t as uneval } from "./uneval.js";
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/constants.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/constants.js
 var UNINITIALIZED = Symbol("uninitialized");
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/escaping.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/escaping.js
 var ATTR_REGEX = /[&"<]/g;
 var CONTENT_REGEX = /[&<]/g;
 /**
@@ -23,7 +23,7 @@ function escape_html(value, is_attr) {
 	}
 	return escaped + str.substring(last);
 }
-// ../../../node_modules/.pnpm/clsx@2.1.1/node_modules/clsx/dist/clsx.mjs
+// node_modules/.pnpm/clsx@2.1.1/node_modules/clsx/dist/clsx.mjs
 function r(e) {
 	var t, f, n = "";
 	if ("string" == typeof e || "number" == typeof e) n += e;
@@ -37,7 +37,7 @@ function clsx$1() {
 	for (var e, t, f = 0, n = "", o = arguments.length; f < o; f++) (e = arguments[f]) && (t = r(e)) && (n && (n += " "), n += t);
 	return n;
 }
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/shared/utils.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/shared/utils.js
 var is_array = Array.isArray;
 Array.prototype.indexOf;
 Array.prototype.includes;
@@ -75,7 +75,7 @@ function deferred() {
 		reject
 	};
 }
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/shared/attributes.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/shared/attributes.js
 /**
 * `<div translate={false}>` should be rendered as `<div translate="no">` and _not_
 * `<div translate="false">`, which is equivalent to `<div translate="yes">`. There
@@ -213,14 +213,14 @@ function to_style(value, styles) {
 	}
 	return value == null ? null : String(value);
 }
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/client/constants.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/client/constants.js
 /** allow users to ignore aborted signal errors if `reason.name === 'StaleReactionError` */
 var STALE_REACTION = new class StaleReactionError extends Error {
 	name = "StaleReactionError";
 	message = "The reaction that called `getAbortSignal()` was re-run or destroyed";
 }();
 globalThis.document?.contentType;
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/shared/errors.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/shared/errors.js
 /**
 * `%name%(...)` can only be used during component initialisation
 * @param {string} name
@@ -236,10 +236,10 @@ function lifecycle_outside_component(name) {
 function set_context_after_init() {
 	throw new Error(`https://svelte.dev/e/set_context_after_init`);
 }
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/flags/index.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/flags/index.js
 /** True if experimental.async=true */
 var async_mode_flag = false;
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/shared/context.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/shared/context.js
 /**
 * @typedef {{ p: Context | null, c: Map<unknown, unknown> | null }} Context
 */
@@ -261,12 +261,11 @@ function get_or_init_context_map(context, name) {
 	if (context === null) lifecycle_outside_component(name);
 	return context.c ??= new Map(get_parent_context(context) || void 0);
 }
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/hydration.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/hydration.js
 var BLOCK_OPEN = `<!--[-->`;
 var BLOCK_OPEN_ELSE = `<!--[!-->`;
 var BLOCK_CLOSE = `<!--]-->`;
 var EMPTY_COMMENT = `<!---->`;
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/utils.js
 var VOID_ELEMENT_NAMES = [
 	"area",
 	"base",
@@ -345,7 +344,7 @@ function is_raw_text_element(name) {
 	return RAW_TEXT_ELEMENTS.includes(name);
 }
 var REGEX_VALID_TAG_NAME = /^[a-zA-Z][a-zA-Z0-9]*(-[a-zA-Z0-9.\-_\u00B7\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u037D\u037F-\u1FFF\u200C-\u200D\u203F-\u2040\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\u{10000}-\u{EFFFF}]*)?$/u;
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/errors.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/errors.js
 /**
 * The node API `AsyncLocalStorage` is not available, but is required to use async server rendering.
 * @returns {never}
@@ -410,7 +409,7 @@ function server_context_required() {
 	error.name = "Svelte error";
 	throw error;
 }
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/context.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/context.js
 /** @import { SSRContext } from '#server' */
 /** @type {SSRContext | null} */
 var ssr_context = null;
@@ -463,7 +462,7 @@ function pop() {
 function unresolved_hydratable(key, stack) {
 	console.warn(`https://svelte.dev/e/unresolved_hydratable`);
 }
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/render-context.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/render-context.js
 /** @import { AsyncLocalStorage } from 'node:async_hooks' */
 /** @import { RenderContext } from '#server' */
 /** @type {Promise<void> | null} */
@@ -518,7 +517,7 @@ function init_render_context() {
 function in_webcontainer() {
 	return !!globalThis.process?.versions?.webcontainer;
 }
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/crypto.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/crypto.js
 var text_encoder;
 var crypto;
 /** @param {string} module_name */
@@ -542,7 +541,7 @@ function base64_encode(bytes) {
 	for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
 	return btoa(binary);
 }
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/renderer.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/renderer.js
 /** @import { Component } from 'svelte' */
 /** @import { HydratableContext, SSRContext } from './types.js' */
 /** @import { Csp, RenderOutput, SyncRenderOutput, Sha256Source } from '../../server/public.js' */
@@ -1351,7 +1350,14 @@ var SSRState = class {
 		}
 	}
 };
-// ../../../node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/index.js
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/blocks/html.js
+/**
+* @param {string} value
+*/
+function html(value) {
+	return "<!---->" + String(value ?? "") + "<!---->";
+}
+// node_modules/.pnpm/svelte@5.57.3_@typescript-eslint+types@8.72.1/node_modules/svelte/src/internal/server/index.js
 var INVALID_ATTR_NAME_CHAR_REGEX = /[\s'">/=\u{FDD0}-\u{FDEF}\u{FFFE}\u{FFFF}\u{1FFFE}\u{1FFFF}\u{2FFFE}\u{2FFFF}\u{3FFFE}\u{3FFFF}\u{4FFFE}\u{4FFFF}\u{5FFFE}\u{5FFFF}\u{6FFFE}\u{6FFFF}\u{7FFFE}\u{7FFFF}\u{8FFFE}\u{8FFFF}\u{9FFFE}\u{9FFFF}\u{AFFFE}\u{AFFFF}\u{BFFFE}\u{BFFFF}\u{CFFFE}\u{CFFFF}\u{DFFFE}\u{DFFFF}\u{EFFFE}\u{EFFFF}\u{FFFFE}\u{FFFFF}\u{10FFFE}\u{10FFFF}]/u;
 /**
 * @param {Renderer} renderer
@@ -1553,6 +1559,6 @@ function derived(fn) {
 		return updated_value;
 	};
 }
-export { attr as _, bind_props as a, run as b, ensure_array_like as c, render as d, spread_props as f, ssr_context as g, setContext as h, await_block as i, head as l, getContext as m, attr_style as n, derived as o, stringify as p, attributes as r, element as s, attr_class as t, props_id as u, clsx as v, escape_html as x, noop as y };
+export { escape_html as S, ssr_context as _, bind_props as a, noop as b, ensure_array_like as c, render as d, spread_props as f, setContext as g, getContext as h, await_block as i, head as l, html as m, attr_style as n, derived as o, stringify as p, attributes as r, element as s, attr_class as t, props_id as u, attr as v, run as x, clsx as y };
 
 //# sourceMappingURL=server2.js.map

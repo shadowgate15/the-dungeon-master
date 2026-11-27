@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto'
+import { lanAccess } from '../lan-access'
 import { NotACampaignFolderError, type CampaignLibrary } from '../campaign/library'
 import type { ToolHost } from '../tools/host'
 import type { Play } from '../play/play'
@@ -183,6 +184,8 @@ export function createBridgeApi({
       if (!folder) return json({ error: 'folder is required' }, 400)
       try {
         const { id, name } = library.register(folder)
+        // The Campaign `dm` launched a session in is the one a remote browser reaches.
+        lanAccess.set({ campaign: id })
         return json({ id, name, attached: sessions.attached(id) })
       } catch (e) {
         if (e instanceof NotACampaignFolderError) return json({ error: e.message }, 404)
