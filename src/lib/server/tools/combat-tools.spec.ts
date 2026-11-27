@@ -8,6 +8,7 @@ import type { CampaignLibrary } from '../campaign/library'
 import { addCharacter, fighterDraft, wizardDraft } from '../character/test-characters'
 import { createDice } from '../dice'
 import { createPlay, type Play } from '../play/play'
+import { playSheets } from '../play/sheets'
 import { gameTools } from '.'
 import { createToolHost, type ToolHost } from './host'
 
@@ -343,5 +344,63 @@ describe('action economy', () => {
     expect(
       ok('attack', { actor: 'creature:goblin-1', target: 'char:wren', with: 'scimitar' }).reminder
     ).toBeUndefined()
+  })
+})
+
+describe('an unclaimed Character in Combat', () => {
+  /** Wren with no Claim: nobody plays her. */
+  const addUnclaimedWren = () => {
+    const id = addWren()
+    library.party(campaignId).letGo(id, SOLO_PLAYER)
+    return id
+  }
+  /** Starts Wren against a goblin; faces are Wren's d20, then the goblin's. */
+  const start = (wren: number, goblin: number) => {
+    load([20, wren], [20, goblin])
+    return ok('start_combat', { combatants: ['char:wren', 'monster:goblin'] })
+  }
+
+  it('has its initiative rolled by code, with no initiative Call', () => {
+    addUnclaimedWren()
+    const started = start(18, 10)
+
+    expect(started.pending_call ?? null).toBeNull()
+    expect(started.rolled).toContain('Wren initiative: d20 18 + 2 = 20')
+    expect(combatView()).toMatchObject({ round: 1, waiting: [] })
+  })
+
+  it('has its turn skipped with a note, from the first round on', () => {
+    addUnclaimedWren()
+    const started = start(18, 10)
+    expect(started.rolled).toContain('Wren is unclaimed: no action')
+    expect(combatView()!.order.find((c) => c.current)?.name).toBe('Goblin 1')
+
+    const next = ok('next_turn')
+    expect(next).toMatchObject({ round: 2, turn: { handle: 'creature:goblin-1' } })
+    expect(next.notes).toContain('Wren is unclaimed: no action')
+  })
+
+  it('has its Death save rolled by code on its turn', () => {
+    addUnclaimedWren()
+    start(18, 10)
+    ok('damage', { target: 'char:wren', amount: 12, type: 'slashing' })
+
+    load([20, 12])
+    const next = ok('next_turn')
+    expect(next.pending_call ?? null).toBeNull()
+    expect(next.notes.join(' ')).toContain('Wren is unclaimed: no action')
+    expect(next.notes.join(' ')).toContain('Death save: d20 12 → success')
+    const sheet = playSheets(library.party(campaignId)).find((s) => s.name === 'Wren')!
+    expect(sheet.deathSaves).toEqual({ successes: 1, failures: 0, stable: false })
+  })
+
+  it('plays its turn when Claimed before it comes', () => {
+    const id = addUnclaimedWren()
+    start(10, 18)
+    library.party(campaignId).claim(id, SOLO_PLAYER)
+
+    const next = ok('next_turn')
+    expect(next).toMatchObject({ round: 1, turn: { handle: 'char:wren' } })
+    expect(next.notes).toEqual([])
   })
 })

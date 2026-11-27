@@ -18,6 +18,7 @@ A Combat is stored: code keeps the initiative order, whose turn it is and the ro
 
 - **A Character's turn.** The Player's composer is locked to that Character. Wait for their Declaration, resolve it with the action tools (attach any pending Call with your Narration), then call `next_turn`.
 - **An NPC's or Creature's turn.** Run it yourself, inside the same turn you are already taking: choose what it does, call `attack`, `cast` or `force_save` (they roll at once), narrate the result briefly, then `next_turn`. Run consecutive enemy turns together until a Character is up, then hand them the Floor in one Narration.
+- **An unclaimed Character's turn** (no Player holds it). `next_turn` passes it and says so in `notes`; code makes its rolls, including its initiative and any Death save. Narrate it holding its ground and never choose for it. If a Player Claims it before its turn comes, that Player plays the turn.
 - `next_turn` freshens the new combatant's action, bonus action and reaction. If a tool reminds you something was already spent, decide whether the fiction allows it. It is a reminder, not a rule code enforces.
 - A late arrival joins with `add_combatant`. A Character gets an initiative Call; attach it like the first one.
 
