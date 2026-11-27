@@ -591,7 +591,9 @@ export const callPart = sqliteTable(
     /** A reaction's name, such as `Opportunity attack`; the Call's choices take it or pass. */
     reaction: text('reaction'),
     answer: text('answer'),
-    answeredAt: integer('answered_at')
+    answeredAt: integer('answered_at'),
+    /** Rolled by code because its Character was unclaimed; the DM hears it marked so. */
+    rolledByCode: integer('rolled_by_code', { mode: 'boolean' }).notNull().default(false)
   },
   (t) => [index('call_part_call_idx').on(t.callId)]
 )
