@@ -57,6 +57,10 @@
     </label>
   {/each}
 </div>
+{#snippet lock(entry: TimelineEntry)}
+  {#if entry.audience}<span class="block text-xs text-muted">🔒 to {entry.audience.join(', ')}</span
+    >{/if}
+{/snippet}
 <ol
   {@attach follow(() => entries.length > 0)}
   aria-label="Timeline"
@@ -65,6 +69,7 @@
   {#each shown as entry (entry.id)}
     {#if entry.type === 'narration'}
       <li class="max-w-[85%] self-start rounded-panel bg-raised px-3 py-2 text-sm">
+        {@render lock(entry)}
         {#if entry.recap}<span class="block text-xs font-semibold text-muted uppercase"
             >Previously</span
           >{/if}
@@ -76,6 +81,7 @@
       <li
         class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm"
       >
+        {@render lock(entry)}
         <span class="block text-xs font-semibold text-muted">{entry.character}</span>
         <span class="whitespace-pre-wrap">{entry.text}</span>
       </li>
@@ -83,6 +89,7 @@
       <li class="self-stretch"><Alert variant="danger">{entry.text}</Alert></li>
     {:else if entry.type === 'roll'}
       <li class="flex flex-wrap items-baseline gap-x-2 self-end text-sm">
+        {@render lock(entry)}
         <span class="font-medium">{entry.character}</span>
         <span class="text-muted">{entry.what}</span>
         <span class="font-mono text-xs text-muted"
@@ -107,6 +114,7 @@
       <li
         class="max-w-[85%] self-end rounded-panel border border-border bg-surface px-3 py-2 text-sm"
       >
+        {@render lock(entry)}
         <span class="block text-xs text-muted">{entry.question}</span>
         <span class="whitespace-pre-wrap">{entry.text}</span>
       </li>

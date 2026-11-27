@@ -427,7 +427,7 @@ describe('the creation conversation', () => {
       })
     ])
     expect(pushed).toContainEqual({ type: 'conversation', campaign: campaignId })
-    expect(library.record(campaignId).timeline().awaitingSince).toBeNull()
+    expect(library.record(campaignId).timeline('player').awaitingSince).toBeNull()
   })
 
   it('shows the DM’s reply in the pane', () => {
@@ -448,7 +448,7 @@ describe('the creation conversation', () => {
     play.converse(campaignId, 'Hello?', SOLO_PLAYER)
     call('reply', { text: 'Hello.' })
     expect(host.events(folder)).toEqual([])
-    expect(library.record(campaignId).timeline().entries).toEqual([])
+    expect(library.record(campaignId).timeline('player').entries).toEqual([])
   })
 
   it('refuses a message while no DM is at the table', () => {

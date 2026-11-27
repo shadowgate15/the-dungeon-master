@@ -147,7 +147,7 @@ describe('Sessions with no Narration', () => {
       summarised: false
     })
     expect(ok('sessions').sessions).toEqual([])
-    expect(library.record(campaignId).sessionHistory().sessions).toEqual([])
+    expect(library.record(campaignId).sessionHistory('player').sessions).toEqual([])
   })
 
   it('close on their own when the next Session opens', () => {
@@ -168,9 +168,9 @@ describe('recap', () => {
 
     ok('narrate', { text: 'Previously, the harbour office…', recap: true })
 
-    expect(library.record(campaignId).timeline().awaitingSince).not.toBeNull()
+    expect(library.record(campaignId).timeline('player').awaitingSince).not.toBeNull()
     ok('narrate', { text: 'The lock clicks open.' })
-    expect(library.record(campaignId).timeline().awaitingSince).toBeNull()
+    expect(library.record(campaignId).timeline('player').awaitingSince).toBeNull()
   })
 
   it('shows as a recap Narration in the timeline and leaves the in-fiction minute alone', () => {
@@ -179,7 +179,7 @@ describe('recap', () => {
 
     ok('narrate', { text: 'Previously, the harbour office…', recap: true })
 
-    expect(library.record(campaignId).timeline().entries).toEqual([
+    expect(library.record(campaignId).timeline('player').entries).toEqual([
       expect.objectContaining({ type: 'narration', recap: true })
     ])
     expect(host.events(folder).at(-1)?.minute).toBe(before)
@@ -202,7 +202,7 @@ describe('recap', () => {
         call: { kind: 'question', text: 'Ready?' }
       }).code
     ).toBe('invalid_input')
-    expect(library.record(campaignId).timeline().entries).toEqual([])
+    expect(library.record(campaignId).timeline('player').entries).toEqual([])
   })
 
   it('is due once per Session after one with a summary', () => {
