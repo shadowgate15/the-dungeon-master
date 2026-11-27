@@ -1,5 +1,6 @@
-import { $ as subclass, A as npcCombat, B as pageRevision, C as characterSpell, Ct as DUNGEON_MASTER_CAMPAIGNS, D as declaration, E as conversationMessage, F as beat, G as abilityScoreMethod, H as ENTITY_TYPES, I as belief, J as classTable, K as alignment, L as entity, M as session, N as act, O as event, P as arc, Q as spell, R as entityAlias, S as characterSkill, T as combatant$1, U as NPC_STATUSES, V as worldLink, W as handleKind, X as race, Y as equipment, Z as skill, _ as character, _t as ne, a as createRulesRepository, at as SOLO_PLAYER, b as characterEquipment, bt as Column, c as abilities_default, ct as and, d as defaultCampaignRoot, dt as gte, et as subrace, f as userStateDir, ft as inArray, g as campaign, gt as lt, h as callPart, ht as like, j as returnedDraft, k as floor, l as campaignDatabasePath, lt as eq, m as call, mt as isNull, nt as BACKSTORY_MAX, o as loadRulesDataset, ot as asc, p as activityLine, pt as isNotNull, q as background, rt as CUSTOM_BACKGROUND_FEATURE_MAX, s as skills_default, st as desc, t as openSeededDatabase, tt as ABILITY_METHODS, u as canonicalFolder, ut as gt, v as characterChoice, vt as or, w as combat, wt as DUNGEON_MASTER_HOME, x as characterItem, xt as is, y as characterDraft, yt as sql, z as fact } from "./seed.js";
+import { $ as subclass, A as npcCombat, B as pageRevision, C as characterSpell, D as declaration, E as conversationMessage, F as beat, G as abilityScoreMethod, H as ENTITY_TYPES, I as belief, J as classTable, K as alignment, L as entity, M as session, N as act, O as event, P as arc, Q as spell, R as entityAlias, S as characterSkill, T as combatant$1, U as NPC_STATUSES, V as worldLink, W as handleKind, X as race, Y as equipment, Z as skill, _ as character, a as createRulesRepository, at as gt, b as characterEquipment, c as abilities_default, ct as isNotNull, d as defaultCampaignRoot, dt as lt, et as subrace, f as userStateDir, ft as ne, g as campaign, gt as is, h as callPart, ht as Column, it as eq, j as returnedDraft, k as floor, l as campaignDatabasePath, lt as isNull, m as call, mt as sql, nt as desc, o as loadRulesDataset, ot as gte, p as activityLine, pt as or, q as background, rt as and, s as skills_default, st as inArray, t as openSeededDatabase, tt as asc, u as canonicalFolder, ut as like, v as characterChoice, vt as DUNGEON_MASTER_CAMPAIGNS, w as combat, x as characterItem, y as characterDraft, yt as DUNGEON_MASTER_HOME, z as fact } from "./seed.js";
 import { F as equipmentGroups, P as equipmentGroupKeys, R as resolveFeatures, c as WIZARD_RULES_KEYS, f as resolverDraft, g as STEPS, i as tryDraftToCharacterInput, l as changedDraftFields, n as detailToSummaryData, o as deriveStats, p as classSpellOptions, t as buildSummary, u as emptyDraft } from "./summary.js";
+import { a as CUSTOM_BACKGROUND_FEATURE_MAX, c as SOLO_PLAYER, r as BACKSTORY_MAX, t as ABILITY_METHODS } from "./enums2.js";
 import { _ as prettifyError, c as literal, f as strictObject, m as union, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { s as ABILITY_KEYS } from "./schema.js";
 import { a as missingSeedFields, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
@@ -3830,7 +3831,7 @@ function createCalls(db, now = Date.now) {
 		* Rolls one Check part in code for its Controlling Player; returns the Call's result when this
 		* roll completes it, null otherwise.
 		*/
-		roll(callId, partId, dice, player = SOLO_PLAYER) {
+		roll(callId, partId, dice, player) {
 			return answer(callId, partId, player, (part, kind) => {
 				if (!part.characterId) throw new CallRefusedError("That part is a question: answer it");
 				if (part.hitDice) throw new CallRefusedError("Say how many Hit Dice to spend");
@@ -3899,7 +3900,7 @@ function createCalls(db, now = Date.now) {
 		* Answers a question part (with choices, the answer must be one of them), or a Hit Dice part
 		* with how many to spend, which code then rolls with `dice`.
 		*/
-		answer(callId, partId, text, player = SOLO_PLAYER, dice) {
+		answer(callId, partId, text, player, dice) {
 			const clean = text.trim();
 			return answer(callId, partId, player, (part, kind) => {
 				if (part.hitDice) return spendHitDice(part, part.hitDice, clean, dice);
@@ -4544,7 +4545,7 @@ function createFloor(db, now = Date.now) {
 		}).from(returnedDraft).innerJoin(character, eq(character.id, returnedDraft.characterId)).where(eq(returnedDraft.player, player)).orderBy(asc(returnedDraft.createdAt), asc(sql`${returnedDraft}.rowid`)).all();
 	}
 	/** The open Floor (empty until something is sent), with `player`'s returned drafts. */
-	function current(player = SOLO_PLAYER) {
+	function current(player) {
 		const floorId = openFloorId();
 		if (!floorId) return {
 			declarations: [],
@@ -4572,7 +4573,7 @@ function createFloor(db, now = Date.now) {
 		* Puts a Declaration for one Character on the open Floor, opening it if none is. Refused for a
 		* Character who can't act or whom `player` doesn't control.
 		*/
-		send({ character: characterId, text, player = SOLO_PLAYER }) {
+		send({ character: characterId, text, player }) {
 			const clean = cleanText(text);
 			return db.transaction(() => {
 				const actor = db.select().from(character).where(eq(character.id, characterId)).get();
@@ -4609,7 +4610,7 @@ function createFloor(db, now = Date.now) {
 		* withdraw any open Call, and the Campaign awaits Narration. An empty Floor closes too, handing the DM the initiative. Refused
 		* while the DM is still answering the last Floor.
 		*/
-		done(player = SOLO_PLAYER) {
+		done(player) {
 			return db.transaction(() => {
 				if (awaitingNarrationSince(db) !== null) throw new DmBusyError("The DM is still answering the last turn");
 				const at = now();
@@ -4620,7 +4621,7 @@ function createFloor(db, now = Date.now) {
 					db.update(floor).set({ done }).where(eq(floor.id, floorId)).run();
 					return { closed: false };
 				}
-				const declarations = current().declarations;
+				const declarations = current(SOLO_PLAYER).declarations;
 				db.update(floor).set({
 					done,
 					state: "closed",

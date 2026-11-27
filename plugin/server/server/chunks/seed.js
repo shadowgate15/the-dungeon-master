@@ -1,6 +1,7 @@
 import { t as dynamic_private_env } from "./config.js";
 import { a as SCALES, n as LENGTHS, o as TECH_LEVELS, r as MAGIC_LEVELS, s as TONES, t as GENRE_FLAVORS } from "./enums.js";
 import { a as rulesDataset$1, i as PROFICIENCY_REFERENCE_TYPES, n as CHOICE_KINDS, r as CHOICE_OWNER_TYPES, s as ABILITY_KEYS, t as BACKGROUND_OPTION_KINDS } from "./schema.js";
+import { i as CHARACTER_STATUSES, n as ALIGNMENTS, s as PICK_SOURCES, t as ABILITY_METHODS } from "./enums2.js";
 import crypto$1 from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -4076,43 +4077,6 @@ var SQLiteTransaction = class extends BaseSQLiteDatabase {
 		throw new TransactionRollbackError();
 	}
 };
-// src/lib/character/enums.ts
-/** The nine alignments; slugs match the Rules Data alignments. NULL means unspecified. */
-var ALIGNMENTS = [
-	"lawful-good",
-	"neutral-good",
-	"chaotic-good",
-	"lawful-neutral",
-	"neutral",
-	"chaotic-neutral",
-	"lawful-evil",
-	"neutral-evil",
-	"chaotic-evil"
-];
-/** Ability Score Methods; slugs match the app-authored Rules Data rows. */
-var ABILITY_METHODS = [
-	"standard-array",
-	"point-buy",
-	"roll"
-];
-/** Where a stored skill or spell pick comes from. */
-var PICK_SOURCES = [
-	"class",
-	"race",
-	"background"
-];
-/** A Character's status. The Party is every Character who has not departed. */
-var CHARACTER_STATUSES = [
-	"alive",
-	"dead",
-	"departed"
-];
-/** The one Player of a solo Campaign; every Character and draft names its Controlling Player. */
-var SOLO_PLAYER = "player";
-/** The seeded app-authored background that requires the custom_background_* fields. */
-var CUSTOM_BACKGROUND_SLUG = "custom";
-var BACKSTORY_MAX = 2e3;
-var CUSTOM_BACKGROUND_FEATURE_MAX = 1e3;
 // src/lib/server/db/rules-schema.ts
 /**
 * Rules Data: the SRD 5.1 reference content, read-only to the app and seeded from the committed
@@ -7368,6 +7332,6 @@ function openSeededDatabase(file) {
 	seedRulesData(db);
 	return db;
 }
-export { subclass as $, npcCombat as A, pageRevision as B, characterSpell as C, DUNGEON_MASTER_CAMPAIGNS as Ct, declaration as D, DUNGEON_MASTER_VERSION as Dt, conversationMessage as E, DUNGEON_MASTER_PORT as Et, beat as F, abilityScoreMethod as G, ENTITY_TYPES as H, belief as I, classTable as J, alignment as K, entity as L, session as M, act as N, event as O, arc as P, spell as Q, entityAlias as R, characterSkill as S, DATABASE_URL as St, combatant as T, DUNGEON_MASTER_LAN as Tt, NPC_STATUSES as U, worldLink as V, handleKind as W, race as X, equipment as Y, skill as Z, character as _, ne as _t, createRulesRepository as a, SOLO_PLAYER as at, characterEquipment as b, Column as bt, abilities_default as c, and as ct, defaultCampaignRoot as d, gte as dt, subrace as et, userStateDir as f, inArray as ft, campaign as g, lt as gt, callPart as h, like as ht, openDatabase as i, CUSTOM_BACKGROUND_SLUG as it, returnedDraft as j, floor as k, campaignDatabasePath as l, eq as lt, call as m, isNull as mt, seedRulesData as n, BACKSTORY_MAX as nt, loadRulesDataset as o, asc as ot, activityLine as p, isNotNull as pt, background as q, migrateDatabase as r, CUSTOM_BACKGROUND_FEATURE_MAX as rt, skills_default as s, desc as st, openSeededDatabase as t, ABILITY_METHODS as tt, canonicalFolder as u, gt as ut, characterChoice as v, or as vt, combat as w, DUNGEON_MASTER_HOME as wt, characterItem as x, is as xt, characterDraft as y, sql as yt, fact as z };
+export { subclass as $, npcCombat as A, pageRevision as B, characterSpell as C, declaration as D, conversationMessage as E, beat as F, abilityScoreMethod as G, ENTITY_TYPES as H, belief as I, classTable as J, alignment as K, entity as L, session as M, act as N, event as O, arc as P, spell as Q, entityAlias as R, characterSkill as S, DUNGEON_MASTER_VERSION as St, combatant as T, NPC_STATUSES as U, worldLink as V, handleKind as W, race as X, equipment as Y, skill as Z, character as _, DATABASE_URL as _t, createRulesRepository as a, gt as at, characterEquipment as b, DUNGEON_MASTER_LAN as bt, abilities_default as c, isNotNull as ct, defaultCampaignRoot as d, lt as dt, subrace as et, userStateDir as f, ne as ft, campaign as g, is as gt, callPart as h, Column as ht, openDatabase as i, eq as it, returnedDraft as j, floor as k, campaignDatabasePath as l, isNull as lt, call as m, sql as mt, seedRulesData as n, desc as nt, loadRulesDataset as o, gte as ot, activityLine as p, or as pt, background as q, migrateDatabase as r, and as rt, skills_default as s, inArray as st, openSeededDatabase as t, asc as tt, canonicalFolder as u, like as ut, characterChoice as v, DUNGEON_MASTER_CAMPAIGNS as vt, combat as w, characterItem as x, DUNGEON_MASTER_PORT as xt, characterDraft as y, DUNGEON_MASTER_HOME as yt, fact as z };
 
 //# sourceMappingURL=seed.js.map

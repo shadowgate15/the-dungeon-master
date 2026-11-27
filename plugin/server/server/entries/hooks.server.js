@@ -1,7 +1,9 @@
+import { c as SOLO_PLAYER } from "../chunks/enums2.js";
 import { r as isStoredTheme, t as THEME_COOKIE } from "../chunks/theme.js";
 // src/hooks.server.ts
 var handle = async ({ event, resolve }) => {
 	if (!fromLocalhost(event.request, event.url)) return new Response("Forbidden", { status: 403 });
+	event.locals.browser = SOLO_PLAYER;
 	const theme = event.cookies.get(THEME_COOKIE);
 	const attr = isStoredTheme(theme) ? `data-theme="${theme}"` : "";
 	return resolve(event, { transformPageChunk: ({ html }) => html.replace("%app.theme%", attr) });

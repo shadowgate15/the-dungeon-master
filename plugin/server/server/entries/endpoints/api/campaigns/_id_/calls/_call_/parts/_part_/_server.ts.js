@@ -9,12 +9,12 @@ import { n as withCampaign, t as assertPlayable } from "../../../../../../../../
 * the DM is woken. 409 `{ error }` when the Call is no longer open or the DM is away; 400 for a refused answer or an
 * archived Campaign; 404 for an unknown Campaign.
 */
-var POST = async ({ params, request }) => {
+var POST = async ({ params, request, locals }) => {
 	const body = await request.json().catch(() => void 0);
 	if (!body || body.roll !== true && typeof body.answer !== "string") return json({ error: "Send { roll: true } or { answer }" }, { status: 400 });
 	return withCampaign(() => {
 		assertPlayable(library, params.id);
-		const outcome = body.roll === true ? play.roll(params.id, params.call, params.part) : play.answer(params.id, params.call, params.part, body.answer);
+		const outcome = body.roll === true ? play.roll(params.id, params.call, params.part, locals.browser) : play.answer(params.id, params.call, params.part, body.answer, locals.browser);
 		return json(outcome);
 	}, [
 		[CallClosedError, 409],

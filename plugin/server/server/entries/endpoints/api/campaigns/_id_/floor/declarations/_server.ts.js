@@ -6,11 +6,12 @@ import { t as changeFloor } from "../../../../../../../chunks/respond2.js";
 * Sends a Declaration for one Character to the open Floor's pending tray: 201 with the
 * Declaration, or 400/404 `{ error }`.
 */
-var POST = async ({ params, request }) => {
+var POST = async ({ params, request, locals }) => {
 	const body = await readJson(request);
 	return changeFloor(params.id, body, (floor) => json(floor.send({
 		character: body.character,
-		text: body.text
+		text: body.text,
+		player: locals.browser
 	}), { status: 201 }));
 };
 export { POST };
