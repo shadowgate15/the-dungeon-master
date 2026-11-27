@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars -- the viewer is the seam where later tickets filter per Player */
-import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import type { LiveMessage } from '#lib/live/messages.ts'
 import type { SceneView } from '#lib/play/scene.ts'
 import type { Timeline } from '#lib/play/timeline.ts'
@@ -139,23 +137,24 @@ export function createPlay({
     },
 
     /** The Scene as the Player's rail shows it. */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the Scene stays unfiltered
     scene(campaignId: string, _viewer: string): SceneView {
       return library.record(campaignId).scene()
     },
 
     /** The Journal as `viewer`'s Player sees it. */
-    journal(campaignId: string, _viewer: string) {
-      return library.record(campaignId).journal()
+    journal(campaignId: string, viewer: string) {
+      return library.record(campaignId).journal(viewer)
     },
 
     /** The read-only Session history as `viewer`'s Player sees it. */
-    sessionHistory(campaignId: string, _viewer: string) {
-      return library.record(campaignId).sessionHistory()
+    sessionHistory(campaignId: string, viewer: string) {
+      return library.record(campaignId).sessionHistory(viewer)
     },
 
     /** The Party's play sheets as `viewer`'s Player sees them. */
-    sheets(campaignId: string, _viewer: string) {
-      return playSheets(library.party(campaignId))
+    sheets(campaignId: string, viewer: string) {
+      return playSheets(library.party(campaignId), viewer)
     },
 
     /** Every Party Character with its Claim as `viewer`'s browser sees it (never by whom). */
@@ -176,6 +175,7 @@ export function createPlay({
     },
 
     /** The DM-pane conversation as `viewer`'s Player sees it. */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the pane is not per Claim
     conversation(campaignId: string, _viewer: string) {
       return library.conversation(campaignId).list()
     },
@@ -252,7 +252,7 @@ export function createPlay({
     stopCheck(campaignId: string, again: boolean): { block: boolean; reason?: string } {
       const record = library.record(campaignId)
       const pending = record.pendingCalls()
-      const awaiting = record.timeline().awaitingSince !== null
+      const awaiting = record.awaitingSince() !== null
       if (!pending.length && !awaiting) return { block: false }
       if (!again) {
         const reasons = [
@@ -287,8 +287,8 @@ export function createPlay({
     },
 
     /** The Player's timeline and whether the DM is working on a turn. */
-    timeline(campaignId: string, _viewer: string): Timeline {
-      return library.record(campaignId).timeline()
+    timeline(campaignId: string, viewer: string): Timeline {
+      return library.record(campaignId).timeline(viewer)
     }
   }
 }

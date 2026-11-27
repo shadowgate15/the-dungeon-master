@@ -78,11 +78,12 @@ function toPlaySheet(c: CharacterDetail, levelUp: PlaySheet['levelUp']): PlayShe
 }
 
 /** The play sheet of every saved Character in the Party, oldest first. */
-export function playSheets(party: Party): PlaySheet[] {
+export function playSheets(party: Party, viewer?: string): PlaySheet[] {
   return party
     .list()
     .flatMap((m) =>
-      m.kind === 'character'
+      m.kind === 'character' &&
+      (viewer === undefined || party.character(m.id).character.controllingPlayer === viewer)
         ? [toPlaySheet(party.character(m.id).character, party.levelUpOffer(m.id))]
         : []
     )

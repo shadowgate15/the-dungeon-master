@@ -441,9 +441,10 @@ function playersAtTable(db: Queryable): string[] {
 }
 
 /** The open Call, Player-safe (no DC, no tier), or null when none is open. */
-export function openCallView(db: Queryable): OpenCall | null {
+export function openCallView(db: Queryable, claimed?: ReadonlySet<string>): OpenCall | null {
   const open = openCallRow(db)
   if (!open) return null
+  if (claimed && !open.audience.some((id) => claimed.has(id))) return null
   const parts = db
     .select({ part: callPart, characterName: character.name })
     .from(callPart)

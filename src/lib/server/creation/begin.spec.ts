@@ -95,7 +95,7 @@ describe('Begin', () => {
     const before = host.events(folder).length
     play.begin(campaignId, SOLO_PLAYER)
     expect(host.events(folder)).toHaveLength(before)
-    expect(library.record(campaignId).timeline().awaitingSince).toBeNull()
+    expect(library.record(campaignId).timeline('player').awaitingSince).toBeNull()
   })
 })
 
@@ -159,7 +159,7 @@ describe('Start over', () => {
 
     expect(call('creation_state').payload).toMatchObject({ state: 'ready' })
     expect(call('search', { query: 'Oren' }).payload).toMatchObject({ results: [] })
-    expect(library.record(campaignId).journal().entries).toEqual([])
+    expect(library.record(campaignId).journal('player').entries).toEqual([])
     expect(
       call('create_arc', {
         title: 'A New Arc',
@@ -203,7 +203,7 @@ describe('what the Player sees after Begin', () => {
     build()
     call('narrate', { text: 'The road out of Ashford is quiet.' })
 
-    const journal = library.record(campaignId).journal()
+    const journal = library.record(campaignId).journal('player')
     expect(journal.entries).toEqual([
       expect.objectContaining({
         text: expect.stringContaining('A relic must cross the burning hills'),
@@ -212,7 +212,7 @@ describe('what the Player sees after Begin', () => {
     ])
     const payloads = JSON.stringify([
       journal,
-      library.record(campaignId).timeline(),
+      library.record(campaignId).timeline('player'),
       play.scene(campaignId, SOLO_PLAYER),
       pushed
     ])
@@ -223,10 +223,10 @@ describe('what the Player sees after Begin', () => {
     ready()
     play.begin(campaignId, SOLO_PLAYER)
     build()
-    expect(library.record(campaignId).timeline().entries).toEqual([])
+    expect(library.record(campaignId).timeline('player').entries).toEqual([])
 
     call('narrate', { text: 'The road out of Ashford is quiet.' })
-    expect(library.record(campaignId).timeline().entries).toEqual([
+    expect(library.record(campaignId).timeline('player').entries).toEqual([
       expect.objectContaining({ type: 'narration', text: 'The road out of Ashford is quiet.' })
     ])
   })

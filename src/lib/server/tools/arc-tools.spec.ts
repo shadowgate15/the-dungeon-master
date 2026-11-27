@@ -86,7 +86,9 @@ describe('create_arc', () => {
     expect(host.events(folder)).toEqual([
       expect.objectContaining({ kind: 'arc_created', dmOnly: true })
     ])
-    expect(JSON.stringify(library.record(campaignId).timeline())).not.toMatch(/Ember Relic|vizier/i)
+    expect(JSON.stringify(library.record(campaignId).timeline('player'))).not.toMatch(
+      /Ember Relic|vizier/i
+    )
   })
 
   it('refuses an Arc with no Acts, or an Act with no Beats', () => {
@@ -321,7 +323,7 @@ describe('what the Player sees', () => {
     call('retire_arc', { version: 3, reason: 'The relic was destroyed.' })
 
     const record = library.record(campaignId)
-    const payloads = JSON.stringify([record.timeline(), record.journal(), pushed])
+    const payloads = JSON.stringify([record.timeline('player'), record.journal('player'), pushed])
 
     expect(payloads).toContain('The road out of Ashford is quiet.')
     expect(payloads).not.toMatch(/Ember Relic|vizier|Hidden|beat:|arc|relic/i)

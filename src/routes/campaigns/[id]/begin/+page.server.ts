@@ -7,7 +7,7 @@ import { DmAwayError } from '#lib/server/play/play.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 /** The Begin step: whether the story can begin, and after Begin the pitch and Start over. */
-export const load: PageServerLoad = ({ params }) => {
+export const load: PageServerLoad = ({ params, locals }) => {
   const entry = library.get(params.id)
   if (!entry) error(404, 'Campaign not found')
   if (entry.status === 'missing') error(404, "This Campaign's folder is missing")
@@ -15,8 +15,8 @@ export const load: PageServerLoad = ({ params }) => {
   return {
     campaign: { id: entry.id, name: entry.name, path: entry.path, status: entry.status },
     creation: library.creation(entry.id),
-    journal: record.journal(),
-    timeline: record.timeline(),
+    journal: record.journal(locals.browser),
+    timeline: record.timeline(locals.browser),
     conversation: library.conversation(entry.id).list(),
     attached: sessions.list()
   }

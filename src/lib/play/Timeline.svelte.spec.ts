@@ -31,6 +31,19 @@ const distanceFromBottom = () => {
 }
 
 describe('Timeline', () => {
+  it('tags entries narrower than the Party with 🔒 and its names, and no other', async () => {
+    render(Timeline, {
+      entries: [
+        { type: 'narration', id: 'n1', text: 'Rain falls.', voice: null },
+        { type: 'narration', id: 'n2', text: 'Psst.', voice: null, audience: ['Bram', 'Kael'] }
+      ],
+      awaitingSince: null
+    })
+
+    await expect.element(page.getByText('🔒 to Bram, Kael')).toBeVisible()
+    expect(document.body.textContent?.match(/🔒/g)).toHaveLength(1)
+  })
+
   it('says the story has not started when nothing has happened', async () => {
     render(Timeline, { entries: [], awaitingSince: null })
 
