@@ -1,5 +1,5 @@
 import { H as ENTITY_TYPES, I as belief, J as classTable, L as entity, O as event, St as DUNGEON_MASTER_VERSION, W as handleKind, X as race, Y as equipment, _ as character, a as createRulesRepository, bt as DUNGEON_MASTER_LAN, f as userStateDir, ft as ne, g as campaign, it as eq, lt as isNull, mt as sql, pt as or, q as background, rt as and, st as inArray, tt as asc, x as characterItem, xt as DUNGEON_MASTER_PORT, y as characterDraft, yt as DUNGEON_MASTER_HOME, z as fact } from "./seed.js";
-import { $ as addCombatants, At as lintWorld, B as openCall, Bt as retireArc, Ct as equippable, D as createDmChannels, Et as loadWizardRules, F as callInput, Ft as CurrentArcError, G as saveSequence, Gt as expectVersion, H as attackSequence, Ht as PLUGIN_NAME, I as callResultEvent, It as createArc, J as logActivity, Jt as formatClock, K as sequenceText, Kt as readTool, L as cancelPendingCall, Lt as currentArc, M as DC_BY_TIER, Mt as fieldNames, N as PASS, Nt as renderLinks, O as playSheets, P as TIERS, Pt as resolveLinks, Q as setAwaitingNarration, Qt as SESSION_LIVE_MESSAGE, R as createHitDiceCall, Rt as pastArcs, St as scenePlace, Tt as believedName, U as damageSequence, Ut as ToolError, V as saveKey, Vt as reviseArc, W as rollAll, Wt as creationTool, X as nextEventId, Xt as characterHolders, Y as logEvent, Yt as parseClock, Z as partyAudience, Zt as characterRefs, _ as closeSession, _t as ClockBackwardsError, at as spendTurnResource, b as sessionsView, bt as currentMinute, c as CampaignNotFoundError, ct as applyHealing, dt as mustAct, et as combatState, f as SeedLockedError, ft as saveBonus, g as addConversationLine, gt as deathSaveCall, h as refuseLockedSeed, ht as setConcentration, i as sessions, it as refuseDuringCombat, jt as createWorld, k as ABILITY_NAMES, kt as hpState, l as NotACampaignFolderError, lt as combatant, m as creationStage, mt as concentrate, n as library, nt as nextTurn, ot as startCombat, pt as setConditions, q as currentStamp, qt as writeTool, r as live, rt as orderText, st as applyDamage, tt as endCombat, ut as incapacitates, v as history, w as returnStrandedDrafts, wt as isBodyArmor, xt as present, y as indexNarration, yt as advanceClock, z as createPendingCall, zt as resolveBeat } from "./campaign.js";
+import { $ as setAwaitingNarration, $t as SESSION_LIVE_MESSAGE, A as ABILITY_NAMES, At as hpState, B as createPendingCall, Bt as resolveBeat, Ct as scenePlace, Dt as loadWizardRules, Et as believedName, F as TIERS, Ft as resolveLinks, G as rollAll, Gt as creationTool, H as saveKey, Ht as reviseArc, I as callInput, It as CurrentArcError, J as currentStamp, Jt as writeTool, K as saveSequence, Kt as expectVersion, L as callResultEvent, Lt as createArc, Mt as createWorld, N as DC_BY_TIER, Nt as fieldNames, O as createDmChannels, P as PASS, Pt as renderLinks, Q as partyAudience, Qt as characterRefs, R as cancelPendingCall, Rt as currentArc, St as present, Tt as isBodyArmor, U as attackSequence, Ut as PLUGIN_NAME, V as openCall, Vt as retireArc, W as damageSequence, Wt as ToolError, X as logEvent, Xt as parseClock, Y as logActivity, Yt as formatClock, Z as nextEventId, Zt as characterHolders, _ as closeSession, _t as deathSaveCall, at as refuseDuringCombat, b as sessionsView, bt as advanceClock, c as CampaignNotFoundError, ct as applyDamage, dt as incapacitates, et as addCombatants, f as SeedLockedError, ft as mustAct, g as addConversationLine, gt as setConcentration, h as refuseLockedSeed, ht as concentrate, i as sessions, it as orderText, jt as lintWorld, k as playSheets, l as NotACampaignFolderError, lt as applyHealing, m as creationStage, mt as setConditions, n as library, nt as endCombat, ot as spendTurnResource, pt as saveBonus, q as sequenceText, qt as readTool, r as live, rt as nextTurn, st as startCombat, tt as combatState, ut as combatant, v as history, vt as ClockBackwardsError, w as returnStrandedDrafts, wt as equippable, xt as currentMinute, y as indexNarration, z as createHitDiceCall, zt as pastArcs } from "./campaign.js";
 import { n as joinUrls } from "./lan.js";
 import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { t as lanAccess } from "./lan-access.js";
@@ -3146,6 +3146,26 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		/** The Party's play sheets as `viewer`'s Player sees them. */
 		sheets(campaignId, _viewer) {
 			return playSheets(library.party(campaignId));
+		},
+		/** Every Party Character with its Claim as `viewer`'s browser sees it (never by whom). */
+		claims(campaignId, viewer) {
+			return library.party(campaignId).claims(viewer);
+		},
+		/** The browser Claims a Character nobody holds; refused for a taken one, the Host's browser included. */
+		claim(campaignId, character, browser) {
+			library.party(campaignId).claim(character, browser);
+			publish({
+				type: "claims",
+				campaign: campaignId
+			});
+		},
+		/** The browser gives up a Claim it holds. */
+		letGo(campaignId, character, browser) {
+			library.party(campaignId).letGo(character, browser);
+			publish({
+				type: "claims",
+				campaign: campaignId
+			});
 		},
 		/** The DM-pane conversation as `viewer`'s Player sees it. */
 		conversation(campaignId, _viewer) {

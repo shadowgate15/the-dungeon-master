@@ -10,6 +10,7 @@ export const load: PageServerLoad = ({ params, locals }) => {
   if (entry.status === 'missing') error(404, "This Campaign's folder is missing")
   return {
     campaign: { id: entry.id, name: entry.name, path: entry.path, status: entry.status },
+    claims: play.claims(entry.id, locals.browser),
     sheets: play.sheets(entry.id, locals.browser),
     floor: play.openFloor(entry.id, locals.browser),
     timeline: play.timeline(entry.id, locals.browser),

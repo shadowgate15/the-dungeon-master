@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { unique } from '../testing/unique'
+import { fighterDraft } from '../lib/server/character/test-characters'
 import { startFakeDm, type FakeDm } from '../testing/fake-dm'
 import { E2E_HOME } from '../../playwright.config'
 
@@ -14,6 +15,18 @@ async function createCampaign(page: Page, name: string) {
   await dialog.getByRole('button', { name: 'Create Campaign' }).click()
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
   return { id: page.url().split('/').at(-1)!, folder }
+}
+
+/** Saves a finished Fighter into the Party: a browser holding no Claim gets Take a seat, not the console. */
+async function addFighter(page: Page, campaign: string, name: string) {
+  await page.goto(`/campaigns/${campaign}/party`)
+  await page.getByRole('button', { name: 'New Character' }).click()
+  await expect(page).toHaveURL(/\/party\?draft=/)
+  const draft = new URL(page.url()).searchParams.get('draft')!
+  const res = await page.request.post(`/api/campaigns/${campaign}/drafts/${draft}/save`, {
+    data: { draft: fighterDraft(name), step: 'review' }
+  })
+  expect(res.status()).toBe(201)
 }
 
 /** Opens the play console with the DM at the table. */
@@ -38,6 +51,7 @@ const request = {
 
 test('a permission prompt is relayed to the browser and approved', async ({ page }) => {
   const { id, folder } = await createCampaign(page, unique('Permission Test'))
+  await addFighter(page, id, 'Wren')
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await openConsole(page, id)
 
@@ -57,6 +71,7 @@ test('a permission prompt is relayed to the browser and approved', async ({ page
 
 test('a reload still shows the open prompt, and Deny answers it', async ({ page }) => {
   const { id, folder } = await createCampaign(page, unique('Deny Test'))
+  await addFighter(page, id, 'Wren')
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await openConsole(page, id)
 
@@ -75,6 +90,7 @@ test('a reload still shows the open prompt, and Deny answers it', async ({ page 
 
 test('the card clears when the prompt is answered in the terminal', async ({ page }) => {
   const { id, folder } = await createCampaign(page, unique('Terminal Test'))
+  await addFighter(page, id, 'Wren')
   dm = await startFakeDm({ folder, home: E2E_HOME })
   await openConsole(page, id)
 

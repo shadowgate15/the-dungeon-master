@@ -9,7 +9,7 @@ type CharacterRow = typeof character.$inferSelect
 export type CharacterRef = { handle: string; row: CharacterRow }
 
 /** A Character as a Holder: its readable handle (`char:wren`) beside its id and name. */
-export type CharacterHolder = { id: string; handle: string; name: string; player: string }
+export type CharacterHolder = { id: string; handle: string; name: string; player: string | null }
 
 /**
  * Every Character with its handle, in the order they joined the Party: the one place handles are

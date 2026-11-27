@@ -590,7 +590,7 @@
       "node_modules/.pnpm/@tanstack+svelte-query-devtools@6.3.7_@tanstack+svelte-query@6.3.7_svelte@5.57.3_@types_8ea849ea8105e537a5386474a23c1746/node_modules/@tanstack/svelte-query-devtools/dist/index.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.CILTPW5i.css"
+      "_app/immutable/assets/_layout.BFLD2ShI.css"
     ],
     "assets": [
       "_app/immutable/assets/metamorphous-latin-ext-400-normal.D08n4oeX.woff2",
@@ -658,6 +658,30 @@
       "_exports.js",
       "_campaign.js",
       "_respond.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/claims/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/claims/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/claims/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/claims/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_exports.js",
+      "_bridge.js",
+      "_http.js",
+      "_campaign.js",
+      "_respond.js"
+    ]
+  },
+  "src/routes/api/campaigns/[id]/claims/[character]/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/claims/_character_/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/claims/_character_/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/claims/[character]/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_bridge.js",
+      "_http.js",
+      "_campaign.js"
     ]
   },
   "src/routes/api/campaigns/[id]/conversation/+server.ts": {
@@ -1081,6 +1105,7 @@
       "_Textarea.js",
       "_floor-client.js",
       "_Alert.js",
+      "_Dialog.js",
       "_follow.svelte.js",
       "_messages.js",
       "_useQueryClient.js",

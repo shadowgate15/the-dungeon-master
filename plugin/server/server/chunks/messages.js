@@ -670,6 +670,8 @@ function createQuery(options, queryClient) {
 // src/lib/live/messages.ts
 /** The query listing the ids of Campaigns with a DM at the table. */
 var SESSIONS_QUERY_KEY = ["sessions"];
+/** The query holding the Party's Claims as this browser sees them: yours, taken or free. */
+var claimsQueryKey = (campaign) => ["claims", campaign];
 /** The query holding a Campaign's open Floor. */
 var floorQueryKey = (campaign) => ["floor", campaign];
 /** The query holding a Campaign's timeline. */
@@ -694,6 +696,6 @@ var sessionHistoryQueryKey = (campaign) => ["session-history", campaign];
 var sheetsQueryKey = (campaign) => ["sheets", campaign];
 /** The query holding the permission prompt a Campaign's session is waiting on. */
 var permissionQueryKey = (campaign) => ["permission", campaign];
-export { journalQueryKey as a, seedQueryKey as c, timelineQueryKey as d, createQuery as f, floorQueryKey as i, sessionHistoryQueryKey as l, conversationQueryKey as n, permissionQueryKey as o, SvelteMap as p, draftQueryKey as r, sceneQueryKey as s, SESSIONS_QUERY_KEY as t, sheetsQueryKey as u };
+export { floorQueryKey as a, sceneQueryKey as c, sheetsQueryKey as d, timelineQueryKey as f, draftQueryKey as i, seedQueryKey as l, SvelteMap as m, claimsQueryKey as n, journalQueryKey as o, createQuery as p, conversationQueryKey as r, permissionQueryKey as s, SESSIONS_QUERY_KEY as t, sessionHistoryQueryKey as u };
 
 //# sourceMappingURL=messages.js.map

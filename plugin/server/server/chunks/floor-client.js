@@ -1,5 +1,5 @@
 import { S as escape_html, c as ensure_array_like, o as derived, v as attr } from "./server2.js";
-import { a as journalQueryKey, d as timelineQueryKey, f as createQuery, i as floorQueryKey, l as sessionHistoryQueryKey, p as SvelteMap, s as sceneQueryKey, u as sheetsQueryKey } from "./messages.js";
+import { a as floorQueryKey, c as sceneQueryKey, d as sheetsQueryKey, f as timelineQueryKey, m as SvelteMap, n as claimsQueryKey, o as journalQueryKey, p as createQuery, u as sessionHistoryQueryKey } from "./messages.js";
 import { t as useQueryClient } from "./useQueryClient.js";
 // src/lib/play/journal.ts
 /** Whether a Character holds an entry themselves. */
@@ -191,6 +191,25 @@ function callActions(campaign) {
 		answer: (call, part, answer) => post(call, part, { answer })
 	};
 }
-export { createSceneQuery as a, createTimelineQuery as c, levelUp as d, saveDetails as f, createJournalQuery as i, endSession as l, knownBy as m, callActions as n, createSessionHistoryQuery as o, Journal as p, createFloorQuery as r, createSheetsQuery as s, PlayRequestError as t, floorActions as u };
+/** The Party's Claims as this browser sees them; a `claims` live message refreshes them. */
+var createClaimsQuery = (campaign, initial) => campaignQuery(claimsQueryKey, "claims", "The Claims could not be loaded", campaign, initial);
+/** Claim and Let go from the Take a seat dialog; throws the server's refusal. */
+function claimActions(campaign) {
+	const queryClient = useQueryClient();
+	async function change(url, init) {
+		const res = await fetch(url, init);
+		await queryClient.invalidateQueries({ queryKey: claimsQueryKey(campaign()) });
+		if (!res.ok) throw await refusal(res, "The Claim could not be changed");
+	}
+	return {
+		claim: (character) => change(campaignPath(campaign(), "claims"), {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ character })
+		}),
+		letGo: (character) => change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}`), { method: "DELETE" })
+	};
+}
+export { createFloorQuery as a, createSessionHistoryQuery as c, endSession as d, floorActions as f, knownBy as g, Journal as h, createClaimsQuery as i, createSheetsQuery as l, saveDetails as m, callActions as n, createJournalQuery as o, levelUp as p, claimActions as r, createSceneQuery as s, PlayRequestError as t, createTimelineQuery as u };
 
 //# sourceMappingURL=floor-client.js.map
