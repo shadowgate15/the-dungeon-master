@@ -5,9 +5,9 @@ import { n as readJson, t as changeParty } from "../../../../../../../../chunks/
 * Saves the stored draft into the Party: 201 `{ id }`, or 400 `{ error }` (keeping the draft)
 * while any step is not valid.
 */
-var POST = async ({ params, request }) => {
+var POST = async ({ params, request, locals }) => {
 	const body = await readJson(request);
-	return changeParty(params.id, body, (party) => json({ id: party.saveDraft(params.draft, body).id }, { status: 201 }));
+	return changeParty(params.id, body, (party) => json({ id: party.saveDraft(params.draft, body, locals.browser).id }, { status: 201 }));
 };
 export { POST };
 

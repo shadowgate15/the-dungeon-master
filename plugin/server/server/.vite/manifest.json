@@ -684,6 +684,17 @@
       "_campaign.js"
     ]
   },
+  "src/routes/api/campaigns/[id]/claims/[character]/release/+server.ts": {
+    "file": "entries/endpoints/api/campaigns/_id_/claims/_character_/release/_server.ts.js",
+    "name": "entries/endpoints/api/campaigns/_id_/claims/_character_/release/_server.ts",
+    "src": "src/routes/api/campaigns/[id]/claims/[character]/release/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_bridge.js",
+      "_http.js",
+      "_campaign.js"
+    ]
+  },
   "src/routes/api/campaigns/[id]/conversation/+server.ts": {
     "file": "entries/endpoints/api/campaigns/_id_/conversation/_server.ts.js",
     "name": "entries/endpoints/api/campaigns/_id_/conversation/_server.ts",

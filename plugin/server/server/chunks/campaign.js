@@ -1950,48 +1950,6 @@ function loadWizardRules() {
 function believedName(db, handle) {
 	return db.select({ name: belief.aboutName }).from(belief).where(and(eq(belief.about, handle), isNotNull(belief.holderCharacter), isNotNull(belief.aboutName), isNull(belief.replacedBy), isNull(belief.retiredAt))).orderBy(desc(belief.id)).get()?.name ?? null;
 }
-// src/lib/rules/armor-class.ts
-/**
-* A Character's AC from what it wears (SRD "Armor and Shields"): equipped body armor's base plus
-* the Dexterity modifier (all of it for light armor, at most 2 for medium, none for heavy), or the
-* unarmored AC without armor; +2 with an equipped shield; +1 from the Defense fighting style while
-* armored. Pure.
-*/
-function armorClass(equipment, input) {
-	const worn = input.equipped.flatMap((slug) => equipment.find((e) => e.slug === slug) ?? []);
-	const armor = worn.find((e) => e.armorCategory && e.armorCategory !== "Shield" && e.armorClassBase !== null);
-	const shield = worn.find((e) => e.armorCategory === "Shield");
-	let value = input.unarmored;
-	if (armor) {
-		const dex = !armor.armorClassDexBonus ? 0 : armor.armorClassMaxBonus === null ? input.dexModifier : Math.min(input.dexModifier, armor.armorClassMaxBonus);
-		value = armor.armorClassBase + dex + (input.defense ? 1 : 0);
-	}
-	if (shield) value += shield.armorClassBase ?? 2;
-	const note = [armor ? armor.name : "unarmored", ...shield ? [shield.name] : []].join(", ");
-	return {
-		value,
-		note
-	};
-}
-/** Whether an item can be equipped: armor, a shield or a weapon. */
-var equippable = (item) => item.armorCategory !== null || item.weaponCategory !== null;
-/** Whether an item is body armor (one suit at a time), as opposed to a shield or a weapon. */
-var isBodyArmor = (item) => item.armorCategory !== null && item.armorCategory !== "Shield";
-// src/lib/server/character/armor.ts
-/**
-* A Character's AC from its equipped armor and shield (see `armorClass`), or null while its
-* unarmored AC can't be derived yet.
-*/
-function characterAc(rules, detail, stats) {
-	if (stats.unarmoredAc.status !== "ok") return null;
-	const dex = stats.abilities.dex;
-	return armorClass(rules.equipment, {
-		equipped: detail.inventory.filter((i) => i.equipped).map((i) => i.item),
-		dexModifier: dex.status === "ok" ? dex.value.modifier : 0,
-		unarmored: stats.unarmoredAc.value.value,
-		defense: detail.choices.some((c) => c.optionSlug.endsWith("fighting-style-defense"))
-	});
-}
 // src/lib/server/play/scene.ts
 /** A move of the clock that would take it backwards. */
 var ClockBackwardsError = class extends Error {};
@@ -2217,6 +2175,48 @@ function deathSaveCall(db, handle, at) {
 		player: ref.row.controllingPlayer ?? "player",
 		sequence: null
 	}], at, "death_save");
+}
+// src/lib/rules/armor-class.ts
+/**
+* A Character's AC from what it wears (SRD "Armor and Shields"): equipped body armor's base plus
+* the Dexterity modifier (all of it for light armor, at most 2 for medium, none for heavy), or the
+* unarmored AC without armor; +2 with an equipped shield; +1 from the Defense fighting style while
+* armored. Pure.
+*/
+function armorClass(equipment, input) {
+	const worn = input.equipped.flatMap((slug) => equipment.find((e) => e.slug === slug) ?? []);
+	const armor = worn.find((e) => e.armorCategory && e.armorCategory !== "Shield" && e.armorClassBase !== null);
+	const shield = worn.find((e) => e.armorCategory === "Shield");
+	let value = input.unarmored;
+	if (armor) {
+		const dex = !armor.armorClassDexBonus ? 0 : armor.armorClassMaxBonus === null ? input.dexModifier : Math.min(input.dexModifier, armor.armorClassMaxBonus);
+		value = armor.armorClassBase + dex + (input.defense ? 1 : 0);
+	}
+	if (shield) value += shield.armorClassBase ?? 2;
+	const note = [armor ? armor.name : "unarmored", ...shield ? [shield.name] : []].join(", ");
+	return {
+		value,
+		note
+	};
+}
+/** Whether an item can be equipped: armor, a shield or a weapon. */
+var equippable = (item) => item.armorCategory !== null || item.weaponCategory !== null;
+/** Whether an item is body armor (one suit at a time), as opposed to a shield or a weapon. */
+var isBodyArmor = (item) => item.armorCategory !== null && item.armorCategory !== "Shield";
+// src/lib/server/character/armor.ts
+/**
+* A Character's AC from its equipped armor and shield (see `armorClass`), or null while its
+* unarmored AC can't be derived yet.
+*/
+function characterAc(rules, detail, stats) {
+	if (stats.unarmoredAc.status !== "ok") return null;
+	const dex = stats.abilities.dex;
+	return armorClass(rules.equipment, {
+		equipped: detail.inventory.filter((i) => i.equipped).map((i) => i.item),
+		dexModifier: dex.status === "ok" ? dex.value.modifier : 0,
+		unarmored: stats.unarmoredAc.value.value,
+		defense: detail.choices.some((c) => c.optionSlug.endsWith("fighting-style-defense"))
+	});
 }
 // src/lib/server/play/concentration.ts
 /** The lowest DC a concentration save has. */
@@ -2672,14 +2672,15 @@ function join(db, dice, combatId, entries, { surprised = [], at }) {
 	const parts = [];
 	for (const { row, who } of adding) {
 		let initiative = null;
-		if (row.kind === "character" && who?.kind === "character") parts.push({
+		const unclaimed = who?.kind === "character" && characterHolders(db).find((h) => h.id === who.id)?.player === null;
+		if (row.kind === "character" && who?.kind === "character" && !unclaimed) parts.push({
 			characterId: who.id,
 			player: who.player,
 			sequence: null,
 			reason: null
 		});
 		else {
-			const modifier = abilityMod(row.dex);
+			const modifier = who?.kind === "character" && who.stats.initiative.status === "ok" ? who.stats.initiative.value : abilityMod(row.dex);
 			const d20 = dice.rollD20();
 			initiative = d20.kept + modifier;
 			const sign = modifier >= 0 ? `+ ${modifier}` : `- ${-modifier}`;
@@ -2706,7 +2707,7 @@ function join(db, dice, combatId, entries, { surprised = [], at }) {
 		}).run();
 	}
 	const pendingCall = parts.length ? createPendingCall(db, parts, at, "initiative") : null;
-	beginIfReady(db, combatId);
+	rolled.push(...beginIfReady(db, combatId, dice));
 	return {
 		creatures: adding.filter((a) => a.row.kind === "creature").map((a) => a.row.handle),
 		rolls,
@@ -2739,12 +2740,12 @@ function acts(db, c, round) {
 * Moves the turn pointer to the next combatant who acts, wrapping into the next round, and resets
 * their per-turn resources. From no current turn, starts from the top of round `round`.
 */
-function advance(db, live) {
+function step(db, live) {
 	const order = initiativeOrder(db, live.id);
 	let round = live.round;
 	let index = live.current === null ? -1 : order.findIndex((c) => c.id === live.current);
 	let next = null;
-	for (let step = 0; step < order.length * 2 + 1 && order.length; step++) {
+	for (let n = 0; n < order.length * 2 + 1 && order.length; n++) {
 		index++;
 		if (index >= order.length) {
 			index = 0;
@@ -2765,32 +2766,63 @@ function advance(db, live) {
 		current: next
 	};
 }
+/** Whether a combatant is a Character nobody Claims right now. */
+var isUnclaimed = (db, c) => c.kind === "character" && characterHolders(db).find((h) => h.handle === c.handle)?.player === null;
+/**
+* Moves to the next turn. An unclaimed Character's turn passes with a note and code makes its rolls
+* (a Death save at 0 HP); a Character Claimed by the time its turn comes plays it. After one full
+* lap of unclaimed Characters the turn stays on the last one.
+*/
+function advance(db, live, dice) {
+	const notes = [];
+	let state = step(db, live);
+	const lap = combatantsOf(db, live.id).length;
+	for (let n = 0; n < lap && state.current && isUnclaimed(db, state.current); n++) {
+		const who = state.current;
+		notes.push(`${who.name} is unclaimed: no action`);
+		const row = characterRefs(db).find((c) => c.handle === who.handle)?.row;
+		if (row && rollsDeathSaves(row)) {
+			const d20 = dice.rollD20().kept;
+			notes.push(`${who.name} Death save: d20 ${d20} → ${applyDeathSave(db, row, d20).text}`);
+		}
+		state = step(db, {
+			...live,
+			round: state.round,
+			current: who.id
+		});
+	}
+	return {
+		...state,
+		notes
+	};
+}
 /** Once every combatant has initiative, round 1 begins with the first who acts. */
-function beginIfReady(db, combatId) {
+function beginIfReady(db, combatId, dice = null) {
 	const live = db.select().from(combat).where(eq(combat.id, combatId)).get();
-	if (live.round !== 0 || live.endedAt !== null) return;
-	if (combatantsOf(db, combatId).some((c) => c.initiative === null)) return;
-	advance(db, {
+	if (live.round !== 0 || live.endedAt !== null) return [];
+	if (combatantsOf(db, combatId).some((c) => c.initiative === null)) return [];
+	const start = {
 		...live,
 		round: 1,
 		current: null
-	});
+	};
+	return dice ? advance(db, start, dice).notes : (step(db, start), []);
 }
 /**
 * Records a Character's initiative roll from the Party's Call. Late arrivals slot into the order;
 * the last roll at the start of a Combat begins round 1.
 */
-function recordInitiative(db, characterHandle, total) {
+function recordInitiative(db, characterHandle, total, dice = null) {
 	const live = liveCombat(db);
-	if (!live) return;
+	if (!live) return [];
 	db.update(combatant$1).set({ initiative: total }).where(and(eq(combatant$1.combatId, live.id), eq(combatant$1.handle, characterHandle))).run();
-	beginIfReady(db, live.id);
+	return beginIfReady(db, live.id, dice);
 }
 /** Advances to the next turn. Refused until every combatant has initiative. */
-function nextTurn(db) {
+function nextTurn(db, dice) {
 	const live = requireCombat(db);
 	if (live.round === 0) throw new ToolError("initiative_pending", "The order is not known yet: some Characters have not rolled initiative", "Attach the initiative Call with narrate and wait for its call_result");
-	return advance(db, live);
+	return advance(db, live, dice);
 }
 var RESOURCE_NAMES = {
 	action: "an action",
@@ -2959,6 +2991,13 @@ function logActivity(db, text, { at, afterEvent = nextEventId(db) - 1 }) {
 	}).run();
 }
 /**
+* Every Character Claim lapses when a Session closes, the Host's and departed Characters'
+* included. Claims on drafts are not Character Claims and survive.
+*/
+function lapseClaims(db) {
+	db.update(character).set({ controllingPlayer: null }).run();
+}
+/**
 * The Session for a DM attaching through `bridge` (one per Claude Code session). A reconnect of
 * the same bridge keeps its Session, even one End Session closed. A new bridge opens the next
 * Session; an older open one stays open for its catch-up close, unless it has no Narration, in
@@ -2979,7 +3018,10 @@ function openSession(db, at, bridge) {
 			number: current.number
 		};
 	}
-	for (const stale of db.select().from(session).where(isNull(session.closedAt)).all()) if (!hasNarration(db, stale.id)) db.update(session).set({ closedAt: at }).where(eq(session.id, stale.id)).run();
+	for (const stale of db.select().from(session).where(isNull(session.closedAt)).all()) if (!hasNarration(db, stale.id)) {
+		db.update(session).set({ closedAt: at }).where(eq(session.id, stale.id)).run();
+		lapseClaims(db);
+	}
 	const last = db.select({ number: session.number }).from(session).orderBy(desc(session.number)).get();
 	return db.insert(session).values({
 		number: (last?.number ?? 0) + 1,
@@ -3591,19 +3633,27 @@ function withdrawOpenCall(db, at) {
 var CallClosedError = class extends Error {};
 /** The part is addressed to another Player, or the answer doesn't fit it. */
 var CallRefusedError = class extends Error {};
+/** What the DM hears a part rolled by code was marked with. */
+var ROLLED_BY_CODE = "(unclaimed: rolled by code)";
+/** Who rolled a part, as the DM hears it: the Character and its Player, or just the Character when code rolled it. */
+var tag = (p) => p.rolledByCode ? `[${p.characterName}]` : `[${p.characterName} · ${p.player}]`;
 /** The DM's view of one answered part: who, what, the dice, the DC and the outcome. */
 function resultLine(p) {
+	const line = describePart(p);
+	return p.rolledByCode ? `${line} ${ROLLED_BY_CODE}` : line;
+}
+function describePart(p) {
 	if (p.kind === "reaction") return reactionLine(p);
-	if (p.hitDice) return `[${p.characterName} · ${p.player}] Hit Dice: ${hitDiceText(p.hitDice)}`;
-	if (p.sequence) return `[${p.characterName} · ${p.player}] ${sequenceText(p.sequence, p.mode)}`;
+	if (p.hitDice) return `${tag(p)} Hit Dice: ${hitDiceText(p.hitDice)}`;
+	if (p.sequence) return `${tag(p)} ${sequenceText(p.sequence, p.mode)}`;
 	if (p.result === null) return `[${p.player}] ${p.answer}`;
 	const r = p.result;
 	const dice = r.dice.length > 1 ? `${r.dice.join("/")} (${p.mode}) kept ${r.kept}` : `${r.kept}`;
 	const modifier = r.modifier >= 0 ? `+ ${r.modifier}` : `- ${-r.modifier}`;
-	if (p.kind === "death_save") return `[${p.characterName} · ${p.player}] Death save: d20 ${r.kept} → ${p.answer}`;
-	if (p.kind === "concentration") return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? "success" : "failure"}; ${p.answer}`;
-	if (p.kind === "initiative") return `[${p.characterName} · ${p.player}] Initiative: d20 ${dice} ${modifier} = ${r.total}`;
-	return `[${p.characterName} · ${p.player}] ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? "success" : "failure"}`;
+	if (p.kind === "death_save") return `${tag(p)} Death save: d20 ${r.kept} → ${p.answer}`;
+	if (p.kind === "concentration") return `${tag(p)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} → ${r.success ? "success" : "failure"}; ${p.answer}`;
+	if (p.kind === "initiative") return `${tag(p)} Initiative: d20 ${dice} ${modifier} = ${r.total}`;
+	return `${tag(p)} ${labelOf(p)}: d20 ${dice} ${modifier} = ${r.total} vs DC ${p.dc} (${p.tier}) → ${r.success ? "success" : "failure"}`;
 }
 /** The Player's choice on a reaction Call that passes it. */
 var PASS = "Pass";
@@ -3612,7 +3662,7 @@ var PASS = "Pass";
 * the reaction was already spent. The answer is the choice, then `; ` and the reminder.
 */
 function reactionLine(p) {
-	const who = `[${p.characterName} · ${p.player}] ${p.reaction}`;
+	const who = `${tag(p)} ${p.reaction}`;
 	if (p.answer === "Pass") return `${who}: passes`;
 	const [choice, reminder] = (p.answer ?? "").split("; ");
 	const taken = p.sequence ? `${who}, taken: ${sequenceText(p.sequence, p.mode)}` : `${who}: takes it (${choice})`;
@@ -3653,17 +3703,26 @@ function createCalls(db, now = Date.now) {
 		const stat = part.skill ? stats.skills[part.skill] : stats.savingThrows[part.save];
 		return stat?.status === "ok" ? stat.value.modifier : 0;
 	}
+	/**
+	* Who may answer a part: a Character's part belongs to the Character, so to whoever Claims it
+	* now; a question part has no Character and stays with the browser it was addressed to.
+	*/
+	function ownerOf(part) {
+		if (!part.characterId) return part.player;
+		return db.select({ player: character.controllingPlayer }).from(character).where(eq(character.id, part.characterId)).get()?.player ?? null;
+	}
 	function answer(callId, partId, player, resolve) {
 		return db.transaction(() => {
 			const at = now();
 			const open = db.select().from(call).where(and(eq(call.id, callId), eq(call.state, "open"))).get();
 			const part = open && db.select().from(callPart).where(and(eq(callPart.id, partId), eq(callPart.callId, callId), isNull(callPart.answeredAt))).get();
 			if (!part) throw new CallClosedError("That Call is no longer open");
-			if (part.player !== player) throw new CallRefusedError("That roll is not yours");
+			if (player !== null && ownerOf(part) !== player) throw new CallRefusedError("That roll is not yours");
 			const { values, event, finished = true } = resolve(part, open.kind);
 			db.update(callPart).set({
 				...values,
-				answeredAt: finished ? at : null
+				answeredAt: finished ? at : null,
+				...player === null && { rolledByCode: true }
 			}).where(eq(callPart.id, partId)).run();
 			logEvent(db, {
 				tool: "call",
@@ -3689,7 +3748,7 @@ function createCalls(db, now = Date.now) {
 			}).where(eq(call.id, callId)).run();
 			const result = {
 				call: callId,
-				players: [...new Set(parts.map((p) => p.player))],
+				players: [...new Set(parts.filter((p) => !p.rolledByCode).map((p) => p.player))],
 				parts,
 				after: [...open.kind === "initiative" ? [orderText(db)] : [], ...waitingLine(db)]
 			};
@@ -3866,6 +3925,68 @@ function createCalls(db, now = Date.now) {
 			}
 		};
 	}
+	/** Rolls one part in code: a sequence's next step, a Death save, or a d20 Check. */
+	function rollPart(part, kind, dice, player) {
+		const characterId = part.characterId;
+		if (part.sequence) return rollSequenceStep(part, dice, player);
+		if (kind === "death_save") return rollDeathSave(part, dice, player);
+		const modifier = modifierFor(characterId, part, kind);
+		const d20 = part.mode === "normal" ? dice.rollD20() : dice.rollD20({
+			mode: part.mode,
+			reason: part.reason ?? ""
+		});
+		const total = d20.kept + modifier;
+		const result = {
+			dice: d20.dice,
+			kept: d20.kept,
+			modifier,
+			total,
+			success: total >= (part.dc ?? 0)
+		};
+		const name = db.select({ name: character.name }).from(character).where(eq(character.id, characterId)).get()?.name ?? "";
+		const what = labelOf(part, kind) ?? "";
+		if (kind === "initiative") {
+			const handle = characterRefs(db).find((c) => c.row.id === characterId)?.handle;
+			if (handle) recordInitiative(db, handle, total, dice);
+			return {
+				values: { result },
+				event: {
+					kind: "roll",
+					summary: `${name} ${what}: ${total}`,
+					data: {
+						part: part.id,
+						characterName: name,
+						player,
+						what,
+						mode: part.mode,
+						reason: part.reason,
+						...result,
+						outcome: null
+					}
+				}
+			};
+		}
+		const kept = kind === "concentration" && keepConcentration(characterId, result.success);
+		return {
+			values: {
+				result,
+				...kept && { answer: kept }
+			},
+			event: {
+				kind: "roll",
+				summary: `${name} ${what}: ${total} (${result.success ? "success" : "failure"})`,
+				data: {
+					part: part.id,
+					characterName: name,
+					player,
+					what,
+					mode: part.mode,
+					reason: part.reason,
+					...result
+				}
+			}
+		};
+	}
 	/** A Character's derived HP maximum. */
 	function maxHp(characterId) {
 		const detail = createCharacterService(db, now).get(characterId);
@@ -3876,6 +3997,51 @@ function createCalls(db, now = Date.now) {
 		});
 		return stats.hitPoints.status === "ok" ? stats.hitPoints.value : null;
 	}
+	/**
+	* Code answers a part for its unclaimed Character: a straight roll with no choices, a reaction
+	* passed, Hit Dice spent at none. A roll sequence is rolled to its end.
+	*/
+	function rollByCode(callId, partId, dice) {
+		for (;;) {
+			const result = answer(callId, partId, null, (part, kind) => {
+				if (part.hitDice) return spendHitDice(part, part.hitDice, "0", dice);
+				if (kind === "reaction") {
+					const { choices } = db.select().from(call).where(eq(call.id, callId)).get();
+					return chooseReaction(part, choices, PASS);
+				}
+				return rollPart(part, kind, dice, part.player);
+			});
+			const left = db.select().from(callPart).where(eq(callPart.id, partId)).get();
+			if (!left || left.answeredAt !== null) return result;
+		}
+	}
+	/**
+	* Rolls for the open Call's unclaimed Characters. On `opening` every unclaimed part is rolled;
+	* after that a part whose Claim lapsed waits for the next Claimant, and is rolled only when it is
+	* the last part outstanding. Returns the Call's result when this completes it.
+	*/
+	function settleUnclaimed(dice, opening = false) {
+		return db.transaction(() => {
+			let result = null;
+			for (;;) {
+				const open = openCallRow(db);
+				if (!open) return result;
+				const unanswered = db.select({
+					part: callPart,
+					owner: character.controllingPlayer
+				}).from(callPart).innerJoin(character, eq(character.id, callPart.characterId)).where(and(eq(callPart.callId, open.id), isNull(callPart.answeredAt))).orderBy(asc(callPart.position)).all();
+				const outstanding = db.select({ id: callPart.id }).from(callPart).where(and(eq(callPart.callId, open.id), isNull(callPart.answeredAt))).all().length;
+				const next = unanswered.find(({ owner }) => owner === null);
+				if (!next || !(opening || outstanding === 1)) return result;
+				result = rollByCode(open.id, next.part.id, dice) ?? result;
+			}
+		});
+	}
+	/** A Player's answer, then code's roll for an unclaimed part it left as the last one outstanding. */
+	function settled(dice, answered) {
+		if (answered || !dice) return answered;
+		return settleUnclaimed(dice);
+	}
 	return {
 		/** The open Call, Player-safe. */
 		open: () => openCallView(db),
@@ -3884,77 +4050,25 @@ function createCalls(db, now = Date.now) {
 		* roll completes it, null otherwise.
 		*/
 		roll(callId, partId, dice, player) {
-			return answer(callId, partId, player, (part, kind) => {
+			return settled(dice, answer(callId, partId, player, (part, kind) => {
 				if (!part.characterId) throw new CallRefusedError("That part is a question: answer it");
 				if (part.hitDice) throw new CallRefusedError("Say how many Hit Dice to spend");
 				if (kind === "reaction" && part.answer === null) throw new CallRefusedError(`${part.reaction}: take it or pass first`);
-				if (part.sequence) return rollSequenceStep(part, dice, player);
-				if (kind === "death_save") return rollDeathSave(part, dice, player);
-				const modifier = modifierFor(part.characterId, part, kind);
-				const d20 = part.mode === "normal" ? dice.rollD20() : dice.rollD20({
-					mode: part.mode,
-					reason: part.reason ?? ""
-				});
-				const total = d20.kept + modifier;
-				const result = {
-					dice: d20.dice,
-					kept: d20.kept,
-					modifier,
-					total,
-					success: total >= (part.dc ?? 0)
-				};
-				const name = db.select({ name: character.name }).from(character).where(eq(character.id, part.characterId)).get()?.name ?? "";
-				const what = labelOf(part, kind) ?? "";
-				if (kind === "initiative") {
-					const handle = characterRefs(db).find((c) => c.row.id === part.characterId)?.handle;
-					if (handle) recordInitiative(db, handle, total);
-					return {
-						values: { result },
-						event: {
-							kind: "roll",
-							summary: `${name} ${what}: ${total}`,
-							data: {
-								part: partId,
-								characterName: name,
-								player,
-								what,
-								mode: part.mode,
-								reason: part.reason,
-								...result,
-								outcome: null
-							}
-						}
-					};
-				}
-				const kept = kind === "concentration" && keepConcentration(part.characterId, result.success);
-				return {
-					values: {
-						result,
-						...kept && { answer: kept }
-					},
-					event: {
-						kind: "roll",
-						summary: `${name} ${what}: ${total} (${result.success ? "success" : "failure"})`,
-						data: {
-							part: partId,
-							characterName: name,
-							player,
-							what,
-							mode: part.mode,
-							reason: part.reason,
-							...result
-						}
-					}
-				};
-			});
+				return rollPart(part, kind, dice, player);
+			}));
 		},
+		/**
+		* Rolls for the open Call's unclaimed Characters; `opening` when the Call has just opened.
+		* Returns the Call's result when that completes it.
+		*/
+		settleUnclaimed,
 		/**
 		* Answers a question part (with choices, the answer must be one of them), or a Hit Dice part
 		* with how many to spend, which code then rolls with `dice`.
 		*/
 		answer(callId, partId, text, player, dice) {
 			const clean = text.trim();
-			return answer(callId, partId, player, (part, kind) => {
+			return settled(dice, answer(callId, partId, player, (part, kind) => {
 				if (part.hitDice) return spendHitDice(part, part.hitDice, clean, dice);
 				const { choices, text: question } = db.select().from(call).where(eq(call.id, callId)).get();
 				if (kind === "reaction") return chooseReaction(part, choices, clean);
@@ -3974,7 +4088,7 @@ function createCalls(db, now = Date.now) {
 						}
 					}
 				};
-			});
+			}));
 		}
 	};
 }
@@ -4384,22 +4498,39 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 		}
 		throw new CharacterNotFoundError("Character not found");
 	}
+	/**
+	* Refuses a write from a browser that does not hold the Claim, the Host included. Without a
+	* `browser` the write is the DM's own (its tools), which no Claim gates.
+	*/
+	function requireClaim(id, browser) {
+		if (browser === void 0) return;
+		const target = claimable(id);
+		if (target.holder !== browser) throw new ClaimRefusedError(`${target.name || "This Character"} is not yours: Claim it first`);
+	}
 	return {
 		/**
 		* Every Party Character with its Claim as `browser` sees it: yours, taken (never by whom) or
 		* free. Saved Characters oldest first.
 		*/
 		claims(browser) {
-			return characters.list().map((c) => ({
+			const saved = characters.list().map((c) => ({
 				kind: "character",
 				id: c.id,
 				name: c.name,
-				claim: claimOf(c.controllingPlayer, browser)
+				claim: claimOf(c.controllingPlayer, browser),
+				...browser === "player" && claimOf(c.controllingPlayer, browser) === "taken" ? { releasable: true } : {}
 			}));
+			const drafts = db.select().from(characterDraft).orderBy(asc(characterDraft.createdAt), asc(sql`${characterDraft}.rowid`)).all().map((d) => ({
+				kind: "draft",
+				id: d.id,
+				name: d.data.name.trim(),
+				claim: claimOf(d.controllingPlayer, browser)
+			}));
+			return [...saved, ...drafts];
 		},
 		/** Whether `browser` holds a Claim on any Party Character. */
 		holdsClaim(browser) {
-			return this.claims(browser).some((row) => row.claim === "yours");
+			return this.claims(browser).some((row) => row.kind === "character" && row.claim === "yours");
 		},
 		/** The browser Claims a Character nobody holds. A taken Character is refused for every browser. */
 		claim(id, browser) {
@@ -4412,6 +4543,12 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 			const target = claimable(id);
 			if (target.holder !== browser) throw new ClaimRefusedError(`${target.name} is not yours`);
 			db.update(target.table).set({ controllingPlayer: null }).where(and(eq(target.table.id, id), eq(target.table.controllingPlayer, browser))).run();
+		},
+		/** The Host frees a Character another browser holds. Refused for any other browser. */
+		release(id, browser) {
+			if (browser !== "player") throw new ClaimRefusedError("Only the Host can Release a Character");
+			const target = claimable(id);
+			db.update(target.table).set({ controllingPlayer: null }).where(eq(target.table.id, id)).run();
 		},
 		/** Saved Characters oldest first, then drafts oldest first. */
 		list() {
@@ -4461,17 +4598,20 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 			};
 		},
 		/** Replaces the stored draft. Incomplete is fine: a draft is unsaved by definition. */
-		writeDraft(id, value) {
+		writeDraft(id, value, browser) {
+			requireClaim(id, browser);
 			write(id, value);
 		},
-		discardDraft(id) {
+		discardDraft(id, browser) {
+			requireClaim(id, browser);
 			if (!db.delete(characterDraft).where(eq(characterDraft.id, id)).returning().get()) throw new DraftNotFoundError("Character draft not found");
 		},
 		/**
 		* Writes the draft, then saves it into the Party and removes it, in one transaction. Refused,
 		* keeping the draft, unless every step is valid.
 		*/
-		saveDraft(id, value) {
+		saveDraft(id, value, browser) {
+			requireClaim(id, browser);
 			return db.transaction(() => {
 				write(id, value);
 				const { controllingPlayer } = row(id);
@@ -4495,7 +4635,8 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 		* slots, coin, inventory), so once the Campaign has begun it is refused: play state changes only
 		* through the DM's tools.
 		*/
-		updateCharacter(id, draft) {
+		updateCharacter(id, draft, browser) {
+			requireClaim(id, browser);
 			if (begun()) throw new DmOnlyEditError("Rewriting a Character in the wizard resets their play state, so once the Campaign has begun only their notes, personality and appearance can be edited. Ask the DM at the table for anything else.");
 			return db.transaction(() => {
 				const updated = characters.update(id, input(draft));
@@ -4513,7 +4654,8 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 		* maximum, and the picked cantrips and spells are learned. Play state is kept. Refused without
 		* an awarded level, or when the picks do not fit the offer.
 		*/
-		levelUp(id, picks) {
+		levelUp(id, picks, browser) {
+			requireClaim(id, browser);
 			return db.transaction(() => {
 				const before = detail(id);
 				const offer = offerFor(before);
@@ -4546,7 +4688,8 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 		* Edits a Character's notes, personality, appearance or backstory, leaving play state alone.
 		* Backstory after Begin is the DM's while the DM is away.
 		*/
-		updateDetails(id, details) {
+		updateDetails(id, details, browser) {
+			requireClaim(id, browser);
 			const fields = Object.keys(DETAIL_LIMITS).filter((f) => details[f] !== void 0);
 			if (fields.includes("backstory")) dmOnly("Backstory");
 			const values = {};
@@ -4872,6 +5015,7 @@ function closeSession(db, { summary, threads, session: number, at }) {
 		summaryAudience: written ? partyAudience(db) : null,
 		threads: written ? threads : null
 	}).where(eq(session.id, target.id)).run();
+	lapseClaims(db);
 	return written ? {
 		session: target.number,
 		summarised: true
@@ -5393,6 +5537,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { setAwaitingNarration as $, SESSION_LIVE_MESSAGE as $t, ABILITY_NAMES as A, hpState as At, createPendingCall as B, resolveBeat as Bt, DmBusyError as C, scenePlace as Ct, DraftNotFoundError as D, loadWizardRules as Dt, DmOnlyEditError as E, believedName as Et, TIERS as F, resolveLinks as Ft, rollAll as G, creationTool as Gt, saveKey as H, reviseArc as Ht, callInput as I, CurrentArcError as It, currentStamp as J, writeTool as Jt, saveSequence as K, expectVersion as Kt, callResultEvent as L, createArc as Lt, CallRefusedError as M, createWorld as Mt, DC_BY_TIER as N, fieldNames as Nt, createDmChannels as O, CharacterNotFoundError as Ot, PASS as P, renderLinks as Pt, partyAudience as Q, characterRefs as Qt, cancelPendingCall as R, currentArc as Rt, DeclarationRefusedError as S, present as St, ClaimRefusedError as T, isBodyArmor as Tt, attackSequence as U, PLUGIN_NAME as Ut, openCall as V, retireArc as Vt, damageSequence as W, ToolError as Wt, logEvent as X, parseClock as Xt, logActivity as Y, formatClock as Yt, nextEventId as Z, characterHolders as Zt, closeSession as _, deathSaveCall as _t, CampaignArchivedError as a, refuseDuringCombat as at, sessionsView as b, advanceClock as bt, CampaignNotFoundError as c, applyDamage as ct, BeginRefusedError as d, incapacitates as dt, addCombatants as et, SeedLockedError as f, mustAct as ft, addConversationLine as g, setConcentration as gt, refuseLockedSeed as h, concentrate as ht, sessions as i, orderText as it, CallClosedError as j, lintWorld as jt, playSheets as k, CharacterValidationError as kt, NotACampaignFolderError as l, applyHealing as lt, creationStage as m, setConditions as mt, library as n, endCombat as nt, CampaignExistsError as o, spendTurnResource as ot, StartOverRefusedError as p, saveBonus as pt, sequenceText as q, readTool as qt, live as r, nextTurn as rt, CampaignMissingError as s, startCombat as st, campaignRoot as t, combatState as tt, SessionLiveError as u, combatant as ut, history as v, ClockBackwardsError as vt, returnStrandedDrafts as w, equippable as wt, DeclarationNotFoundError as x, currentMinute as xt, indexNarration as y, SpotlightRefusedError as yt, createHitDiceCall as z, pastArcs as zt };
+export { partyAudience as $, characterRefs as $t, ABILITY_NAMES as A, CharacterValidationError as At, createHitDiceCall as B, pastArcs as Bt, DmBusyError as C, advanceClock as Ct, DraftNotFoundError as D, believedName as Dt, DmOnlyEditError as E, scenePlace as Et, TIERS as F, renderLinks as Ft, damageSequence as G, ToolError as Gt, openCall as H, retireArc as Ht, callInput as I, resolveLinks as It, sequenceText as J, readTool as Jt, rollAll as K, creationTool as Kt, callResultEvent as L, CurrentArcError as Lt, CallRefusedError as M, lintWorld as Mt, DC_BY_TIER as N, createWorld as Nt, createDmChannels as O, loadWizardRules as Ot, PASS as P, fieldNames as Pt, nextEventId as Q, characterHolders as Qt, cancelPendingCall as R, createArc as Rt, DeclarationRefusedError as S, SpotlightRefusedError as St, ClaimRefusedError as T, present as Tt, saveKey as U, reviseArc as Ut, createPendingCall as V, resolveBeat as Vt, attackSequence as W, PLUGIN_NAME as Wt, logActivity as X, formatClock as Xt, currentStamp as Y, writeTool as Yt, logEvent as Z, parseClock as Zt, closeSession as _, setConcentration as _t, CampaignArchivedError as a, orderText as at, sessionsView as b, deathSaveCall as bt, CampaignNotFoundError as c, startCombat as ct, BeginRefusedError as d, combatant as dt, SESSION_LIVE_MESSAGE as en, setAwaitingNarration as et, SeedLockedError as f, incapacitates as ft, addConversationLine as g, concentrate as gt, refuseLockedSeed as h, setConditions as ht, sessions as i, nextTurn as it, CallClosedError as j, hpState as jt, playSheets as k, CharacterNotFoundError as kt, NotACampaignFolderError as l, applyDamage as lt, creationStage as m, saveBonus as mt, library as n, combatState as nt, CampaignExistsError as o, refuseDuringCombat as ot, StartOverRefusedError as p, mustAct as pt, saveSequence as q, expectVersion as qt, live as r, endCombat as rt, CampaignMissingError as s, spendTurnResource as st, campaignRoot as t, addCombatants as tt, SessionLiveError as u, applyHealing as ut, history as v, equippable as vt, returnStrandedDrafts as w, currentMinute as wt, DeclarationNotFoundError as x, ClockBackwardsError as xt, indexNarration as y, isBodyArmor as yt, createCalls as z, currentArc as zt };
 
 //# sourceMappingURL=campaign.js.map

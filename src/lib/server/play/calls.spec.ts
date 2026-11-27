@@ -313,3 +313,123 @@ describe('an open Call', () => {
     expect(openCall()?.parts[0].label).toBe('Dexterity save')
   })
 })
+
+const GUEST = 'guest-browser'
+const bramCheck = {
+  kind: 'check',
+  character: 'Bram',
+  skill: 'perception',
+  tier: 'easy',
+  reason: 'Footsteps'
+}
+
+/** The id of a Character, from the Party's Claim listing. */
+const idOf = (name: string) => play.claims(campaignId, SOLO_PLAYER).find((r) => r.name === name)!.id
+
+describe('an unclaimed Character in a Call', () => {
+  it('has its part rolled by code when the Call opens, marked in the one call_result', () => {
+    addFighter('Wren')
+    addFighter('Bram')
+    play.letGo(campaignId, idOf('Bram'), SOLO_PLAYER)
+
+    call('narrate', { text: 'The guards turn.', call: [lockCheck, bramCheck] })
+
+    const { id, parts } = openCall()!
+    expect(parts.map((p) => p.answered)).toEqual([false, true])
+    expect(heard).toEqual([])
+
+    play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)
+
+    expect(heard).toHaveLength(1)
+    expect(heard[0].meta).toEqual({ kind: 'call_result', call_id: id, players: 'player' })
+    const lines = heard[0].content.split('\n')
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toMatch(/^\[Wren · player\] /)
+    expect(lines[0]).not.toContain('unclaimed')
+    expect(lines[1]).toMatch(
+      /^\[Bram\] Perception check: .* vs DC 10 \(easy\).* \(unclaimed: rolled by code\)$/
+    )
+  })
+
+  it('tells the DM at once when every part was rolled by code', () => {
+    addFighter('Wren')
+    play.letGo(campaignId, idOf('Wren'), SOLO_PLAYER)
+
+    const { isError, payload } = call('narrate', { text: 'The lock is rusted.', call: lockCheck })
+
+    expect(isError).toBe(false)
+    expect(payload.call_result).toMatch(
+      /^\[Wren\] Sleight of Hand check: .*\(unclaimed: rolled by code\)$/
+    )
+    expect(openCall()).toBeNull()
+    expect(play.timeline(campaignId, SOLO_PLAYER).awaitingSince).toEqual(expect.any(Number))
+  })
+
+  it('waits when its Claim lapses mid-Call, unless it is the last part outstanding', () => {
+    addFighter('Wren')
+    addFighter('Bram')
+    call('narrate', { text: 'The guards turn.', call: [lockCheck, bramCheck] })
+    const { id, parts } = openCall()!
+
+    play.letGo(campaignId, idOf('Bram'), SOLO_PLAYER)
+    expect(openCall()!.parts.map((p) => p.answered)).toEqual([false, false])
+    expect(heard).toEqual([])
+
+    play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)
+
+    expect(openCall()).toBeNull()
+    expect(heard).toHaveLength(1)
+    expect(heard[0].content.split('\n')[1]).toMatch(/\(unclaimed: rolled by code\)$/)
+  })
+
+  it('is rolled by code when the last other part is in and its Claim then lapses', () => {
+    addFighter('Wren')
+    addFighter('Bram')
+    call('narrate', { text: 'The guards turn.', call: [lockCheck, bramCheck] })
+    const { id, parts } = openCall()!
+    play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)
+
+    play.letGo(campaignId, idOf('Bram'), SOLO_PLAYER)
+
+    expect(openCall()).toBeNull()
+    expect(heard).toHaveLength(1)
+  })
+})
+
+describe('a Call across browsers', () => {
+  it('lets a browser roll only the parts of the Characters it holds', () => {
+    addFighter('Wren')
+    addFighter('Bram')
+    play.letGo(campaignId, idOf('Bram'), SOLO_PLAYER)
+    play.claim(campaignId, idOf('Bram'), GUEST)
+    call('narrate', { text: 'The guards turn.', call: [lockCheck, bramCheck] })
+    const { id, parts } = openCall()!
+
+    expect(() => play.roll(campaignId, id, parts[1].id, SOLO_PLAYER)).toThrow(CallRefusedError)
+    expect(() => play.roll(campaignId, id, parts[0].id, GUEST)).toThrow(CallRefusedError)
+
+    play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)
+    expect(heard).toEqual([])
+    play.roll(campaignId, id, parts[1].id, GUEST)
+
+    expect(heard).toHaveLength(1)
+    expect(heard[0].meta?.players).toBe(`player,${GUEST}`)
+    expect(heard[0].content).not.toContain('unclaimed')
+  })
+
+  it("hands a part to the Character's new Claimant", () => {
+    addFighter('Wren')
+    addFighter('Bram')
+    call('narrate', { text: 'Footsteps.', call: [lockCheck, bramCheck] })
+    const { id, parts } = openCall()!
+    play.letGo(campaignId, idOf('Bram'), SOLO_PLAYER)
+    play.claim(campaignId, idOf('Bram'), GUEST)
+
+    expect(() => play.roll(campaignId, id, parts[1].id, SOLO_PLAYER)).toThrow(CallRefusedError)
+    play.roll(campaignId, id, parts[1].id, GUEST)
+    play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)
+
+    expect(heard).toHaveLength(1)
+    expect(heard[0].content).not.toContain('unclaimed')
+  })
+})

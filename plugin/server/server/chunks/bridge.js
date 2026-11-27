@@ -1,5 +1,5 @@
 import { H as ENTITY_TYPES, I as belief, J as classTable, L as entity, O as event, St as DUNGEON_MASTER_VERSION, W as handleKind, X as race, Y as equipment, _ as character, a as createRulesRepository, bt as DUNGEON_MASTER_LAN, f as userStateDir, ft as ne, g as campaign, it as eq, lt as isNull, mt as sql, pt as or, q as background, rt as and, st as inArray, tt as asc, x as characterItem, xt as DUNGEON_MASTER_PORT, y as characterDraft, yt as DUNGEON_MASTER_HOME, z as fact } from "./seed.js";
-import { $ as setAwaitingNarration, $t as SESSION_LIVE_MESSAGE, A as ABILITY_NAMES, At as hpState, B as createPendingCall, Bt as resolveBeat, Ct as scenePlace, Dt as loadWizardRules, Et as believedName, F as TIERS, Ft as resolveLinks, G as rollAll, Gt as creationTool, H as saveKey, Ht as reviseArc, I as callInput, It as CurrentArcError, J as currentStamp, Jt as writeTool, K as saveSequence, Kt as expectVersion, L as callResultEvent, Lt as createArc, Mt as createWorld, N as DC_BY_TIER, Nt as fieldNames, O as createDmChannels, P as PASS, Pt as renderLinks, Q as partyAudience, Qt as characterRefs, R as cancelPendingCall, Rt as currentArc, St as present, Tt as isBodyArmor, U as attackSequence, Ut as PLUGIN_NAME, V as openCall, Vt as retireArc, W as damageSequence, Wt as ToolError, X as logEvent, Xt as parseClock, Y as logActivity, Yt as formatClock, Z as nextEventId, Zt as characterHolders, _ as closeSession, _t as deathSaveCall, at as refuseDuringCombat, b as sessionsView, bt as advanceClock, c as CampaignNotFoundError, ct as applyDamage, dt as incapacitates, et as addCombatants, f as SeedLockedError, ft as mustAct, g as addConversationLine, gt as setConcentration, h as refuseLockedSeed, ht as concentrate, i as sessions, it as orderText, jt as lintWorld, k as playSheets, l as NotACampaignFolderError, lt as applyHealing, m as creationStage, mt as setConditions, n as library, nt as endCombat, ot as spendTurnResource, pt as saveBonus, q as sequenceText, qt as readTool, r as live, rt as nextTurn, st as startCombat, tt as combatState, ut as combatant, v as history, vt as ClockBackwardsError, w as returnStrandedDrafts, wt as equippable, xt as currentMinute, y as indexNarration, z as createHitDiceCall, zt as pastArcs } from "./campaign.js";
+import { $ as partyAudience, $t as characterRefs, A as ABILITY_NAMES, B as createHitDiceCall, Bt as pastArcs, Ct as advanceClock, Dt as believedName, Et as scenePlace, F as TIERS, Ft as renderLinks, G as damageSequence, Gt as ToolError, H as openCall, Ht as retireArc, I as callInput, It as resolveLinks, J as sequenceText, Jt as readTool, K as rollAll, Kt as creationTool, L as callResultEvent, Lt as CurrentArcError, Mt as lintWorld, N as DC_BY_TIER, Nt as createWorld, O as createDmChannels, Ot as loadWizardRules, P as PASS, Pt as fieldNames, Q as nextEventId, Qt as characterHolders, R as cancelPendingCall, Rt as createArc, Tt as present, U as saveKey, Ut as reviseArc, V as createPendingCall, Vt as resolveBeat, W as attackSequence, Wt as PLUGIN_NAME, X as logActivity, Xt as formatClock, Y as currentStamp, Yt as writeTool, Z as logEvent, Zt as parseClock, _ as closeSession, _t as setConcentration, at as orderText, b as sessionsView, bt as deathSaveCall, c as CampaignNotFoundError, ct as startCombat, dt as combatant, en as SESSION_LIVE_MESSAGE, et as setAwaitingNarration, f as SeedLockedError, ft as incapacitates, g as addConversationLine, gt as concentrate, h as refuseLockedSeed, ht as setConditions, i as sessions, it as nextTurn, jt as hpState, k as playSheets, l as NotACampaignFolderError, lt as applyDamage, m as creationStage, mt as saveBonus, n as library, nt as combatState, ot as refuseDuringCombat, pt as mustAct, q as saveSequence, qt as expectVersion, r as live, rt as endCombat, st as spendTurnResource, tt as addCombatants, ut as applyHealing, v as history, vt as equippable, w as returnStrandedDrafts, wt as currentMinute, xt as ClockBackwardsError, y as indexNarration, yt as isBodyArmor, z as createCalls, zt as currentArc } from "./campaign.js";
 import { n as joinUrls } from "./lan.js";
 import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { t as lanAccess } from "./lan-access.js";
@@ -832,8 +832,8 @@ var combatTools = [
 		description: "Move to the next turn in initiative order, into the next round after the last. The new combatant's action, bonus action and reaction are fresh. Run NPC and Creature turns yourself; on a Character's turn the Player's composer is locked to them. A Character at 0 HP rolls a Death save instead: the result carries its pending_call for your closing narrate.",
 		input: strictObject({}),
 		activity: null,
-		run: ({ db, now }) => {
-			const { round, current } = nextTurn(db);
+		run: ({ db, dice, now }) => {
+			const { round, current, notes } = nextTurn(db, dice);
 			const state = combatState(db);
 			const deathSave = current && deathSaveCall(db, current.handle, now);
 			return {
@@ -845,6 +845,7 @@ var combatTools = [
 					},
 					resources: "action, bonus action and reaction are fresh (a reminder, not a rule code enforces)",
 					order: state.order,
+					notes,
 					...deathSave && {
 						pending_call: deathSave,
 						death_save: `${current.name} is at 0 HP and rolls a Death save this turn: attach the Call with your closing narrate(text, call: "${deathSave}")`
@@ -2185,6 +2186,13 @@ var narrationTools = [writeTool({
 				call: callId,
 				next: "End your turn: the Players answer the Call"
 			} : { narrated: true },
+			after: callId ? () => {
+				const settled = createCalls(ctx.db, () => ctx.now).settleUnclaimed(ctx.dice, true);
+				return settled ? {
+					call_result: callResultEvent(settled).content,
+					next: "The Call was rolled by code: narrate what follows"
+				} : {};
+			} : void 0,
 			event: {
 				kind: "narration",
 				audience,
@@ -2966,7 +2974,7 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 		return db.transaction((tx) => {
 			const current = stamp(tx);
 			const eventId = nextEventId(tx);
-			const { result, skill, event: logged } = tool.run({
+			const { result, skill, after, event: logged } = tool.run({
 				...context,
 				db: tx,
 				stamp: {
@@ -2987,9 +2995,16 @@ function createToolHost({ library, tools, stamp = currentStamp, now = Date.now, 
 				at,
 				afterEvent: eventId
 			});
+			const changed = tool.name === "close_session" ? [...timelineChanged, {
+				type: "claims",
+				campaign: campaignId
+			}] : timelineChanged;
 			return {
-				result: withSkill(result, skill),
-				changed: timelineChanged
+				result: withSkill({
+					...result,
+					...after?.()
+				}, skill),
+				changed
 			};
 		});
 	}
@@ -3171,6 +3186,14 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 				campaign: campaignId
 			});
 		},
+		/** The Host's browser frees a Character another browser holds; refused for any other browser. */
+		release(campaignId, character, browser) {
+			library.party(campaignId).release(character, browser);
+			publish({
+				type: "claims",
+				campaign: campaignId
+			});
+		},
 		/** The browser gives up a Claim it holds. */
 		letGo(campaignId, character, browser) {
 			library.party(campaignId).letGo(character, browser);
@@ -3179,6 +3202,8 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 				campaign: campaignId
 			});
 			settle(campaignId, library.floor(campaignId).lose(character));
+			const result = library.calls(campaignId).settleUnclaimed(dice(campaignId));
+			if (result) answered(campaignId, result);
 		},
 		/** The DM-pane conversation as `viewer`'s Player sees it. */
 		conversation(campaignId, _viewer) {
@@ -3259,7 +3284,12 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* its own Session.
 		*/
 		openSession(campaignId, bridge) {
-			return library.record(campaignId).openSession(bridge);
+			const opened = library.record(campaignId).openSession(bridge);
+			publish({
+				type: "claims",
+				campaign: campaignId
+			});
+			return opened;
 		},
 		/**
 		* The Stop hook asks whether the DM may end its turn. It may not while a closed Floor awaits

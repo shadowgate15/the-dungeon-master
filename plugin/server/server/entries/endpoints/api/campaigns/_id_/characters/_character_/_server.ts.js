@@ -6,18 +6,18 @@ import { n as readJson, t as changeParty } from "../../../../../../../chunks/res
 * Replaces a saved Character's choices from the edit wizard's draft: `{ id }` or 400/404 `{ error }`;
 * 409 after Begin while the DM is away (it resets play state).
 */
-var PUT = async ({ params, request }) => {
+var PUT = async ({ params, request, locals }) => {
 	const body = await readJson(request);
-	return changeParty(params.id, body, (party) => json({ id: party.updateCharacter(params.character, body).id }));
+	return changeParty(params.id, body, (party) => json({ id: party.updateCharacter(params.character, body, locals.browser).id }));
 };
 /**
 * Edits a Character's notes, personality, appearance or backstory, leaving play state alone:
 * `{ id, version }`, 400/404 `{ error }`, or 409 for a backstory edit after Begin while the DM is away.
 */
-var PATCH = async ({ params, request }) => {
+var PATCH = async ({ params, request, locals }) => {
 	const body = await readJson(request);
 	return changeParty(params.id, body, (party) => {
-		const updated = party.updateDetails(params.character, body);
+		const updated = party.updateDetails(params.character, body, locals.browser);
 		live.publish({
 			type: "timeline",
 			campaign: params.id
