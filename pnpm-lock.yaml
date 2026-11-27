@@ -11,6 +11,9 @@ importers:
       better-sqlite3:
         specifier: ^13.0.2
         version: 13.0.3
+      uqr:
+        specifier: ^0.1.3
+        version: 0.1.3
     devDependencies:
       '@chromatic-com/storybook':
         specifier: latest
@@ -3513,6 +3516,9 @@ packages:
     resolution: {integrity: sha512-5uKD0nqiYVzlmCRs01Fhs2BdkEgBS3SAVP6ndrBsuK42iC2+JHyxM05Rm9G8+5mkmRtzMZGY8Ct5+mliZxU/Ww==, tarball: https://registry.npmjs.org/unplugin/-/unplugin-2.3.11.tgz}
     engines: {node: '>=18.12.0'}
 
+  uqr@0.1.3:
+    resolution: {integrity: sha512-0rjE8iEJe4YmT9TOhwsZtqCMRLc5DXZUI2UEYUUg63ikBkqqE5EYWaI0etFe/5KUcmcYwLih2RND1kq+hrUJXA==, tarball: https://registry.npmjs.org/uqr/-/uqr-0.1.3.tgz}
+
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==, tarball: https://registry.npmjs.org/uri-js/-/uri-js-4.4.1.tgz}
 
@@ -6696,6 +6702,8 @@ snapshots:
       acorn: 8.19.0
       picomatch: 4.0.7
       webpack-virtual-modules: 0.6.2
+
+  uqr@0.1.3: {}
 
   uri-js@4.4.1:
     dependencies:
