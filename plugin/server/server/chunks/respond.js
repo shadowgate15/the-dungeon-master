@@ -1,5 +1,5 @@
 import { i as json } from "./exports.js";
-import { D as DraftNotFoundError, Dt as CharacterNotFoundError, E as DmOnlyEditError, Ot as CharacterValidationError, c as CampaignNotFoundError, n as library, s as CampaignMissingError } from "./campaign.js";
+import { D as DraftNotFoundError, E as DmOnlyEditError, Ot as CharacterNotFoundError, c as CampaignNotFoundError, kt as CharacterValidationError, n as library, s as CampaignMissingError } from "./campaign.js";
 // src/lib/server/character/respond.ts
 var UNREADABLE = "The Character could not be read. Try saving again.";
 /** Reads a JSON request body, or undefined when it is not JSON. */

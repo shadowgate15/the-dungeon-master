@@ -25,7 +25,7 @@ import type { Dice } from '../dice'
 import { ToolError } from '../tools/contract'
 import { orderText, recordInitiative, spendTurnResource } from './combat'
 import { applyDeathSave, rollsDeathSaves } from './death'
-import { logEvent, setAwaitingNarration } from './log'
+import { logEvent, partyAudience, setAwaitingNarration } from './log'
 import { characterRefs, inScene, scenePlace } from './scene'
 import { nextStep, rollStep, sequenceText } from './sequences'
 
@@ -151,6 +151,16 @@ function labelOf(
   return null
 }
 
+/** Refuses a Call that asks a Character its Narration's Audience leaves out (ADR 0008). */
+function requireInAudience(who: { id: string; name: string }, audience: string[]) {
+  if (audience.includes(who.id)) return
+  throw new ToolError(
+    'not_in_audience',
+    `${who.name} is not in this Narration's Audience, so it cannot ask them for a roll`,
+    'Add them to `to`, or narrate without `to`, or call on a Character the Narration reaches'
+  )
+}
+
 /**
  * Opens a Call in the Narration's transaction. A Call ends the turn; only one is open at a time.
  * Returns its id.
@@ -158,7 +168,11 @@ function labelOf(
 export function openCall(
   db: Queryable,
   input: CallInput,
-  { at, openedBy }: { at: number; openedBy: number | null }
+  {
+    at,
+    openedBy,
+    audience = partyAudience(db)
+  }: { at: number; openedBy: number | null; audience?: string[] }
 ): string {
   if (openCallRow(db)) {
     throw new ToolError(
@@ -167,7 +181,7 @@ export function openCall(
       'Wait for its call_result, or narrate without a call'
     )
   }
-  if (typeof input === 'string') return attachPending(db, input, openedBy)
+  if (typeof input === 'string') return attachPending(db, input, openedBy, audience)
   const id = db
     .insert(call)
     .values({
@@ -176,6 +190,7 @@ export function openCall(
       text: !Array.isArray(input) && input.kind === 'question' ? input.text : null,
       choices: !Array.isArray(input) && input.kind === 'question' ? (input.choices ?? []) : [],
       openedBy,
+      audience,
       createdAt: at
     })
     .returning({ id: call.id })
@@ -188,6 +203,7 @@ export function openCall(
       : (Array.isArray(input) ? input : [input]).flatMap((check) =>
           [check.character].flat().map((ref) => {
             const who = findCharacter(db, ref)
+            requireInAudience(who, audience)
             if (!inScene(scene, who)) {
               throw new ToolError(
                 'not_in_scene',
@@ -217,10 +233,22 @@ export function openCall(
 }
 
 /** Opens a pending Call an action tool made: the Narration attaching it shows it to the Players. */
-function attachPending(db: Queryable, id: string, openedBy: number | null): string {
+function attachPending(
+  db: Queryable,
+  id: string,
+  openedBy: number | null,
+  audience: string[]
+): string {
+  const asked = db
+    .select({ id: character.id, name: character.name })
+    .from(callPart)
+    .innerJoin(character, eq(character.id, callPart.characterId))
+    .where(and(eq(callPart.callId, id)))
+    .all()
+  for (const who of asked) requireInAudience(who, audience)
   const attached = db
     .update(call)
-    .set({ state: 'open', openedBy })
+    .set({ state: 'open', openedBy, audience })
     .where(and(eq(call.id, id), eq(call.state, 'pending')))
     .returning({ id: call.id })
     .get()
@@ -271,6 +299,7 @@ export function createPendingCall(
       text: prompt?.text ?? null,
       choices: prompt?.choices ?? [],
       state: 'pending',
+      audience: partyAudience(db),
       createdAt: at
     })
     .returning({ id: call.id })
@@ -315,6 +344,7 @@ export function createHitDiceCall(db: Queryable, parts: HitDicePart[], at: numbe
       kind: 'hit_dice',
       state: 'pending',
       text: 'How many Hit Dice do you spend?',
+      audience: partyAudience(db),
       createdAt: at
     })
     .returning({ id: call.id })
@@ -585,7 +615,11 @@ export function createCalls(db: Database, now: () => number = Date.now) {
         .set({ ...values, answeredAt: finished ? at : null })
         .where(eq(callPart.id, partId))
         .run()
-      logEvent(db, { tool: 'call', ...event, data: { call: callId, ...event.data } }, { at })
+      logEvent(
+        db,
+        { tool: 'call', ...event, data: { call: callId, ...event.data }, audience: open.audience },
+        { at }
+      )
 
       const parts = db
         .select({ part: callPart, characterName: character.name })
@@ -610,7 +644,8 @@ export function createCalls(db: Database, now: () => number = Date.now) {
           kind: 'call_result',
           summary: callResultEvent(result).content,
           data: { call: callId },
-          dmOnly: true
+          dmOnly: true,
+          audience: open.audience
         },
         { at }
       )

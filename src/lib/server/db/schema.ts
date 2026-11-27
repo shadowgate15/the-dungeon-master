@@ -107,6 +107,14 @@ export const event = sqliteTable('event', {
   data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
   /** DM-only events (Arc and Beat changes) never reach the Player. */
   dmOnly: integer('dm_only', { mode: 'boolean' }).notNull().default(false),
+  /**
+   * The Characters who can see it: a list of Character ids written once and never recomputed
+   * (ADR 0008). The default is the Party's Characters when it was written.
+   */
+  audience: text('audience', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'`),
   createdAt: integer('created_at').notNull()
 })
 
@@ -397,6 +405,8 @@ export const session = sqliteTable('session', {
   startedAt: integer('started_at').notNull(),
   closedAt: integer('closed_at'),
   summary: text('summary'),
+  /** Who can read the summary (ADR 0008); null until it is written. */
+  summaryAudience: text('summary_audience', { mode: 'json' }).$type<string[]>(),
   threads: text('threads', { mode: 'json' }).$type<string[]>()
 })
 
@@ -409,6 +419,14 @@ export const activityLine = sqliteTable('activity_line', {
   sessionId: text('session_id'),
   afterEvent: integer('after_event').notNull(),
   text: text('text').notNull(),
+  /**
+   * The Characters who can see it: a list of Character ids written once and never recomputed
+   * (ADR 0008). The default is the Party's Characters when it was written.
+   */
+  audience: text('audience', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'`),
   createdAt: integer('created_at').notNull()
 })
 
@@ -451,6 +469,14 @@ export const call = sqliteTable('call', {
   choices: text('choices', { mode: 'json' }).$type<string[]>().notNull().default([]),
   /** The Event (a Narration) that opened it. */
   openedBy: integer('opened_by'),
+  /**
+   * The Characters who can see it: a list of Character ids written once and never recomputed
+   * (ADR 0008). The default is the Party's Characters when it was written.
+   */
+  audience: text('audience', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'`),
   createdAt: integer('created_at').notNull(),
   closedAt: integer('closed_at')
 })

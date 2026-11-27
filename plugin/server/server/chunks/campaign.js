@@ -2875,6 +2875,10 @@ function currentTurn(db) {
 	return db.select().from(combatant$1).where(eq(combatant$1.id, live.current)).get() ?? null;
 }
 // src/lib/server/play/log.ts
+/** The default Audience: every Party Character now, in the order they joined (ADR 0008). */
+function partyAudience(db) {
+	return db.select({ id: character.id }).from(character).orderBy(sql`rowid`).all().map((c) => c.id);
+}
 /**
 * The Campaign's current stamp: the open Session (null offline) and the Campaign clock's minute.
 */
@@ -2910,6 +2914,7 @@ function logEvent(db, entry, { stamp = currentStamp(db), at, id = nextEventId(db
 		summary: entry.summary,
 		data: entry.data ?? null,
 		dmOnly: entry.dmOnly ?? false,
+		audience: entry.audience ?? partyAudience(db),
 		createdAt: at
 	}).run();
 	return id;
@@ -2920,6 +2925,7 @@ function logActivity(db, text, { at, afterEvent = nextEventId(db) - 1 }) {
 		text,
 		afterEvent,
 		sessionId: currentStamp(db).sessionId,
+		audience: partyAudience(db),
 		createdAt: at
 	}).run();
 }
@@ -3343,24 +3349,31 @@ function labelOf(part, kind) {
 	if (part.save) return `${ABILITY_NAMES.get(part.save) ?? part.save} save`;
 	return null;
 }
+/** Refuses a Call that asks a Character its Narration's Audience leaves out (ADR 0008). */
+function requireInAudience(who, audience) {
+	if (audience.includes(who.id)) return;
+	throw new ToolError("not_in_audience", `${who.name} is not in this Narration's Audience, so it cannot ask them for a roll`, "Add them to `to`, or narrate without `to`, or call on a Character the Narration reaches");
+}
 /**
 * Opens a Call in the Narration's transaction. A Call ends the turn; only one is open at a time.
 * Returns its id.
 */
-function openCall(db, input, { at, openedBy }) {
+function openCall(db, input, { at, openedBy, audience = partyAudience(db) }) {
 	if (openCallRow(db)) throw new ToolError("call_open", "A Call is already open, waiting on the Players", "Wait for its call_result, or narrate without a call");
-	if (typeof input === "string") return attachPending(db, input, openedBy);
+	if (typeof input === "string") return attachPending(db, input, openedBy, audience);
 	const id = db.insert(call).values({
 		campaignId: db.select({ id: campaign.id }).from(campaign).get().id,
 		kind: Array.isArray(input) ? "check" : input.kind,
 		text: !Array.isArray(input) && input.kind === "question" ? input.text : null,
 		choices: !Array.isArray(input) && input.kind === "question" ? input.choices ?? [] : [],
 		openedBy,
+		audience,
 		createdAt: at
 	}).returning({ id: call.id }).get().id;
 	const scene = scenePlace(db);
 	(!Array.isArray(input) && input.kind === "question" ? playersAtTable(db).map((player) => ({ player })) : (Array.isArray(input) ? input : [input]).flatMap((check) => [check.character].flat().map((ref) => {
 		const who = findCharacter(db, ref);
+		requireInAudience(who, audience);
 		if (!inScene(scene, who)) throw new ToolError("not_in_scene", `${who.name} is not in the Scene`, "Move the Scene to where they are first, or call on a Character in the Scene");
 		return {
 			characterId: who.id,
@@ -3382,10 +3395,16 @@ function openCall(db, input, { at, openedBy }) {
 	return id;
 }
 /** Opens a pending Call an action tool made: the Narration attaching it shows it to the Players. */
-function attachPending(db, id, openedBy) {
+function attachPending(db, id, openedBy, audience) {
+	const asked = db.select({
+		id: character.id,
+		name: character.name
+	}).from(callPart).innerJoin(character, eq(character.id, callPart.characterId)).where(and(eq(callPart.callId, id))).all();
+	for (const who of asked) requireInAudience(who, audience);
 	const attached = db.update(call).set({
 		state: "open",
-		openedBy
+		openedBy,
+		audience
 	}).where(and(eq(call.id, id), eq(call.state, "pending"))).returning({ id: call.id }).get();
 	if (!attached) throw new ToolError("unknown_call", `No pending Call has the id ${id}`, "Attach a pending Call id an action tool returned, or pass the Call inline");
 	return attached.id;
@@ -3401,6 +3420,7 @@ function createPendingCall(db, parts, at, kind = "roll_sequence", prompt = null)
 		text: prompt?.text ?? null,
 		choices: prompt?.choices ?? [],
 		state: "pending",
+		audience: partyAudience(db),
 		createdAt: at
 	}).returning({ id: call.id }).get().id;
 	parts.forEach((part, i) => {
@@ -3429,6 +3449,7 @@ function createHitDiceCall(db, parts, at) {
 		kind: "hit_dice",
 		state: "pending",
 		text: "How many Hit Dice do you spend?",
+		audience: partyAudience(db),
 		createdAt: at
 	}).returning({ id: call.id }).get().id;
 	parts.forEach((part, i) => {
@@ -3621,7 +3642,8 @@ function createCalls(db, now = Date.now) {
 				data: {
 					call: callId,
 					...event.data
-				}
+				},
+				audience: open.audience
 			}, { at });
 			const parts = db.select({
 				part: callPart,
@@ -3647,7 +3669,8 @@ function createCalls(db, now = Date.now) {
 				kind: "call_result",
 				summary: callResultEvent(result).content,
 				data: { call: callId },
-				dmOnly: true
+				dmOnly: true,
+				audience: open.audience
 			}, { at });
 			setAwaitingNarration(db, at);
 			return result;
@@ -4793,6 +4816,7 @@ function closeSession(db, { summary, threads, session: number, at }) {
 	db.update(session).set({
 		closedAt: at,
 		summary: written ? summary : null,
+		summaryAudience: written ? partyAudience(db) : null,
 		threads: written ? threads : null
 	}).where(eq(session.id, target.id)).run();
 	return written ? {
@@ -5316,6 +5340,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { addCombatants as $, ABILITY_NAMES as A, lintWorld as At, createPendingCall as B, retireArc as Bt, DmBusyError as C, equippable as Ct, DraftNotFoundError as D, CharacterNotFoundError as Dt, DmOnlyEditError as E, loadWizardRules as Et, TIERS as F, CurrentArcError as Ft, rollAll as G, expectVersion as Gt, saveKey as H, PLUGIN_NAME as Ht, callInput as I, createArc as It, currentStamp as J, formatClock as Jt, saveSequence as K, readTool as Kt, callResultEvent as L, currentArc as Lt, CallRefusedError as M, fieldNames as Mt, DC_BY_TIER as N, renderLinks as Nt, createDmChannels as O, CharacterValidationError as Ot, PASS as P, resolveLinks as Pt, setAwaitingNarration as Q, SESSION_LIVE_MESSAGE as Qt, cancelPendingCall as R, pastArcs as Rt, DeclarationRefusedError as S, scenePlace as St, ClaimRefusedError as T, believedName as Tt, attackSequence as U, ToolError as Ut, openCall as V, reviseArc as Vt, damageSequence as W, creationTool as Wt, logEvent as X, characterHolders as Xt, logActivity as Y, parseClock as Yt, nextEventId as Z, characterRefs as Zt, closeSession as _, ClockBackwardsError as _t, CampaignArchivedError as a, spendTurnResource as at, sessionsView as b, currentMinute as bt, CampaignNotFoundError as c, applyHealing as ct, BeginRefusedError as d, mustAct as dt, combatState as et, SeedLockedError as f, saveBonus as ft, addConversationLine as g, deathSaveCall as gt, refuseLockedSeed as h, setConcentration as ht, sessions as i, refuseDuringCombat as it, CallClosedError as j, createWorld as jt, playSheets as k, hpState as kt, NotACampaignFolderError as l, combatant as lt, creationStage as m, concentrate as mt, library as n, nextTurn as nt, CampaignExistsError as o, startCombat as ot, StartOverRefusedError as p, setConditions as pt, sequenceText as q, writeTool as qt, live as r, orderText as rt, CampaignMissingError as s, applyDamage as st, campaignRoot as t, endCombat as tt, SessionLiveError as u, incapacitates as ut, history as v, SpotlightRefusedError as vt, returnStrandedDrafts as w, isBodyArmor as wt, DeclarationNotFoundError as x, present as xt, indexNarration as y, advanceClock as yt, createHitDiceCall as z, resolveBeat as zt };
+export { setAwaitingNarration as $, SESSION_LIVE_MESSAGE as $t, ABILITY_NAMES as A, hpState as At, createPendingCall as B, resolveBeat as Bt, DmBusyError as C, scenePlace as Ct, DraftNotFoundError as D, loadWizardRules as Dt, DmOnlyEditError as E, believedName as Et, TIERS as F, resolveLinks as Ft, rollAll as G, creationTool as Gt, saveKey as H, reviseArc as Ht, callInput as I, CurrentArcError as It, currentStamp as J, writeTool as Jt, saveSequence as K, expectVersion as Kt, callResultEvent as L, createArc as Lt, CallRefusedError as M, createWorld as Mt, DC_BY_TIER as N, fieldNames as Nt, createDmChannels as O, CharacterNotFoundError as Ot, PASS as P, renderLinks as Pt, partyAudience as Q, characterRefs as Qt, cancelPendingCall as R, currentArc as Rt, DeclarationRefusedError as S, present as St, ClaimRefusedError as T, isBodyArmor as Tt, attackSequence as U, PLUGIN_NAME as Ut, openCall as V, retireArc as Vt, damageSequence as W, ToolError as Wt, logEvent as X, parseClock as Xt, logActivity as Y, formatClock as Yt, nextEventId as Z, characterHolders as Zt, closeSession as _, deathSaveCall as _t, CampaignArchivedError as a, refuseDuringCombat as at, sessionsView as b, advanceClock as bt, CampaignNotFoundError as c, applyDamage as ct, BeginRefusedError as d, incapacitates as dt, addCombatants as et, SeedLockedError as f, mustAct as ft, addConversationLine as g, setConcentration as gt, refuseLockedSeed as h, concentrate as ht, sessions as i, orderText as it, CallClosedError as j, lintWorld as jt, playSheets as k, CharacterValidationError as kt, NotACampaignFolderError as l, applyHealing as lt, creationStage as m, setConditions as mt, library as n, endCombat as nt, CampaignExistsError as o, spendTurnResource as ot, StartOverRefusedError as p, saveBonus as pt, sequenceText as q, readTool as qt, live as r, nextTurn as rt, CampaignMissingError as s, startCombat as st, campaignRoot as t, combatState as tt, SessionLiveError as u, combatant as ut, history as v, ClockBackwardsError as vt, returnStrandedDrafts as w, equippable as wt, DeclarationNotFoundError as x, currentMinute as xt, indexNarration as y, SpotlightRefusedError as yt, createHitDiceCall as z, pastArcs as zt };
 
 //# sourceMappingURL=campaign.js.map

@@ -3,7 +3,7 @@ import type { SessionHistory } from '#lib/play/sessions.ts'
 import type { Queryable } from '../db/connect'
 import { event, session } from '../db/schema'
 import { ToolError } from '../tools/contract'
-import { currentSession, hasNarration } from './log'
+import { currentSession, hasNarration, partyAudience } from './log'
 
 type SessionRow = typeof session.$inferSelect
 
@@ -66,6 +66,7 @@ export function closeSession(
     .set({
       closedAt: at,
       summary: written ? summary : null,
+      summaryAudience: written ? partyAudience(db) : null,
       threads: written ? threads : null
     })
     .where(eq(session.id, target.id))
