@@ -55,7 +55,11 @@ type Context = {
   home: string
   port: number
   env: NodeJS.ProcessEnv
+  /** Whether this run asked for LAN mode with `--lan`. */
+  lan: boolean
 }
+
+type Mode = 'local' | 'lan'
 
 function pluginVersion(pluginRoot: string): string {
   const manifest = path.join(pluginRoot, '.claude-plugin', 'plugin.json')
@@ -66,7 +70,7 @@ function pluginVersion(pluginRoot: string): string {
  * Starts the server from this plugin root, detached in its own process group so it outlives the
  * terminal and the `claude` session, and waits until it listens.
  */
-async function startServer(ctx: Context): Promise<Runtime> {
+async function startServer(ctx: Context, mode: Mode): Promise<Runtime> {
   const serverDir = path.join(ctx.pluginRoot, 'server')
   fs.mkdirSync(ctx.home, { recursive: true })
   const logFile = path.join(ctx.home, 'server.log')
@@ -78,11 +82,14 @@ async function startServer(ctx: Context): Promise<Runtime> {
     stdio: ['ignore', log, log],
     env: {
       ...ctx.env,
+      DUNGEON_MASTER_LAN: '',
       DUNGEON_MASTER_HOME: ctx.home,
       DUNGEON_MASTER_PORT: String(ctx.port),
       DUNGEON_MASTER_VERSION: ctx.version,
       PORT: String(ctx.port),
-      HOST: '127.0.0.1',
+      // LAN mode binds every interface, which still covers loopback for the launcher and bridge.
+      HOST: mode === 'lan' ? '0.0.0.0' : '127.0.0.1',
+      ...(mode === 'lan' ? { DUNGEON_MASTER_LAN: '1' } : {}),
       // adapter-node assumes https otherwise, and refuses the UI's form posts as cross-site.
       ORIGIN: uiUrl(ctx.port)
     }
@@ -148,7 +155,8 @@ async function runningServer(ctx: Context): Promise<Runtime | undefined> {
 }
 
 /**
- * The server for this plugin version: the running one, or a fresh one replacing a stale one.
+ * The server for this plugin version and mode: the running one, or a fresh one replacing a stale
+ * one. A fresh start is localhost-only unless `--lan` asked for LAN mode.
  * `beforeRestart` may refuse (by throwing) before a stale server is stopped.
  */
 async function ensureServer(
@@ -156,12 +164,16 @@ async function ensureServer(
   beforeRestart?: (stale: Runtime) => Promise<void>
 ): Promise<Runtime> {
   const running = await runningServer(ctx)
+  // A plain dm reuses a LAN server as-is, and a version restart keeps the mode; only --lan
+  // switches a localhost server, through the same restart path.
+  const current: Mode = running?.mode === 'lan' ? 'lan' : 'local'
+  const wanted: Mode = ctx.lan ? 'lan' : current
   if (running) {
-    if (running.version === ctx.version) return running
+    if (running.version === ctx.version && current === wanted) return running
     await beforeRestart?.(running)
     await stopServer(ctx, running)
   }
-  return startServer(ctx)
+  return startServer(ctx, wanted)
 }
 
 type InstalledPlugin = { id: string; enabled: boolean; installPath?: string }
@@ -209,6 +221,15 @@ async function register(runtime: Runtime, folder: string): Promise<RegisteredCam
     throw new LauncherError(`The game server refused to register ${folder} (${response.status}).`)
   }
   return (await response.json()) as RegisteredCampaign
+}
+
+/** Refuses a restart that would cut a live Session off. */
+function refuseRestartIfAttached(campaign: RegisteredCampaign) {
+  if (campaign.attached) {
+    throw new LauncherError(
+      `${campaign.name} already has a DM session at the table. End the Session first.`
+    )
+  }
 }
 
 function refuseIfAttached(campaign: RegisteredCampaign) {
@@ -290,7 +311,11 @@ function installShim() {
   fs.chmodSync(shim, 0o755)
 }
 
-/** Runs `dm [stop | install-shim]` and resolves to the exit code. */
+/** Where Players on the network reach the game, and what to check when they can't. */
+const FIREWALL_HINT =
+  'dm: if a device cannot connect, allow incoming connections for node in your firewall.'
+
+/** Runs `dm [--lan] [stop | install-shim]` and resolves to the exit code. */
 export async function runLauncher(
   args: string[],
   {
@@ -303,7 +328,11 @@ export async function runLauncher(
   if (Number(node.split('.')[0]) < NODE_MINIMUM) {
     return fail(`The Dungeon Master needs Node ${NODE_MINIMUM} or later; this is Node ${node}.`)
   }
+  const lan = args.includes('--lan')
+  // --lan is the launcher's: claude never sees it.
+  args = args.filter((arg) => arg !== '--lan')
   const ctx: Context = {
+    lan,
     pluginRoot,
     version: pluginVersion(pluginRoot),
     home: userStateDir(env),
@@ -316,6 +345,7 @@ export async function runLauncher(
       return 0
     }
     if (args[0] === 'stop') {
+      if (lan) return fail('dm stop does not take --lan: stopping the server ends LAN mode.')
       const running = await runningServer(ctx)
       if (!running) {
         process.stdout.write('dm: the game server is not running.\n')
@@ -328,6 +358,10 @@ export async function runLauncher(
     if (!fs.existsSync(campaignDatabasePath(cwd))) {
       // A Campaign is only ever created in the UI, so make sure there is one to point to.
       const runtime = await ensureServer(ctx)
+      if (lan) {
+        printJoinUrls(runtime)
+        process.stdout.write('dm: Players can join once a Session is live.\n')
+      }
       return fail(
         `${cwd} is not a Campaign folder. Create or open a Campaign in the web UI at ` +
           `${uiUrl(runtime.port)}/campaigns, then run dm in its folder.`
@@ -337,18 +371,26 @@ export async function runLauncher(
     // A stale server may still hold this Campaign's live session: ask it before restarting, since
     // the session's bridge only reconnects after the restart.
     const runtime = await ensureServer(ctx, async (stale) =>
-      refuseIfAttached(await register(stale, cwd))
+      refuseRestartIfAttached(await register(stale, cwd))
     )
     const campaign = await register(runtime, cwd)
     refuseIfAttached(campaign)
     process.stdout.write(
       `dm: ${campaign.name} is at ${uiUrl(runtime.port)}/campaigns/${campaign.id}\n`
     )
+    printJoinUrls(runtime)
     return await runClaude(pluginId, cwd, args)
   } catch (e) {
     if (e instanceof LauncherError) return fail(e.message)
     throw e
   }
+}
+
+/** The join URLs one per line, then the firewall hint; nothing for a localhost-only server. */
+function printJoinUrls(runtime: Runtime) {
+  if (runtime.mode !== 'lan') return
+  for (const url of runtime.joinUrls ?? []) process.stdout.write(`${url}\n`)
+  process.stdout.write(`${FIREWALL_HINT}\n`)
 }
 
 function fail(message: string) {

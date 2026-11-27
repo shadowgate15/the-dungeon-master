@@ -1,5 +1,5 @@
 import { n as fail, t as error } from "../../../../../chunks/exports.js";
-import { l as DmAwayError, o as play } from "../../../../../chunks/bridge.js";
+import { s as play, u as DmAwayError } from "../../../../../chunks/bridge.js";
 import { a as CampaignArchivedError, d as BeginRefusedError, i as sessions, n as library, p as StartOverRefusedError } from "../../../../../chunks/campaign.js";
 // src/routes/campaigns/[id]/begin/+page.server.ts
 /** The Begin step: whether the story can begin, and after Begin the pitch and Start over. */

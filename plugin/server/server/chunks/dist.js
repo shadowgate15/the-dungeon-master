@@ -2,7 +2,7 @@ import "./server2.js";
 import "./index-server.js";
 import "./context.js";
 import { t as useQueryClient } from "./useQueryClient.js";
-// node_modules/.pnpm/@tanstack+svelte-query-devtools@6.3.7_@tanstack+svelte-query@6.3.7_svelte@5.57.3_@types_8ea849ea8105e537a5386474a23c1746/node_modules/@tanstack/svelte-query-devtools/dist/Devtools.svelte
+// ../../../node_modules/.pnpm/@tanstack+svelte-query-devtools@6.3.7_@tanstack+svelte-query@6.3.7_svelte@5.57.3_@types_8ea849ea8105e537a5386474a23c1746/node_modules/@tanstack/svelte-query-devtools/dist/Devtools.svelte
 function Devtools($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
 		/**

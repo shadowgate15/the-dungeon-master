@@ -6,7 +6,16 @@ import path from 'node:path'
  * the launcher find the server and prove they may talk to it. `version` is the plugin version the
  * launcher started it from (none for a dev server), so a stale server can be restarted.
  */
-export type Runtime = { port: number; token: string; pid: number; version?: string }
+export type Runtime = {
+  port: number
+  token: string
+  pid: number
+  version?: string
+  /** `lan` when the server listens on every interface; absent in older files, meaning `local`. */
+  mode?: 'local' | 'lan'
+  /** Where other devices reach a LAN server, computed by the server at start. */
+  joinUrls?: string[]
+}
 
 export function runtimeFilePath(home: string): string {
   return path.join(home, 'runtime.json')
