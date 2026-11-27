@@ -7,6 +7,7 @@ vi.mock('#lib/server/campaign/index.ts', () => ({
 vi.mock('#lib/server/bridge/index.ts', () => ({
   permissions: { pending: () => ({ requestId: 'r1' }) },
   play: {
+    claims: () => [],
     sheets: () => [],
     openFloor: () => ({}),
     timeline: () => ({}),
