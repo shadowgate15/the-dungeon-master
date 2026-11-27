@@ -1,4 +1,5 @@
 import { error } from '@sveltejs/kit'
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import { library, sessions } from '#lib/server/campaign/index.ts'
 import { permissions, play } from '#lib/server/bridge/index.ts'
 import type { PageServerLoad } from './$types'
@@ -16,7 +17,8 @@ export const load: PageServerLoad = ({ params, locals }) => {
     timeline: play.timeline(entry.id, locals.browser),
     scene: play.scene(entry.id, locals.browser),
     journal: play.journal(entry.id, locals.browser),
-    permission: permissions.pending(entry.id),
+    // Permission prompts are the Host's to answer: a remote browser is never sent one.
+    permission: locals.browser === SOLO_PLAYER ? permissions.pending(entry.id) : null,
     attached: sessions.list()
   }
 }
