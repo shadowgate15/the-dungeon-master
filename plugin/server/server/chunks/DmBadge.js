@@ -1,5 +1,5 @@
 import { r as attributes, v as clsx, x as escape_html } from "./server2.js";
-import { f as createQuery, t as SESSIONS_QUERY_KEY } from "./messages.js";
+import { p as createQuery, t as SESSIONS_QUERY_KEY } from "./messages.js";
 import { i as STATUS_CLASSES_BORDERLESS, n as NEUTRAL_CLASSES } from "./Alert.js";
 // src/lib/live/client.ts
 /** The ids of the Campaigns with a DM at the table, starting from the server-rendered list. */

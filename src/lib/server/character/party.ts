@@ -8,6 +8,7 @@ import {
   MAX_LEVEL,
   type LevelUpOffer
 } from '#lib/character/level-up.ts'
+import type { ClaimRow } from '#lib/play/claims.ts'
 import { tryDraftToCharacterInput } from '#lib/character/save.ts'
 import { buildSummary, detailToSummaryData } from '#lib/character/summary.ts'
 import { STEPS, type StepId } from '#lib/character/steps.ts'
@@ -49,14 +50,6 @@ const listed = (words: string[]) =>
 
 /** A Claim the browser may not make or give up: the Character is taken, or not the browser's. */
 export class ClaimRefusedError extends Error {}
-
-/** One Party Character as a browser sees its Claim: never by whom, only whether it is its own. */
-export type ClaimRow = {
-  kind: 'character' | 'draft'
-  id: string
-  name: string
-  claim: 'yours' | 'taken' | 'free'
-}
 
 /** The Campaign has no draft with this id. */
 export class DraftNotFoundError extends Error {}

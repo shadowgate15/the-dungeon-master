@@ -4,7 +4,7 @@ import fs from "node:fs";
 import http from "node:http";
 import process from "node:process";
 import { rm } from "node:fs/promises";
-// node_modules/.pnpm/@sveltejs+adapter-node@6.0.5_@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_sve_28bfda2a64ecb3848bd230f6779c8da2/node_modules/@sveltejs/adapter-node/src/index.js
+// ../../../node_modules/.pnpm/@sveltejs+adapter-node@6.0.5_@sveltejs+kit@3.1.1_@sveltejs+vite-plugin-svelte@7.3.1_sve_28bfda2a64ecb3848bd230f6779c8da2/node_modules/@sveltejs/adapter-node/src/index.js
 var path = env("SOCKET_PATH", false);
 var host = env("HOST", "0.0.0.0");
 var port = env("PORT", !path && "3000");

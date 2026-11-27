@@ -25,7 +25,7 @@ var DUNGEON_MASTER_PORT = dynamic_private_env.DUNGEON_MASTER_PORT;
 var DUNGEON_MASTER_VERSION = dynamic_private_env.DUNGEON_MASTER_VERSION;
 var DUNGEON_MASTER_LAN = dynamic_private_env.DUNGEON_MASTER_LAN;
 var DUNGEON_MASTER_CAMPAIGNS = dynamic_private_env.DUNGEON_MASTER_CAMPAIGNS;
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/entity.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/entity.js
 var entityKind = Symbol.for("drizzle:entityKind");
 function is(value, type) {
 	if (!value || typeof value !== "object") return false;
@@ -38,7 +38,7 @@ function is(value, type) {
 	}
 	return false;
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/column.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/column.js
 var Column = class {
 	constructor(table, config) {
 		this.table = table;
@@ -87,7 +87,7 @@ var Column = class {
 		return this.config.generated !== void 0 && this.config.generated.type !== "byDefault";
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/column-builder.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/column-builder.js
 var ColumnBuilder = class {
 	static [entityKind] = "ColumnBuilder";
 	config;
@@ -189,14 +189,14 @@ var ColumnBuilder = class {
 		this.config.name = name;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/table.utils.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/table.utils.js
 var TableName = Symbol.for("drizzle:Name");
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/pg-core/columns/enum.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/pg-core/columns/enum.js
 var isPgEnumSym = Symbol.for("drizzle:isPgEnum");
 function isPgEnum(obj) {
 	return !!obj && typeof obj === "function" && isPgEnumSym in obj && obj[isPgEnumSym] === true;
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/subquery.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/subquery.js
 var Subquery = class {
 	static [entityKind] = "Subquery";
 	constructor(sql, fields, alias, isWith = false, usedTables = []) {
@@ -213,13 +213,13 @@ var Subquery = class {
 var WithSubquery = class extends Subquery {
 	static [entityKind] = "WithSubquery";
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/tracing.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/tracing.js
 var tracer = { startActiveSpan(name, fn) {
 	return fn();
 } };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/view-common.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/view-common.js
 var ViewBaseConfig = Symbol.for("drizzle:ViewBaseConfig");
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/table.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/table.js
 var Schema = Symbol.for("drizzle:Schema");
 var Columns = Symbol.for("drizzle:Columns");
 var ExtraConfigColumns = Symbol.for("drizzle:ExtraConfigColumns");
@@ -280,7 +280,7 @@ function getTableName(table) {
 function getTableUniqueName(table) {
 	return `${table[Schema] ?? "public"}.${table[TableName]}`;
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/sql.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/sql.js
 function isSQLWrapper(value) {
 	return value !== null && value !== void 0 && typeof value.getSQL === "function";
 }
@@ -650,7 +650,7 @@ Table.prototype.getSQL = function() {
 Subquery.prototype.getSQL = function() {
 	return new SQL([this]);
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/alias.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/alias.js
 var ColumnAliasProxyHandler = class {
 	constructor(table) {
 		this.table = table;
@@ -707,7 +707,7 @@ function mapColumnsInSQLToAlias(query, alias) {
 		return c;
 	}));
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/errors.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/errors.js
 var DrizzleError = class extends Error {
 	static [entityKind] = "DrizzleError";
 	constructor({ message, cause }) {
@@ -733,7 +733,7 @@ var TransactionRollbackError = class extends DrizzleError {
 		super({ message: "Rollback" });
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/logger.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/logger.js
 var ConsoleLogWriter = class {
 	static [entityKind] = "ConsoleLogWriter";
 	write(message) {
@@ -762,7 +762,7 @@ var NoopLogger = class {
 	static [entityKind] = "NoopLogger";
 	logQuery() {}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/query-promise.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/query-promise.js
 var QueryPromise = class {
 	static [entityKind] = "QueryPromise";
 	[Symbol.toStringTag] = "QueryPromise";
@@ -782,7 +782,7 @@ var QueryPromise = class {
 		return this.execute().then(onFulfilled, onRejected);
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/utils.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/utils.js
 function mapResultRow(columns, row, joinsNotNullableMap) {
 	const nullifyMap = {};
 	const result = columns.reduce((result2, { path, field }, columnIndex) => {
@@ -893,7 +893,7 @@ function isConfig(data) {
 	return false;
 }
 var textDecoder = typeof TextDecoder === "undefined" ? null : new TextDecoder();
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/pg-core/table.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/pg-core/table.js
 var InlineForeignKeys$1 = Symbol.for("drizzle:PgInlineForeignKeys");
 var EnableRLS = Symbol.for("drizzle:EnableRLS");
 var PgTable = class extends Table {
@@ -912,7 +912,7 @@ var PgTable = class extends Table {
 	/** @internal */
 	[Table.Symbol.ExtraConfigColumns] = {};
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/pg-core/primary-keys.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/pg-core/primary-keys.js
 var PrimaryKeyBuilder$1 = class {
 	static [entityKind] = "PgPrimaryKeyBuilder";
 	/** @internal */
@@ -941,7 +941,7 @@ var PrimaryKey$1 = class {
 		return this.name ?? `${this.table[PgTable.Symbol.Name]}_${this.columns.map((column) => column.name).join("_")}_pk`;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/expressions/conditions.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/expressions/conditions.js
 function bindIfParam(value, column) {
 	if (isDriverValueEncoder(column) && !isSQLWrapper(value) && !is(value, Param) && !is(value, Placeholder) && !is(value, Column) && !is(value, Table) && !is(value, View)) return new Param(value, column);
 	return value;
@@ -1031,14 +1031,14 @@ function ilike(column, value) {
 function notIlike(column, value) {
 	return sql`${column} not ilike ${value}`;
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/expressions/select.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sql/expressions/select.js
 function asc(column) {
 	return sql`${column} asc`;
 }
 function desc(column) {
 	return sql`${column} desc`;
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/relations.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/relations.js
 var Relation = class {
 	constructor(sourceTable, referencedTable, relationName) {
 		this.sourceTable = sourceTable;
@@ -1213,7 +1213,7 @@ function mapRelationalRow(tablesConfig, tableConfig, row, buildQueryResultSelect
 	}
 	return result;
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/checks.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/checks.js
 var CheckBuilder = class {
 	constructor(name, value) {
 		this.name = name;
@@ -1238,7 +1238,7 @@ var Check = class {
 function check(name, value) {
 	return new CheckBuilder(name, value);
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/foreign-keys.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/foreign-keys.js
 var ForeignKeyBuilder = class {
 	static [entityKind] = "SQLiteForeignKeyBuilder";
 	/** @internal */
@@ -1299,7 +1299,7 @@ var ForeignKey = class {
 		return name ?? `${chunks.join("_")}_fk`;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/unique-constraint.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/unique-constraint.js
 function uniqueKeyName(table, columns) {
 	return `${table[TableName]}_${columns.join("_")}_unique`;
 }
@@ -1343,7 +1343,7 @@ var UniqueConstraint = class {
 		return this.name;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/common.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/common.js
 var SQLiteColumnBuilder = class extends ColumnBuilder {
 	static [entityKind] = "SQLiteColumnBuilder";
 	foreignKeyConfigs = [];
@@ -1393,7 +1393,7 @@ var SQLiteColumn = class extends Column {
 	}
 	static [entityKind] = "SQLiteColumn";
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/blob.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/blob.js
 var SQLiteBigIntBuilder = class extends SQLiteColumnBuilder {
 	static [entityKind] = "SQLiteBigIntBuilder";
 	constructor(name) {
@@ -1472,7 +1472,7 @@ function blob(a, b) {
 	if (config?.mode === "bigint") return new SQLiteBigIntBuilder(name);
 	return new SQLiteBlobBufferBuilder(name);
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/custom.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/custom.js
 var SQLiteCustomColumnBuilder = class extends SQLiteColumnBuilder {
 	static [entityKind] = "SQLiteCustomColumnBuilder";
 	constructor(name, fieldConfig, customTypeParams) {
@@ -1512,7 +1512,7 @@ function customType(customTypeParams) {
 		return new SQLiteCustomColumnBuilder(name, config, customTypeParams);
 	};
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/integer.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/integer.js
 var SQLiteBaseIntegerBuilder = class extends SQLiteColumnBuilder {
 	static [entityKind] = "SQLiteBaseIntegerBuilder";
 	constructor(name, dataType, columnType) {
@@ -1601,7 +1601,7 @@ function integer(a, b) {
 	if (config?.mode === "boolean") return new SQLiteBooleanBuilder(name, config.mode);
 	return new SQLiteIntegerBuilder(name);
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/numeric.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/numeric.js
 var SQLiteNumericBuilder = class extends SQLiteColumnBuilder {
 	static [entityKind] = "SQLiteNumericBuilder";
 	constructor(name) {
@@ -1666,7 +1666,7 @@ function numeric(a, b) {
 	const mode = config?.mode;
 	return mode === "number" ? new SQLiteNumericNumberBuilder(name) : mode === "bigint" ? new SQLiteNumericBigIntBuilder(name) : new SQLiteNumericBuilder(name);
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/real.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/real.js
 var SQLiteRealBuilder = class extends SQLiteColumnBuilder {
 	static [entityKind] = "SQLiteRealBuilder";
 	constructor(name) {
@@ -1686,7 +1686,7 @@ var SQLiteReal = class extends SQLiteColumn {
 function real(name) {
 	return new SQLiteRealBuilder(name ?? "");
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/text.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/text.js
 var SQLiteTextBuilder = class extends SQLiteColumnBuilder {
 	static [entityKind] = "SQLiteTextBuilder";
 	constructor(name, config) {
@@ -1737,7 +1737,7 @@ function text(a, b = {}) {
 	if (config.mode === "json") return new SQLiteTextJsonBuilder(name);
 	return new SQLiteTextBuilder(name, config);
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/selection-proxy.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/selection-proxy.js
 var SelectionProxyHandler = class SelectionProxyHandler {
 	static [entityKind] = "SelectionProxyHandler";
 	config;
@@ -1773,7 +1773,7 @@ var SelectionProxyHandler = class SelectionProxyHandler {
 		return new Proxy(value, new SelectionProxyHandler(this.config));
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/all.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/columns/all.js
 function getSQLiteColumnBuilders() {
 	return {
 		blob,
@@ -1784,7 +1784,7 @@ function getSQLiteColumnBuilders() {
 		text
 	};
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/table.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/table.js
 var InlineForeignKeys = Symbol.for("drizzle:SQLiteInlineForeignKeys");
 var SQLiteTable = class extends Table {
 	static [entityKind] = "SQLiteTable";
@@ -1816,7 +1816,7 @@ function sqliteTableBase(name, columns, extraConfig, schema, baseName = name) {
 var sqliteTable = (name, columns, extraConfig) => {
 	return sqliteTableBase(name, columns, extraConfig);
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/indexes.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/indexes.js
 var IndexBuilderOn = class {
 	constructor(name, unique) {
 		this.name = name;
@@ -1867,7 +1867,7 @@ function index(name) {
 function uniqueIndex(name) {
 	return new IndexBuilderOn(name, true);
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/primary-keys.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/primary-keys.js
 function primaryKey(...config) {
 	if (config[0].columns) return new PrimaryKeyBuilder(config[0].columns, config[0].name);
 	return new PrimaryKeyBuilder(config);
@@ -1900,14 +1900,14 @@ var PrimaryKey = class {
 		return this.name ?? `${this.table[SQLiteTable.Symbol.Name]}_${this.columns.map((column) => column.name).join("_")}_pk`;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/utils.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/utils.js
 function extractUsedTable(table) {
 	if (is(table, SQLiteTable)) return [`${table[Table.Symbol.BaseName]}`];
 	if (is(table, Subquery)) return table._.usedTables ?? [];
 	if (is(table, SQL)) return table.usedTables ?? [];
 	return [];
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/delete.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/delete.js
 var SQLiteDeleteBase = class extends QueryPromise {
 	constructor(table, session, dialect, withList) {
 		super();
@@ -2014,7 +2014,7 @@ var SQLiteDeleteBase = class extends QueryPromise {
 		return this;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/casing.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/casing.js
 function toSnakeCase(input) {
 	return (input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? []).map((word) => word.toLowerCase()).join("_");
 }
@@ -2056,11 +2056,11 @@ var CasingCache = class {
 		this.cachedTables = {};
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/view-base.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/view-base.js
 var SQLiteViewBase = class extends View {
 	static [entityKind] = "SQLiteViewBase";
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/dialect.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/dialect.js
 var SQLiteDialect = class {
 	static [entityKind] = "SQLiteDialect";
 	/** @internal */
@@ -2497,7 +2497,7 @@ var SQLiteSyncDialect = class extends SQLiteDialect {
 		}
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/query-builders/query-builder.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/query-builders/query-builder.js
 var TypedQueryBuilder = class {
 	static [entityKind] = "TypedQueryBuilder";
 	/** @internal */
@@ -2505,7 +2505,7 @@ var TypedQueryBuilder = class {
 		return this._.selectedFields;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/select.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/select.js
 var SQLiteSelectBuilder = class {
 	static [entityKind] = "SQLiteSelectBuilder";
 	fields;
@@ -3109,7 +3109,7 @@ var union = createSetOperator("union", false);
 var unionAll = createSetOperator("union", true);
 var intersect = createSetOperator("intersect", false);
 var except = createSetOperator("except", false);
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/query-builder.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/query-builder.js
 var QueryBuilder = class {
 	static [entityKind] = "SQLiteQueryBuilder";
 	dialect;
@@ -3174,7 +3174,7 @@ var QueryBuilder = class {
 		return this.dialect;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/insert.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/insert.js
 var SQLiteInsertBuilder = class {
 	constructor(table, session, dialect, withList) {
 		this.table = table;
@@ -3331,7 +3331,7 @@ var SQLiteInsertBase = class extends QueryPromise {
 		return this;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/update.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/update.js
 var SQLiteUpdateBuilder = class {
 	constructor(table, session, dialect, withList) {
 		this.table = table;
@@ -3486,7 +3486,7 @@ var SQLiteUpdateBase = class extends QueryPromise {
 		return this;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/count.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/count.js
 var SQLiteCountBuilder = class SQLiteCountBuilder extends SQL {
 	constructor(params) {
 		super(SQLiteCountBuilder.buildEmbeddedCount(params.source, params.filters).queryChunks);
@@ -3520,7 +3520,7 @@ var SQLiteCountBuilder = class SQLiteCountBuilder extends SQL {
 		});
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/query.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/query.js
 var RelationalQueryBuilder = class {
 	constructor(mode, fullSchema, schema, tableNamesMap, table, tableConfig, dialect, session) {
 		this.mode = mode;
@@ -3619,7 +3619,7 @@ var SQLiteSyncRelationalQuery = class extends SQLiteRelationalQuery {
 		return this.executeRaw();
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/raw.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/query-builders/raw.js
 var SQLiteRaw = class extends QueryPromise {
 	constructor(execute, getSQL, action, dialect, mapBatchResult) {
 		super();
@@ -3649,7 +3649,7 @@ var SQLiteRaw = class extends QueryPromise {
 		return false;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/db.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/db.js
 var BaseSQLiteDatabase = class {
 	constructor(resultKind, dialect, session, schema) {
 		this.resultKind = resultKind;
@@ -3901,7 +3901,7 @@ var BaseSQLiteDatabase = class {
 		return this.session.transaction(transaction, config);
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/cache/core/cache.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/cache/core/cache.js
 var Cache = class {
 	static [entityKind] = "Cache";
 };
@@ -3920,7 +3920,7 @@ async function hashQuery(sql, params) {
 	const hashBuffer = await crypto.subtle.digest("SHA-256", data);
 	return [...new Uint8Array(hashBuffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/session.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/sqlite-core/session.js
 var ExecuteResultSync = class extends QueryPromise {
 	constructor(resultCb) {
 		super();
@@ -4885,8 +4885,8 @@ var campaignOwner = () => text("campaign_id").notNull().references(() => campaig
 var character = sqliteTable("character", {
 	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
 	campaignId: campaignOwner(),
-	/** The Player who controls this Character; exactly one, transferable. */
-	controllingPlayer: text("controlling_player").notNull(),
+	/** The browser that Claims this Character; null while it is unclaimed. */
+	controllingPlayer: text("controlling_player"),
 	status: text("status", { enum: CHARACTER_STATUSES }).notNull().default("alive"),
 	/** The Character's Entity version: bumped by every edit, named in change notices. */
 	version: integer("version").notNull().default(1),
@@ -5020,7 +5020,7 @@ var characterItem = sqliteTable("character_item", {
 var characterDraft = sqliteTable("character_draft", {
 	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
 	campaignId: campaignOwner(),
-	controllingPlayer: text("controlling_player").notNull(),
+	controllingPlayer: text("controlling_player"),
 	data: text("data", { mode: "json" }).$type().notNull(),
 	/** The wizard step the draft was last on. */
 	step: text("step").$type().notNull(),
@@ -6731,7 +6731,7 @@ function createRulesRepository(db) {
 		abilityScoreMethods: () => db.select().from(abilityScoreMethod).orderBy(asc(abilityScoreMethod.id)).all()
 	};
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/session.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/session.js
 var BetterSQLiteSession = class extends SQLiteSession {
 	constructor(client, dialect, schema, options = {}) {
 		super(dialect);
@@ -6813,7 +6813,7 @@ var PreparedQuery = class extends SQLitePreparedQuery {
 		return this._isResponseInArrayMode;
 	}
 };
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/driver.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/driver.js
 var BetterSQLite3Database = class extends BaseSQLiteDatabase {
 	static [entityKind] = "BetterSQLite3Database";
 };
@@ -6854,7 +6854,7 @@ function drizzle(...params) {
 	}
 	drizzle2.mock = mock;
 })(drizzle || (drizzle = {}));
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/migrator.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/migrator.js
 function readMigrationFiles(config) {
 	const migrationFolderTo = config.migrationsFolder;
 	const migrationQueries = [];
@@ -6881,7 +6881,7 @@ function readMigrationFiles(config) {
 	}
 	return migrationQueries;
 }
-// node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/migrator.js
+// ../../../node_modules/.pnpm/drizzle-orm@0.45.4_@types+better-sqlite3@9.6.0_better-sqlite3@13.0.3/node_modules/drizzle-orm/better-sqlite3/migrator.js
 function migrate(db, config) {
 	const migrations = readMigrationFiles(config);
 	db.dialect.migrate(migrations, db.session, config);

@@ -9,7 +9,7 @@ return {
 	app_path: "_app",
 	assets: new Set(["robots.txt"]),
 	mime_types: {".txt":"text/plain"},
-	client: {start:"_app/immutable/entry/start.CFUX30lc.js",app:"_app/immutable/entry/app.hvENE96p.js",imports:["_app/immutable/entry/start.CFUX30lc.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/BYHYnV9N.js","_app/immutable/chunks/BpXE3IPt.js","_app/immutable/chunks/B5n0xp8a.js","_app/immutable/chunks/BnCPhKr5.js","_app/immutable/chunks/9lSbqI6C.js","_app/immutable/entry/app.hvENE96p.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
+	client: {start:"_app/immutable/entry/start.CFUX30lc.js",app:"_app/immutable/entry/app.Cn-BkEiR.js",imports:["_app/immutable/entry/start.CFUX30lc.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/BYHYnV9N.js","_app/immutable/chunks/BpXE3IPt.js","_app/immutable/chunks/B5n0xp8a.js","_app/immutable/chunks/BnCPhKr5.js","_app/immutable/chunks/9lSbqI6C.js","_app/immutable/entry/app.Cn-BkEiR.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
 	
 	nodes: [
 		__memo(() => import('./nodes/0.js')),
@@ -62,6 +62,20 @@ return {
 			params: [{"name":"id","optional":false,"rest":false,"chained":false},{"name":"character","optional":false,"rest":false,"chained":false}],
 			page: null,
 			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/characters/_character_/level-up/_server.ts.js'))
+		},
+		{
+			id: "/api/campaigns/[id]/claims",
+			pattern: /^\/api\/campaigns\/([^/]+?)\/claims\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false}],
+			page: null,
+			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/claims/_server.ts.js'))
+		},
+		{
+			id: "/api/campaigns/[id]/claims/[character]",
+			pattern: /^\/api\/campaigns\/([^/]+?)\/claims\/([^/]+?)\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false},{"name":"character","optional":false,"rest":false,"chained":false}],
+			page: null,
+			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/claims/_character_/_server.ts.js'))
 		},
 		{
 			id: "/api/campaigns/[id]/conversation",
