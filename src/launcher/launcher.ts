@@ -66,6 +66,27 @@ function pluginVersion(pluginRoot: string): string {
   return (JSON.parse(fs.readFileSync(manifest, 'utf8')) as { version: string }).version
 }
 
+/** The header adapter-node reads the request's protocol from in LAN mode. */
+const LAN_PROTOCOL_HEADER = 'x-forwarded-proto'
+
+/**
+ * In LAN mode each request's URL is its own Host over `http`, so form posts pass SvelteKit's
+ * origin check from localhost and from a LAN address alike, and a write from another site still
+ * fails it. adapter-node takes the host from the Host header but the protocol only from a header
+ * or a fixed ORIGIN, so a preload sets that header on every request: the server speaks plain HTTP
+ * only, and whatever protocol a client claimed is overwritten.
+ */
+const LAN_PRELOAD = `import http from 'node:http'
+const emit = http.Server.prototype.emit
+http.Server.prototype.emit = function (event, req, ...rest) {
+  if (event === 'request') req.headers['${LAN_PROTOCOL_HEADER}'] = 'http'
+  return emit.call(this, event, req, ...rest)
+}`
+
+function serverNodeArgs(mode: Mode): string[] {
+  return mode === 'lan' ? [`--import=data:text/javascript,${encodeURIComponent(LAN_PRELOAD)}`] : []
+}
+
 /**
  * Starts the server from this plugin root, detached in its own process group so it outlives the
  * terminal and the `claude` session, and waits until it listens.
@@ -75,25 +96,30 @@ async function startServer(ctx: Context, mode: Mode): Promise<Runtime> {
   fs.mkdirSync(ctx.home, { recursive: true })
   const logFile = path.join(ctx.home, 'server.log')
   const log = fs.openSync(logFile, 'a')
-  const child = spawn(process.execPath, [path.join(serverDir, 'index.js')], {
-    // The server finds its migrations relative to its own directory.
-    cwd: serverDir,
-    detached: true,
-    stdio: ['ignore', log, log],
-    env: {
-      ...ctx.env,
-      DUNGEON_MASTER_LAN: '',
-      DUNGEON_MASTER_HOME: ctx.home,
-      DUNGEON_MASTER_PORT: String(ctx.port),
-      DUNGEON_MASTER_VERSION: ctx.version,
-      PORT: String(ctx.port),
-      // LAN mode binds every interface, which still covers loopback for the launcher and bridge.
-      HOST: mode === 'lan' ? '0.0.0.0' : '127.0.0.1',
-      ...(mode === 'lan' ? { DUNGEON_MASTER_LAN: '1' } : {}),
-      // adapter-node assumes https otherwise, and refuses the UI's form posts as cross-site.
-      ORIGIN: uiUrl(ctx.port)
+  const child = spawn(
+    process.execPath,
+    [...serverNodeArgs(mode), path.join(serverDir, 'index.js')],
+    {
+      // The server finds its migrations relative to its own directory.
+      cwd: serverDir,
+      detached: true,
+      stdio: ['ignore', log, log],
+      env: {
+        ...ctx.env,
+        DUNGEON_MASTER_LAN: '',
+        DUNGEON_MASTER_HOME: ctx.home,
+        DUNGEON_MASTER_PORT: String(ctx.port),
+        DUNGEON_MASTER_VERSION: ctx.version,
+        PORT: String(ctx.port),
+        // LAN mode binds every interface, which still covers loopback for the launcher and bridge.
+        HOST: mode === 'lan' ? '0.0.0.0' : '127.0.0.1',
+        ...(mode === 'lan' ? { DUNGEON_MASTER_LAN: '1' } : {}),
+        // adapter-node assumes https otherwise, and refuses the UI's form posts as cross-site. A
+        // localhost server is told its one origin; a LAN server takes each request's own Host.
+        ...(mode === 'lan' ? { PROTOCOL_HEADER: LAN_PROTOCOL_HEADER } : { ORIGIN: uiUrl(ctx.port) })
+      }
     }
-  })
+  )
   fs.closeSync(log)
   let exited = false
   child.once('exit', () => (exited = true))

@@ -3,6 +3,7 @@ import { actions } from './+page.server.ts'
 
 async function run(theme: string, redirectTo?: string) {
   const set: [string, string][] = []
+  const options: Record<string, unknown>[] = []
   const deleted: string[] = []
   const form = new FormData()
   form.set('theme', theme)
@@ -10,19 +11,27 @@ async function run(theme: string, redirectTo?: string) {
   const event = {
     request: { formData: async () => form },
     cookies: {
-      set: (name: string, value: string) => set.push([name, value]),
+      set: (name: string, value: string, opts: Record<string, unknown>) => {
+        set.push([name, value])
+        options.push(opts)
+      },
       delete: (name: string) => deleted.push(name)
     }
   }
   try {
     await actions.default(event as never)
   } catch (thrown) {
-    return { redirect: thrown as { status: number; location: string }, set, deleted }
+    return { redirect: thrown as { status: number; location: string }, set, deleted, options }
   }
   throw new Error('expected a redirect')
 }
 
 describe('theme action', () => {
+  it('writes a cookie that is not Secure, so plain-HTTP LAN browsers keep it', async () => {
+    const { options } = await run('dark', '/')
+    expect(options[0]).toMatchObject({ secure: false })
+  })
+
   it('stores light and redirects back', async () => {
     const { redirect, set } = await run('light', '/campaigns?x=1')
     expect(set).toEqual([['theme', 'light']])

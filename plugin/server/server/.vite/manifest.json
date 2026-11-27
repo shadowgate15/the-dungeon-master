@@ -114,8 +114,9 @@
     "imports": [
       "_seed.js",
       "_campaign.js",
-      "_seed2.js",
+      "_lan-access.js",
       "_schemas.js",
+      "_seed2.js",
       "_summary.js",
       "_schema.js"
     ]
@@ -221,6 +222,10 @@
     "dynamicImports": [
       "src/hooks.server.ts"
     ]
+  },
+  "_lan-access.js": {
+    "file": "chunks/lan-access.js",
+    "name": "lan-access"
   },
   "_messages.js": {
     "file": "chunks/messages.js",
@@ -496,6 +501,7 @@
     "isEntry": true,
     "imports": [
       "_enums2.js",
+      "_lan-access.js",
       "_theme.js"
     ],
     "dynamicImports": [

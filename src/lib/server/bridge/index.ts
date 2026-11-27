@@ -8,6 +8,7 @@ import {
 import { library, live, sessions } from '../campaign'
 import { userStateDir } from '../campaign/paths'
 import { joinUrls } from '../lan'
+import { lanAccess } from '../lan-access'
 import { stopServer, writeRuntimeFile } from '../runtime'
 import { gameTools } from '../tools'
 import { createToolHost } from '../tools/host'
@@ -47,6 +48,7 @@ export const port = Number(DUNGEON_MASTER_PORT || 4777)
 
 /** Whether `dm --lan` started this server on every interface. */
 export const lan = Boolean(DUNGEON_MASTER_LAN)
+lanAccess.set({ lan })
 
 /** Writes the runtime file (port, token, pid, version, mode, join URLs) so the bridge and launcher find this server. */
 export function announceServer() {
