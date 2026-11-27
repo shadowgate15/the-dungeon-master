@@ -117,6 +117,14 @@ export function logActivity(
 }
 
 /**
+ * Every Character Claim lapses when a Session closes, the Host's and departed Characters'
+ * included. Claims on drafts are not Character Claims and survive.
+ */
+export function lapseClaims(db: Queryable) {
+  db.update(character).set({ controllingPlayer: null }).run()
+}
+
+/**
  * The Session for a DM attaching through `bridge` (one per Claude Code session). A reconnect of
  * the same bridge keeps its Session, even one End Session closed. A new bridge opens the next
  * Session; an older open one stays open for its catch-up close, unless it has no Narration, in
@@ -138,6 +146,7 @@ export function openSession(
   for (const stale of db.select().from(session).where(isNull(session.closedAt)).all()) {
     if (!hasNarration(db, stale.id)) {
       db.update(session).set({ closedAt: at }).where(eq(session.id, stale.id)).run()
+      lapseClaims(db)
     }
   }
   const last = db

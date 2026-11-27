@@ -241,7 +241,10 @@ export function createPlay({
      * its own Session.
      */
     openSession(campaignId: string, bridge?: string): { id: string; number: number } {
-      return library.record(campaignId).openSession(bridge)
+      const opened = library.record(campaignId).openSession(bridge)
+      // Closing a stopped Session as this one opens may have lapsed Claims.
+      publish({ type: 'claims', campaign: campaignId })
+      return opened
     },
 
     /**

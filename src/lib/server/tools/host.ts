@@ -147,7 +147,12 @@ export function createToolHost({
       logEvent(tx, { tool: tool.name, ...logged }, { stamp: current, at, id: eventId })
       const line = activityLine(tool, parsed.data, result, logged.dmOnly ?? false)
       if (line) logActivity(tx, line, { at, afterEvent: eventId })
-      return { result: withSkill(result, skill), changed: timelineChanged }
+      // Closing a Session lapses every Character Claim.
+      const changed: LiveMessage[] =
+        tool.name === 'close_session'
+          ? [...timelineChanged, { type: 'claims', campaign: campaignId }]
+          : timelineChanged
+      return { result: withSkill(result, skill), changed }
     })
   }
 
