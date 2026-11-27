@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -69,14 +70,14 @@ const addWren = () => addCharacter(library, campaignId, fighterDraft('Wren'))
 /** Ash: a High Elf Wizard, Dex 16 with the racial bonus (initiative +3). */
 const addAsh = () => addCharacter(library, campaignId, wizardDraft('Ash'))
 
-const timeline = () => play.timeline(campaignId)
-const combatView = () => play.scene(campaignId).combat
+const timeline = () => play.timeline(campaignId, SOLO_PLAYER)
+const combatView = () => play.scene(campaignId, SOLO_PLAYER).combat
 
 /** Rolls every open initiative part in order, one d20 face each. */
 function rollInitiative(id: string, ...d20s: number[]) {
   for (const [i, part] of timeline().call!.parts.entries()) {
     load([20, d20s[i]])
-    play.roll(campaignId, id, part.id)
+    play.roll(campaignId, id, part.id, SOLO_PLAYER)
   }
 }
 
@@ -188,7 +189,7 @@ describe('Creatures', () => {
     ok('damage', { target: 'creature:goblin-1', amount: 4, type: 'piercing' })
     const goblin = combatView()!.order.find((c) => c.name === 'Goblin 1')
     expect(goblin).toMatchObject({ kind: 'creature', state: 'bloodied' })
-    expect(JSON.stringify(play.scene(campaignId))).not.toMatch(/creature:|"hp"|maxHp/)
+    expect(JSON.stringify(play.scene(campaignId, SOLO_PLAYER))).not.toMatch(/creature:|"hp"|maxHp/)
   })
 
   it('vanish at end_combat, and the rounds go onto the clock rounded up to a minute', () => {
@@ -273,8 +274,10 @@ describe('the Floor in Combat', () => {
     const { pending_call: id } = ok('start_combat', { combatants: ['char:wren', 'monster:goblin'] })
     ok('narrate', { text: 'Roll for initiative!', call: id })
 
-    library.floor(campaignId).send({ character: wren, text: 'I draw my sword.' })
-    play.done(campaignId)
+    library
+      .floor(campaignId)
+      .send({ character: wren, text: 'I draw my sword.', player: SOLO_PLAYER })
+    play.done(campaignId, SOLO_PLAYER)
 
     expect(timeline().call).toMatchObject({ id, kind: 'initiative' })
     rollInitiative(id, 18)
@@ -284,18 +287,18 @@ describe('the Floor in Combat', () => {
   it('takes Declarations only for the Character whose turn it is', () => {
     const ash = addAsh()
     fight([10], 18) // Wren 20, Goblin 1 12; Ash isn't fighting.
-    const wren = play.scene(campaignId).present.find((c) => c.name === 'Wren')!.id
+    const wren = play.scene(campaignId, SOLO_PLAYER).present.find((c) => c.name === 'Wren')!.id
     const floor = library.floor(campaignId)
 
-    floor.send({ character: wren, text: 'I swing at the goblin.' })
-    expect(() => floor.send({ character: ash, text: 'I cast a spell.' })).toThrow(
-      "It is Wren's turn"
-    )
+    floor.send({ character: wren, text: 'I swing at the goblin.', player: SOLO_PLAYER })
+    expect(() =>
+      floor.send({ character: ash, text: 'I cast a spell.', player: SOLO_PLAYER })
+    ).toThrow("It is Wren's turn")
 
     ok('next_turn')
-    expect(() => floor.send({ character: wren, text: 'I swing again.' })).toThrow(
-      "It is Goblin 1's turn"
-    )
+    expect(() =>
+      floor.send({ character: wren, text: 'I swing again.', player: SOLO_PLAYER })
+    ).toThrow("It is Goblin 1's turn")
   })
 })
 

@@ -19,7 +19,8 @@ function request(
   const event = {
     url: new URL(url),
     request: new Request(url, { method, headers }),
-    cookies: { get: (name: string) => (name === 'theme' ? cookie : undefined) }
+    cookies: { get: (name: string) => (name === 'theme' ? cookie : undefined) },
+    locals: {}
   }
   return handle({
     event: event as never,
@@ -86,5 +87,22 @@ describe('localhost gate', () => {
   it('leaves the token-gated bridge routes to their own check', async () => {
     const res = await request('http://localhost:4777/api/bridge/tools', { host: 'evil.example' })
     expect(res.status).toBe(200)
+  })
+})
+
+describe('browser id', () => {
+  it('is SOLO_PLAYER on the locals of a localhost request', async () => {
+    const locals: { browser?: string } = {}
+    const headers = new Headers({ host: 'localhost:4777' })
+    await handle({
+      event: {
+        url: new URL('http://localhost:4777/'),
+        request: new Request('http://localhost:4777/', { headers }),
+        cookies: { get: () => undefined },
+        locals
+      } as never,
+      resolve: async () => new Response('')
+    })
+    expect(locals.browser).toBe('player')
   })
 })

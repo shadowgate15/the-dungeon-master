@@ -1,5 +1,5 @@
-import { Dt as DUNGEON_MASTER_VERSION, Et as DUNGEON_MASTER_PORT, H as ENTITY_TYPES, I as belief, J as classTable, L as entity, O as event, Tt as DUNGEON_MASTER_LAN, W as handleKind, X as race, Y as equipment, _ as character, _t as ne, a as createRulesRepository, at as SOLO_PLAYER, ct as and, f as userStateDir, ft as inArray, g as campaign, lt as eq, mt as isNull, ot as asc, q as background, vt as or, wt as DUNGEON_MASTER_HOME, x as characterItem, y as characterDraft, yt as sql, z as fact } from "./seed.js";
-import { $ as combatState, At as createWorld, B as openCall, Bt as reviseArc, Ct as isBodyArmor, D as createDmChannels, F as callInput, Ft as createArc, G as saveSequence, Gt as readTool, H as attackSequence, Ht as ToolError, I as callResultEvent, It as currentArc, J as logActivity, Jt as parseClock, K as sequenceText, Kt as writeTool, L as cancelPendingCall, Lt as pastArcs, M as DC_BY_TIER, Mt as renderLinks, N as PASS, Nt as resolveLinks, Ot as hpState, P as TIERS, Pt as CurrentArcError, Q as addCombatants, R as createHitDiceCall, Rt as resolveBeat, St as equippable, Tt as loadWizardRules, U as damageSequence, Ut as creationTool, V as saveKey, Vt as PLUGIN_NAME, W as rollAll, Wt as expectVersion, X as nextEventId, Xt as characterRefs, Y as logEvent, Yt as characterHolders, Z as setAwaitingNarration, Zt as SESSION_LIVE_MESSAGE, _ as closeSession, at as startCombat, b as sessionsView, bt as present, c as CampaignNotFoundError, ct as combatant, dt as saveBonus, et as endCombat, f as SeedLockedError, ft as setConditions, g as addConversationLine, gt as ClockBackwardsError, h as refuseLockedSeed, ht as deathSaveCall, i as sessions, it as spendTurnResource, jt as fieldNames, k as ABILITY_NAMES, kt as lintWorld, l as NotACampaignFolderError, lt as incapacitates, m as creationStage, mt as setConcentration, n as library, nt as orderText, ot as applyDamage, pt as concentrate, q as currentStamp, qt as formatClock, r as live, rt as refuseDuringCombat, st as applyHealing, tt as nextTurn, ut as mustAct, v as history, vt as advanceClock, w as returnStrandedDrafts, wt as believedName, xt as scenePlace, y as indexNarration, yt as currentMinute, z as createPendingCall, zt as retireArc } from "./campaign.js";
+import { H as ENTITY_TYPES, I as belief, J as classTable, L as entity, O as event, St as DUNGEON_MASTER_VERSION, W as handleKind, X as race, Y as equipment, _ as character, a as createRulesRepository, bt as DUNGEON_MASTER_LAN, f as userStateDir, ft as ne, g as campaign, it as eq, lt as isNull, mt as sql, pt as or, q as background, rt as and, st as inArray, tt as asc, x as characterItem, xt as DUNGEON_MASTER_PORT, y as characterDraft, yt as DUNGEON_MASTER_HOME, z as fact } from "./seed.js";
+import { $ as combatState, At as createWorld, B as openCall, Bt as reviseArc, Ct as isBodyArmor, D as createDmChannels, F as callInput, Ft as createArc, G as saveSequence, Gt as readTool, H as attackSequence, Ht as ToolError, I as callResultEvent, It as currentArc, J as logActivity, Jt as parseClock, K as sequenceText, Kt as writeTool, L as cancelPendingCall, Lt as pastArcs, M as DC_BY_TIER, Mt as renderLinks, N as PASS, Nt as resolveLinks, O as playSheets, Ot as hpState, P as TIERS, Pt as CurrentArcError, Q as addCombatants, R as createHitDiceCall, Rt as resolveBeat, St as equippable, Tt as loadWizardRules, U as damageSequence, Ut as creationTool, V as saveKey, Vt as PLUGIN_NAME, W as rollAll, Wt as expectVersion, X as nextEventId, Xt as characterRefs, Y as logEvent, Yt as characterHolders, Z as setAwaitingNarration, Zt as SESSION_LIVE_MESSAGE, _ as closeSession, at as startCombat, b as sessionsView, bt as present, c as CampaignNotFoundError, ct as combatant, dt as saveBonus, et as endCombat, f as SeedLockedError, ft as setConditions, g as addConversationLine, gt as ClockBackwardsError, h as refuseLockedSeed, ht as deathSaveCall, i as sessions, it as spendTurnResource, jt as fieldNames, k as ABILITY_NAMES, kt as lintWorld, l as NotACampaignFolderError, lt as incapacitates, m as creationStage, mt as setConcentration, n as library, nt as orderText, ot as applyDamage, pt as concentrate, q as currentStamp, qt as formatClock, r as live, rt as refuseDuringCombat, st as applyHealing, tt as nextTurn, ut as mustAct, v as history, vt as advanceClock, w as returnStrandedDrafts, wt as believedName, xt as scenePlace, y as indexNarration, yt as currentMinute, z as createPendingCall, zt as retireArc } from "./campaign.js";
 import { n as joinUrls } from "./lan.js";
 import { _ as prettifyError, a as discriminatedUnion, c as literal, d as record, f as strictObject, g as toJSONSchema, h as unknown, i as boolean, l as number, m as union, o as int, p as string, r as array, t as _enum, u as object } from "./schemas.js";
 import { n as CampaignSeedError, o as parseCampaignSeed, r as campaignSeedCard, t as CAMPAIGN_SEED_FIELDS } from "./seed2.js";
@@ -3072,7 +3072,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* The Player presses Done. When it closes the Floor, the DM gets exactly one floor event and
 		* the Campaign awaits Narration.
 		*/
-		done(campaignId, player = SOLO_PLAYER) {
+		done(campaignId, player) {
 			atTable(campaignId);
 			const outcome = library.floor(campaignId).done(player);
 			if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome));
@@ -3090,7 +3090,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* The Player clicks one roll of the open Call; code rolls it. The roll that completes the Call
 		* wakes the DM with one call_result event and sets awaiting Narration.
 		*/
-		roll(campaignId, callId, partId, player = SOLO_PLAYER) {
+		roll(campaignId, callId, partId, player) {
 			atTable(campaignId);
 			return answered(campaignId, library.calls(campaignId).roll(callId, partId, dice(campaignId), player));
 		},
@@ -3098,7 +3098,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* The Player answers a question Call, or says how many Hit Dice to spend (code rolls them);
 		* the last answer wakes the DM like a roll does.
 		*/
-		answer(campaignId, callId, partId, text, player = SOLO_PLAYER) {
+		answer(campaignId, callId, partId, text, player) {
 			atTable(campaignId);
 			return answered(campaignId, library.calls(campaignId).answer(callId, partId, text, player, dice(campaignId)));
 		},
@@ -3106,20 +3106,40 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* A Player's "Cut to <Name>": one spotlight channel event to the DM. Doesn't await Narration.
 		* Refused (`SpotlightRefusedError`) for a Character who is already in the Scene.
 		*/
-		spotlight(campaignId, character, player = SOLO_PLAYER) {
+		spotlight(campaignId, character, player) {
 			const folder = atTable(campaignId);
 			const request = library.record(campaignId).spotlight(character, player);
 			channels.send(folder, request);
 		},
 		/** The Scene as the Player's rail shows it. */
-		scene(campaignId) {
+		scene(campaignId, _viewer) {
 			return library.record(campaignId).scene();
+		},
+		/** The Journal as `viewer`'s Player sees it. */
+		journal(campaignId, _viewer) {
+			return library.record(campaignId).journal();
+		},
+		/** The read-only Session history as `viewer`'s Player sees it. */
+		sessionHistory(campaignId, _viewer) {
+			return library.record(campaignId).sessionHistory();
+		},
+		/** The Party's play sheets as `viewer`'s Player sees them. */
+		sheets(campaignId, _viewer) {
+			return playSheets(library.party(campaignId));
+		},
+		/** The DM-pane conversation as `viewer`'s Player sees it. */
+		conversation(campaignId, _viewer) {
+			return library.conversation(campaignId).list();
+		},
+		/** The open Floor with `viewer`'s returned drafts, to read: it works with the DM away. */
+		openFloor(campaignId, viewer) {
+			return library.floor(campaignId).current(viewer);
 		},
 		/**
 		* The Player writes in the DM pane: the message is kept for the pane and reaches the DM as one
 		* conversation event. It is out of fiction, so it never touches the Floor or the Event log.
 		*/
-		converse(campaignId, text, player = SOLO_PLAYER) {
+		converse(campaignId, text, player) {
 			const folder = folderOf(campaignId);
 			if (!channels.listening(folder)) throw new DmAwayError("The DM is away. Run dm in the Campaign folder to ask for help.");
 			const message = library.conversation(campaignId).add({
@@ -3143,7 +3163,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 		* The Player presses Begin: the Seed locks and the DM gets one begin event, which it hands to
 		* `builder`. It needs a DM at the table, and it doesn't set awaiting Narration.
 		*/
-		begin(campaignId, player = SOLO_PLAYER) {
+		begin(campaignId, player) {
 			const folder = folderOf(campaignId);
 			if (!channels.listening(folder)) throw new DmAwayError("The DM is away. Run dm in the Campaign folder, then press Begin.");
 			library.begin(campaignId);
@@ -3222,7 +3242,7 @@ function createPlay({ library, channels, publish, dice = (id) => campaignDice.fo
 			return library.record(campaignId).coreBlock();
 		},
 		/** The Player's timeline and whether the DM is working on a turn. */
-		timeline(campaignId) {
+		timeline(campaignId, _viewer) {
 			return library.record(campaignId).timeline();
 		}
 	};

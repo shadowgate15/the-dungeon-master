@@ -7,9 +7,9 @@ import { c as play, d as DmAwayError } from "../../../../../../../chunks/bridge.
 * The Player presses Done: `{ closed }`, true once the Floor closed and woke the DM. 409 `{ error }`
 * while the DM is still answering the last turn or is away; 404 for an unknown Campaign; 400 when archived.
 */
-var POST = ({ params }) => withCampaign(() => {
+var POST = ({ params, locals }) => withCampaign(() => {
 	assertPlayable(library, params.id);
-	return json({ closed: play.done(params.id).closed });
+	return json({ closed: play.done(params.id, locals.browser).closed });
 }, [[DmBusyError, 409], [DmAwayError, 409]]);
 export { POST };
 

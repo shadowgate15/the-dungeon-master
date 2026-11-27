@@ -1,10 +1,13 @@
 import type { Handle, ServerInit } from '@sveltejs/kit/hooks'
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import { isStoredTheme, THEME_COOKIE } from '#lib/theme/theme.ts'
 
 // The `theme` cookie (light | dark) is written into the server-rendered <html>
 // so the first paint is correct without JS. No cookie means follow the OS.
 export const handle: Handle = async ({ event, resolve }) => {
   if (!fromLocalhost(event.request, event.url)) return new Response('Forbidden', { status: 403 })
+  // Every localhost browser is the solo Player; later tickets resolve other browsers here.
+  event.locals.browser = SOLO_PLAYER
   const theme = event.cookies.get(THEME_COOKIE)
   const attr = isStoredTheme(theme) ? `data-theme="${theme}"` : ''
   return resolve(event, {

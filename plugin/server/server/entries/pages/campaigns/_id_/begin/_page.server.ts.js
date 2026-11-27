@@ -23,9 +23,9 @@ var load = ({ params }) => {
 	};
 };
 var actions = {
-	begin: ({ params }) => {
+	begin: ({ params, locals }) => {
 		try {
-			play.begin(params.id);
+			play.begin(params.id, locals.browser);
 		} catch (e) {
 			if (e instanceof DmAwayError) return fail(409, { error: e.message });
 			if (e instanceof BeginRefusedError || e instanceof CampaignArchivedError) return fail(400, { error: e.message });

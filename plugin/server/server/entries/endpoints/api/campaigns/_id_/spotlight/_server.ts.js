@@ -9,11 +9,11 @@ import { n as readJson } from "../../../../../../chunks/respond.js";
 * 204; 400 `{ error }` for a Character already in the Scene (or unknown); 404 for an unknown Campaign;
 * 409 while the DM is away.
 */
-var POST = async ({ params, request }) => {
+var POST = async ({ params, request, locals }) => {
 	const body = await readJson(request);
 	if (typeof body?.character !== "string") return json({ error: "Name the Character to cut to" }, { status: 400 });
 	return withCampaign(() => {
-		play.spotlight(params.id, body.character);
+		play.spotlight(params.id, body.character, locals.browser);
 		return new Response(null, { status: 204 });
 	}, [[DmAwayError, 409], [SpotlightRefusedError, 400]]);
 };

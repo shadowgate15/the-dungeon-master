@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -49,7 +50,7 @@ describe('creation_state', () => {
 
   it('is party_empty once the Seed is complete but no Character is saved', () => {
     library.saveSeed(campaignId, completeSeed)
-    library.party(campaignId).startDraft()
+    library.party(campaignId).startDraft({ player: SOLO_PLAYER })
     expect(call('creation_state').payload).toMatchObject({
       state: 'party_empty',
       missing: [],
@@ -126,7 +127,7 @@ describe('Character draft tools', () => {
   /** A stored draft with the Player's own Concept answers; returns its handle. */
   function startDraft(patch: Partial<CharacterDraft> = {}) {
     const party = library.party(campaignId)
-    const { id } = party.startDraft()
+    const { id } = party.startDraft({ player: SOLO_PLAYER })
     party.writeDraft(id, { draft: { ...emptyDraft(), name: 'Wren', ...patch }, step: 'concept' })
     return { id, handle: `draft:${id}` }
   }

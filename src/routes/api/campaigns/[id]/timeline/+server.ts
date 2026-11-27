@@ -4,5 +4,5 @@ import { withCampaign } from '#lib/server/campaign/http.ts'
 import type { RequestHandler } from './$types'
 
 /** The Player's timeline (Player-safe entries only) and awaiting Narration, or 404 `{ error }`. */
-export const GET: RequestHandler = ({ params }) =>
-  withCampaign(() => json(play.timeline(params.id)))
+export const GET: RequestHandler = ({ params, locals }) =>
+  withCampaign(() => json(play.timeline(params.id, locals.browser)))

@@ -3,7 +3,10 @@
 declare global {
   namespace App {
     // interface Error {}
-    // interface Locals {}
+    interface Locals {
+      /** The browser id of this request: the Player it plays as. */
+      browser: string
+    }
     // interface PageData {}
     // interface PageState {}
     // interface Platform {}

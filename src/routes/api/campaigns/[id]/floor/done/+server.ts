@@ -9,10 +9,10 @@ import type { RequestHandler } from './$types'
  * The Player presses Done: `{ closed }`, true once the Floor closed and woke the DM. 409 `{ error }`
  * while the DM is still answering the last turn or is away; 404 for an unknown Campaign; 400 when archived.
  */
-export const POST: RequestHandler = ({ params }) =>
+export const POST: RequestHandler = ({ params, locals }) =>
   withCampaign(() => {
     assertPlayable(library, params.id)
-    return json({ closed: play.done(params.id).closed })
+    return json({ closed: play.done(params.id, locals.browser).closed })
   }, [
     [DmBusyError, 409],
     [DmAwayError, 409]

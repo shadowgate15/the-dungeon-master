@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -301,8 +302,10 @@ describe('what the Player sees', () => {
   it('holds no Arc event, Arc tool result or Arc text, after every Arc tool', () => {
     const wren = addCharacter(library, campaignId, fighterDraft('Wren'))
     call('create_arc', relicArc)
-    library.floor(campaignId).send({ character: wren, text: 'I ride for the ford.' })
-    library.floor(campaignId).done()
+    library
+      .floor(campaignId)
+      .send({ character: wren, text: 'I ride for the ford.', player: SOLO_PLAYER })
+    library.floor(campaignId).done(SOLO_PLAYER)
     call('arc', { history: true })
     call('resolve_beat', {
       beat: 'beat:the-vizier-is-the-patron',
