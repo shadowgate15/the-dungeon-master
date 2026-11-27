@@ -232,5 +232,6 @@
     {problem}
     onclaim={(id) => attempt(() => seats.claim(id))}
     onletgo={(id) => attempt(() => seats.letGo(id))}
+    onrelease={(id) => attempt(() => seats.release(id))}
   />
 </div>

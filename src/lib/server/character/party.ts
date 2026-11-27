@@ -198,7 +198,10 @@ export function createParty(
         kind: 'character' as const,
         id: c.id,
         name: c.name,
-        claim: claimOf(c.controllingPlayer, browser)
+        claim: claimOf(c.controllingPlayer, browser),
+        ...(browser === SOLO_PLAYER && claimOf(c.controllingPlayer, browser) === 'taken'
+          ? { releasable: true as const }
+          : {})
       }))
     },
 
@@ -227,6 +230,14 @@ export function createParty(
         .set({ controllingPlayer: null })
         .where(and(eq(target.table.id, id), eq(target.table.controllingPlayer, browser)))
         .run()
+    },
+
+    /** The Host frees a Character another browser holds. Refused for any other browser. */
+    release(id: string, browser: string): void {
+      if (browser !== SOLO_PLAYER)
+        throw new ClaimRefusedError('Only the Host can Release a Character')
+      const target = claimable(id)
+      db.update(target.table).set({ controllingPlayer: null }).where(eq(target.table.id, id)).run()
     },
 
     /** Saved Characters oldest first, then drafts oldest first. */
