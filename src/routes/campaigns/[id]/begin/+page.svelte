@@ -49,7 +49,9 @@
     disabled: archived
   }}
 >
-  <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
+  {#if data.isHost}
+    <Link href={resolve('/campaigns')} class="text-sm">All Campaigns</Link>
+  {/if}
   <header class="space-y-1">
     <div class="flex items-center gap-3">
       <h1 class="font-display text-2xl">{data.campaign.name}</h1>
@@ -96,12 +98,20 @@
         </p>
       {:else if !attached}
         <p class="text-sm text-muted">
-          The DM is away. Run <code>dm</code> in {data.campaign.path} to Begin.
+          {#if data.isHost}
+            The DM is away. Run <code>dm</code> in {data.campaign.path} to Begin.
+          {:else}
+            Waiting for the Host to start the DM.
+          {/if}
         </p>
       {/if}
-      <form method="POST" action="?/begin" use:enhance>
-        <Button type="submit" disabled={state !== 'ready' || !attached || archived}>Begin</Button>
-      </form>
+      {#if data.isHost}
+        <form method="POST" action="?/begin" use:enhance>
+          <Button type="submit" disabled={state !== 'ready' || !attached || archived}>Begin</Button>
+        </form>
+      {:else}
+        <p class="text-sm text-muted">The Host begins the story.</p>
+      {/if}
     </div>
   {:else}
     <Panel title="The pitch">
@@ -114,7 +124,7 @@
     <div class="flex items-center gap-3">
       {#if playing}
         <Link href={playHref}>Play has opened: go to the play console</Link>
-      {:else if !archived}
+      {:else if !archived && data.isHost}
         <form method="POST" action="?/startOver" use:enhance>
           <Button type="submit" variant="secondary">Start over</Button>
         </form>
