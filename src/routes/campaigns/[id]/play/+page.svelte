@@ -8,7 +8,6 @@
   import TableStrip from '#lib/play/TableStrip.svelte'
   import Rail from '#lib/play/Rail.svelte'
   import { actingCharacter, turnOf } from '#lib/play/combat.ts'
-  import { knownBy } from '#lib/play/journal.ts'
   import PermissionCard from '#lib/play/PermissionCard.svelte'
   import TakeASeat from '#lib/play/TakeASeat.svelte'
   import Timeline from '#lib/play/Timeline.svelte'
@@ -110,6 +109,9 @@
   const actors = $derived(sheets.filter((s) => s.canAct && inScene.has(s.id)))
   // In a Combat the composer is locked to whoever's turn it is, so picks wait.
   const acting = $derived(actingCharacter(actors, viewed, scene.data.combat, lastInScene))
+  // The Journal card follows the viewed tab, including an elsewhere Character; a browser with a
+  // Claim always has a tab, so it needs no Party fallback.
+  const viewer = $derived(sheets.find((s) => s.id === viewed) ?? acting ?? sheets[0])
   // The sheets are this browser's Claimed Characters, so only those show as elsewhere.
   const mine = $derived(new Set(party.data.map((s) => s.id)))
   const elsewhere = $derived(scene.data.elsewhere.filter((c) => mine.has(c.id)))
@@ -237,12 +239,9 @@
       {/if}
     </section>
 
-    <Rail
-      scene={scene.data}
-      believer={acting?.name ?? 'the Party'}
-      entries={acting ? knownBy(journal.data, acting.id) : journal.data.entries}
-      actor={acting?.id}
-    />
+    {#if viewer}
+      <Rail scene={scene.data} journal={journal.data} {viewer} />
+    {/if}
   </main>
 
   <TakeASeat

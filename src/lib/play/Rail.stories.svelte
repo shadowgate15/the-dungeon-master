@@ -40,7 +40,11 @@
     title: 'Play/Rail',
     component: Rail,
     tags: ['autodocs'],
-    args: { scene: longCombat, believer: 'Wren', entries: manyEntries, actor: 'wren' }
+    args: {
+      scene: longCombat,
+      journal: { entries: manyEntries },
+      viewer: { id: 'wren', name: 'Wren' }
+    }
   })
 </script>
 
@@ -60,9 +64,8 @@
       ...longCombat,
       combat: { ...longCombat.combat!, order: longCombat.combat!.order.slice(0, 3) }
     },
-    entries: journalEntries,
-    actor: undefined,
-    believer: 'the Party'
+    journal: { entries: journalEntries },
+    viewer: { id: 'wren', name: 'Wren' }
   }}
 />
 <Story name="Out of Combat" {template} args={{ scene: { ...longCombat, combat: undefined } }} />
