@@ -1,5 +1,5 @@
 import { i as json } from "./exports.js";
-import { D as DraftNotFoundError, E as DmOnlyEditError, Ot as CharacterNotFoundError, c as CampaignNotFoundError, kt as CharacterValidationError, n as library, s as CampaignMissingError } from "./campaign.js";
+import { At as CharacterValidationError, D as DraftNotFoundError, E as DmOnlyEditError, T as ClaimRefusedError, c as CampaignNotFoundError, kt as CharacterNotFoundError, n as library, s as CampaignMissingError } from "./campaign.js";
 // src/lib/server/character/respond.ts
 var UNREADABLE = "The Character could not be read. Try saving again.";
 /** Reads a JSON request body, or undefined when it is not JSON. */
@@ -21,6 +21,7 @@ function changeParty(campaignId, body, change) {
 		if (library.get(campaignId)?.status === "archived") return json({ error: "An archived Campaign cannot be changed" }, { status: 400 });
 		return change(library.party(campaignId));
 	} catch (e) {
+		if (e instanceof ClaimRefusedError) return json({ error: e.message }, { status: 403 });
 		if (e instanceof DmOnlyEditError) return json({ error: e.message }, { status: 409 });
 		if (e instanceof CharacterValidationError) return json({ error: e.message }, { status: 400 });
 		if (e instanceof CampaignNotFoundError || e instanceof CampaignMissingError || e instanceof DraftNotFoundError || e instanceof CharacterNotFoundError) return json({ error: e.message }, { status: 404 });

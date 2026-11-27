@@ -8,14 +8,14 @@ var slugs = (value) => Array.isArray(value) && value.every((v) => typeof v === "
 * `{ cantrips?, spells? }` returns `{ id, level }`. 400 `{ error }` without an awarded level or for
 * picks that do not fit; 404 for an unknown Campaign or Character. Works with or without a session.
 */
-var POST = async ({ params, request }) => {
+var POST = async ({ params, request, locals }) => {
 	const body = await readJson(request);
 	const picks = body && {
 		cantrips: slugs(body.cantrips) ?? [],
 		spells: slugs(body.spells) ?? []
 	};
 	return changeParty(params.id, picks, (party) => {
-		const updated = party.levelUp(params.character, picks);
+		const updated = party.levelUp(params.character, picks, locals.browser);
 		live.publish({
 			type: "timeline",
 			campaign: params.id

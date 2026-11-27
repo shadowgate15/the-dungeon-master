@@ -211,7 +211,9 @@ function claimActions(campaign) {
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ character })
 		}),
-		letGo: (character) => change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}`), { method: "DELETE" })
+		letGo: (character) => change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}`), { method: "DELETE" }),
+		/** The Host frees a Character another browser holds. */
+		release: (character) => change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}/release`), { method: "POST" })
 	};
 }
 export { createFloorQuery as a, createSessionHistoryQuery as c, endSession as d, floorActions as f, knownBy as g, Journal as h, createClaimsQuery as i, createSheetsQuery as l, saveDetails as m, callActions as n, createJournalQuery as o, levelUp as p, claimActions as r, createSceneQuery as s, PlayRequestError as t, createTimelineQuery as u };

@@ -10,7 +10,7 @@ return {
 	app_path: "_app",
 	assets: new Set(["robots.txt"]),
 	mime_types: {".txt":"text/plain"},
-	client: {start:"_app/immutable/entry/start.BOy07o82.js",app:"_app/immutable/entry/app.CtCthz2i.js",imports:["_app/immutable/entry/start.BOy07o82.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/5eNKj7d6.js","_app/immutable/chunks/BZzsgcU7.js","_app/immutable/chunks/CfxiCzHY.js","_app/immutable/chunks/BORwyWYY.js","_app/immutable/chunks/Cyt8LZpN.js","_app/immutable/entry/app.CtCthz2i.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
+	client: {start:"_app/immutable/entry/start.BOy07o82.js",app:"_app/immutable/entry/app.DvyxDNDJ.js",imports:["_app/immutable/entry/start.BOy07o82.js","_app/immutable/entry/payload.DSmR2FwN.js","_app/immutable/chunks/CRzLMJPS.js","_app/immutable/chunks/5eNKj7d6.js","_app/immutable/chunks/BZzsgcU7.js","_app/immutable/chunks/CfxiCzHY.js","_app/immutable/chunks/BORwyWYY.js","_app/immutable/chunks/Cyt8LZpN.js","_app/immutable/entry/app.DvyxDNDJ.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
 	
 	nodes: [
 		__memo(() => import('./nodes/0.js')),
@@ -77,6 +77,13 @@ return {
 			params: [{"name":"id","optional":false,"rest":false,"chained":false},{"name":"character","optional":false,"rest":false,"chained":false}],
 			page: null,
 			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/claims/_character_/_server.ts.js'))
+		},
+		{
+			id: "/api/campaigns/[id]/claims/[character]/release",
+			pattern: /^\/api\/campaigns\/([^/]+?)\/claims\/([^/]+?)\/release\/?$/,
+			params: [{"name":"id","optional":false,"rest":false,"chained":false},{"name":"character","optional":false,"rest":false,"chained":false}],
+			page: null,
+			endpoint: __memo(() => import('./entries/endpoints/api/campaigns/_id_/claims/_character_/release/_server.ts.js'))
 		},
 		{
 			id: "/api/campaigns/[id]/conversation",
