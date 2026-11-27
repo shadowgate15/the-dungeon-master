@@ -96,6 +96,8 @@ export type ToolEvent = {
   summary: string
   data?: Record<string, unknown>
   dmOnly?: boolean
+  /** Who can see it; the Party's Characters when left out (ADR 0008). */
+  audience?: string[]
 }
 
 /** A tool's output; `skill` names a plugin skill (unprefixed) the DM must load next. */

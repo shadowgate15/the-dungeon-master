@@ -5,7 +5,7 @@ import type { HpState } from '#lib/play/hp-state.ts'
 import type { RollOutcome, Timeline, TimelineEntry } from '#lib/play/timeline.ts'
 import type { Queryable } from '../db/connect'
 import type { Stamp } from '../tools/contract'
-import { activityLine, campaign, event, session } from '../db/schema'
+import { activityLine, campaign, character, event, session } from '../db/schema'
 import { openCallView } from './calls'
 import { currentMinute } from './scene'
 
@@ -19,6 +19,18 @@ export type NewEvent = {
   summary: string
   data?: Record<string, unknown> | null
   dmOnly?: boolean
+  /** Who can see it; defaults to the Party's Characters now (ADR 0008). */
+  audience?: string[]
+}
+
+/** The default Audience: every Party Character now, in the order they joined (ADR 0008). */
+export function partyAudience(db: Queryable): string[] {
+  return db
+    .select({ id: character.id })
+    .from(character)
+    .orderBy(sql`rowid`)
+    .all()
+    .map((c) => c.id)
 }
 
 /**
@@ -80,6 +92,7 @@ export function logEvent(
       summary: entry.summary,
       data: entry.data ?? null,
       dmOnly: entry.dmOnly ?? false,
+      audience: entry.audience ?? partyAudience(db),
       createdAt: at
     })
     .run()
@@ -93,7 +106,13 @@ export function logActivity(
   { at, afterEvent = nextEventId(db) - 1 }: { at: number; afterEvent?: number }
 ) {
   db.insert(activityLine)
-    .values({ text, afterEvent, sessionId: currentStamp(db).sessionId, createdAt: at })
+    .values({
+      text,
+      afterEvent,
+      sessionId: currentStamp(db).sessionId,
+      audience: partyAudience(db),
+      createdAt: at
+    })
     .run()
 }
 
