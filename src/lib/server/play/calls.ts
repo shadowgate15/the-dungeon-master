@@ -213,7 +213,8 @@ export function openCall(
             }
             return {
               characterId: who.id,
-              player: who.controllingPlayer,
+              // Until a pending part follows its Character (not the browser), an unclaimed one is the Host's.
+              player: who.controllingPlayer ?? SOLO_PLAYER,
               skill: check.skill ?? null,
               save: check.save ?? null,
               tier: check.tier,
@@ -434,6 +435,7 @@ function playersAtTable(db: Queryable): string[] {
       .all()
       .filter(canAct)
       .map((c) => c.controllingPlayer)
+      .filter((p) => p !== null)
   )
   return players.size ? [...players] : [SOLO_PLAYER]
 }

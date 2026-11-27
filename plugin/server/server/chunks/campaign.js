@@ -2185,7 +2185,7 @@ function deathSaveCall(db, handle, at) {
 	if (!ref || !rollsDeathSaves(ref.row)) return null;
 	return createPendingCall(db, [{
 		characterId: ref.row.id,
-		player: ref.row.controllingPlayer,
+		player: ref.row.controllingPlayer ?? "player",
 		sequence: null
 	}], at, "death_save");
 }
@@ -2284,7 +2284,7 @@ function characterCombatant(db, ref) {
 		handle: holder.handle,
 		name: holder.name,
 		id: holder.id,
-		player: holder.player,
+		player: holder.player ?? "player",
 		detail,
 		stats,
 		features,
@@ -3377,7 +3377,7 @@ function openCall(db, input, { at, openedBy, audience = partyAudience(db) }) {
 		if (!inScene(scene, who)) throw new ToolError("not_in_scene", `${who.name} is not in the Scene`, "Move the Scene to where they are first, or call on a Character in the Scene");
 		return {
 			characterId: who.id,
-			player: who.controllingPlayer,
+			player: who.controllingPlayer ?? "player",
 			skill: check.skill ?? null,
 			save: check.save ?? null,
 			tier: check.tier,
@@ -3508,7 +3508,7 @@ function cancelPendingCall(db, id, at) {
 }
 /** The Players at the table: everyone with a Character who can act (solo play: one). */
 function playersAtTable(db) {
-	const players = new Set(db.select().from(character).all().filter(canAct).map((c) => c.controllingPlayer));
+	const players = new Set(db.select().from(character).all().filter(canAct).map((c) => c.controllingPlayer).filter((p) => p !== null));
 	return players.size ? [...players] : [SOLO_PLAYER];
 }
 /** The open Call, Player-safe (no DC, no tier), or null when none is open. */
@@ -4255,6 +4255,8 @@ var DETAIL_LIMITS = {
 };
 /** "notes, personality and appearance". */
 var listed = (words) => words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+/** A Claim the browser may not make or give up: the Character is taken, or not the browser's. */
+var ClaimRefusedError = class extends Error {};
 /** The Campaign has no draft with this id. */
 var DraftNotFoundError = class extends Error {};
 var stepLabel = (step) => STEPS.find((s) => s.id === step)?.label ?? step;
@@ -4333,7 +4335,55 @@ function createParty(db, now = Date.now, { attended = () => true } = {}) {
 		if (!mapped) throw new CharacterValidationError("Finish every step before saving");
 		return mapped;
 	}
+	const claimOf = (holder, browser) => holder === null ? "free" : holder === browser ? "yours" : "taken";
+	/** The Character or draft with this id, as the table to write its Claim to. */
+	function claimable(id) {
+		const saved = db.select().from(character).where(eq(character.id, id)).get();
+		if (saved) return {
+			table: character,
+			holder: saved.controllingPlayer,
+			name: saved.name
+		};
+		const draft = db.select().from(characterDraft).where(eq(characterDraft.id, id)).get();
+		if (draft) {
+			const name = draft.data.name.trim();
+			return {
+				table: characterDraft,
+				holder: draft.controllingPlayer,
+				name
+			};
+		}
+		throw new CharacterNotFoundError("Character not found");
+	}
 	return {
+		/**
+		* Every Party Character with its Claim as `browser` sees it: yours, taken (never by whom) or
+		* free. Saved Characters oldest first.
+		*/
+		claims(browser) {
+			return characters.list().map((c) => ({
+				kind: "character",
+				id: c.id,
+				name: c.name,
+				claim: claimOf(c.controllingPlayer, browser)
+			}));
+		},
+		/** Whether `browser` holds a Claim on any Party Character. */
+		holdsClaim(browser) {
+			return this.claims(browser).some((row) => row.claim === "yours");
+		},
+		/** The browser Claims a Character nobody holds. A taken Character is refused for every browser. */
+		claim(id, browser) {
+			const target = claimable(id);
+			if (target.holder !== null) throw new ClaimRefusedError(`${target.name} is taken`);
+			db.update(target.table).set({ controllingPlayer: browser }).where(and(eq(target.table.id, id), isNull(target.table.controllingPlayer))).run();
+		},
+		/** The browser gives up a Claim it holds. */
+		letGo(id, browser) {
+			const target = claimable(id);
+			if (target.holder !== browser) throw new ClaimRefusedError(`${target.name} is not yours`);
+			db.update(target.table).set({ controllingPlayer: null }).where(and(eq(target.table.id, id), eq(target.table.controllingPlayer, browser))).run();
+		},
 		/** Saved Characters oldest first, then drafts oldest first. */
 		list() {
 			const saved = characters.list().map((c) => ({
@@ -4546,7 +4596,7 @@ function createFloor(db, now = Date.now) {
 	function playersAtTable() {
 		const place = scenePlace(db);
 		const actors = db.select().from(character).all().filter((c) => canAct(c) && inScene(place, c));
-		return [...new Set(actors.map((c) => c.controllingPlayer))];
+		return [...new Set(actors.map((c) => c.controllingPlayer).filter((p) => p !== null))];
 	}
 	function cleanText(text) {
 		const trimmed = typeof text === "string" ? text.replace(/\s*[\r\n]+\s*/g, " ").trim() : "";
@@ -5290,6 +5340,6 @@ var library = createCampaignLibrary({
 });
 /** The default root the New Campaign dialog suggests folders under. */
 var campaignRoot = defaultCampaignRoot(env);
-export { addCombatants as $, CallClosedError as A, lintWorld as At, openCall as B, retireArc as Bt, DmBusyError as C, equippable as Ct, createDmChannels as D, CharacterNotFoundError as Dt, DraftNotFoundError as E, loadWizardRules as Et, callInput as F, CurrentArcError as Ft, saveSequence as G, expectVersion as Gt, attackSequence as H, PLUGIN_NAME as Ht, callResultEvent as I, createArc as It, logActivity as J, formatClock as Jt, sequenceText as K, readTool as Kt, cancelPendingCall as L, currentArc as Lt, DC_BY_TIER as M, fieldNames as Mt, PASS as N, renderLinks as Nt, playSheets as O, CharacterValidationError as Ot, TIERS as P, resolveLinks as Pt, setAwaitingNarration as Q, SESSION_LIVE_MESSAGE as Qt, createHitDiceCall as R, pastArcs as Rt, DeclarationRefusedError as S, scenePlace as St, DmOnlyEditError as T, believedName as Tt, damageSequence as U, ToolError as Ut, saveKey as V, reviseArc as Vt, rollAll as W, creationTool as Wt, nextEventId as X, characterHolders as Xt, logEvent as Y, parseClock as Yt, partyAudience as Z, characterRefs as Zt, closeSession as _, ClockBackwardsError as _t, CampaignArchivedError as a, spendTurnResource as at, sessionsView as b, currentMinute as bt, CampaignNotFoundError as c, applyHealing as ct, BeginRefusedError as d, mustAct as dt, combatState as et, SeedLockedError as f, saveBonus as ft, addConversationLine as g, deathSaveCall as gt, refuseLockedSeed as h, setConcentration as ht, sessions as i, refuseDuringCombat as it, CallRefusedError as j, createWorld as jt, ABILITY_NAMES as k, hpState as kt, NotACampaignFolderError as l, combatant as lt, creationStage as m, concentrate as mt, library as n, nextTurn as nt, CampaignExistsError as o, startCombat as ot, StartOverRefusedError as p, setConditions as pt, currentStamp as q, writeTool as qt, live as r, orderText as rt, CampaignMissingError as s, applyDamage as st, campaignRoot as t, endCombat as tt, SessionLiveError as u, incapacitates as ut, history as v, SpotlightRefusedError as vt, returnStrandedDrafts as w, isBodyArmor as wt, DeclarationNotFoundError as x, present as xt, indexNarration as y, advanceClock as yt, createPendingCall as z, resolveBeat as zt };
+export { setAwaitingNarration as $, SESSION_LIVE_MESSAGE as $t, ABILITY_NAMES as A, hpState as At, createPendingCall as B, resolveBeat as Bt, DmBusyError as C, scenePlace as Ct, DraftNotFoundError as D, loadWizardRules as Dt, DmOnlyEditError as E, believedName as Et, TIERS as F, resolveLinks as Ft, rollAll as G, creationTool as Gt, saveKey as H, reviseArc as Ht, callInput as I, CurrentArcError as It, currentStamp as J, writeTool as Jt, saveSequence as K, expectVersion as Kt, callResultEvent as L, createArc as Lt, CallRefusedError as M, createWorld as Mt, DC_BY_TIER as N, fieldNames as Nt, createDmChannels as O, CharacterNotFoundError as Ot, PASS as P, renderLinks as Pt, partyAudience as Q, characterRefs as Qt, cancelPendingCall as R, currentArc as Rt, DeclarationRefusedError as S, present as St, ClaimRefusedError as T, isBodyArmor as Tt, attackSequence as U, PLUGIN_NAME as Ut, openCall as V, retireArc as Vt, damageSequence as W, ToolError as Wt, logEvent as X, parseClock as Xt, logActivity as Y, formatClock as Yt, nextEventId as Z, characterHolders as Zt, closeSession as _, deathSaveCall as _t, CampaignArchivedError as a, refuseDuringCombat as at, sessionsView as b, advanceClock as bt, CampaignNotFoundError as c, applyDamage as ct, BeginRefusedError as d, incapacitates as dt, addCombatants as et, SeedLockedError as f, mustAct as ft, addConversationLine as g, setConcentration as gt, refuseLockedSeed as h, concentrate as ht, sessions as i, orderText as it, CallClosedError as j, lintWorld as jt, playSheets as k, CharacterValidationError as kt, NotACampaignFolderError as l, applyHealing as lt, creationStage as m, setConditions as mt, library as n, endCombat as nt, CampaignExistsError as o, spendTurnResource as ot, StartOverRefusedError as p, saveBonus as pt, sequenceText as q, readTool as qt, live as r, nextTurn as rt, CampaignMissingError as s, startCombat as st, campaignRoot as t, combatState as tt, SessionLiveError as u, combatant as ut, history as v, ClockBackwardsError as vt, returnStrandedDrafts as w, equippable as wt, DeclarationNotFoundError as x, currentMinute as xt, indexNarration as y, SpotlightRefusedError as yt, createHitDiceCall as z, pastArcs as zt };
 
 //# sourceMappingURL=campaign.js.map

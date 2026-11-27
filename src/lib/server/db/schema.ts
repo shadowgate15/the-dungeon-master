@@ -149,8 +149,8 @@ export const character = sqliteTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     campaignId: campaignOwner(),
-    /** The Player who controls this Character; exactly one, transferable. */
-    controllingPlayer: text('controlling_player').notNull(),
+    /** The browser that Claims this Character; null while it is unclaimed. */
+    controllingPlayer: text('controlling_player'),
     status: text('status', { enum: CHARACTER_STATUSES }).notNull().default('alive'),
     /** The Character's Entity version: bumped by every edit, named in change notices. */
     version: integer('version').notNull().default(1),
@@ -322,7 +322,7 @@ export const characterDraft = sqliteTable('character_draft', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   campaignId: campaignOwner(),
-  controllingPlayer: text('controlling_player').notNull(),
+  controllingPlayer: text('controlling_player'),
   data: text('data', { mode: 'json' }).$type<unknown>().notNull(),
   /** The wizard step the draft was last on. */
   step: text('step').$type<StepId>().notNull(),

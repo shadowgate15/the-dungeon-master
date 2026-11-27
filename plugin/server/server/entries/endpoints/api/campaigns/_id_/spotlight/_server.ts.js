@@ -1,5 +1,5 @@
 import { i as json } from "../../../../../../chunks/exports.js";
-import { vt as SpotlightRefusedError } from "../../../../../../chunks/campaign.js";
+import { yt as SpotlightRefusedError } from "../../../../../../chunks/campaign.js";
 import { c as play, d as DmAwayError } from "../../../../../../chunks/bridge.js";
 import { n as withCampaign } from "../../../../../../chunks/http.js";
 import { n as readJson } from "../../../../../../chunks/respond.js";

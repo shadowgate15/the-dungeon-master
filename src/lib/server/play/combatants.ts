@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import { handleKind } from '#lib/world/entity-types.ts'
 import { eq } from 'drizzle-orm'
 import { canAct } from '#lib/character/acting.ts'
@@ -102,7 +103,7 @@ function characterCombatant(db: Queryable, ref: string): Combatant | null {
     handle: holder.handle,
     name: holder.name,
     id: holder.id,
-    player: holder.player,
+    player: holder.player ?? SOLO_PLAYER,
     detail,
     stats,
     features,

@@ -9,10 +9,13 @@
   import { actingCharacter, turnOf } from '#lib/play/combat.ts'
   import { knownBy } from '#lib/play/journal.ts'
   import PermissionCard from '#lib/play/PermissionCard.svelte'
+  import TakeASeat from '#lib/play/TakeASeat.svelte'
   import Timeline from '#lib/play/Timeline.svelte'
   import { createPermissionQuery, permissionActions } from '#lib/play/permission-client.ts'
   import {
     callActions,
+    claimActions,
+    createClaimsQuery,
     createFloorQuery,
     createSceneQuery,
     createSheetsQuery,
@@ -51,6 +54,17 @@
     () => data.campaign.id,
     () => data.journal
   )
+  const claims = createClaimsQuery(
+    () => data.campaign.id,
+    () => data.claims
+  )
+  const seats = claimActions(() => data.campaign.id)
+  // No Claim: the console waits, empty and dimmed, behind Take a seat.
+  const seated = $derived(claims.data.some((r) => r.claim === 'yours'))
+  let seatOpen = $state(false)
+  $effect(() => {
+    if (!seated) seatOpen = true
+  })
   const actions = floorActions(() => data.campaign.id)
   const calls = callActions(() => data.campaign.id)
   let rolling = $state(false)
@@ -129,14 +143,19 @@
       href={resolve('/campaigns/[id]/journal', { id: data.campaign.id })}
       class="ml-auto text-sm">Journal and Session history</Link
     >
+    <Button size="sm" variant="secondary" onclick={() => (seatOpen = true)}>Your Characters</Button>
     <Button size="sm" variant="secondary" disabled={!attached || archived || ending} onclick={end}
       >{ending ? 'Ending the session…' : 'End Session'}</Button
     >
   </header>
 
   <main
-    class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]"
+    class={[
+      'grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]',
+      !seated && 'pointer-events-none opacity-40'
+    ]}
     aria-label="Play console"
+    inert={!seated}
   >
     <CharacterSheet
       {sheets}
@@ -152,11 +171,11 @@
 
     <section aria-label="Story" class="flex min-h-0 flex-col gap-2">
       <Timeline
-        entries={timeline.data.entries}
+        entries={seated ? timeline.data.entries : []}
         awaitingSince={timeline.data.awaitingSince}
         away={!attached}
       />
-      {#if timeline.data.call && !archived}
+      {#if seated && timeline.data.call && !archived}
         {@const open = timeline.data.call}
         <CallCard
           call={open}
@@ -179,7 +198,7 @@
         <FloorComposer
           acting={acting?.name ?? null}
           turn={turn?.name ?? null}
-          declarations={floor.data.declarations}
+          declarations={seated ? floor.data.declarations : []}
           awaiting={timeline.data.awaitingSince !== null}
           onsend={(text) => acting && attempt(() => actions.send(acting.id, text))}
           ondone={done}
@@ -187,7 +206,7 @@
           onwithdraw={(id) => attempt(() => actions.withdraw(id))}
           elsewhere={scene.data.elsewhere}
           oncut={(id) => attempt(() => actions.cut(id))}
-          returned={floor.data.returned}
+          returned={seated ? floor.data.returned : []}
           onreturned={(ids) => attempt(() => actions.clearReturned(ids))}
           away={attached ? null : { folder: data.campaign.path }}
         />
@@ -201,4 +220,14 @@
       actor={acting?.id}
     />
   </main>
+
+  <TakeASeat
+    bind:open={seatOpen}
+    rows={claims.data}
+    createHref={resolve('/campaigns/[id]/party', { id: data.campaign.id })}
+    closeHref={resolve('/campaigns/[id]', { id: data.campaign.id })}
+    {problem}
+    onclaim={(id) => attempt(() => seats.claim(id))}
+    onletgo={(id) => attempt(() => seats.letGo(id))}
+  />
 </div>

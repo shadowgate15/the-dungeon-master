@@ -7,10 +7,11 @@ import { t as Badge } from "../../../../../chunks/Badge.js";
 import { t as Checkbox } from "../../../../../chunks/Checkbox.js";
 import { t as Field } from "../../../../../chunks/Field.js";
 import { t as Textarea } from "../../../../../chunks/Textarea.js";
-import { a as createSceneQuery, c as createTimelineQuery, d as levelUp, f as saveDetails, i as createJournalQuery, l as endSession, m as knownBy, n as callActions, p as Journal, r as createFloorQuery, s as createSheetsQuery, t as PlayRequestError, u as floorActions } from "../../../../../chunks/floor-client.js";
+import { a as createFloorQuery, d as endSession, f as floorActions, g as knownBy, h as Journal, i as createClaimsQuery, l as createSheetsQuery, m as saveDetails, n as callActions, o as createJournalQuery, p as levelUp, r as claimActions, s as createSceneQuery, t as PlayRequestError, u as createTimelineQuery } from "../../../../../chunks/floor-client.js";
 import { t as Alert } from "../../../../../chunks/Alert.js";
+import { t as Dialog } from "../../../../../chunks/Dialog.js";
 import "../../../../../chunks/follow.svelte.js";
-import { f as createQuery, o as permissionQueryKey } from "../../../../../chunks/messages.js";
+import { p as createQuery, s as permissionQueryKey } from "../../../../../chunks/messages.js";
 import { t as useQueryClient } from "../../../../../chunks/useQueryClient.js";
 import { t as Link } from "../../../../../chunks/Link.js";
 // src/lib/play/CallCard.svelte
@@ -877,6 +878,103 @@ function PermissionCard($$renderer, $$props) {
 		$$renderer.push(`<!----></div></div>`);
 	});
 }
+// src/lib/play/TakeASeat.svelte
+function TakeASeat($$renderer, $$props) {
+	$$renderer.component(($$renderer) => {
+		/** Where "Create a Character" goes: the Party wizard. */
+		let { open = void 0, rows, createHref, closeHref, problem = null, onclaim, onletgo } = $$props;
+		const seated = derived(() => rows.some((r) => r.claim === "yours"));
+		let $$settled = true;
+		let $$inner_renderer;
+		function $$render_inner($$renderer) {
+			Dialog($$renderer, {
+				title: "Take a seat",
+				closeHref,
+				class: "max-w-lg",
+				oncancel: (e) => !seated() && e.preventDefault(),
+				get open() {
+					return open;
+				},
+				set open($$value) {
+					open = $$value;
+					$$settled = false;
+				},
+				children: ($$renderer) => {
+					$$renderer.push(`<p class="text-text-muted mb-3 text-sm">Claim the Characters you play, then sit down.</p> <ul class="mb-4 flex flex-col gap-2" aria-label="Party">`);
+					const each_array = ensure_array_like(rows);
+					if (each_array.length !== 0) {
+						$$renderer.push("<!--[-->");
+						for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
+							let row = each_array[$$index];
+							$$renderer.push(`<li class="flex items-center justify-between gap-3 rounded-panel border border-border p-2"><span>${escape_html(row.name)}</span> `);
+							if (row.claim === "yours") {
+								$$renderer.push("<!--[0-->");
+								Button($$renderer, {
+									size: "sm",
+									variant: "secondary",
+									onclick: () => onletgo(row.id),
+									children: ($$renderer) => {
+										$$renderer.push(`<!---->Let go`);
+									},
+									$$slots: { default: true }
+								});
+							} else if (row.claim === "free") {
+								$$renderer.push("<!--[1-->");
+								Button($$renderer, {
+									size: "sm",
+									onclick: () => onclaim(row.id),
+									children: ($$renderer) => {
+										$$renderer.push(`<!---->Claim`);
+									},
+									$$slots: { default: true }
+								});
+							} else $$renderer.push(`<!--[-1--><span class="text-text-muted text-sm">taken</span>`);
+							$$renderer.push(`<!--]--></li>`);
+						}
+					} else $$renderer.push(`<!--[!--><li class="text-text-muted text-sm">The Party has no Characters yet.</li>`);
+					$$renderer.push(`<!--]--></ul> `);
+					if (problem) {
+						$$renderer.push("<!--[0-->");
+						Alert($$renderer, {
+							variant: "danger",
+							children: ($$renderer) => {
+								$$renderer.push(`<!---->${escape_html(problem)}`);
+							},
+							$$slots: { default: true }
+						});
+					} else $$renderer.push("<!--[-1-->");
+					$$renderer.push(`<!--]--> <div class="flex items-center justify-between gap-3">`);
+					Button($$renderer, {
+						variant: "secondary",
+						href: createHref,
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->Create a Character`);
+						},
+						$$slots: { default: true }
+					});
+					$$renderer.push(`<!----> `);
+					Button($$renderer, {
+						disabled: !seated(),
+						onclick: () => open = false,
+						children: ($$renderer) => {
+							$$renderer.push(`<!---->Sit down`);
+						},
+						$$slots: { default: true }
+					});
+					$$renderer.push(`<!----></div>`);
+				},
+				$$slots: { default: true }
+			});
+		}
+		do {
+			$$settled = true;
+			$$inner_renderer = $$renderer.copy();
+			$$render_inner($$inner_renderer);
+		} while (!$$settled);
+		$$renderer.subsume($$inner_renderer);
+		bind_props($$props, { open });
+	});
+}
 // src/lib/play/Timeline.svelte
 function Timeline($$renderer, $$props) {
 	$$renderer.component(($$renderer) => {
@@ -1016,6 +1114,10 @@ function _page($$renderer, $$props) {
 		const scene = createSceneQuery(() => data.campaign.id, () => data.scene);
 		const party = createSheetsQuery(() => data.campaign.id, () => data.sheets);
 		const journal = createJournalQuery(() => data.campaign.id, () => data.journal);
+		const claims = createClaimsQuery(() => data.campaign.id, () => data.claims);
+		const seats = claimActions(() => data.campaign.id);
+		const seated = derived(() => claims.data.some((r) => r.claim === "yours"));
+		let seatOpen = false;
 		const actions = floorActions(() => data.campaign.id);
 		const calls = callActions(() => data.campaign.id);
 		let rolling = false;
@@ -1064,126 +1166,162 @@ function _page($$renderer, $$props) {
 				else throw e;
 			}
 		}
-		head("1vf78z9", $$renderer, ($$renderer) => {
-			$$renderer.title(($$renderer) => {
-				$$renderer.push(`<title>${escape_html(data.campaign.name)} · Play</title>`);
+		let $$settled = true;
+		let $$inner_renderer;
+		function $$render_inner($$renderer) {
+			head("1vf78z9", $$renderer, ($$renderer) => {
+				$$renderer.title(($$renderer) => {
+					$$renderer.push(`<title>${escape_html(data.campaign.name)} · Play</title>`);
+				});
 			});
-		});
-		$$renderer.push(`<div class="flex h-[calc(100dvh-3rem)] flex-col gap-2 overflow-hidden p-3"><header class="flex shrink-0 items-center gap-3">`);
-		Link($$renderer, {
-			href: resolve("/campaigns/[id]", { id: data.campaign.id }),
-			class: "text-sm",
-			children: ($$renderer) => {
-				$$renderer.push(`<!---->${escape_html(data.campaign.name)}`);
-			},
-			$$slots: { default: true }
-		});
-		$$renderer.push(`<!----> `);
-		DmBadge($$renderer, {
-			size: "sm",
-			attached: attached()
-		});
-		$$renderer.push(`<!----> `);
-		Link($$renderer, {
-			href: resolve("/campaigns/[id]/journal", { id: data.campaign.id }),
-			class: "ml-auto text-sm",
-			children: ($$renderer) => {
-				$$renderer.push(`<!---->Journal and Session history`);
-			},
-			$$slots: { default: true }
-		});
-		$$renderer.push(`<!----> `);
-		Button($$renderer, {
-			size: "sm",
-			variant: "secondary",
-			disabled: !attached() || archived() || ending,
-			onclick: end,
-			children: ($$renderer) => {
-				$$renderer.push(`<!---->${escape_html(ending ? "Ending the session…" : "End Session")}`);
-			},
-			$$slots: { default: true }
-		});
-		$$renderer.push(`<!----></header> <main class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]" aria-label="Play console">`);
-		CharacterSheet($$renderer, {
-			sheets: sheets(),
-			acting: acting()?.id ?? null,
-			onselect: (id) => picked = id,
-			onlevelup: archived() ? void 0 : (id, picks) => attempt(() => levelUp(data.campaign.id, id, picks)),
-			onsavedetails: archived() ? void 0 : (id, details) => saveDetails(data.campaign.id, id, details)
-		});
-		$$renderer.push(`<!----> <section aria-label="Story" class="flex min-h-0 flex-col gap-2">`);
-		Timeline($$renderer, {
-			entries: timeline.data.entries,
-			awaitingSince: timeline.data.awaitingSince,
-			away: !attached()
-		});
-		$$renderer.push(`<!----> `);
-		if (timeline.data.call && !archived()) {
-			$$renderer.push("<!--[0-->");
-			const open = timeline.data.call;
-			CallCard($$renderer, {
-				call: open,
-				disabled: rolling || !attached(),
-				onroll: (part) => answerCall(() => calls.roll(open.id, part)),
-				onanswer: (part, answer) => answerCall(() => calls.answer(open.id, part, answer))
-			});
-		} else $$renderer.push("<!--[-1-->");
-		$$renderer.push(`<!--]--> `);
-		if (problem) {
-			$$renderer.push("<!--[0-->");
-			Alert($$renderer, {
-				variant: "danger",
+			$$renderer.push(`<div class="flex h-[calc(100dvh-3rem)] flex-col gap-2 overflow-hidden p-3"><header class="flex shrink-0 items-center gap-3">`);
+			Link($$renderer, {
+				href: resolve("/campaigns/[id]", { id: data.campaign.id }),
+				class: "text-sm",
 				children: ($$renderer) => {
-					$$renderer.push(`<!---->${escape_html(problem)}`);
+					$$renderer.push(`<!---->${escape_html(data.campaign.name)}`);
 				},
 				$$slots: { default: true }
 			});
-		} else $$renderer.push("<!--[-1-->");
-		$$renderer.push(`<!--]--> `);
-		if (permission.data) {
-			$$renderer.push("<!--[0-->");
-			const request = permission.data;
-			PermissionCard($$renderer, {
-				request,
-				onanswer: (behavior) => answers.answer(request.requestId, behavior)
+			$$renderer.push(`<!----> `);
+			DmBadge($$renderer, {
+				size: "sm",
+				attached: attached()
 			});
-		} else $$renderer.push("<!--[-1-->");
-		$$renderer.push(`<!--]--> `);
-		if (archived()) {
-			$$renderer.push("<!--[0-->");
-			Alert($$renderer, {
-				variant: "warning",
+			$$renderer.push(`<!----> `);
+			Link($$renderer, {
+				href: resolve("/campaigns/[id]/journal", { id: data.campaign.id }),
+				class: "ml-auto text-sm",
 				children: ($$renderer) => {
-					$$renderer.push(`<!---->This Campaign is archived. Restore it to play.`);
+					$$renderer.push(`<!---->Journal and Session history`);
 				},
 				$$slots: { default: true }
 			});
-		} else {
-			$$renderer.push("<!--[-1-->");
-			FloorComposer($$renderer, {
-				acting: acting()?.name ?? null,
-				turn: turn()?.name ?? null,
-				declarations: floor.data.declarations,
-				awaiting: timeline.data.awaitingSince !== null,
-				onsend: (text) => acting() && attempt(() => actions.send(acting().id, text)),
-				ondone: done,
-				onedit: (id, text) => attempt(() => actions.edit(id, text)),
-				onwithdraw: (id) => attempt(() => actions.withdraw(id)),
-				elsewhere: scene.data.elsewhere,
-				oncut: (id) => attempt(() => actions.cut(id)),
-				returned: floor.data.returned,
-				onreturned: (ids) => attempt(() => actions.clearReturned(ids)),
-				away: attached() ? null : { folder: data.campaign.path }
+			$$renderer.push(`<!----> `);
+			Button($$renderer, {
+				size: "sm",
+				variant: "secondary",
+				onclick: () => seatOpen = true,
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->Your Characters`);
+				},
+				$$slots: { default: true }
 			});
+			$$renderer.push(`<!----> `);
+			Button($$renderer, {
+				size: "sm",
+				variant: "secondary",
+				disabled: !attached() || archived() || ending,
+				onclick: end,
+				children: ($$renderer) => {
+					$$renderer.push(`<!---->${escape_html(ending ? "Ending the session…" : "End Session")}`);
+				},
+				$$slots: { default: true }
+			});
+			$$renderer.push(`<!----></header> <main${attr_class(clsx(["grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)_15rem]", !seated() && "pointer-events-none opacity-40"]))} aria-label="Play console"${attr("inert", !seated(), true)}>`);
+			CharacterSheet($$renderer, {
+				sheets: sheets(),
+				acting: acting()?.id ?? null,
+				onselect: (id) => picked = id,
+				onlevelup: archived() ? void 0 : (id, picks) => attempt(() => levelUp(data.campaign.id, id, picks)),
+				onsavedetails: archived() ? void 0 : (id, details) => saveDetails(data.campaign.id, id, details)
+			});
+			$$renderer.push(`<!----> <section aria-label="Story" class="flex min-h-0 flex-col gap-2">`);
+			Timeline($$renderer, {
+				entries: seated() ? timeline.data.entries : [],
+				awaitingSince: timeline.data.awaitingSince,
+				away: !attached()
+			});
+			$$renderer.push(`<!----> `);
+			if (seated() && timeline.data.call && !archived()) {
+				$$renderer.push("<!--[0-->");
+				const open = timeline.data.call;
+				CallCard($$renderer, {
+					call: open,
+					disabled: rolling || !attached(),
+					onroll: (part) => answerCall(() => calls.roll(open.id, part)),
+					onanswer: (part, answer) => answerCall(() => calls.answer(open.id, part, answer))
+				});
+			} else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> `);
+			if (problem) {
+				$$renderer.push("<!--[0-->");
+				Alert($$renderer, {
+					variant: "danger",
+					children: ($$renderer) => {
+						$$renderer.push(`<!---->${escape_html(problem)}`);
+					},
+					$$slots: { default: true }
+				});
+			} else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> `);
+			if (permission.data) {
+				$$renderer.push("<!--[0-->");
+				const request = permission.data;
+				PermissionCard($$renderer, {
+					request,
+					onanswer: (behavior) => answers.answer(request.requestId, behavior)
+				});
+			} else $$renderer.push("<!--[-1-->");
+			$$renderer.push(`<!--]--> `);
+			if (archived()) {
+				$$renderer.push("<!--[0-->");
+				Alert($$renderer, {
+					variant: "warning",
+					children: ($$renderer) => {
+						$$renderer.push(`<!---->This Campaign is archived. Restore it to play.`);
+					},
+					$$slots: { default: true }
+				});
+			} else {
+				$$renderer.push("<!--[-1-->");
+				FloorComposer($$renderer, {
+					acting: acting()?.name ?? null,
+					turn: turn()?.name ?? null,
+					declarations: seated() ? floor.data.declarations : [],
+					awaiting: timeline.data.awaitingSince !== null,
+					onsend: (text) => acting() && attempt(() => actions.send(acting().id, text)),
+					ondone: done,
+					onedit: (id, text) => attempt(() => actions.edit(id, text)),
+					onwithdraw: (id) => attempt(() => actions.withdraw(id)),
+					elsewhere: scene.data.elsewhere,
+					oncut: (id) => attempt(() => actions.cut(id)),
+					returned: seated() ? floor.data.returned : [],
+					onreturned: (ids) => attempt(() => actions.clearReturned(ids)),
+					away: attached() ? null : { folder: data.campaign.path }
+				});
+			}
+			$$renderer.push(`<!--]--></section> `);
+			Rail($$renderer, {
+				scene: scene.data,
+				believer: acting()?.name ?? "the Party",
+				entries: acting() ? knownBy(journal.data, acting().id) : journal.data.entries,
+				actor: acting()?.id
+			});
+			$$renderer.push(`<!----></main> `);
+			TakeASeat($$renderer, {
+				rows: claims.data,
+				createHref: resolve("/campaigns/[id]/party", { id: data.campaign.id }),
+				closeHref: resolve("/campaigns/[id]", { id: data.campaign.id }),
+				problem,
+				onclaim: (id) => attempt(() => seats.claim(id)),
+				onletgo: (id) => attempt(() => seats.letGo(id)),
+				get open() {
+					return seatOpen;
+				},
+				set open($$value) {
+					seatOpen = $$value;
+					$$settled = false;
+				}
+			});
+			$$renderer.push(`<!----></div>`);
 		}
-		$$renderer.push(`<!--]--></section> `);
-		Rail($$renderer, {
-			scene: scene.data,
-			believer: acting()?.name ?? "the Party",
-			entries: acting() ? knownBy(journal.data, acting().id) : journal.data.entries,
-			actor: acting()?.id
-		});
-		$$renderer.push(`<!----></main></div>`);
+		do {
+			$$settled = true;
+			$$inner_renderer = $$renderer.copy();
+			$$render_inner($$inner_renderer);
+		} while (!$$settled);
+		$$renderer.subsume($$inner_renderer);
 	});
 }
 export { _page as default };
