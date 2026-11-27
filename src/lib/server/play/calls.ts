@@ -864,7 +864,7 @@ export function createCalls(db: Database, now: () => number = Date.now) {
         const what = labelOf(part, kind) ?? ''
         if (kind === 'initiative') {
           const handle = characterRefs(db).find((c) => c.row.id === part.characterId)?.handle
-          if (handle) recordInitiative(db, handle, total)
+          if (handle) recordInitiative(db, handle, total, dice)
           return {
             values: { result },
             event: {

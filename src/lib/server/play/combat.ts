@@ -6,7 +6,10 @@ import { call, combat, combatant as combatantTable, type TurnResources } from '.
 import type { Dice } from '../dice'
 import { ToolError } from '../tools/contract'
 import { believedName, UNKNOWN_NPC } from '../knowledge/player-names'
+import { characterHolders } from '../knowledge/holders'
 import { createPendingCall, type PendingPart } from './calls'
+import { applyDeathSave, rollsDeathSaves } from './death'
+import { characterRefs } from './scene'
 import { combatant, isOut, type Combatant, type StatBlock, statBlockFor } from './combatants'
 import { advanceClock, currentMinute } from './scene'
 
@@ -203,10 +206,17 @@ function join(
   const parts: PendingPart[] = []
   for (const { row, who } of adding) {
     let initiative: number | null = null
-    if (row.kind === 'character' && who?.kind === 'character') {
+    const unclaimed =
+      who?.kind === 'character' &&
+      characterHolders(db).find((h) => h.id === who.id)?.player === null
+    if (row.kind === 'character' && who?.kind === 'character' && !unclaimed) {
       parts.push({ characterId: who.id, player: who.player, sequence: null, reason: null })
     } else {
-      const modifier = abilityMod(row.dex)
+      // An unclaimed Character has no Player: code rolls its initiative like an NPC's.
+      const modifier =
+        who?.kind === 'character' && who.stats.initiative.status === 'ok'
+          ? who.stats.initiative.value
+          : abilityMod(row.dex)
       const d20 = dice.rollD20()
       initiative = d20.kept + modifier
       const sign = modifier >= 0 ? `+ ${modifier}` : `- ${-modifier}`
@@ -235,7 +245,7 @@ function join(
       .run()
   }
   const pendingCall = parts.length ? createPendingCall(db, parts, at, 'initiative') : null
-  beginIfReady(db, combatId)
+  rolled.push(...beginIfReady(db, combatId, dice))
   return {
     creatures: adding.filter((a) => a.row.kind === 'creature').map((a) => a.row.handle!),
     rolls,
@@ -289,12 +299,12 @@ function acts(db: Queryable, c: CombatantRow, round: number): boolean {
  * Moves the turn pointer to the next combatant who acts, wrapping into the next round, and resets
  * their per-turn resources. From no current turn, starts from the top of round `round`.
  */
-function advance(db: Queryable, live: CombatRow): { round: number; current: CombatantRow | null } {
+function step(db: Queryable, live: CombatRow): { round: number; current: CombatantRow | null } {
   const order = initiativeOrder(db, live.id)
   let round = live.round
   let index = live.current === null ? -1 : order.findIndex((c) => c.id === live.current)
   let next: CombatantRow | null = null
-  for (let step = 0; step < order.length * 2 + 1 && order.length; step++) {
+  for (let n = 0; n < order.length * 2 + 1 && order.length; n++) {
     index++
     if (index >= order.length) {
       index = 0
@@ -315,30 +325,66 @@ function advance(db: Queryable, live: CombatRow): { round: number; current: Comb
   return { round, current: next }
 }
 
+/** Whether a combatant is a Character nobody Claims right now. */
+const isUnclaimed = (db: Queryable, c: CombatantRow) =>
+  c.kind === 'character' && characterHolders(db).find((h) => h.handle === c.handle)?.player === null
+
+/**
+ * Moves to the next turn. An unclaimed Character's turn passes with a note and code makes its rolls
+ * (a Death save at 0 HP); a Character Claimed by the time its turn comes plays it. After one full
+ * lap of unclaimed Characters the turn stays on the last one.
+ */
+function advance(
+  db: Queryable,
+  live: CombatRow,
+  dice: Dice
+): { round: number; current: CombatantRow | null; notes: string[] } {
+  const notes: string[] = []
+  let state = step(db, live)
+  const lap = combatantsOf(db, live.id).length
+  for (let n = 0; n < lap && state.current && isUnclaimed(db, state.current); n++) {
+    const who = state.current
+    notes.push(`${who.name} is unclaimed: no action`)
+    const row = characterRefs(db).find((c) => c.handle === who.handle)?.row
+    if (row && rollsDeathSaves(row)) {
+      const d20 = dice.rollD20().kept
+      notes.push(`${who.name} Death save: d20 ${d20} → ${applyDeathSave(db, row, d20).text}`)
+    }
+    state = step(db, { ...live, round: state.round, current: who.id })
+  }
+  return { ...state, notes }
+}
+
 /** Once every combatant has initiative, round 1 begins with the first who acts. */
-function beginIfReady(db: Queryable, combatId: string) {
+function beginIfReady(db: Queryable, combatId: string, dice: Dice | null = null): string[] {
   const live = db.select().from(combat).where(eq(combat.id, combatId)).get()!
-  if (live.round !== 0 || live.endedAt !== null) return
-  if (combatantsOf(db, combatId).some((c) => c.initiative === null)) return
-  advance(db, { ...live, round: 1, current: null })
+  if (live.round !== 0 || live.endedAt !== null) return []
+  if (combatantsOf(db, combatId).some((c) => c.initiative === null)) return []
+  const start = { ...live, round: 1, current: null }
+  return dice ? advance(db, start, dice).notes : (step(db, start), [])
 }
 
 /**
  * Records a Character's initiative roll from the Party's Call. Late arrivals slot into the order;
  * the last roll at the start of a Combat begins round 1.
  */
-export function recordInitiative(db: Queryable, characterHandle: string, total: number) {
+export function recordInitiative(
+  db: Queryable,
+  characterHandle: string,
+  total: number,
+  dice: Dice | null = null
+): string[] {
   const live = liveCombat(db)
-  if (!live) return
+  if (!live) return []
   db.update(combatantTable)
     .set({ initiative: total })
     .where(and(eq(combatantTable.combatId, live.id), eq(combatantTable.handle, characterHandle)))
     .run()
-  beginIfReady(db, live.id)
+  return beginIfReady(db, live.id, dice)
 }
 
 /** Advances to the next turn. Refused until every combatant has initiative. */
-export function nextTurn(db: Queryable) {
+export function nextTurn(db: Queryable, dice: Dice) {
   const live = requireCombat(db)
   if (live.round === 0) {
     throw new ToolError(
@@ -347,7 +393,7 @@ export function nextTurn(db: Queryable) {
       'Attach the initiative Call with narrate and wait for its call_result'
     )
   }
-  return advance(db, live)
+  return advance(db, live, dice)
 }
 
 const RESOURCE_NAMES: Record<keyof TurnResources, string> = {
