@@ -63,30 +63,45 @@ function pluginVersion(pluginRoot) {
   const manifest = path3.join(pluginRoot, ".claude-plugin", "plugin.json");
   return JSON.parse(fs2.readFileSync(manifest, "utf8")).version;
 }
+var LAN_PROTOCOL_HEADER = "x-forwarded-proto";
+var LAN_PRELOAD = `import http from 'node:http'
+const emit = http.Server.prototype.emit
+http.Server.prototype.emit = function (event, req, ...rest) {
+  if (event === 'request') req.headers['${LAN_PROTOCOL_HEADER}'] = 'http'
+  return emit.call(this, event, req, ...rest)
+}`;
+function serverNodeArgs(mode) {
+  return mode === "lan" ? [`--import=data:text/javascript,${encodeURIComponent(LAN_PRELOAD)}`] : [];
+}
 async function startServer(ctx, mode) {
   const serverDir = path3.join(ctx.pluginRoot, "server");
   fs2.mkdirSync(ctx.home, { recursive: true });
   const logFile = path3.join(ctx.home, "server.log");
   const log = fs2.openSync(logFile, "a");
-  const child = spawn(process.execPath, [path3.join(serverDir, "index.js")], {
-    // The server finds its migrations relative to its own directory.
-    cwd: serverDir,
-    detached: true,
-    stdio: ["ignore", log, log],
-    env: {
-      ...ctx.env,
-      DUNGEON_MASTER_LAN: "",
-      DUNGEON_MASTER_HOME: ctx.home,
-      DUNGEON_MASTER_PORT: String(ctx.port),
-      DUNGEON_MASTER_VERSION: ctx.version,
-      PORT: String(ctx.port),
-      // LAN mode binds every interface, which still covers loopback for the launcher and bridge.
-      HOST: mode === "lan" ? "0.0.0.0" : "127.0.0.1",
-      ...mode === "lan" ? { DUNGEON_MASTER_LAN: "1" } : {},
-      // adapter-node assumes https otherwise, and refuses the UI's form posts as cross-site.
-      ORIGIN: uiUrl(ctx.port)
+  const child = spawn(
+    process.execPath,
+    [...serverNodeArgs(mode), path3.join(serverDir, "index.js")],
+    {
+      // The server finds its migrations relative to its own directory.
+      cwd: serverDir,
+      detached: true,
+      stdio: ["ignore", log, log],
+      env: {
+        ...ctx.env,
+        DUNGEON_MASTER_LAN: "",
+        DUNGEON_MASTER_HOME: ctx.home,
+        DUNGEON_MASTER_PORT: String(ctx.port),
+        DUNGEON_MASTER_VERSION: ctx.version,
+        PORT: String(ctx.port),
+        // LAN mode binds every interface, which still covers loopback for the launcher and bridge.
+        HOST: mode === "lan" ? "0.0.0.0" : "127.0.0.1",
+        ...mode === "lan" ? { DUNGEON_MASTER_LAN: "1" } : {},
+        // adapter-node assumes https otherwise, and refuses the UI's form posts as cross-site. A
+        // localhost server is told its one origin; a LAN server takes each request's own Host.
+        ...mode === "lan" ? { PROTOCOL_HEADER: LAN_PROTOCOL_HEADER } : { ORIGIN: uiUrl(ctx.port) }
+      }
     }
-  });
+  );
   fs2.closeSync(log);
   let exited = false;
   child.once("exit", () => exited = true);
