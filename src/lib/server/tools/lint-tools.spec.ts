@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { addCharacter, fighterDraft } from '../character/test-characters'
 import { tempDir } from '../../../testing/temp-dir'
 import { testLibrary } from '../../../testing/library'
 import type { CampaignLibrary } from '../campaign/library'
@@ -241,5 +242,41 @@ describe('lint itself', () => {
     expect(host.events(folder).slice(eventsBefore)).toMatchObject([
       { tool: 'lint', kind: 'lint_ran', dmOnly: true }
     ])
+  })
+})
+
+describe('Reveals outside the Narration Audience', () => {
+  beforeEach(() => {
+    addCharacter(library, campaignId, fighterDraft('Wren'))
+    addCharacter(library, campaignId, fighterDraft('Ash'))
+  })
+
+  const outside = (lint: { findings: { kind: string }[] }) =>
+    lint.findings.filter((f) => f.kind === 'reveal_outside_audience')
+
+  it('hints at a Reveal to a Character the turn’s Narration did not reach', () => {
+    ok('establish', { type: 'npc', name: 'Odo' })
+    ok('narrate', { text: 'Odo slips Wren a note.', to: ['char:wren'] })
+    ok('reveal', {
+      claim: 'Odo is a spy',
+      about: 'npc:odo',
+      holders: ['char:wren', 'char:ash']
+    })
+
+    expect(outside(ok('lint'))).toEqual([
+      {
+        kind: 'reveal_outside_audience',
+        holder: 'char:ash',
+        belief: expect.any(Number)
+      }
+    ])
+  })
+
+  it('stays quiet when the Reveal stays inside the Audience, and still reveals to the Scene by default', () => {
+    ok('establish', { type: 'npc', name: 'Odo' })
+    ok('narrate', { text: 'Odo slips Wren a note.', to: ['char:wren'] })
+    ok('reveal', { claim: 'Odo is a spy', about: 'npc:odo', holders: ['char:wren'] })
+
+    expect(outside(ok('lint'))).toEqual([])
   })
 })
