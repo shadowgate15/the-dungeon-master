@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -167,13 +168,13 @@ describe('a cut with drafts open', () => {
     ok('move', { who: ['char:wren', 'char:bram'], to: 'place:drowned-lantern' })
     ok('set_scene', { place: 'place:drowned-lantern' })
     const floor = library.floor(campaignId)
-    floor.send({ character: wren, text: 'I check the cellar door.' })
-    floor.send({ character: bram, text: 'I slip out to the docks.' })
+    floor.send({ character: wren, text: 'I check the cellar door.', player: SOLO_PLAYER })
+    floor.send({ character: bram, text: 'I slip out to the docks.', player: SOLO_PLAYER })
 
     ok('move', { who: ['char:bram'], via: 'front door' })
     expect(ok('set_scene', { place: 'place:the-docks' })).toMatchObject({ returned: 1 })
 
-    const after = library.floor(campaignId).current()
+    const after = library.floor(campaignId).current(SOLO_PLAYER)
     expect(after.declarations).toMatchObject([{ characterName: 'Bram' }])
     expect(after.returned).toEqual([
       {
@@ -185,7 +186,7 @@ describe('a cut with drafts open', () => {
     ])
 
     library.floor(campaignId).clearReturned(after.returned[0].id)
-    expect(library.floor(campaignId).current().returned).toEqual([])
+    expect(library.floor(campaignId).current(SOLO_PLAYER).returned).toEqual([])
   })
 
   it('refuses a Declaration for a Character outside the Scene', () => {
@@ -195,8 +196,8 @@ describe('a cut with drafts open', () => {
     ok('move', { who: ['char:wren'], to: 'place:drowned-lantern' })
     ok('move', { who: ['char:bram'], to: 'place:the-docks' })
     ok('set_scene', { place: 'place:drowned-lantern' })
-    expect(() => library.floor(campaignId).send({ character: bram, text: 'I wave.' })).toThrow(
-      /not in the Scene/
-    )
+    expect(() =>
+      library.floor(campaignId).send({ character: bram, text: 'I wave.', player: SOLO_PLAYER })
+    ).toThrow(/not in the Scene/)
   })
 })

@@ -10,13 +10,13 @@ import type { RequestHandler } from './$types'
  * 204; 400 `{ error }` for a Character already in the Scene (or unknown); 404 for an unknown Campaign;
  * 409 while the DM is away.
  */
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
   const body = await readJson<{ character: string }>(request)
   if (typeof body?.character !== 'string') {
     return json({ error: 'Name the Character to cut to' }, { status: 400 })
   }
   return withCampaign(() => {
-    play.spotlight(params.id, body.character)
+    play.spotlight(params.id, body.character, locals.browser)
     return new Response(null, { status: 204 })
   }, [
     [DmAwayError, 409],

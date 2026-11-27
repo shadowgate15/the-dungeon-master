@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- the viewer is the seam where later tickets filter per Player */
 import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import type { LiveMessage } from '#lib/live/messages.ts'
 import type { SceneView } from '#lib/play/scene.ts'
@@ -7,6 +8,7 @@ import type { Sessions } from '../bridge/sessions'
 import { CampaignNotFoundError, type CampaignLibrary } from '../campaign/library'
 import { campaignDice, type Dice } from '../dice'
 import type { DoneOutcome, Floor } from '../floor/floor'
+import { playSheets } from './sheets'
 import { callResultEvent, type CallResult } from './calls'
 
 export { DmBusyError } from '../floor/floor'
@@ -95,7 +97,7 @@ export function createPlay({
      * The Player presses Done. When it closes the Floor, the DM gets exactly one floor event and
      * the Campaign awaits Narration.
      */
-    done(campaignId: string, player: string = SOLO_PLAYER): DoneOutcome {
+    done(campaignId: string, player: string): DoneOutcome {
       atTable(campaignId)
       const outcome = library.floor(campaignId).done(player)
       if (outcome.closed) channels.send(folderOf(campaignId), floorEvent(outcome))
@@ -108,7 +110,7 @@ export function createPlay({
      * The Player clicks one roll of the open Call; code rolls it. The roll that completes the Call
      * wakes the DM with one call_result event and sets awaiting Narration.
      */
-    roll(campaignId: string, callId: string, partId: string, player: string = SOLO_PLAYER) {
+    roll(campaignId: string, callId: string, partId: string, player: string) {
       atTable(campaignId)
       const result = library.calls(campaignId).roll(callId, partId, dice(campaignId), player)
       return answered(campaignId, result)
@@ -118,13 +120,7 @@ export function createPlay({
      * The Player answers a question Call, or says how many Hit Dice to spend (code rolls them);
      * the last answer wakes the DM like a roll does.
      */
-    answer(
-      campaignId: string,
-      callId: string,
-      partId: string,
-      text: string,
-      player: string = SOLO_PLAYER
-    ) {
+    answer(campaignId: string, callId: string, partId: string, text: string, player: string) {
       atTable(campaignId)
       const result = library
         .calls(campaignId)
@@ -136,22 +132,47 @@ export function createPlay({
      * A Player's "Cut to <Name>": one spotlight channel event to the DM. Doesn't await Narration.
      * Refused (`SpotlightRefusedError`) for a Character who is already in the Scene.
      */
-    spotlight(campaignId: string, character: string, player: string = SOLO_PLAYER): void {
+    spotlight(campaignId: string, character: string, player: string): void {
       const folder = atTable(campaignId)
       const request = library.record(campaignId).spotlight(character, player)
       channels.send(folder, request)
     },
 
     /** The Scene as the Player's rail shows it. */
-    scene(campaignId: string): SceneView {
+    scene(campaignId: string, _viewer: string): SceneView {
       return library.record(campaignId).scene()
+    },
+
+    /** The Journal as `viewer`'s Player sees it. */
+    journal(campaignId: string, _viewer: string) {
+      return library.record(campaignId).journal()
+    },
+
+    /** The read-only Session history as `viewer`'s Player sees it. */
+    sessionHistory(campaignId: string, _viewer: string) {
+      return library.record(campaignId).sessionHistory()
+    },
+
+    /** The Party's play sheets as `viewer`'s Player sees them. */
+    sheets(campaignId: string, _viewer: string) {
+      return playSheets(library.party(campaignId))
+    },
+
+    /** The DM-pane conversation as `viewer`'s Player sees it. */
+    conversation(campaignId: string, _viewer: string) {
+      return library.conversation(campaignId).list()
+    },
+
+    /** The open Floor with `viewer`'s returned drafts, to read: it works with the DM away. */
+    openFloor(campaignId: string, viewer: string) {
+      return library.floor(campaignId).current(viewer)
     },
 
     /**
      * The Player writes in the DM pane: the message is kept for the pane and reaches the DM as one
      * conversation event. It is out of fiction, so it never touches the Floor or the Event log.
      */
-    converse(campaignId: string, text: string, player: string = SOLO_PLAYER) {
+    converse(campaignId: string, text: string, player: string) {
       const folder = folderOf(campaignId)
       if (!channels.listening(folder)) {
         throw new DmAwayError('The DM is away. Run dm in the Campaign folder to ask for help.')
@@ -166,7 +187,7 @@ export function createPlay({
      * The Player presses Begin: the Seed locks and the DM gets one begin event, which it hands to
      * `builder`. It needs a DM at the table, and it doesn't set awaiting Narration.
      */
-    begin(campaignId: string, player: string = SOLO_PLAYER): void {
+    begin(campaignId: string, player: string): void {
       const folder = folderOf(campaignId)
       if (!channels.listening(folder)) {
         throw new DmAwayError('The DM is away. Run dm in the Campaign folder, then press Begin.')
@@ -249,7 +270,7 @@ export function createPlay({
     },
 
     /** The Player's timeline and whether the DM is working on a turn. */
-    timeline(campaignId: string): Timeline {
+    timeline(campaignId: string, _viewer: string): Timeline {
       return library.record(campaignId).timeline()
     }
   }

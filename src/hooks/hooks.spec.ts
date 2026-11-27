@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,8 +49,10 @@ function hook(event: string, input: Record<string, unknown>): Promise<unknown> {
 function closeFloor() {
   server.channels.listen(folder, () => {})
   const wren = addCharacter(server.library, campaignId, fighterDraft('Wren'))
-  server.library.floor(campaignId).send({ character: wren, text: 'I pick the lock.' })
-  server.play.done(campaignId)
+  server.library
+    .floor(campaignId)
+    .send({ character: wren, text: 'I pick the lock.', player: SOLO_PLAYER })
+  server.play.done(campaignId, SOLO_PLAYER)
 }
 
 describe('PreToolUse', () => {
@@ -91,7 +94,7 @@ describe('Stop', () => {
     const out = await hook('stop', { hook_event_name: 'Stop', stop_hook_active: true })
 
     expect(out).toBeNull()
-    expect(server.play.timeline(campaignId).entries.at(-1)).toMatchObject({
+    expect(server.play.timeline(campaignId, SOLO_PLAYER).entries.at(-1)).toMatchObject({
       type: 'error',
       text: expect.stringContaining('without a Narration')
     })

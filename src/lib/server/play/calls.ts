@@ -788,7 +788,7 @@ export function createCalls(db: Database, now: () => number = Date.now) {
      * Rolls one Check part in code for its Controlling Player; returns the Call's result when this
      * roll completes it, null otherwise.
      */
-    roll(callId: string, partId: string, dice: Dice, player: string = SOLO_PLAYER) {
+    roll(callId: string, partId: string, dice: Dice, player: string) {
       return answer(callId, partId, player, (part, kind) => {
         if (!part.characterId) throw new CallRefusedError('That part is a question: answer it')
         if (part.hitDice) throw new CallRefusedError('Say how many Hit Dice to spend')
@@ -862,13 +862,7 @@ export function createCalls(db: Database, now: () => number = Date.now) {
      * Answers a question part (with choices, the answer must be one of them), or a Hit Dice part
      * with how many to spend, which code then rolls with `dice`.
      */
-    answer(
-      callId: string,
-      partId: string,
-      text: string,
-      player: string = SOLO_PLAYER,
-      dice?: Dice
-    ) {
+    answer(callId: string, partId: string, text: string, player: string, dice?: Dice) {
       const clean = text.trim()
       return answer(callId, partId, player, (part, kind) => {
         if (part.hitDice) return spendHitDice(part, part.hitDice, clean, dice)

@@ -1,3 +1,4 @@
+import { SOLO_PLAYER } from '#lib/character/enums.ts'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { tempDir } from '../../../testing/temp-dir'
@@ -56,7 +57,7 @@ const lockCheck = {
 }
 
 /** The open Call as the Player's timeline shows it. */
-const openCall = () => play.timeline(campaignId).call
+const openCall = () => play.timeline(campaignId, SOLO_PLAYER).call
 
 describe('a Check Call', () => {
   it('shows the Player the skill and the reason, never the DC', () => {
@@ -85,7 +86,9 @@ describe('a Check Call', () => {
         }
       ]
     })
-    expect(JSON.stringify(play.timeline(campaignId))).not.toMatch(/\b20\b|\bdc\b|tier|hard/i)
+    expect(JSON.stringify(play.timeline(campaignId, SOLO_PLAYER))).not.toMatch(
+      /\b20\b|\bdc\b|tier|hard/i
+    )
   })
 })
 
@@ -102,13 +105,13 @@ describe('rolling a Call', () => {
     })
     const [wren, bram] = openCall()!.parts
 
-    play.roll(campaignId, openCall()!.id, wren.id)
+    play.roll(campaignId, openCall()!.id, wren.id, SOLO_PLAYER)
     expect(heard).toEqual([])
-    expect(play.timeline(campaignId).awaitingSince).toBeNull()
+    expect(play.timeline(campaignId, SOLO_PLAYER).awaitingSince).toBeNull()
     expect(openCall()!.parts.map((p) => p.answered)).toEqual([true, false])
 
     const id = openCall()!.id
-    play.roll(campaignId, id, bram.id)
+    play.roll(campaignId, id, bram.id, SOLO_PLAYER)
 
     expect(heard).toHaveLength(1)
     expect(heard[0].meta).toEqual({ kind: 'call_result', call_id: id, players: 'player' })
@@ -118,7 +121,7 @@ describe('rolling a Call', () => {
       /^\[Wren · player\] Sleight of Hand check: d20 \d+ [+-] \d+ = \d+ vs DC 20 \(hard\) → (success|failure)$/
     )
     expect(lines[1]).toMatch(/^\[Bram · player\] Perception check: .* vs DC 10 \(easy\)/)
-    expect(play.timeline(campaignId).awaitingSince).toEqual(expect.any(Number))
+    expect(play.timeline(campaignId, SOLO_PLAYER).awaitingSince).toEqual(expect.any(Number))
     expect(openCall()).toBeNull()
   })
 
@@ -127,9 +130,9 @@ describe('rolling a Call', () => {
     call('narrate', { text: 'The lock is rusted.', call: lockCheck })
     const { id, parts } = openCall()!
 
-    play.roll(campaignId, id, parts[0].id)
+    play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)
 
-    const roll = play.timeline(campaignId).entries.find((e) => e.type === 'roll')
+    const roll = play.timeline(campaignId, SOLO_PLAYER).entries.find((e) => e.type === 'roll')
     expect(roll).toEqual({
       type: 'roll',
       id: expect.any(String),
@@ -143,7 +146,7 @@ describe('rolling a Call', () => {
       reason: null,
       target: null
     })
-    expect(JSON.stringify(play.timeline(campaignId))).not.toMatch(/\bdc\b|tier|hard/i)
+    expect(JSON.stringify(play.timeline(campaignId, SOLO_PLAYER))).not.toMatch(/\bdc\b|tier|hard/i)
   })
 
   it('on advantage rolls both d20s and shows them with the reason', () => {
@@ -155,9 +158,9 @@ describe('rolling a Call', () => {
     const { id, parts } = openCall()!
     expect(parts[0].mode).toBe('advantage')
 
-    play.roll(campaignId, id, parts[0].id)
+    play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)
 
-    const roll = play.timeline(campaignId).entries.find((e) => e.type === 'roll')
+    const roll = play.timeline(campaignId, SOLO_PLAYER).entries.find((e) => e.type === 'roll')
     expect(roll).toMatchObject({ mode: 'advantage', reason: 'The guard is distracted' })
     expect(roll && 'dice' in roll && roll.dice).toHaveLength(2)
     expect(heard[0].content).toMatch(/d20 \d+\/\d+ \(advantage\) kept \d+/)
@@ -169,9 +172,9 @@ describe('rolling a Call', () => {
     call('narrate', { text: 'Both of you.', call: { ...lockCheck, character: ['Wren', 'Bram'] } })
     const { id, parts } = openCall()!
 
-    play.roll(campaignId, id, parts[0].id)
+    play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)
 
-    expect(() => play.roll(campaignId, id, parts[0].id)).toThrow(CallClosedError)
+    expect(() => play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)).toThrow(CallClosedError)
     expect(heard).toEqual([])
   })
 
@@ -181,7 +184,7 @@ describe('rolling a Call', () => {
     pushed = []
     const { id, parts } = openCall()!
 
-    play.roll(campaignId, id, parts[0].id)
+    play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)
 
     expect(pushed).toEqual([{ type: 'timeline', campaign: campaignId }])
   })
@@ -202,8 +205,10 @@ describe('a question Call', () => {
     })
     expect(open.parts).toEqual([expect.objectContaining({ player: 'player', character: null })])
 
-    expect(() => play.answer(campaignId, open.id, open.parts[0].id, 'Up')).toThrow(CallRefusedError)
-    play.answer(campaignId, open.id, open.parts[0].id, 'Left')
+    expect(() => play.answer(campaignId, open.id, open.parts[0].id, 'Up', SOLO_PLAYER)).toThrow(
+      CallRefusedError
+    )
+    play.answer(campaignId, open.id, open.parts[0].id, 'Left', SOLO_PLAYER)
 
     expect(heard).toEqual([
       {
@@ -211,14 +216,14 @@ describe('a question Call', () => {
         meta: { kind: 'call_result', call_id: open.id, players: 'player' }
       }
     ])
-    expect(play.timeline(campaignId).entries.at(-1)).toEqual({
+    expect(play.timeline(campaignId, SOLO_PLAYER).entries.at(-1)).toEqual({
       type: 'answer',
       id: expect.any(String),
       player: 'player',
       question: 'Which door?',
       text: 'Left'
     })
-    expect(play.timeline(campaignId).awaitingSince).toEqual(expect.any(Number))
+    expect(play.timeline(campaignId, SOLO_PLAYER).awaitingSince).toEqual(expect.any(Number))
   })
 
   it('without choices takes free text', () => {
@@ -226,7 +231,7 @@ describe('a question Call', () => {
     call('narrate', { text: 'The sphinx waits.', call: { kind: 'question', text: 'Your answer?' } })
     const open = openCall()!
 
-    play.answer(campaignId, open.id, open.parts[0].id, 'A shadow')
+    play.answer(campaignId, open.id, open.parts[0].id, 'A shadow', SOLO_PLAYER)
 
     expect(heard[0].content).toBe('[player] A shadow')
   })
@@ -238,11 +243,13 @@ describe('an open Call', () => {
     call('narrate', { text: 'The lock is rusted.', call: lockCheck })
     const { id, parts } = openCall()!
 
-    library.floor(campaignId).send({ character: wren, text: 'I kick the door instead.' })
-    play.done(campaignId)
+    library
+      .floor(campaignId)
+      .send({ character: wren, text: 'I kick the door instead.', player: SOLO_PLAYER })
+    play.done(campaignId, SOLO_PLAYER)
 
     expect(openCall()).toBeNull()
-    expect(() => play.roll(campaignId, id, parts[0].id)).toThrow(CallClosedError)
+    expect(() => play.roll(campaignId, id, parts[0].id, SOLO_PLAYER)).toThrow(CallClosedError)
     expect(heard.map((e) => e.meta)).toEqual([
       expect.objectContaining({ kind: 'floor', withdrawn_call: id })
     ])
@@ -252,7 +259,7 @@ describe('an open Call', () => {
     addFighter('Wren')
     call('narrate', { text: 'The lock is rusted.', call: lockCheck })
 
-    play.done(campaignId)
+    play.done(campaignId, SOLO_PLAYER)
 
     expect(openCall()).not.toBeNull()
   })
