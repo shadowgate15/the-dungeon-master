@@ -234,6 +234,11 @@ export function claimActions(campaign: () => string) {
     letGo: (character: string) =>
       change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}`), {
         method: 'DELETE'
+      }),
+    /** The Host frees a Character another browser holds. */
+    release: (character: string) =>
+      change(campaignPath(campaign(), `claims/${encodeURIComponent(character)}/release`), {
+        method: 'POST'
       })
   }
 }
