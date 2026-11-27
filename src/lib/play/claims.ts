@@ -6,4 +6,6 @@ export type ClaimRow = {
   claim: 'yours' | 'taken' | 'free'
   /** Present, and true, only for the Host on a taken Character: the Host may Release it. */
   releasable?: true
+  /** True for a Character that has departed the Party: it can Rejoin, not be Claimed. */
+  departed?: true
 }

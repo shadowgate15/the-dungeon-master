@@ -213,7 +213,8 @@ export function createParty(
         claim: claimOf(c.controllingPlayer, browser),
         ...(browser === SOLO_PLAYER && claimOf(c.controllingPlayer, browser) === 'taken'
           ? { releasable: true as const }
-          : {})
+          : {}),
+        ...(c.status === 'departed' ? { departed: true as const } : {})
       }))
       const drafts = db
         .select()
@@ -240,10 +241,46 @@ export function createParty(
       if (target.holder !== null) {
         throw new ClaimRefusedError(`${target.name} is taken`)
       }
+      if (target.table === character && characters.get(id)?.status === 'departed') {
+        throw new ClaimRefusedError(`${target.name} has departed: Rejoin instead`)
+      }
       db.update(target.table)
         .set({ controllingPlayer: browser })
         .where(and(eq(target.table.id, id), isNull(target.table.controllingPlayer)))
         .run()
+    },
+
+    /**
+     * The browser's Character leaves the Party: the status is set here, and the Claim is dropped.
+     * Needs the Claim and a live Session (the caller checks for the DM).
+     */
+    depart(id: string, browser: string): void {
+      const target = claimable(id)
+      if (target.holder !== browser) throw new ClaimRefusedError(`${target.name} is not yours`)
+      if (characters.get(id)?.status !== 'alive') {
+        throw new ClaimRefusedError(`${target.name} cannot depart`)
+      }
+      db.update(character)
+        .set({ status: 'departed', controllingPlayer: null })
+        .where(eq(character.id, id))
+        .run()
+    },
+
+    /**
+     * A departed Character comes back to the Party and the browser Claims it, with or without a
+     * Session. With no DM at the table the next opening says so.
+     */
+    rejoin(id: string, browser: string): void {
+      const target = claimable(id)
+      if (target.table !== character || characters.get(id)?.status !== 'departed') {
+        throw new ClaimRefusedError(`${target.name} has not departed`)
+      }
+      if (target.holder !== null) throw new ClaimRefusedError(`${target.name} is taken`)
+      db.update(character)
+        .set({ status: 'alive', controllingPlayer: browser })
+        .where(eq(character.id, id))
+        .run()
+      noteChange(id, `${target.name} rejoined the Party`)
     },
 
     /** The browser gives up a Claim it holds. */
