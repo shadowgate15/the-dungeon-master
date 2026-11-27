@@ -27,7 +27,8 @@
     onreturned = () => {},
     away = null,
     isHost = true,
-    turn = null
+    turn = null,
+    waiting = false
   }: {
     /** The acting Character's name, or null when no Character can act. */
     acting: string | null
@@ -54,6 +55,8 @@
     isHost?: boolean
     /** In a Combat, whose turn it is: the box is locked to that Character, or blocked for a foe. */
     turn?: string | null
+    /** None of this browser's Characters is in the Scene: a waiting line replaces the box. */
+    waiting?: boolean
   } = $props()
 
   /** The folder, quoted for a POSIX shell when it needs it. */
@@ -170,16 +173,29 @@
   {#if turn}
     <p class="text-xs font-medium">{turn}'s turn</p>
   {/if}
-  <Textarea
-    size="sm"
-    rows={2}
-    bind:value={draft}
-    {onkeydown}
-    disabled={blocked}
-    aria-label={prompt}
-    placeholder={prompt}
-  />
-  {#if elsewhere.length}
+  {#if waiting}
+    <ul class="flex flex-col gap-1 text-sm" aria-label="Waiting">
+      {#each elsewhere as c (c.id)}
+        <li class="flex items-center gap-2 text-muted">
+          <span>{c.name} is {c.whereabouts ? `in ${c.whereabouts}` : 'elsewhere'}</span>
+          {#if !away}
+            <button class="underline" onclick={() => oncut(c.id)}>Cut to {c.name}</button>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  {:else}
+    <Textarea
+      size="sm"
+      rows={2}
+      bind:value={draft}
+      {onkeydown}
+      disabled={blocked}
+      aria-label={prompt}
+      placeholder={prompt}
+    />
+  {/if}
+  {#if elsewhere.length && !waiting}
     <ul class="flex flex-wrap gap-2 text-xs" aria-label="Elsewhere">
       {#each elsewhere as c (c.id)}
         <li class="flex items-center gap-1 rounded-control bg-surface px-2 py-1 text-muted">
@@ -208,7 +224,7 @@
         <span class="text-muted">Waiting for the Host to start the DM; your drafts wait here.</span>
       {/if}
     </div>
-  {:else}
+  {:else if !waiting}
     <div class="flex items-center justify-end gap-2">
       <span class="mr-auto text-xs text-muted"
         >Enter adds to the tray · Ctrl+Enter sends and closes · Shift+Enter for a new line</span

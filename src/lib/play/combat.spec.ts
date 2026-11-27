@@ -45,6 +45,12 @@ describe('actingCharacter', () => {
     expect(actingCharacter([wren, ash], 'c-ash', undefined)).toBe(ash)
   })
 
+  it('acts as the last in-Scene pick while the viewed Character is elsewhere', () => {
+    expect(actingCharacter([wren, ash], 'c-kael', null, 'c-ash')).toBe(ash)
+    expect(actingCharacter([wren, ash], 'c-kael', null, 'c-gone')).toBe(wren)
+    expect(actingCharacter([wren, ash], 'c-wren', null, 'c-ash')).toBe(wren)
+  })
+
   it('locks to the Character whose turn it is and ignores the pick', () => {
     expect(actingCharacter([wren, ash], 'c-wren', combat('Ash'))).toBe(ash)
   })
