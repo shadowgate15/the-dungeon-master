@@ -7,7 +7,7 @@ An AI Dungeon Master for D&D 5e, run by a Claude Code session. Deterministic cod
 ### The table
 
 **Player**:
-A human at the table who controls one or more of a Campaign's Characters. A Player is never a Holder: what a Player can see comes from the Beliefs of the Characters they control.
+A human at the table who controls one or more of a Campaign's Characters. A Player has no record of their own: they are known only by the Characters they have Claimed from their browser. A Player is never a Holder: what a Player can see comes from the Beliefs of the Characters they control.
 _Avoid_: User, gamer
 
 **DM**:
@@ -23,8 +23,12 @@ A Player's hero in one Campaign, built at level 1 from the D&D 5e SRD 5.1. It st
 _Avoid_: PC, player character sheet, hero, avatar
 
 **Controlling Player**:
-The one Player who decides what a Character does. Every Character has exactly one, and control can pass to another Player. The DM never controls a Character: anyone the DM runs, even a companion who travels with the Party, is an NPC.
+The one Player who decides what a Character does: whoever holds its Claim right now. A Character has at most one, and control passes when the Claim is let go or released. The DM never controls a Character: anyone the DM runs, even a companion who travels with the Party, is an NPC.
 _Avoid_: Owner, author
+
+**Claim**:
+A Player taking control of a Character from their browser. One browser holds a Character's Claim at a time, until its Player lets go, the Host releases it, or the Session closes; a Claim on a Draft survives the Session's close. An unclaimed Character stays in the Party but makes no Declarations and is left out of the Floor. Its rolls are made by code and its Combat turns pass; the DM never chooses for it.
+_Avoid_: Seat, login, lock
 
 **Character status**:
 Whether a Character is alive, dead or departed. Death is a state the story can reverse, so a dead Character stays in the Party. Departed means its Controlling Player took it out of play; it stays on record, read-only, and can rejoin. Unconscious, dying and other conditions are play state, not status.
@@ -140,7 +144,7 @@ What a Player says one of their Characters does or says, in free text or by clic
 _Avoid_: Action, command, input, move, turn
 
 **Floor**:
-The DM waiting on the Players' Declarations. Out of Combat it is open to every Character in the Scene; in Combat, only to the Character whose turn it is. Until it closes, the Declarations on it can be added to, edited or withdrawn, and the DM hears none of them. It closes when every Player with a Character in the Scene has said they are done; it never times out. The DM then answers the whole Floor at once, in one Narration. A Floor closed with no Declarations hands the DM the initiative.
+The DM waiting on the Players' Declarations. Out of Combat it is open to every Character in the Scene; in Combat, only to the Character whose turn it is. Until it closes, the Declarations on it can be added to, edited or withdrawn, and the DM hears none of them. It closes when every Player with a Claimed Character in the Scene has said they are done; it never times out. The DM then answers the whole Floor at once, in one Narration. A Floor closed with no Declarations hands the DM the initiative.
 _Avoid_: Round (that is Combat's), batch, queue, turn
 
 **Check**:
