@@ -12,14 +12,16 @@
     "file": "chunks/Alert.js",
     "name": "Alert",
     "imports": [
-      "_server2.js"
+      "_server2.js",
+      "_status.js"
     ]
   },
-  "_Button.js": {
-    "file": "chunks/Button.js",
-    "name": "Button",
+  "_Badge.js": {
+    "file": "chunks/Badge.js",
+    "name": "Badge",
     "imports": [
-      "_server2.js"
+      "_server2.js",
+      "_status.js"
     ]
   },
   "_Checkbox.js": {
@@ -36,7 +38,7 @@
       "_server2.js",
       "_messages.js",
       "_useQueryClient.js",
-      "_Button.js",
+      "_status.js",
       "_Alert.js",
       "_Textarea.js",
       "_follow.svelte.js"
@@ -48,7 +50,7 @@
     "imports": [
       "_server2.js",
       "_index-server.js",
-      "_Button.js"
+      "_status.js"
     ]
   },
   "_DmBadge.js": {
@@ -57,7 +59,7 @@
     "imports": [
       "_server2.js",
       "_messages.js",
-      "_Alert.js"
+      "_Badge.js"
     ]
   },
   "_Field.js": {
@@ -70,6 +72,13 @@
   "_Link.js": {
     "file": "chunks/Link.js",
     "name": "Link",
+    "imports": [
+      "_server2.js"
+    ]
+  },
+  "_Panel.js": {
+    "file": "chunks/Panel.js",
+    "name": "Panel",
     "imports": [
       "_server2.js"
     ]
@@ -114,8 +123,9 @@
     "imports": [
       "_seed.js",
       "_campaign.js",
-      "_seed2.js",
+      "_lan.js",
       "_schemas.js",
+      "_seed2.js",
       "_summary.js",
       "_schema.js"
     ]
@@ -222,6 +232,10 @@
       "src/hooks.server.ts"
     ]
   },
+  "_lan.js": {
+    "file": "chunks/lan.js",
+    "name": "lan"
+  },
   "_messages.js": {
     "file": "chunks/messages.js",
     "name": "messages",
@@ -325,6 +339,13 @@
       "_index-server.js",
       "_server2.js",
       "_server-errors.js"
+    ]
+  },
+  "_status.js": {
+    "file": "chunks/status.js",
+    "name": "status",
+    "imports": [
+      "_server2.js"
     ]
   },
   "_summary.js": {
@@ -510,7 +531,7 @@
     "imports": [
       "_server2.js",
       "_Alert.js",
-      "_Button.js",
+      "_status.js",
       "_Dialog.js",
       "_Field.js",
       "_Link.js",
@@ -532,7 +553,11 @@
     "src": "src/routes/+layout.server.ts",
     "isEntry": true,
     "imports": [
-      "_theme.js"
+      "_theme.js",
+      "_lan.js"
+    ],
+    "dynamicImports": [
+      "src/lib/server/bridge/index.ts"
     ]
   },
   "src/routes/+layout.svelte": {
@@ -548,7 +573,9 @@
       "_context.js",
       "_forms.js",
       "_theme.js",
-      "_Button.js",
+      "_status.js",
+      "_Badge.js",
+      "_Panel.js",
       "_state.js",
       "_paths.js"
     ],
@@ -557,7 +584,7 @@
       "node_modules/.pnpm/@tanstack+svelte-query-devtools@6.3.7_@tanstack+svelte-query@6.3.7_svelte@5.57.3_@types_8ea849ea8105e537a5386474a23c1746/node_modules/@tanstack/svelte-query-devtools/dist/index.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.Uh-NDqMJ.css"
+      "_app/immutable/assets/_layout.CILTPW5i.css"
     ],
     "assets": [
       "_app/immutable/assets/metamorphous-latin-ext-400-normal.D08n4oeX.woff2",
@@ -878,11 +905,12 @@
       "_state.js",
       "_navigation.js",
       "_paths.js",
+      "_Badge.js",
       "_DmBadge.js",
       "_Link.js",
       "_forms.js",
       "_Alert.js",
-      "_Button.js",
+      "_status.js",
       "_Dialog.js",
       "_Field.js",
       "_TextInput.js"
@@ -917,8 +945,9 @@
       "_TextInput.js",
       "_seed2.js",
       "_CreationPage.js",
-      "_Button.js",
+      "_status.js",
       "_Link.js",
+      "_Panel.js",
       "_DmBadge.js",
       "_useQueryClient.js",
       "_index-server.js"
@@ -949,8 +978,9 @@
       "_DmBadge.js",
       "_floor-client.js",
       "_Alert.js",
-      "_Button.js",
-      "_Link.js"
+      "_status.js",
+      "_Link.js",
+      "_Panel.js"
     ]
   },
   "src/routes/campaigns/[id]/journal/+page.server.ts": {
@@ -999,12 +1029,12 @@
       "_forms.js",
       "_paths.js",
       "_CreationPage.js",
-      "_DmBadge.js",
+      "_Badge.js",
       "_Link.js",
       "_index-server.js",
       "_navigation.js",
       "_Alert.js",
-      "_Button.js",
+      "_status.js",
       "_Dialog.js",
       "_schema.js",
       "_summary.js",
@@ -1012,7 +1042,9 @@
       "_Field.js",
       "_Select.js",
       "_Textarea.js",
-      "_TextInput.js"
+      "_TextInput.js",
+      "_Panel.js",
+      "_DmBadge.js"
     ]
   },
   "src/routes/campaigns/[id]/play/+page.server.ts": {
@@ -1036,7 +1068,8 @@
       "_server2.js",
       "_paths.js",
       "_DmBadge.js",
-      "_Button.js",
+      "_status.js",
+      "_Badge.js",
       "_Checkbox.js",
       "_Field.js",
       "_Textarea.js",
