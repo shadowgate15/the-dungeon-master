@@ -9,6 +9,7 @@ import { hpState } from '#lib/play/hp-state.ts'
 import { pendingCalls } from './calls'
 import { initiativeOrder, liveCombat, waitingOnInitiative } from './combat'
 import { characterRefs, currentMinute, present } from './scene'
+import { whoIsAtTheTable } from './labels'
 import { playSheets } from './sheets'
 
 /**
@@ -178,6 +179,7 @@ export function coreBlock(source: CoreBlockSource): string {
     '# Core block',
     scenePart(source),
     partyPart(source),
+    whoIsAtTheTable(source.db),
     npcsPart(source),
     combatPart(source),
     arcPart(source),
